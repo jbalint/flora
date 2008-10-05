@@ -1,0 +1,82 @@
+/* File:      flrparse.flr
+**
+** Author(s): Michael Kifer
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2008.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+
+
+:- export
+        %read(?,?,?),
+	%readAll(?,?,?),
+	?[%readAll(?,?)].
+/*
+    Reads a term from std input, parses, compiles, and builds it.
+    Term can also be a reification.
+    Molecules or rules not allowed unless represented as reified terms.
+    Always succeeds (unless there is a bug).
+
+    Code: the code of the term read. 
+          If the thing read is not a term then Code is left unbound
+    Module: If unbound then FLORA_DEFAULT_WORKSPACE is assumed.
+            If bound and if the term is a reification then the reified formula
+	    is built for this module.
+    Status: [OutcomeFlag, EOF_flag|ErrorList]
+            OutcomeFlag = null/or/error
+	       null  - a blank line was read, no code generated 
+	              (Code will remain unbound)
+	       ok    - good code was generated, no errors
+	       error - parsing/compilation errors
+	    EOF_flag = eof/not_eof
+               not_eof -  end-of-file has not been reached
+	       eof     -  if it has been reached. 
+            ErrorList - if OutcomeFlag=null/ok, then this list would be empty.
+                        if OutcomeFlag=error, then this would be a list of the
+			form [error(N1,N2,Message), ...]
+			N1, N2 encode the line and character number, which is
+			largely irrelevant in this context. Message is an error
+			message that explains the problem. Error messages are 
+			also printed to stderr.
+*/
+%read(?Code,?Mod,?Stat) :-
+	flora_read_parse_compile_build_term(?Code,?Mod,?Stat)@_prolog(flrutils).
+
+/*
+   Used for reading terms one-by-one and returning answers interactively. 
+   Under one-at-a-time solution (_one), will wait for input, return parsed code,
+   then wait for input again, if the user types ";". If the user types
+   RET then succeeds and exits.
+   Under all-solutions semantics (_all), will wait for inputs and process them,
+   but will not return answers unless the file is closed (e.g., Ctl-D at
+   standard input).
+*/
+%readAll(?Code,?Mod,?Stat) :-
+	flora_read_parse_compile_build_loop(?Code,?Mod,?Stat)@_prolog(flrutils).
+
+/*
+   Collects all answers from the source (string(Str) or file(FileName)
+   and returns them in a list, CodeList, of the form code(TermCode,Status).
+   TermCode is the compiled code of a term in ?Source, and ?Status is the
+   status of the compilation for this term.
+*/
+?Source[%readAll(?Module,?CodeList)] :-
+	?Source = string(?Str),
+	!,
+	?PlgSrc = atom(?Str)@_prolog,
+	flora_read_parse_compile_build_term_list(?PlgSrc,?CodeList,?Module)@_prolog(flrutils),
+	!.
+?Source[%readAll(?Module,?CodeList)] :-
+	p2h{?PlgSrc,?Source},
+	flora_read_parse_compile_build_term_list(?PlgSrc,?CodeList,?Module)@_prolog(flrutils),
+	!.

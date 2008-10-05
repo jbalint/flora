@@ -1,0 +1,107 @@
+/* File:      flrwrapper.H
+**
+** Author(s): Guizhen Yang
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2008.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+
+
+
+:- import
+	length/2,
+	ground/1
+   from basics.
+
+:- import
+	flora_term_to_atom/2,
+	flora_match_substring/3,
+	flora_match_substring/5,
+	flora_get_substring/4,
+	flora_concat_atoms/2
+    from flrporting.
+
+:- import term_psc/2, term_new/2, psc_name/2 from machine.
+
+:- import flora_module_registry/1 from flrregistry.
+
+:- import flora_abort/1 from flrutils.
+
+:- dynamic flora_flogic_fact_wrapper(_,_).
+:- dynamic flora_current_flogic_module(_).
+:- dynamic flora_encoded_call_cache(_,_,_,_).
+:- dynamic flora_decoded_predicate_cache(_,_,_,_,_,_,_).
+:- dynamic functor_arity_cache(_,_).
+
+%% These indices do not seem to make a difference or even turt
+%%:- index(functor_arity_cache/2,[1,2]).
+%%:- index(flora_encoded_call_cache/4,[1,3,2]).
+%%:- index(flora_decoded_predicate_cache/8,[1]).
+
+:- index(flora_flogic_fact_wrapper/2,[1,2]).
+
+:- export
+	flora_module_predicate/4,
+	flora_module_predicate_symbol/3,
+	flora_hilog_module_predicate_symbol/2,
+	flora_tabled_hilog_module_predicate_symbol/2,
+	flora_dyna_hilog_module_predicate_symbol/2,
+	flora_dynz_hilog_module_predicate_symbol/2,
+	flora_tdyna_hilog_module_predicate_symbol/2,
+	flora_tdynz_hilog_module_predicate_symbol/2,
+
+	flora_fdb_storage_name/2,
+	flora_fld_storage_name/2,
+	flora_is_flogic_base/1,
+	flora_storage_module/2,
+
+	flora_setup_flogic_fact_wrapper/1,
+	flora_flogic_fact_wrapper/2,
+
+	is_flora_callable_literal/1,
+	flora_decode_predicate/6,
+	flora_decode_predicate/7,
+	flora_decode_module_name/2,
+	flora_decode_module_prefix/3,
+	flora_is_flogic_wrapper/3,
+
+	flora_is_fdb_storage/1,
+	flora_is_fld_storage/1,
+
+	flora_canonic_wrapper_symbol/2,
+	negate_wrapper/2,
+	flora_is_system_module_name/1,
+	flora_check_module_name/1,
+	valid_flora_module_name/1,
+	flora_module_name_error/1,
+
+	flora_is_transactional_wrapper/1,
+	flora_is_neg_wrapper/1,
+	flora_funct_arity/2.
+
+:- table
+	flora_storage_module/2,
+	flora_is_system_module_name/1.
+:- table
+	flora_fdb_storage_name/2,
+	flora_fld_storage_name/2,
+	flora_is_fld_storage/1,
+	flora_is_fdb_storage/1.
+:- table module_name_syntax_internal/1.
+:- table flora_is_neg_wrapper/1.
+:- table
+	negate_wrapper/2,
+	flora_canonic_wrapper_symbol/2.
+
+%% This does not seem to affect anything
+%%:- table flora_check_module_name/1.

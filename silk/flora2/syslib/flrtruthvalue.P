@@ -1,0 +1,69 @@
+/* File:      flrtruthvalue.P
+**
+** Author(s): Michael Kifer
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2008.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+
+
+:- compiler_options([xpp_on]).
+
+#include "flora_terms.flh"
+#include "flora_porting.flh"
+
+:- import get_residual/2 from tables.
+:- import flora_tnot/1 from flrnegation.
+:- import convert_to_head_literal/2 from flrcanon.
+
+%% TODO: get rid of the meta declaration for get_residual
+%% When compiling, make sure that the caller argument of Goal is bound
+%% This probably happens automatically when compiling as a goal,
+%% but not as a reified statement.
+%% get rid of get_residual in all demos/tests
+
+:- table flora_truthvalue_tabled_call/1.
+
+FLLIBTRUTHVALUE(Goal,FL_TRUE) :-
+	(flora_truthvalue_tabled_call(Goal), fail
+	;
+	    %% Using HGoal doesn't work with non-tabled predicates,
+	    %% so we wrap everything in flora_truthvalue_tabled_call/1
+	    %%convert_to_head_literal(Goal,HGoal),
+	    %%get_residual(HGoal,[])
+	    get_residual(flora_truthvalue_tabled_call(Goal),[])
+	),
+	flora_abolish_table_call(flora_truthvalue_tabled_call(_)).
+FLLIBTRUTHVALUE(Goal,FL_UNKNOWN) :-
+	(flora_truthvalue_tabled_call(Goal), fail
+	;
+	    %%convert_to_head_literal(Goal,HGoal),
+	    %%get_residual(HGoal,[_|_])
+	    get_residual(flora_truthvalue_tabled_call(Goal),[_|_])
+	),
+	flora_abolish_table_call(flora_truthvalue_tabled_call(_)).
+FLLIBTRUTHVALUE(Goal,FL_FALSE) :-
+	(flora_truthvalue_tabled_call(Goal), fail
+	;
+	    %%convert_to_head_literal(Goal,HGoal),
+	    %%(get_residual(HGoal,[_|_]) -> fail
+	    (get_residual(flora_truthvalue_tabled_call(Goal),[_|_]) -> fail
+	    ;
+		flora_tnot(Goal)
+	    )
+	),
+	flora_abolish_table_call(flora_truthvalue_tabled_call(_)).
+FLLIBTRUTHVALUE(Goal,FL_FAIL) :-  FLLIBTRUTHVALUE(Goal,FL_FALSE).
+
+flora_truthvalue_tabled_call(Call) :- call(Call).
+

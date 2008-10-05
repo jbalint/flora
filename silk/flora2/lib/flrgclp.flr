@@ -1,0 +1,114 @@
+/* File:      flrgclp.flr
+**
+** Author(s): Michael Kifer
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2008;
+**      and Vulcan, Inc., 2008.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+
+/*** This is the default defeasible theory: GCL, Generalized Courteous Logic */
+
+#include "flora_terms.flh"
+
+// All the FL_* names are defined in flora_terms.flh to make it easier to change
+:- export FL_UNDEFEATED(?,?,?).
+
+
+/*
+  Note 1: FL_UNDEFEATED/3 must be called with the third argument bound to
+          the user module name in which defeasible theory is invoked.
+          This is done by the compiler.
+  Note 2: We should make sure that ?R and ?Mod are ground.
+          If ?Mod is not ground, it is an error (should catch).
+          If ?R is non-ground, the result is incorrect: false{defeated} ==
+          not Exists defeated, while we need Exists not defeated.
+*/
+FL_UNDEFEATED(?I,?H,?Mod) :-
+	not FL_DEFEATED((?I,?H),?Mod).
+        // Using 't not' directly does not buy performance
+	//'t not'(FL_DEFEATED(?R,?Mod))@_prolog(tables).
+
+// Axioms for Courteous LP
+
+FL_DEFEATED(?R,?Mod) :- FL_DEFEATS(?S,?R,?Mod), not FL_COMPROMISED(?S,?Mod).
+FL_DEFEATED(?R,?Mod) :- FL_DISQUALIFIED(?R,?Mod).
+
+FL_DEFEATS(?R1,?R2,?Mod) :- FL_REFUTES(?R1,?R2,?Mod).
+FL_DEFEATS(?R1,?R2,?Mod) :- FL_REBUTS(?R1,?R2,?Mod).
+
+FL_REFUTED(?R,?Mod)   :- FL_REFUTES(?,?R,?Mod).
+// rebutted/2 is unused in this version of the argumentation theory
+FL_REBUTTED(?R,?Mod)  :- FL_REBUTS(?,?R,?Mod).
+
+// Modifiers of the original GCL
+FL_COMPROMISED(?R,?Mod)  :- FL_DEFEATED(?R,?Mod).
+FL_DISQUALIFIED(?R,?Mod) :- FL_TRANS_DEFEATS(?R,?R,?Mod).
+/*
+*/
+
+// The original GCL essentially amounts to defining
+// FL_COMPROMISED/2 and FL_DISQUALIFIED/2 defined as below.
+/*
+FL_COMPROMISED(?,?)  :- false.
+FL_DISQUALIFIED(?,?) :- false.
+*/
+
+
+FL_REFUTES(?R1,?R2,?Mod) :-
+	// This order is potentially better, since normally
+	// there are fewer overrides than conflicts.
+	FL_OVERRIDES_AUX(?Mod,?R1,?R2),
+	FL_CONFLICTS(?R1,?R2,?Mod).
+FL_REBUTS(?R1,?R2,?Mod)  :-
+	FL_CONFLICTS(?R1,?R2,?Mod),
+	not FL_REFUTED(?R1,?Mod),
+	not FL_REFUTED(?R2,?Mod).
+
+
+/***************************** Auxiliary Predicates ***********************/
+
+FL_TRANS_DEFEATS(?R1,?R2,?Mod) :- FL_DEFEATS(?R1,?R2,?Mod).
+FL_TRANS_DEFEATS(?R1,?R3,?Mod) :-
+	// This order seems to be faster than others
+	FL_TRANS_DEFEATS(?R2,?R3,?Mod),
+	FL_DEFEATS(?R1,?R2,?Mod).
+
+// Given a rule Id and possibly Head, find body and test if it is satisfied.
+// This predicate's tables are abolished after each query by an
+// after-query hook because sometimes it is called with RId/Head as a var.
+// It may succeed for one query and will be tabled.
+// If it is, then when called for another query, wrong result may be returned.
+FL_CANDIDATE((?RId,?Head),?Mod) :-
+	// show_rule_signature/9 in flrcanon.P
+	show_rule_signature(?RId,?,?Mod,?Head,?Body,?,?DefeatCond,?,?)@_prolog(flrcanon),
+	?DefeatCond !== NULL,
+	call(?Body).
+// Find out if two labels (Id,Head) are in conflict.
+// One of the labels might be a variable
+FL_CONFLICTS(?L1,?L2,?Mod) :-
+	FL_CANDIDATE(?L1,?Mod),
+	FL_CANDIDATE(?L2,?Mod),
+	FL_OPPOSES_AUX(?Mod,?L1,?L2).
+
+
+// FL_OPPOSES_AUX/3 and FL_OVERRIDES_AUX/3 are defined in
+// genincludes/flrdefeasible/fli
+
+
+
+// Hook for abolishing FL_CANDIDATE/1 after each query
+'_flrdefesible_cleanup'(?,?) :- abolish_table_call(${FL_CANDIDATE(?,?)}).
+
+?- flora_add_hook(_@,QUERYHOOK,after,0,'_flrdefesible_cleanup'(?,?))@_prolog(flrhooks).
+

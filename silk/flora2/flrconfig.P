@@ -1,0 +1,134 @@
+
+/* File:      flrconfig.P  -- Capture Prolog and Flora installation directories
+**
+** Author(s): Michael Kifer
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2008.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+
+:- compiler_options([xpp_on]).
+
+#define CH_BACKSLASH   	     92	      /*  \     */
+
+%% Records Prolog and Flora installation directories
+
+:- import path_sysop/3 from file_io.
+:- import
+	xsb_configuration/2
+   from xsb_configuration.
+
+:- import
+	flora_slash/1,
+	flora_concat_atoms/2,
+	flora_running_under/1,
+	flora_file_op/3,
+	flora_double_backslash/2,
+	flora_convert_backslash_to_forward/2,
+	flora_convert_win_path_to_cygwin/2
+   from flrporting.
+
+:- import shell/1 from shell.
+
+?- path_sysop(expand,'.',FloraDir),
+   PrologOptions = '-m 100000 -c 20000',  % to prevent XSB from crashing
+   xsb_configuration(install_dir,InstallDir),
+   xsb_configuration(config_bindir,ConfigBinDirPrelim),
+   xsb_configuration(user_home,UserHome),
+   (flora_running_under(windows)
+   ->  PrologPath = '.prolog_path_wind',
+       ConfigBinDir = ConfigBinDirPrelim
+   ; flora_running_under(cygwin)
+   ->  PrologPath = '.prolog_path_cygwin',
+       flora_convert_win_path_to_cygwin(ConfigBinDirPrelim,ConfigBinDir)
+   ;
+       PrologPath = '.prolog_path',
+       ConfigBinDir = ConfigBinDirPrelim
+   ),
+   telling(F),
+   tell(PrologPath),
+   (flora_running_under(windows)
+   -> write('PROLOG='), write(ConfigBinDir), writeln('\\xsb'),
+       write('PROLOGDIR='), writeln(InstallDir),
+       flora_concat_atoms([UserHome,'\\.xsb\\flora\\*'], FloraTmpFiles),
+       shell(['del ', '"', FloraTmpFiles, '.P"']),
+       shell(['del ', '"', FloraTmpFiles, '.xwam"'])
+   ;
+       write(ConfigBinDir)
+   ),
+   told,
+   (flora_running_under(windows)
+   -> tell('runflora.bat'),
+       writeln('@echo OFF'),
+       write('@set FLORADIR="'), writeq(FloraDir), writeln('"'),
+       write('@set PROLOG='), write(ConfigBinDir), writeln('\\xsb'),
+       write('REM @set PROLOGOPTIONS="'), write(PrologOptions), writeln('"'),
+       writeln('@%PROLOG% %PROLOGOPTIONS% -e "asserta(library_directory(%FLORADIR%)). [flora2]. flora_shell." %1 %2 %3 %4 %5 %6 %7')
+   ;
+       tell('runflora'),
+       %% Use write with \n instead of writeln to be compatible with cygwin
+       write('#! /bin/sh\n\n'),
+       write('if test ! "$*" = ""; then\n'),
+       write('    extra_args="$*"\n'),
+       write('fi\n\n'),
+       write('FLORADIR="'),
+       (flora_running_under(cygwin)
+       ->
+           flora_double_backslash(FloraDir,CygwinFloraDir),
+           writeq(CygwinFloraDir)
+       ;
+           writeq(FloraDir)
+       ),
+       write('"\n'),
+       write('PROLOG='), write(ConfigBinDir), write('/xsb\n'),
+       write('#PROLOGOPTIONS="'), write(PrologOptions), write('"\n'),
+       write('$PROLOG $PROLOGOPTIONS -e "asserta(library_directory($FLORADIR)). [flora2]. flora_shell." $extra_args\n')
+   ),
+   told,
+   %% If we are in the packages/flora2 directory and ../../emu exists, then
+   %% we are installing as a package; otherwise - standalone
+   tell('floraInstallMode.P'),
+   writeln(':- import flora_configuration/2 from flrregistry.'),
+   flora_slash(Slash),
+   flora_concat_atoms([InstallDir,Slash,packages,Slash,flora2],FloraPkgDir),
+   flora_file_op(expand,FloraPkgDir,FloraPkgDirExpanded),
+   flora_file_op(expand,FloraDir,FloraDirExpanded),
+   (FloraDirExpanded = FloraPkgDirExpanded
+   ->  %% installing as a package
+       writeln('?- assert(flora_configuration(standalone,no)).')
+   ;
+       writeln('?- assert(flora_configuration(standalone,yes)).')
+   ),
+   write('?- assert(flora_configuration(installdir,'),
+   writeq(FloraDirExpanded),
+   writeln(')).'),
+   told,
+   %% set up the variables for Java
+   (flora_running_under(windows)
+   -> tell('java\\flora_settings.bat'),
+       flora_convert_backslash_to_forward(FloraDir,FloraDirForwShash),
+       flora_convert_backslash_to_forward(ConfigBinDir,ConfigBinDirForwSlash),
+       writeln('@echo OFF'),
+       write('@set FLORADIR='), writeln(FloraDirForwShash),
+       write('@set PROLOGDIR='), writeln(ConfigBinDirForwSlash)
+   ; tell('java/flora_settings.sh'),
+       write('FLORADIR='),
+       (flora_running_under(cygwin)
+       ->
+           writeln(CygwinFloraDir)
+       ;
+           writeln(FloraDir)
+       ),
+       write('PROLOGDIR='), writeln(ConfigBinDir)
+   ),
+   tell(F).

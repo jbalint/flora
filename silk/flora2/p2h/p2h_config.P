@@ -1,0 +1,111 @@
+/* File:      p2h_config.P -- loader for the prolog to hilog module
+** Author(s): kifer
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2008.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+
+
+%% bootstrap_flora/0 adds this directory to the library search path.
+%% Loading p2h_config.P ensures that the module prolog2hilog is compiled 
+%% and loaded.
+
+:- compiler_options([xpp_on]).
+#include "flora_porting.flh"
+
+
+:- import
+	flora_slash/1,
+	flora_concat_atoms/2,
+	flora_file_op/3,
+	flora_file_op/2,
+	flora_running_under/1
+    from flrporting.
+:- import flora_configuration/2 from flrregistry.
+:- import search_module/6 from consult.
+:- import xsb_configuration/2 from xsb_configuration.
+:- import shell/1 from shell.
+
+?-  flora_configuration(installdir, FloraDir),
+    flora_slash(Slash),
+    Basename = prolog2hilog,
+    xsb_configuration(config_libdir, ConfigLibdir),
+    flora_concat_atoms([ConfigLibdir,Slash,Basename,'.',PROLOG_OFILE_EXT],
+		       LibObjFile),
+    flora_concat_atoms([FloraDir,Slash,p2h,Slash,Basename],Module),
+    flora_concat_atoms([Module,'.', PROLOG_OFILE_EXT], Objfile),
+    (   %% avoid recompilation: check if prolog2hilog.OBJ exists and 
+	%% is newer than prolog2hilog.c.
+	search_module(Basename,Dir,_Mod,_Ext,_Base,ModuleO),
+	flora_concat_atoms([Module, '.c'], ModuleSourceFile),
+	flora_file_op(newerthan,ModuleO,ModuleSourceFile)
+    %% module compiled and is current, so just load
+    -> [Basename]
+
+    ; (flora_running_under(windows) ; flora_running_under(cygwin))
+    ->
+	xsb_configuration(config_bindir, ConfigBindir),
+	flora_concat_atoms([Module, '.dll'],CygModDLL),
+	flora_concat_atoms([FloraDir,Slash,'p2h\windows',Slash,Basename,'.dll'],WinModDLL),
+	(flora_running_under(cygwin)
+	->
+	    consult(Module, []),
+	    flora_concat_atoms([ConfigLibdir,Slash,Basename,'.dll'],
+			       TargetDLLCyg),
+	    (flora_file_op(unlink,TargetDLLCyg), ! ; true),
+	    flora_file_op(rename,CygModDLL, TargetDLLCyg),
+	    %% clean up
+	    flora_concat_atoms([Module, '.a'],CygModA),
+	    flora_concat_atoms([Module, '.o'],CygModO),
+	    flora_concat_atoms([Module, '.def'],CygModDEF),
+	    (flora_file_op(unlink,CygModA), ! ; true),
+	    (flora_file_op(unlink,CygModO), ! ; true),
+	    (flora_file_op(unlink,CygModDEF), ! ; true),
+	    (flora_file_op(unlink,LibObjFile), ! ; true),
+	    flora_file_op(rename,Objfile,LibObjFile),
+	    [Basename]
+	; 
+	    flora_concat_atoms([ConfigBindir,Slash,Basename,'.dll'],
+			       TargetDLLWin),
+	    (flora_file_op(unlink,TargetDLLWin), ! ; true),
+	    shell(['copy /B /Y ', WinModDLL, ' ', TargetDLLWin]),
+	    %% In windows Objfile is created by ?- [Basename], so it
+	    %% is copied after
+	    (flora_file_op(unlink,LibObjFile), ! ; true),
+	    [Basename],
+	    flora_file_op(rename,Objfile,LibObjFile)
+	)
+
+    %% If Module isn't compiled or is old --- recompile
+    ;   xsb_configuration(compiler, CC),
+	consult(Module, [cc(CC), cc_opts(' ')]),
+	flora_file_op(rename,Objfile, LibObjFile),
+	( % MacOS
+	flora_running_under(darwin)
+	->
+	    %% Note: the .dylib ending is Mac-specific.
+	    flora_concat_atoms([Module, '.dylib'], SharedLib),
+	    flora_concat_atoms([ConfigLibdir,Slash,Basename,'.dylib'], LibMod),
+	    flora_file_op(rename,SharedLib,LibMod)
+	;
+	flora_running_under(unix)
+	->
+	    %% Note: the .so ending is Unix-specific.
+	    %% We don't need to run this script under Windows
+	    flora_concat_atoms([Module, '.so'], SharedLib),
+	    flora_concat_atoms([ConfigLibdir,Slash,Basename,'.so'], LibMod),
+	    flora_file_op(rename,SharedLib,LibMod)
+	;
+	  true
+	)
+     ).

@@ -1,0 +1,167 @@
+/*******************************************************************************
+  file: closure/flrtypes.fli - Axioms for primitive data types
+
+  Author(s): Michael Kifer
+
+  Contact:   kifer@cs.stonybrook.edu
+
+  Copyright (C) by
+       The Research Foundation of the State University of New York, 1999-2008.
+
+  All rights reserved.
+
+  For information about licensing terms, please see
+  http://silk.projects.semwebcentral.org/flora2-license.html
+
+*******************************************************************************/
+
+
+:- table builtin_sub/2.
+%% We don't want the silent ISA relationships to be shown by the debugger
+builtin_sub(C,FL_TOPTYPE) :- C \= FL_TOPTYPE.
+builtin_sub(FL_LONG,FL_INTEGER).
+builtin_sub(FL_INTEGER,FL_DECIMAL).
+builtin_sub(FL_FLOAT,FL_DOUBLE).
+builtin_sub(FL_IRI,FL_SYMBOL).
+
+builtin_sub(X,Y) :- builtin_sub(X,Z), builtin_sub(Z,Y).
+
+%%silent_sub(X,Y,_Caller) :- builtin_sub(X,Y).
+FLTRAILERPREFIX(WRAP_SUB)(X,Y,_Caller) :- builtin_sub(X,Y).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_TOPTYPE,_Caller).
+
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_LONG,_Caller) :- integer(X).
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_LONG,_Caller) :- flora_datatype_name(X,FL_LONG).
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_INTEGER,_Caller) :- flora_datatype_name(X,FL_INTEGER).
+%%FLTRAILERPREFIX(WRAP_ISA)(X,FL_INTEGER,_Caller) :- FLTRAILERPREFIX(WRAP_ISA)(X,FL_LONG,_Caller).
+
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_FLOAT,_Caller) :- float(X).
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_FLOAT,_Caller) :- flora_datatype_name(X,FL_FLOAT).
+
+%%FLTRAILERPREFIX(WRAP_ISA)(X,FL_DOUBLE,_Caller) :- FLTRAILERPREFIX(WRAP_ISA)(X,FL_FLOAT,_Caller).
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_DOUBLE,_Caller) :- flora_datatype_name(X,FL_DOUBLE).
+
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_DECIMAL,_Caller) :- flora_datatype_name(X,FL_DECIMAL).
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_DECIMAL,_Caller) :- FLTRAILERPREFIX(WRAP_ISA)(X,FL_DOUBLE,_Caller).
+%%FLTRAILERPREFIX(WRAP_ISA)(X,FL_DECIMAL,_Caller) :- FLTRAILERPREFIX(WRAP_ISA)(X,FL_INTEGER,_Caller).
+
+%% '...' is not a string but a symbol
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_SYMBOL,_Caller) :- atom(X).
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_SYMBOL,_Caller) :- flora_datatype_name(X,FL_SYMBOL).
+%%FLTRAILERPREFIX(WRAP_ISA)(X,FL_SYMBOL,_Caller) :- flora_datatype_name(X,FL_IRI).
+
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_STRING,_Caller) :- flora_datatype_name(X,FL_STRING).
+
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_BOOL,_Caller) :- flora_datatype_name(X,FL_BOOL).
+
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_LISTTYPE,_Caller) :- is_list(X).
+
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_DATETIME,_Caller) :- flora_datatype_name(X,FL_DATETIME).
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_TIME,_Caller) :- flora_datatype_name(X,FL_TIME).
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_IRI,_Caller) :- flora_datatype_name(X,FL_IRI).
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_DATE,_Caller) :- flora_datatype_name(X,FL_DATE).
+FLTRAILERPREFIX(WRAP_ISA)(X,FL_DURATION,_Caller) :- flora_datatype_name(X,FL_DURATION).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Type combinators
+%% Restrictions on C1, C2 are precautions against infinite loops
+%% due to things like (_string,(_string,(_string,...)...))
+FLTRAILERPREFIX(WRAP_ISA)(X, (C1,C2),_Caller) :-
+	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
+	;
+	    (C1 \= (_,_), C1 \= (_;_), C1 \= (_-_) -> true ; ground(C1)),
+	    (C2 \= (_,_), C2 \= (_;_), C2 \= (_-_) -> true ; ground(C2)),
+	    WRAP_ISA(X,C1,_Caller),
+	    WRAP_ISA(X,C2,_Caller)
+	).
+
+%% The glb rule
+FLTRAILERPREFIX(WRAP_SUB)(X, (C1,C2),_Caller) :-
+        X \== FL_TOPTYPE,
+	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
+	;
+	    (C1 \= (_,_), C1 \= (_;_), C1 \= (_-_) -> true ; ground(C1)),
+	    (C2 \= (_,_), C2 \= (_;_), C2 \= (_-_) -> true ; ground(C2)),
+	    WRAP_SUB(X,C1,_Caller),
+	    WRAP_SUB(X,C2,_Caller),
+	    X \= (C1,C2), X \= (C2,C1)
+	).
+
+FLTRAILERPREFIX(WRAP_SUB)((C1,C2),C1,_Caller) :-
+        C2 \== FL_TOPTYPE,
+	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
+	;
+	    (C1 \= (_,_), C1 \= (_;_), C1 \= (_-_) -> true ; ground(C1))
+	).
+
+FLTRAILERPREFIX(WRAP_SUB)((C1,C2),C2,_Caller) :-
+        C1 \== FL_TOPTYPE,
+	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
+	;
+	    (C2 \= (_,_), C2 \= (_;_), C2 \= (_-_) -> true ; ground(C2))
+	).
+
+%% Restrictions on C1, C2 are precautions against infinite loops
+%% due to things like (_string,(_string,(_string,...)...))
+FLTRAILERPREFIX(WRAP_ISA)(X, (C1;C2),_Caller) :-
+	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
+	;
+	    (
+		(C1 \= (_,_), C1 \= (_;_), C1 \= (_-_) -> true ; ground(C1)),
+	  	WRAP_ISA(X,C1,_Caller)
+	    ;
+		(C2 \= (_,_), C2 \= (_;_), C2 \= (_-_) -> true ; ground(C2)),
+	  	WRAP_ISA(X,C2,_Caller)
+	    )
+	).
+
+%% The lub rule
+FLTRAILERPREFIX(WRAP_SUB)((C1;C2),X,_Caller) :-
+	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
+	;
+	    (C1 \= (_;_), C1 \= (_,_), C1 \= (_-_) -> true ; ground(C1)),
+	    (C2 \= (_;_), C2 \= (_,_), C2 \= (_-_) -> true ; ground(C2)),
+	    WRAP_SUB(C1,X,_Caller),
+	    WRAP_SUB(C2,X,_Caller),
+	    X \= (C1;C2), X \= (C2;C1)
+	).
+
+FLTRAILERPREFIX(WRAP_SUB)(C1,(C1;C2),_Caller) :-
+        C1 \== FL_TOPTYPE,
+	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
+	;
+	    (C1 \= (_;_), C1 \= (_,_), C1 \= (_-_) -> true ; ground(C1))
+	).
+
+FLTRAILERPREFIX(WRAP_SUB)(C2,(C1;C2),_Caller) :-
+        C2 \== FL_TOPTYPE,
+	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
+	;
+	    (C2 \= (_;_), C2 \= (_,_), C2 \= (_-_) -> true ; ground(C2))
+	).
+
+
+%% C2 must be ground, since they are under NOT
+%% (semantics for non-ground NOT is NOT EXISTS)
+FLTRAILERPREFIX(WRAP_ISA)(X, (C1-C2),_Caller) :-
+	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
+	;
+	    ground(C2),
+	    WRAP_ISA(X,C1,_Caller),
+	    FLORA_TNOT(WRAP_ISA(X,C2,_Caller))
+	).
+
+FLTRAILERPREFIX(WRAP_SUB)((C1-C2),C1,_Caller) :-
+	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
+	;
+	    (C1 \= (_-_), C1 \= (_;_), C1 \= (_,_) -> true ; ground(C1))
+	).
+
+
+/********************* End of standard type definitions *******************/
+
+
+

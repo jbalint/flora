@@ -1,0 +1,84 @@
+/* File:      flrshdirect.P
+**
+** Author(s): Guizhen Yang 
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2008.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+
+
+
+:- compiler_options([xpp_on]).
+
+#include "flora_terms.flh"
+#include "flora_exceptions.flh"
+
+
+:- import flora_shdefine_operator/3 from flroperator.
+
+:- import flora_shdefine_arguments/3 from flrarguments.
+
+:- import flora_storage_check_module_name/1 from flrstorageutils.
+
+:- import
+	flora_dyna_hilog_module_predicate_symbol/2,
+	flora_dynz_hilog_module_predicate_symbol/2,
+	flora_tdyna_hilog_module_predicate_symbol/2,
+	flora_tdynz_hilog_module_predicate_symbol/2
+   from flrwrapper.
+
+:- import flora_abort/1 from flrutils.
+
+
+/*****************************************************************************
+  FLLIBSHDIRECT
+
+  Processes directives in the flora shell (like op, etc.)
+*****************************************************************************/
+
+%% Executable version of this directive makes sense only in main
+%% module in the shell
+FLLIBSHDIRECT(FL_OP,Module,Preced,Assoc,Op) :-
+	(Module == FLORA_DEFAULT_WORKSPACE ->
+	    flora_shdefine_operator(Preced,Assoc,Op)
+	; true
+	).
+
+%% Executable version of this directive makes sense only in main
+%% module in the shell
+/** DEPRECATED
+FLLIBSHDIRECT(FL_ARGUMENTS,Module,Funct,Arity,Args) :-
+	(Module == FLORA_DEFAULT_WORKSPACE ->
+	    flora_shdefine_arguments(Funct,Arity,Args)
+	; true
+	).
+**/
+
+FLLIBSHDIRECT(FL_INDEX,Module,Arity,Position) :-
+	flora_storage_check_module_name(Module),
+        (Arity=FL_TRANSACTIONAL(NA),!; NA=Arity),
+	( integer(NA), integer(Position), Position>0, NA >= Position ->
+	    A is NA+1,
+            P is Position+1,
+            (Arity=FL_TRANSACTIONAL(NA) ->
+                flora_dyna_hilog_module_predicate_symbol(Module,NewPA),
+                flora_dynz_hilog_module_predicate_symbol(Module,NewPZ)
+            ;
+                flora_tdyna_hilog_module_predicate_symbol(Module,NewPA),
+                flora_tdynz_hilog_module_predicate_symbol(Module,NewPZ)
+            ),
+            call(index(NewPA/A,P)),
+            call(index(NewPZ/A,P))
+	;
+	    flora_abort('Invalid argument in index directive')
+	).

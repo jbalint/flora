@@ -1,0 +1,228 @@
+/*******************************************************************************
+  file: closure/flrnoeqltrailer.fli - A template file to generate trailers that
+  				      have no equality maintenance and NO
+				      behavioral inheritance.
+  				      Inheritance of signatures is supported.
+  Author(s): Guizhen Yang
+
+  Contact:   kifer@cs.stonybrook.edu
+
+  Copyright (C) by
+       The Research Foundation of the State University of New York, 1999-2008.
+
+  All rights reserved.
+
+  For information about licensing terms, please see
+  http://silk.projects.semwebcentral.org/flora2-license.html
+
+*******************************************************************************/
+
+
+#include "flora_wspredicates.flh"
+#include "flora_porting.flh"
+
+:- import flora_warning_line/2 from flrprint.
+:- import flora_funct_arity/2 from flrwrapper.
+
+#include "flrnoeqltrailer_neg.inc"
+
+/***************************************************************************
+  Note that all programs rules are translated with with a 'derived_' prefix.
+  These rules are bridged to the trailer using wrapper predicates with a
+  'inferred_' (FLTRAILERPREFIX) prefix.
+***************************************************************************/
+
+
+/***************************************************************************
+  closure rules for X::Y
+***************************************************************************/
+WRAP_SUB(X,Y,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_SUB)(X,Y,CallerInfo),
+	(X=Y,
+	    flora_warning_line('cycle in class hierarchy: ~w sub ~w', [X,Y])
+	; true).
+
+WRAP_SUB(X,Y,CallerInfo) :-
+	silent_sub(X,Z,CallerInfo),
+	FLTRAILERPREFIX(WRAP_SUB)(Z,Y,CallerInfo),
+	(X=Y,
+	    flora_warning_line('cycle in class hierarchy: ~w sub ~w sub ~w',[X,Z,Y])
+	; true).
+
+
+/***************************************************************************
+  closure rules for O:C
+***************************************************************************/
+%% WRAP_ISA/3
+WRAP_ISA(O,C,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_ISA)(O,C,CallerInfo).
+
+WRAP_ISA(O,C,CallerInfo) :-
+        nonvar(C), var(O),
+	!,
+	silent_sub(S,C,CallerInfo),
+	FLTRAILERPREFIX(WRAP_ISA)(O,S,CallerInfo).
+
+WRAP_ISA(O,C,CallerInfo) :-
+	(
+	    flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')
+	-> 
+	    silent_sub(S,C,CallerInfo),
+	    FLTRAILERPREFIX(WRAP_ISA)(O,S,CallerInfo)
+	;
+	   %% The order of FLTRAILERPREFIX(WRAP_ISA)/SILENT_SUB is important. Otherwise, it
+	   %% won't return correct answers in cases like a:(b,c). ?- a:?X.
+	    FLTRAILERPREFIX(WRAP_ISA)(O,S,CallerInfo),
+	    silent_sub(S,C,CallerInfo)
+	).
+
+
+/*****************************************************************************
+  closure for X[Y->Z], X[Y*->Z], X[]
+*****************************************************************************/
+WRAP_IMVD(C,M,V,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_IMVD)(C,M,V,CallerInfo).
+
+WRAP_MVD(O,M,V,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_MVD)(O,M,V,CallerInfo).
+
+WRAP_MVDDEF(O,M,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_MVDDEF)(O,M,CallerInfo).
+
+WRAP_MVDDEF(O,M,CallerInfo) :-
+	nonvar(M),
+	WRAP_MVD(O,M,_V,CallerInfo).
+	%% Should have a cut here when XSB will allow
+
+
+/*****************************************************************************
+  binary attributes (tabled methods)
+*****************************************************************************/
+WRAP_METH(O,M,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_METH)(O,M,CallerInfo).
+
+WRAP_IMETH(C,M,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_IMETH)(C,M,CallerInfo).
+
+
+/*****************************************************************************
+  nontabled methods (transactions)
+*****************************************************************************/
+WRAP_TRAN(O,T,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_TRAN)(O,T,CallerInfo).
+
+
+/*****************************************************************************
+  monotonic inheritance of signatures
+*****************************************************************************/
+%% WRAP_MVDSIG/4
+WRAP_MVDSIG(O,M,R,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_MVDSIG)(O,M,R,CallerInfo).
+
+WRAP_MVDSIG(O,M,R,CallerInfo) :-
+	WRAP_ISA(O,C,CallerInfo),
+	WRAP_IMVDSIG(C,M,R,CallerInfo).
+
+
+%% WRAP_MVDCONDEF/5 
+WRAP_MVDCONDEF(C,M,L,H,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_MVDCONDEF)(C,M,L,H,CallerInfo).
+
+WRAP_MVDCONDEF(O,M,L,H,CallerInfo) :-
+	WRAP_ISA(O,C,CallerInfo),
+	WRAP_IMVDCONDEF(C,M,L,H,CallerInfo).
+
+%% WRAP_MVDSIGDEF/3
+WRAP_MVDSIGDEF(O,M,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_MVDSIGDEF)(O,M,CallerInfo).
+
+WRAP_MVDSIGDEF(O,M,CallerInfo) :-
+	WRAP_ISA(O,C,CallerInfo),
+	WRAP_IMVDSIGDEF(C,M,CallerInfo).
+
+WRAP_MVDSIGDEF(O,M,CallerInfo) :-
+	WRAP_MVDSIG(O,M,_V,CallerInfo).
+	%% Should have a cut here when XSB will allow
+
+
+%% WRAP_IMVDSIG/4
+WRAP_IMVDSIG(C,M,R,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_IMVDSIG)(C,M,R,CallerInfo).
+
+WRAP_IMVDSIG(C,M,R,CallerInfo) :-
+	inheritance_sub(C,S,CallerInfo),
+	WRAP_IMVDSIG(S,M,R,CallerInfo).
+
+
+%% WRAP_IMVDCONDEF/5 
+WRAP_IMVDCONDEF(C,M,L,H,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_IMVDCONDEF)(C,M,L,H,CallerInfo).
+
+WRAP_IMVDCONDEF(C,M,L,H,CallerInfo) :-
+	inheritance_sub(C,S,CallerInfo),
+	WRAP_IMVDCONDEF(S,M,L,H,CallerInfo).
+
+%% WRAP_IMVDSIGDEF/3
+WRAP_IMVDSIGDEF(C,M,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_IMVDSIGDEF)(C,M,CallerInfo).
+
+WRAP_IMVDSIGDEF(C,M,CallerInfo) :-
+	inheritance_sub(C,S,CallerInfo),
+	WRAP_IMVDSIGDEF(S,M,CallerInfo).
+
+WRAP_IMVDSIGDEF(C,M,CallerInfo) :-
+	WRAP_IMVDSIG(C,M,_V,CallerInfo).
+	%% Should have a cut here when XSB will allow
+
+
+%% WRAP_BOOLSIG/3
+WRAP_BOOLSIG(O,M,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_BOOLSIG)(O,M,CallerInfo).
+
+WRAP_BOOLSIG(O,M,CallerInfo) :-
+	WRAP_ISA(O,C,CallerInfo),
+	WRAP_IBOOLSIG(C,M,CallerInfo).
+
+
+%% WRAP_IBOOLSIG/3
+WRAP_IBOOLSIG(C,M,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_IBOOLSIG)(C,M,CallerInfo).
+
+WRAP_IBOOLSIG(C,M,CallerInfo) :-
+	inheritance_sub(C,S,CallerInfo),
+	WRAP_IBOOLSIG(S,M,CallerInfo).
+
+
+%% WRAP_TRANSIG/3
+WRAP_TRANSIG(O,M,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_TRANSIG)(O,M,CallerInfo).
+
+WRAP_TRANSIG(O,M,CallerInfo) :-
+	WRAP_ISA(O,C,CallerInfo),
+	WRAP_ITRANSIG(C,M,CallerInfo).
+
+
+%% WRAP_ITRANSIG/3
+WRAP_ITRANSIG(C,M,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_ITRANSIG)(C,M,CallerInfo).
+
+WRAP_ITRANSIG(C,M,CallerInfo) :-
+	inheritance_sub(C,S,CallerInfo),
+	WRAP_ITRANSIG(S,M,CallerInfo).
+
+
+/*****************************************************************************
+  object existence
+*****************************************************************************/
+WRAP_EXISTS(X,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_EXISTS)(X,CallerInfo).
+
+
+/*****************************************************************************
+  equality maintenance
+  Here we just treat :=: as an ordinary relation.
+*****************************************************************************/
+%% Means X,Y are equal, but not identical
+WRAP_DIFFOBJEQL(X,Y,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_OBJEQL)(X,Y,CallerInfo),
+	X \= Y.

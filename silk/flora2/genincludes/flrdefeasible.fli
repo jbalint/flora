@@ -1,0 +1,74 @@
+/*******************************************************************************
+  file: genincludes/flrdefeasible.fli - A template for generating the include
+  				      	file for supporting defeasible
+  					reasoning.
+  					The use of this file permits us to
+  					avoid the use of FLORA-2's
+  					meta-features, which speeds up hard
+  					cases of defeasible reasoning by 2x.
+					Included from ../includes/flrtrailer.flh
+  Author(s): Michael Kifer
+
+  Copyright (C) by
+       The Research Foundation of the State University of New York, 1999-2008;
+       and Vulcan, Inc., 2008.
+
+  All rights reserved.
+
+  For information about licensing terms, please see
+  http://silk.projects.semwebcentral.org/flora2-license.html
+
+*******************************************************************************/
+
+#include "flora_wspredicates.flh"
+:- WRAP_COPY_UNQUOTED 'FLORA_THIS_MODULE_NAME'.
+
+/*
+  The following rules connect Prolog predicates
+  FL_OPPOSES_AUX/3 and FL_OVERRIDES_AUX/3,
+  which are used by defeasible theories, such as flrgclp.flr,
+  to user-modules HiLog predicates
+  FL_OPPOSES/2, FL_OPPOSES/2 and FL_OPPOSES/4, FL_OPPOSES/4.
+*/
+
+/*
+   MK: For some reason it is faster to use flrtrim:flora_generalize_last/2,
+       when there are many calls to _opposes. Strangely, FLLIBMODOBJ/5 is
+       even faster, but is not always correct (cannot take nontabled HiLog as
+       argument).
+
+       Also, using WRAP_TABLED_HILOG is faster than
+       FLBodyPREFIX(WRAP_TABLED_HILOG).
+       Probably because WRAP_TABLED_HILOG is tabled.
+*/
+
+?- table FL_OPPOSES_AUX/3.
+
+%% Base data: p opposes neg p.
+?- assert((FL_OPPOSES_AUX('FLORA_THIS_MODULE_NAME',(_,H1),(_,H2)) :-
+    	    FL_OPPOSES_BASE('FLORA_THIS_MODULE_NAME',H1,H2))).
+%% Commutativity
+?- assert((FL_OPPOSES_AUX('FLORA_THIS_MODULE_NAME',L2,L1) :-
+    	    FL_OPPOSES_AUX('FLORA_THIS_MODULE_NAME',L1,L2))).
+
+
+%% Connect FL_OPPOSES_AUX and FL_OVERRIDES_AUX with user predicates:
+%% HiLog FL_OPPOSES/2+4, FL_OVERRIDES/2+4.
+?- assert((FL_OPPOSES_AUX('FLORA_THIS_MODULE_NAME',(Id1,H1),(Id2,H2)) :-
+	    flrtrim:flora_generalize_last(H1,HH1),
+	    flrtrim:flora_generalize_last(H2,HH2),
+            (
+	       WRAP_TABLED_HILOG(FL_OPPOSES,HH1,HH2,_)
+	    ;
+	       WRAP_TABLED_HILOG(FL_OPPOSES,Id1,HH1,Id2,HH2,_)
+	    )
+	  )).
+
+
+?- assert((FL_OVERRIDES_AUX('FLORA_THIS_MODULE_NAME',(Id1,H1),(Id2,H2)) :-
+            (
+	       WRAP_TABLED_HILOG(FL_OVERRIDES,Id1,Id2,_)
+	    ;
+	       WRAP_TABLED_HILOG(FL_OVERRIDES,Id1,H1,Id2,H2,_)
+	    )
+	 )).

@@ -1,0 +1,259 @@
+/* File:      flrstorageutils.P
+**
+** Author(s): Guizhen Yang 
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2008.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+
+
+
+:- compiler_options([xpp_on]).
+
+#include "flora_terms.flh"
+#include "flora_porting.flh"
+#include "flora_exceptions.flh"
+
+
+:- import flora_module_registry/1 from flrregistry.
+
+:- import
+	flora_is_system_module_name/1,
+	flora_check_module_name/1,
+	flora_module_name_error/1,
+	flora_fdb_storage_name/2,
+	flora_decode_module_name/2
+   from flrwrapper.
+
+:- import 
+        convert_to_head_literal/2,
+        get_canonical_form/2,
+        flora_check_dynmod_type_consistency/1
+    from flrcanon.
+
+:- import flora_add_last/3 from flrtrim.
+
+:- import flora_decode_goal_as_atom/2 from flrdecode.
+
+:- import
+	flora_abort/1,
+	flora_load_system_module_internal/1
+   from flrutils.
+
+:- import
+	FLSYSDBUPDATE/2,
+	FLSYSDBUPDATE/3,
+	FLLIBMODLIT/4,
+	FLLIBMODOBJ/5
+   from usermod.
+
+:- import
+	flora_db_find_base/2
+   from flrstoragebase.
+:- import
+        flora_check_export_registry_internal/4
+   from flrexport.
+
+:- export
+	flora_storage_check_module_name/1,
+	flora_storage_check_existence/1,
+	flora_storage_check_deletepredicate/2,
+	flora_construct_delete_predicate/3,
+	flora_storage_convertlist/4,
+	flora_storage_is_negation_symbol/1,
+	('_isbasefact')/1.
+
+/*
+%% Tabling these does not seem to have any effect
+:- table
+	flora_storage_check_module_name/1,
+	flora_storage_check_existence/1.
+*/
+
+/*****************************************************************************
+  flora_storage_check_module_name(+ModuleName)
+
+  The procedure is called to checks if a module name is valid during an update
+  operation. Note that updating a Flora system module is not allowed.
+*****************************************************************************/
+flora_storage_check_module_name(ModuleName) :-
+	(flora_is_system_module_name(ModuleName)
+	-> (flora_module_registry(ModuleName), !
+	    ; flora_load_system_module_internal(ModuleName)
+	    )
+	; flora_check_module_name(ModuleName)
+	-> flora_storage_check_existence(ModuleName)
+	;
+	    flora_module_name_error(ModuleName)
+	).
+
+/*****************************************************************************
+  flora_storage_check_existence(+ModuleName)
+
+  The procedure is called to checks if a module is loaded.
+*****************************************************************************/
+flora_storage_check_existence(ModuleName) :-
+        ( flora_module_registry(ModuleName), !
+        ;
+            flora_abort(['Module ',ModuleName,' is not loaded'])
+        ).
+
+/*****************************************************************************
+  flora_storage_check_deletepredicate(+P,-UpdateStruct)
+
+  It is used to call a predicate in the list of literals to be deleted.
+  It supports the meta-programming feature of delete where a variable is
+  used to pass the predicate.
+
+  Note: If the variable is bound to a conjunction, then it will be broken up
+        accordingly into a nested list structure. This feature is defferent
+        from Prolog which does not treat conjunction any diferently from
+        other builtin predicates. However, deletion of disjunction or negation
+        is not allowed.
+*****************************************************************************/
+flora_storage_check_deletepredicate(P,_UpdateStruct) :-
+	var(P),
+	!,
+	flora_abort('Uninstantiated argument in DELETE operation').
+
+flora_storage_check_deletepredicate(','(C1,C2),[P1,P2]) :-
+	!,
+	%% Break up conjunction, although deletion of conjunction is not
+	%% allowed in XSB.
+	flora_storage_check_deletepredicate(C1,P1),
+	flora_storage_check_deletepredicate(C2,P2).
+
+flora_storage_check_deletepredicate(P,FLSYSDBUPDATE(NP,StorageName)) :-
+	%% This is a meta programming feature.
+	functor(P,F,N),
+	( flora_decode_module_name(P,ModuleName) ->
+	    flora_storage_check_module_name(ModuleName),
+	    flora_fdb_storage_name(ModuleName,StorageName),
+            convert_to_head_literal(P,NP),
+	    flora_db_find_base(StorageName,NP)
+
+	; N == 2, F == ';' ->
+	    flora_decode_goal_as_atom(P,PA),
+	    flora_abort(['Deletion of disjunctive information is not allowed, ',
+			 PA])
+
+	; N == 1, flora_storage_is_negation_symbol(F) ->
+	    flora_decode_goal_as_atom(P,PA),
+	    flora_abort(['Deletion of negative information is not allowed, ',
+			 PA])
+	;
+	    flora_decode_goal_as_atom(P,PA),
+	    ( F == WRAP_HILOG ->
+		flora_abort(['Deletion of HiLog terms is not allowed, ', PA])
+	    ;
+		flora_abort(['Deletion of Prolog terms is not allowed, ', PA])
+	    )
+	).
+
+flora_construct_delete_predicate(ThisModuleName,ModuleName,P) :-
+        var(P),
+        flora_module_registry(ModuleName),
+        flora_fdb_storage_name(ModuleName,StorageName),
+        flora_check_export_registry_internal(ThisModuleName,ModuleName,EP,FLEXPORT_UPDATABLE),
+        ( var(EP) ->
+            flora_db_find_base(StorageName,EP),
+            flora_add_last(EP,P,ThisModuleName)
+        ;
+            flora_db_find_base(StorageName,EP),
+            EP = P
+        ).
+
+/*****************************************************************************
+  flora_storage_convertlist(+ThisModule,+List,-CallList,-FactList)
+*****************************************************************************/
+flora_storage_convertlist(_ThisModule,[],[],[]) :- !.
+
+flora_storage_convertlist(ThisModule,[P|Fs],CL,[P|FL]) :-
+	%% Don't flag rule update predicate
+	functor(P,FLSYSRULEUPDATE,_N),
+	!,
+	flora_storage_convertlist(ThisModule,Fs,CL,FL).
+
+
+flora_storage_convertlist(ThisModule,[Var|Fs],
+                          [flora_construct_delete_predicate(ThisModule,_ModuleName,Var), flora_storage_check_deletepredicate(Var,UpdateStruct)|CL],
+			  [UpdateStruct|FL]) :-
+        var(Var),
+        !,
+        flora_storage_convertlist(ThisModule,Fs,CL,FL).
+
+flora_storage_convertlist(ThisModule,[FLLIBMODOBJ(F,A,MN,C,O)|Fs],CL,FL) :-
+        !,
+        flora_storage_convertlist(ThisModule,Fs,CL,FL),
+        FLLIBMODOBJ(F,A,MN,C,O).
+
+flora_storage_convertlist(ThisModule,[FLLIBMODLIT(LibmodWrap,Var,ModuleName,_Caller)|Fs],
+                          [flora_construct_delete_predicate(ThisModule,ModuleName,Var), get_canonical_form(Var,FLCANON(_,_,_,_,PredType)),flora_storage_check_deletepredicate(Var,UpdateStruct)|CL],
+			  [UpdateStruct|FL]) :-
+        var(Var),
+	(LibmodWrap == FL_LIBMOD -> PredType = FL_TABLED
+	; LibmodWrap == FL_NEGLIBMOD -> PredType = FL_TABLED_NEG
+	; PredType = FL_NOTTABLED
+	),
+        !,
+        flora_storage_convertlist(ThisModule,Fs,CL,FL).
+
+flora_storage_convertlist(ThisModule,[FLLIBMODLIT(LibmodWrap,(First,Rest),Mod,Caller)|Fs],CL,FL) :-
+        !,
+        flora_check_dynmod_type_consistency(FLLIBMODLIT(LibmodWrap,(First,Rest),Mod,Caller)),
+        flora_storage_convertlist(ThisModule,[FLLIBMODLIT(LibmodWrap,First,Mod,Caller),FLLIBMODLIT(FL_LIBMOD,Rest,Mod,Caller)|Fs],CL,FL).
+
+flora_storage_convertlist(ThisModule,[FLLIBMODLIT(LibmodWrap,FLLIBMODOBJ(F,A,MN,C,O),_Mod,_Caller)|Fs],CL,FL) :-
+	(LibmodWrap==FL_LIBMOD ; LibmodWrap==FL_NEGLIBMOD ; LibmodWrap==FL_TRANSLIBMOD),
+        !,
+        flora_storage_convertlist(ThisModule,Fs,CL,FL),
+        FLLIBMODOBJ(F,A,MN,C,O).
+
+flora_storage_convertlist(ThisModule,[FLLIBMODLIT(Wrap,Args,Mod,Caller)|Fs],
+                                     [flora_storage_check_module_name(Mod),flora_module_registry(Mod),get_canonical_form(FLLIBMODLIT(Wrap,Args,Mod,Caller),FLCANON(_,_,_,P,_)),flora_check_export_registry_internal(ThisModule,Mod,P,FLEXPORT_UPDATABLE),flora_storage_check_deletepredicate(P,UpdateStruct)|CL],
+                                     [UpdateStruct|FL]) :-
+        !,
+        flora_storage_convertlist(ThisModule,Fs,CL,FL).
+
+flora_storage_convertlist(ThisModule,[FLSYSDBUPDATE(P,StorageName,Module)|Fs],
+                          [flora_db_find_base(StorageName,P)|CL],
+			  [FLSYSDBUPDATE(P,StorageName)|FL]) :-
+	!,
+        flora_storage_check_existence(Module),
+        flora_check_export_registry_internal(ThisModule,Module,P,FLEXPORT_UPDATABLE),
+	flora_storage_convertlist(ThisModule,Fs,CL,FL).
+
+flora_storage_convertlist(ThisModule,[P|Fs],
+	                  [flora_storage_check_deletepredicate(P,UpdateStruct)|CL],
+			  [UpdateStruct|FL]) :-
+	%% This is a meta-programming feature.
+	flora_storage_convertlist(ThisModule,Fs,CL,FL).
+
+
+/*****************************************************************************
+  flora_storage_is_negation_symbol(+Functor)
+*****************************************************************************/
+%% Note that FL_NEG is not listed here, since deletion of explicitly
+%% negated facts is allowed
+flora_storage_is_negation_symbol(FL_NAF).
+flora_storage_is_negation_symbol(FL_NOT).
+flora_storage_is_negation_symbol(FL_TNOT).
+flora_storage_is_negation_symbol(FLORA_TNOT_PREDICATE).
+
+
+%% Check if Fact is a base fact
+'_isbasefact'(Fact) :-
+	flora_decode_module_name(Fact,Module),
+	flora_fdb_storage_name(Module,StorageName),
+	convert_to_head_literal(Fact,HeadFact),
+	flora_db_find_base(StorageName,HeadFact).

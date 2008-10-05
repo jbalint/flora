@@ -1,0 +1,260 @@
+/* File:      flrtypeconstraint.flr
+**
+** Author(s): Hui Wan
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2008.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+
+
+
+
+#include "flora_terms.flh"
+
+:- export
+       ?[%check(?,?)],
+       ?[%check(?)].
+
+Cardinality[%check(?Atom)] :-
+	?Atom !~ ?Obj[?Meth => ?]@?Mod,
+	?Atom !~ ?Obj[?Meth {?LowBound:?HighBound} => ?]@?Mod,
+	?Atom !~ ?Obj[?Meth *=> ?]@?Mod,
+	?Atom !~ ?Obj[?Meth {?LowBound:?HighBound} *=> ?]@?Mod,
+	flora_decode_goal_as_atom(?Atom,?AtmString)@_prolog(flrdecode),
+	%abort(['Cardinality[%check(',
+		 ?AtmString,
+		 ')]@_typecheck: Invalid signature argument'])@_sys.
+
+Cardinality[%check(?Atom)] :-
+	( ?Atom ~ ?Obj[?Meth => ?]@?Mod, !
+        ; ?Atom ~ ?Obj[?Meth {?LowBound:?HighBound} => ?]@?Mod
+        ),
+	// ?Mod==FLSYSMODTYPECHECK, if module wasn't specified
+	if ?Mod == FLSYSMODTYPECHECK then caller{?RealMod} else ?RealMod=?Mod,
+	%checkBounds(?LowBound,?HighBound),
+	?Obj[?Meth {?Low:?High}  => ?]@?RealMod,
+	?Count = count{?V | ?Obj[?Meth -> ?V]@?RealMod},
+	// use @> to compare ?Count and ?High since ?High may be '*'
+	(?Count < ?Low ; ?Count @> ?High),
+	boundViolated(?Count,?Low,?High,?LowBound,?HighBound).
+	
+
+Cardinality[%check(?Atom)] :-
+	( ?Atom ~ ?Obj[?Meth *=> ?]@?Mod, !
+        ; ?Atom ~ ?Obj[?Meth {?LowBound:?HighBound} *=> ?]@?Mod
+        ),
+	// ?Mod==FLSYSMODTYPECHECK, if module wasn't specified
+	if ?Mod == FLSYSMODTYPECHECK then caller{?RealMod} else ?RealMod=?Mod,
+	%checkBounds(?LowBound,?HighBound),
+	?Obj[?Meth {?Low:?High} *=> ?]@?RealMod,
+	?Count = count{?V | ?Obj[?Meth *-> ?V]@?RealMod},
+	// use @> to compare ?Count and ?High since ?High may be '*'
+	(?Count < ?Low ; ?Count @> ?High),
+	boundViolated(?Count,?Low,?High,?LowBound,?HighBound).
+
+/*****************************************************************************
+    Utilities for cardinality check
+*****************************************************************************/
+
+/*****************************************************************************
+	    %checkBounds(-LowBound,-HighBound)
+
+  Verify that ?LowBound and ?HighBound should be unbound variables,
+  and should not be equal.
+*****************************************************************************/
+%checkBounds(?LowBound,?HighBound) :-
+	if ?HighBound == ?LowBound  then
+	    %abort('Error in Cardinality[%check(?[?Method {?Low:?High} => ?])]@_typecheck: Low and high bounds must be different')@_sys,
+	if nonvar(?LowBound) then  
+	    %abort('Error in Cardinality[%check(?[?Method {?Low:?High} => ?])]@_typecheck: ?Low must be unbound variable')@_sys,
+	if nonvar(?HighBound) then 
+	    %abort('Error in Cardinality[%check(?[?Method {?Low:?High} => ?])]@_typecheck: ?High must be unbound variable')@_sys.
+
+
+/*****************************************************************************
+	    boundViolated(+Count,+Low,+High,-LowBound,-HighBound)
+
+  ?Count is the actual cardinality, ?Low and ?High are the bounds,
+  ?LowBound and ?HighBound signal the violated bounds.
+*****************************************************************************/
+boundViolated(?Count,?Low,?High,?LowBound,?HighBound) :-
+	if ?Count < ?Low then
+	    ?LowBound = ?Low // The lower bound is violated, bind ?LowBound
+          	             // to the violated lower bound; else, bind to 'ok'.
+	else ?LowBound = NOT_VIOLATED,
+	if ?Count @> ?High then
+	    ?HighBound = ?High // The higher bound is violated, bind ?HighBound
+	                       // to the violated high bound; else bind to 'ok'.
+	else ?HighBound = NOT_VIOLATED.
+
+
+
+/******************************************************************************
+   Type checking;
+	  Type[%typeCheck(+?Atom,-?Result)
+          If ?Atom = -> then both -> and *-> are checked. Missing types flagged
+             ?Atom = *-> then only *-> are checked. Missing types not flagged
+             ?Atom = => then ->, *-> are checked. Missing types not flagged
+                        (semistructured data)
+             ?Atom = *=> then only *-> are checked. Missing types not flagged
+******************************************************************************/
+
+Type[%check(?Atom,?Result)] :-
+	caller{?CallerMod},
+        Method[%mustDefine(?Stat(?CallerMod))]@_sys,
+        Method[%mustDefine(off(?CallerMod))]@_sys,
+	?Result = collectset{?Res|Type[%check(?Atom,?CallerMod,?Res)]},
+        Method[%mustDefine(?Stat(?CallerMod))]@_sys.
+
+// %check/3 - internal
+Type[%check(?Atom,?CallerMod,?Result)] :-
+	?Atom ~ ?Class[?Meth -> ?]@?,
+	!,
+	Type[%typeCheckInternal(?,?)(?Class,?Meth,?CallerMod,?Result)].
+
+Type[%check(?Atom,?CallerMod,?Result)] :-
+	?Atom ~ ?Class[?Meth *-> ?]@?,
+	!,
+	Type[%typeCheckInternal(defaultonly,?)(?Class,?Meth,?CallerMod,?Result)].
+
+Type[%check(?Atom,?CallerMod,?Result)] :-
+	?Atom ~ ?Class[?Meth => ?]@?,
+	!,
+	Type[%typeCheckInternal(?,nonstrict)(?Class,?Meth,?CallerMod,?Result)].
+
+Type[%check(?Atom,?CallerMod,?Result)] :-
+	?Atom ~ ?Class[?Meth *=> ?]@?,
+	!,
+	Type[%typeCheckInternal(defaultonly,nonstrict)(?Class,?Meth,?CallerMod,?Result)].
+
+// For Boolean methods
+Type[%check(?Atom,?CallerMod,?Result)] :-
+	?Atom ~ ?Class[?Meth]@?,
+	!,
+	Type[%typeCheckBoolInternal(?,?)(?Class,?Meth,?CallerMod,?Result)].
+
+Type[%check(?Atom,?CallerMod,?Result)] :-
+	?Atom ~ ?Class[*?Meth]@?,
+	!,
+	Type[%typeCheckBoolInternal(defaultonly,?)(?Class,?Meth,?CallerMod,?Result)].
+
+Type[%check(?Atom,?CallerMod,?Result)] :-
+	?Atom ~ ?Class[=>?Meth]@?,
+	!,
+	Type[%typeCheckBoolInternal(?,nonstrict)(?Class,?Meth,?CallerMod,?Result)].
+
+Type[%check(?Atom,?CallerMod,?Result)] :-
+	?Atom ~ ?Class[*=>?Meth]@?,
+	!,
+	Type[%typeCheckBoolInternal(defaultonly,nonstrict)(?Class,?Meth,?CallerMod,?Result)].
+
+Type[%check(?Atom,?_Mod,?_Result)] :-
+	flora_decode_goal_as_atom(?Atom,?AtmString)@_prolog(flrdecode),
+	%abort(['Type[%check(',
+		 ?AtmString,',?Result',
+		 ')]@_typecheck: Invalid first argument'])@_sys.
+
+
+	
+// wrong type, nondefault, nonstrict
+Type[%typeCheckInternal(allsigns,?)(?Class,?Method,?Module,?Result)] :- 
+	\+ flora_system_module(?Module)@_prolog(flrlibman),
+	?O[?Method->?Val, ?Method=>?Type]@?Module,
+	if nonvar(?Class) then ?O:?Class@?Module,
+	not ?Val:?Type@?Module,
+	?Result ~ ?O[?Method->?Val, ?Method=>?Type]@?Module.
+
+// missing type, nondefault sign, strict
+Type[%typeCheckInternal(allsigns,strict)(?Class,?Method,?Module,?Result)] :-
+	\+ flora_system_module(?Module)@_prolog(flrlibman),
+        (?O[?Method -> ?Val], not ?O[?Method => ?])@?Module,
+	if nonvar(?Class) then ?O:?Class@?Module,
+	?Result ~ ?O[?Method -> ?Val]@?Module.
+
+// wrong type, default sign, nonstrict
+Type[%typeCheckInternal(?,?)(?Class,?Method,?Module,?Result)] :- 
+	\+ flora_system_module(?Module)@_prolog(flrlibman),
+	?O[?Method*->?Val, ?Method*=>?Type]@?Module,
+	if nonvar(?Class) then ?O:?Class@?Module,
+	not ?Val:?Type@?Module,
+	?Result ~ ?O[?Method*->?Val, ?Method*=>?Type]@?Module.
+
+// missing type, default sign, strict (not checked if nonstrict)
+Type[%typeCheckInternal(?,strict)(?Class,?Method,?Module,?Result)] :-
+	\+ flora_system_module(?Module)@_prolog(flrlibman),
+        (?O[?Method *-> ?Val], not ?O[?Method *=> ?])@?Module,
+	if nonvar(?Class) then ?O:?Class@?Module,
+	?Result ~ ?O[?Method *-> ?Val]@?Module.
+
+
+
+// Same for Boolean methods
+// wrong type, nondefault, nonstrict
+Type[%typeCheckBoolInternal(allsigns,?)(?Class,?Method,?Module,?Result)] :- 
+	\+ flora_system_module(?Module)@_prolog(flrlibman),
+	?O[?Method]@?Module,
+	generalize_method(?Method,?MethodType,?MethArgs,?Types),
+	?O[=>?MethodType]@?Module,
+	if nonvar(?Class) then ?O:?Class@?Module,
+	not_complies_with_type_list(?MethArgs,?Types,?Module),
+	?Result ~ ?O[?Method, =>?MethodType]@?Module.
+
+// missing type, nondefault sign, strict
+Type[%typeCheckBoolInternal(allsigns,strict)(?Class,?Method,?Module,?Result)] :-
+	\+ flora_system_module(?Module)@_prolog(flrlibman),
+        ?O[?Method]@?Module,
+	generalize_method(?Method,?MethodType,?,?),
+	not ?O[=>?MethodType]@?Module,
+	if nonvar(?Class) then ?O:?Class@?Module,
+	?Result ~ ?O[?Method]@?Module.
+
+// wrong type, default sign, nonstrict
+Type[%typeCheckBoolInternal(?,?)(?Class,?Method,?Module,?Result)] :- 
+	\+ flora_system_module(?Module)@_prolog(flrlibman),
+	?O[*?Method]@?Module,
+	generalize_method(?Method,?MethodType,?MethArgs,?Types),
+	?O[*=>?MethodType]@?Module,
+	if nonvar(?Class) then ?O:?Class@?Module,
+	not_complies_with_type_list(?MethArgs,?Types,?Module),
+	?Result ~ ?O[*?Method, *=>?MethodType]@?Module.
+
+// missing type, default sign, strict (not checked if nonstrict)
+Type[%typeCheckBoolInternal(?,strict)(?Class,?Method,?Module,?Result)] :-
+	\+ flora_system_module(?Module)@_prolog(flrlibman),
+        ?O[*?Method]@?Module,
+	generalize_method(?Method,?MethodType,?,?),
+	not ?O[*=>?MethodType]@?Module,
+	if nonvar(?Class) then ?O:?Class@?Module,
+	?Result ~ ?O[*?Method]@?Module.
+
+
+/*************************************************************************
+  Utilities
+*************************************************************************/
+// replace method args with variables
+generalize_method(?Method,?Method,?,?) :-
+	var(?Method),
+	!.
+
+generalize_method(?Method,?GenMethod,?Args,?NewArgs) :-
+	(?Method =.. [?HiLogWrap,?MethName|?Args])@_prolog,
+	(length(?Args,?Len), length(?NewArgs,?Len))@_prolog(basics),
+	(?GenMethod =.. [?HiLogWrap,?MethName|?NewArgs])@_prolog.
+
+not_complies_with_type_list([], [], ?) :- !, fail.
+not_complies_with_type_list([?Arg|?], [?Type|?], ?Module) :-
+	not ?Arg : ?Type@?Module,
+	!.
+not_complies_with_type_list([?Arg|?ArgList], [?Type|?TypeList], ?Module) :-
+	?Arg : ?Type@?Module,
+	not_complies_with_type_list(?ArgList,?TypeList,?Module).

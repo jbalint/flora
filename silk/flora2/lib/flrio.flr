@@ -1,0 +1,229 @@
+/* File:      flrio.flr
+**
+** Author(s): Michael Kifer
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2008.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+
+
+
+#include "standard.h"
+#include "flora_terms.flh"
+
+// The purpose of this library is to provide optimal conversion from
+// HiLog to Prolog and back before passing the arguments to the I/O predicates.
+// In addition, it passes the result through flora_write_oid/1 in order 
+// to ensure that all the FLORA module info and encoding is stripped.
+//
+// This all is used for user-level output. For file I/O one should use
+// @_prolog instead of @_io, i.e., use Prolog I/O primitives directly.
+
+/**************************
+**   I/O port based ops
+**************************/
+
+:- export
+         ?_[%open(?_,?_)],
+	 ?_[%close],
+	 ?_[%read(?_)],
+	 %write(?_),
+	 ?_[%write(?_)],
+	 %stdread(?_),
+	 %stdwrite(?_),
+	 %fmt_write(?_,?_),
+	 ?_[%fmt_write(?_,?_)],
+	 %fmt_write_string(?_,?_,?_),
+	 %fmt_read(?_,?_,?_),
+	 ?_[%fmt_read(?_,?_,?_)],
+	 ?_[%write_canonical(?_)],
+	 %write_canonical(?_),
+	 %read_canonical(?_),
+	 ?_[%read_canonical(?_)],
+	 ?_[%readline(?_,?_)],
+	 %readline(?_,?_),
+	 ?_[%writeln(?_)],
+	 %writeln(?_),
+	 %nl,
+	 %nl(?_),
+	 ?_[%see],
+	 %see(?_),
+	 %seen,
+	 %seeing(?_),
+	 ?_[%tell],
+	 %tell(?_),
+	 %told,
+	 ?_[%telling],
+	 %telling(?_),
+	 // file ops
+	 ?[%exists(?)],
+	 ?[%readable(?)],
+	 ?[%writable(?)],
+	 ?[%executable(?)],
+	 ?[%modtime(?)],
+	 ?[%mkdir(?)],
+	 ?[%rmdir(?)],
+	 ?[%chdir(?)],
+	 ?[%cwd(?)],
+	 ?[%link(?)],
+	 ?[%unlink(?)],
+	 ?[%remove(?)],
+	 ?[%tmpfilename(?)],
+	 ?[%isabsolute(?)],
+	 ?[%rename(?)],
+	 ?[%basename(?)],
+	 ?[%extension(?)],
+	 ?[%expand(?)],
+	 ?[%newerthan(?)],
+	 ?[%dirname(?)],
+	 ?[%copy(?)].
+
+
+?Filename[%open(?Mode,?Port)] :-
+	// ?Filename can be atom(...). Needs to be prologized
+	p2h{?FilenameP,?Filename},
+	open(?FilenameP,?Mode,?Port)@_plg.
+?Port[%close] :- close(?Port)@_plg.
+
+%stdread(?HResult) :-
+	read(STDIN, ?PResult)@_plg, p2h{?PResult,?HResult}.
+%stdwrite(?Term) :-
+	flora_write_oid(STDOUT,?Term)@_plg(flrdecode).
+
+
+// Use arg(obj, obj, obj) to supply multiple arguments
+%fmt_write(?Format,?O) :-
+	!,
+	%florify_arguments(?O,?FO),
+	fmt_write(?Format,?FO)@_plg.
+?FileHandle[%fmt_write(?Format,?O)] :-
+	%florify_arguments(?O,?FO),
+	fmt_write(?FileHandle,?Format,?FO)@_plg().
+%fmt_write_string(?String,?Format,?O) :-
+	!,
+	%florify_arguments(?O,?FO),
+	fmt_write_string(?String,?Format,?FO)@_plg.
+%fmt_read(?Format,?Result,?Status) :-
+	!,
+	fmt_read(?Format,?PResult,?Status)@_plg(),
+	p2h{?PResult,?Result}.
+?FileHandle[%fmt_read(?Format,?Result,?Status)] :-
+	fmt_read(?FileHandle,?Format,?PResult,?Status)@_plg,
+	p2h{?PResult,?Result}.
+
+?Filehandle[%write_canonical(?HTerm)] :-
+	p2h{?PTerm,?HTerm},
+	file_write_canonical(?Filehandle,?PTerm)@_plg(xsb_writ).
+%write_canonical(?HTerm) :-
+	p2h{?PTerm,?HTerm}, write_canonical(?PTerm)@_plg().
+
+%read_canonical(?HTerm) :-
+	read_canonical(?PTerm)@_plg, p2h{?PTerm,?HTerm}. 
+?Filehandle[%read_canonical(?HTerm)] :-
+	file_read_canonical(?Filehandle,?PTerm,?_)@_plg(machine),
+	p2h{?PTerm,?HTerm}. 
+?Filehandle[%readline(atom,?String)] :-
+	!, file_read_line_atom(?Filehandle,?String)@_plg(file_io).
+?Filehandle[%readline(charlist,?String)] :-
+	!, file_read_line_list(?Filehandle,?String)@_prolog(file_io).
+?_Filehandle[%readline(?Request,?_)] :- 
+	%abort(('Invalid readline format, ', ?Request))@_sys.
+%readline(atom,?String) :-
+	!, file_read_line_atom(?String)@_prolog(file_io).
+%readline(charlist,?String) :-
+	!, file_read_line_list(?String)@_prolog(file_io).
+%readline(?Request,?_) :- 
+	%abort(('Invalid readline format, ', ?Request))@_sys.
+
+
+/***********************
+**  Stream-based I/O
+***********************/
+
+%write(?O) :- !,
+	flora_write_oid(?O)@_plg(flrdecode).
+?IOstream[%write(?O)] :-
+	flora_write_oid(?IOstream,?O)@_prolog(flrdecode).
+%writeln(?O) :- !,
+	flora_write_oid(?O)@_plg(flrdecode),
+	nl@_plg.
+?IOstream[%writeln(?O)] :-
+	flora_write_oid(?IOstream,?O)@_prolog(flrdecode),
+	nl(?IOstream)@_prolog.
+%nl :- nl@_plg.
+%nl(?IOstream) :- nl(?IOstream)@_plg().
+
+%read(?Result) :- !, read(?PResult)@_prolog, p2h{?PResult,?Result}.
+?IOstream[%read(?Result)] :-
+	read(?IOstream,?PResult)@_prolog, p2h{?PResult,?Result}.
+
+?Filename[%see] :- see(?Filename)@_plg.
+%see(?Filename) :- see(?Filename)@_plg.
+%seen :- seen@_plg.
+%seeing(?Stream) :- seeing(?Stream)@_plg().
+
+?Filename[%tell] :- tell(?Filename)@_prolog.
+%tell(?Filename) :- tell(?Filename)@_prolog.
+%told :- told@_plg.
+%telling(?Stream) :- telling(?Stream)@_plg().
+?Stream[%telling] :- telling(?Stream)@_plg().
+
+
+
+// UTILITIES
+
+// This is used for fmt_write_* predicates. Takes a *prolog* term argument 
+// of the form 
+// arg(arg1,...,argn) and returns arg(arg1',..., argn'), where arg_i=arg_i'
+// if arg_i is not compound. Otherwise we apply flora_write_oid/1
+// This is needed in order make sure that arguments like f(a) are printed 
+// as f(a) and not WRAP_HILOG(f,a) or something like that.
+%florify_arguments(?WrappedArgs,?OutTerm) :-
+	?WrappedArgs =.. [hilog(?Fun) | ?Args],
+	!,
+	%florify_arglist(?Args,?OutList),
+	?OutTerm =.. [?Fun|?OutList].
+// single argument to fmt_write without the arg(...) envelope
+%florify_arguments(?Arg,?OutTerm) :-
+	flora_decode_oid_as_atom(?Arg,?OutTerm)@_prolog(flrdecode).
+%florify_arglist([],[]) :- !.
+%florify_arglist([?Arg|?Args], [?OutArg| ?OutArgs]) :-
+	compound(?Arg)@_prolog,
+	!,
+	flora_decode_oid_as_atom(?Arg,?OutArg)@_plg(flrdecode),
+	%florify_arglist(?Args,?OutArgs).
+%florify_arglist([?_Arg|?Args], [?_Arg| ?OutArgs]) :-
+	%florify_arglist(?Args,?OutArgs).
+
+
+File[%exists(?F)] :- flora_file_op(exists,?F)@_prolog(flrporting).
+File[%readable(?F)] :- flora_file_op(readable,?F)@_prolog(flrporting).
+File[%writable(?F)] :- flora_file_op(writable,?F)@_prolog(flrporting).
+File[%executable(?F)] :- flora_file_op(executable,?F)@_prolog(flrporting).
+File[%modtime(?F,?T)] :- flora_file_op(modtime,?F,?T)@_prolog(flrporting).
+File[%mkdir(?F)] :- flora_file_op(mkdir,?F)@_prolog(flrporting).
+File[%rmdir(?F)] :- flora_file_op(rmdir,?F)@_prolog(flrporting).
+File[%chdir(?F)] :- flora_file_op(chdir,?F)@_prolog(flrporting).
+File[%cwd(?F)] :- flora_file_op(cwd,?F)@_prolog(flrporting).
+File[%link(?F,?D)] :- flora_file_op(link,?F,?D)@_prolog(flrporting).
+File[%unlink(?F)] :- flora_file_op(unlink,?F)@_prolog(flrporting).
+File[%remove(?F)] :- flora_file_op(rm,?F)@_prolog(flrporting).
+File[%tmpfilename(?F)] :- flora_file_op(tmpfilename,?F)@_prolog(flrporting).
+File[%isabsolute(?F)] :- flora_file_op(isabsolute,?F)@_prolog(flrporting).
+File[%rename(?F,?To)] :- flora_file_op(rename,?F,?To)@_prolog(flrporting).
+File[%basename(?F,?Base)] :- flora_file_op(basename,?F,?Base)@_prolog(flrporting).
+File[%extension(?F,?Ext)] :- flora_file_op(extension,?F,?Ext)@_prolog(flrporting).
+File[%expand(?F,?Expanded)] :- flora_file_op(expand,?F,?Expanded)@_prolog(flrporting).
+File[%newerthan(?F,?F2)] :- flora_file_op(newerthan,?F,?F2)@_prolog(flrporting).
+File[%dirname(?F,?Dir)] :- flora_file_op(dirname,?F,?Dir)@_prolog(flrporting).
+File[%copy(?F,?To)] :- flora_file_op(copy,?F,?To)@_prolog(flrporting).

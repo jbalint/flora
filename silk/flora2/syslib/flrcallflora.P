@@ -1,0 +1,224 @@
+/* File:      flrcallflora.P
+**
+** Author(s): Michael Kifer
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2008.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+
+:- compiler_options([xpp_on]).
+
+#include "flora_terms.flh"
+#include "flora_exceptions.flh"
+#include "flora_status_codes.flh"
+
+#define MAX_NUMBER_CACHED_QUERIES  500
+
+:- import 
+	flora_shell_command_line/3,
+	flloadtrailer/2,
+	flora_abort/1
+   from flrutils.
+:- import
+	flora_load_library/1,
+	flora_load_system_module/1
+   from flrlibman.
+
+:- import print_backtrace/1 from error_handler.
+
+:- import is_charlist/1 from machine.
+
+:- import member/2 from basics.
+
+
+
+:- export
+	flora_good_command/1,
+	flora_bad_command/1,
+	flora_noop_command/1,
+	flora_string_command_line/4,
+	flora_call_string_command/4.
+
+:- dynamic
+	flora_query_cache/3,
+	cache_index/2,
+	last_cached_query_index/1.
+:- index(flora_query_cache/3,trie).
+:- index(cache_index/2,trie).
+
+
+/*************************************************************************
+   flora_call_string_command(+String,+Vars,-Status,-Exception)
+
+   Execute a query specified in String.
+
+   String: A query string
+   Vars:   A list of the form [Name1=Var1, Name2=Var2,...].
+           Name is a name of a variable mentioned in String, for instance, 
+	   '?X' (note: must be quoted, since it is a name).
+	   Var is a variable where you want the bonding for the variable 
+	   Name in String to be returned. For instance, 
+	   if String is 'p(?X,?Y).'
+	   Vars can be ['?X' = Xyz, '?Y' = Qpr]
+	   Then Xyz will be bound to the value of ?X in p(?X,?Y) after
+	   the execution and Qpr will be bound to the value of ?Y in p(?X,?Y).
+   Status: indicates the status of compilation of the command in String.
+   Exception: is a possible exception during the runtime execution 
+              of the command in String.
+*************************************************************************/
+
+flora_call_string_command(String,_UserVars,Status,_Exception) :-
+	\+ atom(String),
+	\+ is_charlist(String),
+	!,
+	Status = [FLORA_INVALID_INPUT, FLORA_FAILURE].
+
+flora_call_string_command(String,UserVars,Status,Exception) :-
+	%% use stored query
+	flora_query_cache(String,QueryCode,ArgList),
+	!,
+	Status = [FLORA_SUCCESS],
+	exec_saved_query(QueryCode,ArgList,UserVars,Exception).
+	
+flora_call_string_command(String,UserVars,Status,Exception) :-
+	flora_string_command_line(String,Code,Options,Status),
+        %% there may be import directives
+        handle_import_directive(Code,ShellCode),
+	%% strip FLLIBSHELLANS from code and extract variables - we
+	%% want to control delivery of answers by an external caller
+	ShellCode = FLLIBSHELLANS(Code1,Vars),
+	( flora_good_command(Status) ->
+	    findall(SysLibOp,member(FLSYSLIB(SysLibOp),Options),SysLibLst),
+	    findall(SysModOp,member(FLSYSMOD(SysModOp),Options),SysModLst),
+	    save_query(String,Code1,Vars,SysModLst,SysLibLst),
+	    exec_saved_query(Code1,Vars,UserVars,Exception)
+	;
+	    true
+	).
+
+
+/*************************************************************************
+   flora_string_command_line(+String,-Code,-Options,-Status)
+
+   Read, parse, then compile a query from a string
+*************************************************************************/
+flora_string_command_line(String,Code,Options,Status) :-
+	%% Note: oprn(atom(String),...) permits String to be
+	%% a list of characters or an atom
+	see_source(atom(String),IOPort,OldStdin),
+	!,
+	flora_shell_command_line(Code,Options,Status),
+	seen_source(IOPort,OldStdin).
+
+
+
+save_query(QString,QCode,QArgs,SysModList,SysLibList) :-
+	%% because flora_query_cache/3 is trie indexed, the next query
+	%% does not save anything, but is pure overhead
+	%%\+ flora_query_cache(QString,_,_),
+	store_query_in_cache(QString,QCode,QArgs),
+	flora_init_for_external_calls,
+	flora_load_library(SysLibList),
+	flora_load_system_module(SysModList).
+
+
+exec_saved_query(QueryCode,QArgs,UserVars,Exception) :-
+	bind_q_variables(UserVars,QArgs),
+	catch(call(QueryCode),
+	      Exception,
+	      string_command_handler(Exception)),
+	(var(Exception)
+	-> Exception = FLORA_NORMAL,
+	    bind_q_variables(UserVars,QArgs)
+	;
+	    true
+	).
+
+
+flora_init_for_external_calls :-
+	flora_load_library(FLLIBLOAD),
+	flora_load_library(FLLIBDISPLAY),
+	flora_load_library(FLLIBIMPORTEDCALLS),
+	flloadtrailer([FL_EQUALITY(NONE)],FLORA_DEFAULT_WORKSPACE).
+
+%% The error handler for executing commands read from strings.
+string_command_handler(Exception) :-
+	seen,
+	xsb_flag(backtrace_on_error,BT),
+	(Exception = error(_Error,_Msg,Backtrace), BT == on
+	->
+	    print_backtrace(Backtrace)
+	;
+	    true
+	).
+
+bind_q_variables([],_ResultVars).
+%% special case for obtaining all bindings in 1-variable case in javaAPI
+bind_q_variables(['?'=Var|RestUserVars],ResultVars) :-
+	!,  %% the cut prevents unbound vars among answers
+	(member(_=Var, ResultVars) -> true ; true),
+	bind_q_variables(RestUserVars,ResultVars).
+bind_q_variables([Name=Var|RestUserVars],ResultVars) :-
+	( atom(Name) -> AtomicName = Name
+	; is_charlist(Name) -> atom_codes(AtomicName,Name)
+	; flora_abort(['Bad variable specification in flora_query/4: ', Name])
+	),
+	(member(AtomicName=Var, ResultVars) -> true ; true),
+	bind_q_variables(RestUserVars,ResultVars).
+
+
+handle_import_directive(FLLIBSHELLANS(Code,Vars),FLLIBSHELLANS(Code,Vars)) :- !.
+handle_import_directive(','(ImportCode,Code),ShellCode) :- 
+        ImportCode = import(_),
+        call(ImportCode),
+        handle_import_directive(Code,ShellCode).
+
+
+/*************************************************************************
+  flora_good_command(+Status)
+  flora_bad_command(+Status)
+  flora_noop_command(+Status)
+*************************************************************************/
+flora_good_command(Status) :- member(FLORA_SUCCESS,Status).
+flora_bad_command(Status) :- member(FLORA_FAILURE,Status).
+flora_noop_command(Status) :- member(FLORA_NOOP,Status).
+
+
+see_source(Source,IOPort,OldStdin) :-
+	seeing(OldStdin),
+	open(Source, read, IOPort),
+	see(IOPort).
+
+seen_source(IOPort,OldStdin) :-
+	seen,
+	see(OldStdin),
+	close(IOPort).
+
+
+%% We store only MAX_NUMBER_CACHED_QUERIES queries in a circular buffer
+store_query_in_cache(QString,QCode,QArgs) :-
+	(\+ last_cached_query_index(_) -> assert(last_cached_query_index(0))
+	; true
+	),
+	last_cached_query_index(Idx),
+	NextIdx is (Idx+1) mod MAX_NUMBER_CACHED_QUERIES,
+	assert(flora_query_cache(QString,QCode,QArgs)),
+	assert(cache_index(Idx,QString)),
+	(cache_index(NextIdx,NextQString)
+	->
+	    retractall(flora_query_cache(NextQString,_,_)),
+	    retract(cache_index(NextIdx,NextQString))
+	; true
+	),
+	retract(last_cached_query_index(Idx)),
+	assert(last_cached_query_index(NextIdx)).

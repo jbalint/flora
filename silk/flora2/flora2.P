@@ -1,0 +1,288 @@
+/* File:      flora2.P
+**
+** Author(s): Michael Kifer
+**            Guizhen Yang
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2008.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+** 
+*/
+
+
+:- compiler_options([xpp_on]).
+
+
+:- import
+	bootstrap_package/2,
+	unload_package/1
+   from packaging.
+
+:- import
+	flora_import_predicate/4
+   from flrimport.
+
+:- import
+	flora_load_module_internal/2, flora_load_module_internal/1,
+	flora_add_module_dyn/2, flora_add_module_dyn/1,
+        flora_save_module_internal/2, flora_save_module_internal/1,
+	flora_abort/1,
+	flora_compile_internal/2, flora_compile_internal/1,
+	flora_compile_add/2, flora_compile_add/1
+   from flrutils.
+
+:- import
+	flora_configuration/2,
+	flora_module_registry/1
+   from flrregistry.
+
+:- import flora_sysmod_file/3 from flrlibman.
+:- import flora_call_string_command/4 from flrcallflora.
+
+:- import
+	flora_concat_atoms/2,
+	flora_set_counter/2,
+	flora_get_counter/2,
+	flora_slash/1
+   from flrporting.
+
+:- import flora_shell_loop/0 from usermod.
+
+:- import hide_this_show/2 from usermod.
+
+:- import xpp_include_dir/1 from parse.
+
+:- import search_module/6 from consult.
+
+:- import slash/1 from machine.
+
+:- dynamic hide_this_show(_,_).
+%%:- index(hide_this_show/2,trie). % this triggers an error-check in a newer XSB
+
+:- export
+	bootstrap_flora/0,
+	unstrap_flora/0,
+	flora_query/4,
+	flora_shell/0,
+	('_flimport')/1,
+	('_load')/1,
+	('_compile')/1,
+	('_add')/1,
+	('_compileadd')/1,
+        ('_save')/1,
+	('_isloaded')/1.
+
+/*****************************************************************************/
+
+?- search_module(flora2,Dir,_,_,_,_),
+   (search_module(floraInstallMode,_,_,_,_,_)
+   -> [floraInstallMode]
+   ;
+       slash(S),
+       atom_concat(Dir,S,Dir1),
+       atom_concat(Dir1,flora2,FloraDir),
+       asserta(library_directory(FloraDir)),
+       [floraInstallMode]
+   ).
+?- current_predicate(flrregistry:flora_configuration/2),
+   flora_configuration(standalone,no),
+   flora_configuration(standalone,yes),
+   abort('FLORA-2 is loaded as a package and as a standalone application').
+
+bootstrap_flora :-
+	\+ flora_configuration(loaded,yes),
+	flora_configuration(installdir,FloraDir),
+	flora_slash(S),
+	flora_concat_atoms([pkgs,S,prolog],PkgsProlog),
+	(
+	  %% running FLORA as a standalone version
+	  flora_configuration(standalone,yes),
+	  !,
+	  asserta(library_directory(FloraDir)),
+	  [flrversion],
+	  flora_assert_directories([syslib,datatypes,lib,debugger,pkgs,PkgsProlog,p2h])
+	;
+	  %% running FLORA as an XSB package
+	  bootstrap_package([flora2,syslib,lib,debugger,pkgs,PkgsProlog,p2h],
+			    flora),
+	  [flrversion]
+	),
+	!,
+	assert(flora_configuration(loaded,yes)),
+	flora_concat_atoms([FloraDir,S,closure],Closure),
+	flora_concat_atoms([FloraDir,S,includes],Includes),
+	flora_concat_atoms([FloraDir,S,flrincludes],FlrIncludes),
+	flora_concat_atoms([FloraDir,S,genincludes],GenIncludes),
+	flora_concat_atoms([FloraDir,S,lib,S,include],LibIncludes),
+	assert(xpp_include_dir(Closure)),
+	assert(xpp_include_dir(Includes)),
+	assert(xpp_include_dir(FlrIncludes)),
+	assert(xpp_include_dir(GenIncludes)),
+	assert(xpp_include_dir(LibIncludes)),
+	assert(flora_configuration(includedirs, [Closure,Includes,FlrIncludes,GenIncludes,LibIncludes])),
+	flora_set_counter(flora_compile_id,0), % disambiguates _# in _add
+	[flrcommon_definitions],
+	[p2h_config].
+
+bootstrap_flora.
+
+flora_assert_directories([]).
+flora_assert_directories([H|T]) :-
+	flora_slash(S),
+	flora_configuration(installdir,FloraInstallDir),
+	flora_concat_atoms([FloraInstallDir,S,H], Directory),
+	assert(library_directory(Directory)),
+	flora_assert_directories(T).
+
+
+/*****************************************************************************/
+unstrap_flora :-
+	flora_configuration(includedirs,IncludeDirs),
+	remove_include_dirs(IncludeDirs),
+	(flora_configuration(standalone,yes), ! ; unload_package(flora)),
+	retractall(flora_configuration(loaded,_)),
+	flora_set_counter(flora_shell_loaded,0).
+
+
+/*****************************************************************************/
+%% don''t show flora_shell in trace
+:- assert(hide_this_show(flora_shell,0)). 
+
+
+/*****************************************************************************/
+flora_shell :-
+	bootstrap_flora,
+	notrace,
+	( flora_get_counter(flora_shell_loaded,1), !
+	;
+	  consult(flrshell),
+	  flora_shell_loop
+	).
+
+/************************************************************************
+  Flora import stuff
+
+  Syntax:
+      :- '_flimport' Pred/Arity as Pred1(_,_,...) from File[.flr]>>FloraModule
+  or
+      :- '_flimport' Pred/Arity as Pred1(_,_,...) from FloraModule
+
+  Also (to load into the default module)
+      :- _load(file).
+  or
+      :- _load(file>>module).
+
+  To compile (without loading):
+      :- _compile(file).
+  or
+      :- _compile(file>>module).
+
+  To add file to an existing module without overriding:
+      :- _add(file).
+  or
+      :- _add(file>>module).
+
+  To save module to a flora file:
+      :- _save(file).
+  or
+      :- _save(module>>file).
+            
+  To compile for adding to an existing module without overriding:
+      :- _compileadd(file).
+  or
+      :- _compileadd(file>>module).
+
+************************************************************************/
+
+:- op(500,yfx,(as)).
+:- op(1170,fx,('_flimport')).
+
+%% The other operators, '>>' and 'from', are already defined in Prolog
+
+'_flimport'(from(as(What,AsWhat),FileMod)) :- !,
+	(atom(FileMod)  % in this case FileMod is a module name
+	-> ('_isloaded'(FileMod)
+	   -> flora_import_predicate(What,AsWhat,_,FileMod)
+	   ;  flora_abort(['Trying to import hilog predicate ', What,
+		     ' from unloaded FLORA module ', FileMod])
+	   )
+	; FileMod = File>>Module 
+	-> flora_import_predicate(What,AsWhat,File,Module)
+	).
+
+'_flimport'(X) :- flora_abort(['Invalid _flimport syntax: ', X]).
+
+'_load'(File>>Module) :- !, flora_load_module_internal(File,Module).
+'_load'(File) :- flora_load_module_internal(File).
+
+/*************************************************************************
+  
+  _save(+ModuleName,+FlrFile)
+  _save(+FlrFile)
+   
+  Purpose: -save Module into FlrFile
+           -shell command
+           -if ModuleName is omitted, main by defaut	   
+  Comments: none
+	   
+*************************************************************************/
+
+'_save'(Module>>File) :- !, flora_save_module_internal(Module,File).
+'_save'(File) :- flora_save_module_internal(File).
+
+
+'_compile'(File>>Module) :- !, flora_compile_internal(File,Module).
+'_compile'(File) :- flora_compile_internal(File).
+
+
+%% Add file contents to module
+'_add'(File>>Module) :- !, flora_add_module_dyn(File,Module).
+'_add'(File) :- flora_add_module_dyn(File).
+
+%% Compile for adding to module
+'_compileadd'(File>>Module) :- !, flora_compile_add(File,Module).
+'_compileadd'(File) :- flora_compile_add(File).
+
+%% tells if ModuleName is loaded
+'_isloaded'(ModuleName) :- 
+	flora_module_registry(ModuleName),
+	not flora_sysmod_file(ModuleName,_,_).
+
+
+/***************************************************************************/
+%% Some utilities that must be duplicated here because they can't be imported
+
+remove_include_dirs([]).
+remove_include_dirs([H|T]) :-
+	(retract(xpp_include_dir(H)) ; true),
+	remove_include_dirs(T).
+
+
+/************************************************************************
+    flora_query(+String,+Vars,-Status,-Exception)
+
+   Execute a query specified in String.
+
+   String: A query string
+   Vars:   A list of the form [Name1=Var1, Name2=Var2,...].
+           Name is a name of a variable mentioned in String, for instance, 
+	   '?X' (note: must be quoted, since it is an atom).
+	   Var is a variable where you want the binding for the variable 
+	   Name in String to be returned. For instance, 
+	   if String is 'p(?X,?Y).'
+	   Vars can be ['?X' = Xyz, '?Y' = Qpr]
+	   Then Xyz will be bound to the value of ?X in p(?X,?Y) after
+	   the execution and Qpr will be bound to the value of ?Y in p(?X,?Y).
+   Status: indicates the status of compilation of the command in String.
+   Exception: is a possible exception during the runtime execution 
+              of the command in String.
+*************************************************************************/
+flora_query(String,Vars,Status,Exception) :-
+	flora_call_string_command(String,Vars,Status,Exception).

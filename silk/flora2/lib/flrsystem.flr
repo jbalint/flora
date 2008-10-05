@@ -1,0 +1,227 @@
+/* File:      flrsystem.flr
+**
+** Author(s): Michael Kifer
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2008;
+**      and Vulcan, Inc., 2008.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+
+
+
+#include "standard.h"
+#include "flora_exceptions.flh"
+#include "flora_terms.flh"
+
+:- export
+    	?[%add(?)],
+	?[%remove(?)],
+	?[%query(?)],
+	?[%abolish],
+	?[%refresh],
+	%abort(?),
+	%abort,
+	%warning(?),
+	%message(?),
+	?[%mustDefine(?)],
+	?[%mustDefine(?,?)].
+	
+
+Libpath[%add(?Path)] :-
+	flora_file_op(expand,?Path,?ExpandedPath)@_prolog(flrporting),
+	( flora_module_path_get(?ExpandedPath)@_prolog(flrporting) -> true
+         ; flora_module_path_add(?ExpandedPath)@_prolog(flrporting)
+        ).
+
+Libpath[%remove(?Path)] :-
+	flora_file_op(expand,?Path,?ExpandedPath)@_prolog(flrporting),
+	flora_module_path_remove(?ExpandedPath)@_prolog(flrporting).
+
+Libpath[%query(?Path)] :-
+	atom(?Path)@_prolog,
+	!,
+	flora_file_op(expand,?Path,?ExpandedPath)@_prolog(flrporting),
+	flora_module_path_get(?ExpandedPath)@_prolog(flrporting).
+Libpath[%query(?Path)] :-
+	var(?Path)@_prolog,
+	!,
+	flora_module_path_get(?Path)@_prolog(flrporting).
+Libpath[%query(?_Path)] :-
+	%abort('Libpath[%query(Path)]@_sys: Argument must be atom or variable')@_sys.
+
+
+Tables[%abolish] :- abolish_all_tables@_prolog.
+Tables[%refresh] :- abolish_all_tables@_prolog.
+
+%abort(?X) :-
+	p2h{?PX,?X},
+	flora_abort(?PX,FLORA_USER_ABORT)@_prolog(flrutils).
+
+%abort :- flora_abort('', FLORA_USER_ABORT)@_prolog(flrutils).
+
+%warning(?X) :-
+	p2h{?PX,?X},
+	flora_warning_heading@_prolog(flrprint),
+	message(?PX,STDERR)@_prolog(standard),
+	flora_stderr_nl@_prolog(flrprint).
+
+// Put a message on stderr
+%message(?X) :-
+	p2h{?PX,?X},
+	message(?PX,STDERR)@_prolog(standard),
+	flora_stderr_nl@_prolog(flrprint).
+
+
+Method[%mustDefine(?Flag)] :-
+	var(?Flag)@_prolog,
+	!,
+	( flora_in_debug_mode(?)@_prolog(flrregistry),
+	    ?Flag=on,
+	    !
+	;
+	    ?Flag=off
+	).
+	 
+Method[%mustDefine(on)] :-
+	!,
+	( flora_in_debug_mode(?)@_prolog(flrregistry), !
+	;
+	    assert(flora_in_debug_mode(1)@_prolog(flrregistry))@_prolog,
+	    ?ML = collectset{?M|(flora_module_registry(?M),
+		     \+ flora_debug_module_registry(?M))@_prolog(flrregistry)},
+	    %turn_on_debug_all(?ML)
+	).
+	
+Method[%mustDefine(off)] :-
+	!,
+	retractall(flora_in_debug_mode(?)@_prolog(flrregistry))@_prolog,
+        ?ML = collectset{?M|flora_debug_module_registry(?M)@_prolog(flrregistry)},
+	%turn_off_debug_all(?ML).
+
+
+Method[%mustDefine(?Flag(?Module))] :-
+	( var(?Module)@_prolog,
+	    %abort(['Invalid module name in Method[%mustDefine(',?Flag,'(',?Module,'))]@_system'])
+	; \+  flora_is_system_module_name(?Module)@_prolog(flrwrapper),
+	    \+ flora_module_registry(?Module)@_prolog(flrregistry),
+	    %abort(['Unloaded module name in Method[%mustDefine(',?Flag,'(',?Module,'))]@_system'])
+	).
+
+Method[%mustDefine(?Flag(?Module))] :-
+	var(?Flag)@_prolog,
+	!,
+	( flora_is_system_module_name(?Module)@_prolog(flrwrapper),
+	    (flora_module_registry(?Module)@_prolog(flrregistry), !
+	    ; flora_load_system_module_internal(?Module)@_prolog(flrutils)
+	    )
+	; \+ flora_is_system_module_name(?Module)@_prolog(flrwrapper)
+	),
+	( flora_debug_module_registry(?Module)@_prolog(flrregistry), 
+	    ?Flag=on,
+	    !
+	;
+	    ?Flag=off
+	).
+	 
+Method[%mustDefine(on(?Module))] :-
+	!,
+	( flora_is_system_module_name(?Module)@_prolog(flrwrapper),
+	    (flora_module_registry(?Module)@_prolog(flrregistry), !
+	    ; flora_load_system_module_internal(?Module)@_prolog(flrutils)
+	    )
+	; \+ flora_is_system_module_name(?Module)@_prolog(flrwrapper)
+	),
+	(flora_debug_module_registry(?Module)@_prolog(flrregistry),!
+        ; %turn_on_debug(?Module)
+        ).
+	
+Method[%mustDefine(off(?Module))] :-
+	!,
+	( flora_is_system_module_name(?Module)@_prolog(flrwrapper),
+	  (flora_module_registry(?Module)@_prolog(flrregistry), !
+	  ;
+	    flora_load_system_module_internal(?Module)@_prolog(flrutils)
+	  )
+	; \+ flora_is_system_module_name(?Module)@_prolog(flrwrapper)
+	),
+	(\+ flora_debug_module_registry(?Module)@_prolog(flrregistry), !
+	;
+	    %turn_off_debug(?Module)
+	).
+
+Method[%mustDefine(?Flag(?Module))] :-
+	// Note: %abort is defined in this module
+	%abort(['Invalid option in Method[%mustDefine(',?Flag,'(',?Module,'))]']).
+
+%turn_on_debug_all([]) :- !.
+%turn_on_debug_all([?H|?L]) :-
+	%turn_on_debug(?H),
+	%turn_on_debug_all(?L).
+
+%turn_on_debug(?Module) :-
+	assert(flora_debug_module_registry(?Module)@_prolog(flrregistry))@_prolog.
+
+%turn_off_debug_all([]) :- !.
+%turn_off_debug_all([?H|?L]) :-
+	%turn_off_debug(?H),
+	%turn_off_debug_all(?L).
+
+%turn_off_debug(?Module) :-
+	retractall(flora_debug_module_registry(?Module)@_prolog(flrregistry))@_prolog.
+
+Method[%mustDefine(?Mode,?Pred)] :-
+	?Mode \== off,
+	%abort(['Invalid mode in Method[%mustDefine(', ?Mode, ?Pred, ')]@_system']).
+Method[%mustDefine(off,?Pred)] :-
+        var(?Pred)@_prolog,
+	%abort(['Invalid second argument (variable) in Method[%mustDefine(off,', ?Pred, ')]@_system']).
+
+Method[%mustDefine(off,','(?Pred1,?Pred2))] :-
+        !,
+        Method[%mustDefine(off,?Pred1)],
+        Method[%mustDefine(off,?Pred2)].
+
+Method[%mustDefine(off,?Pred)] :-
+	\+ is_flora_callable_literal(?Pred)@_prolog(flrwrapper),
+	?Pred \= FLLIBMODOBJ(?,?,?,?,?)@_prolog,
+	?Pred \= FLLIBMODLIT(?,?,?,?)@_prolog,
+	%abort(['Invalid second argument (not atomic formula) in Method[%mustDefine(off,', ?Pred, ')]@_system']).
+
+Method[%mustDefine(off,?Pred)] :-
+        get_canonical_form(?Pred, FLCANON(?Wrap,?Args,?Mod,?Callable,?TFlag)@_prolog)@_prolog(flrcanon),
+        if (var(?Mod))
+        then (
+            flora_module_registry(?Mod)@_prolog(flrregistry),
+            get_canonical_form(?Pred, FLCANON(?Wrap,?Args,?Mod,?Callable,?TFlag)@_prolog)@_prolog(flrcanon)
+        ),
+        if (var(?Callable))
+        then (
+	    flora_decode_goal_as_atom(?Pred,?PredString)@_prolog(flrdecode),
+            %abort(['Invalid argument in Method[%mustDefine(off,', ?PredString, ')]@_system'])
+        ),
+	( flora_is_system_module_name(?Mod)@_prolog(flrwrapper),
+	  unless flora_module_registry(?Mod)@_prolog(flrregistry)
+          do flora_load_system_module_internal(?Mod)@_prolog(flrutils)
+        ; \+ flora_is_system_module_name(?Mod)@_prolog(flrwrapper)
+        ),
+	if flora_module_registry(?Mod)@_prolog(flrregistry)
+        then(  
+	    flora_module_predicate(FLORA_IGNORE_UNDEFCHECK,[?Callable],
+				   ?Mod,?Entry)@_prolog(flrwrapper),
+	    assert(?Entry)@_prolog
+	) else (
+	    flora_decode_goal_as_atom(?Pred,?PredString)@_prolog(flrdecode),
+	    %abort(['Invalid argument in Method[%mustDefine(off,', ?PredString, ')]@_system : Module ', ?Mod,' is unloaded'])
+	).
+
+
