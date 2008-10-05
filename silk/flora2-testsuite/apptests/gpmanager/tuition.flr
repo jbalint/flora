@@ -1,0 +1,174 @@
+/********************************************************************
+**   Tuition policies
+********************************************************************/
+
+:- ignore_depchk %round(?_,?_).
+
+// General rules
+?S[tuitionInfo(?Sem) -> limit(?Limit)] :-
+	(
+	    ?S:student(?Sem),
+	    ?S.support(?Sem)[type->tuition, limit->?Limit]
+	)@PPLMODULE.
+
+// Tuition support is proportional to the level of TA/GA/RA support, but 
+// explicit limit in tuition overrides this
+?S[tuitionInfo(?Sem) -> limit(?Limit)] :-
+	?S:student(?Sem)@PPLMODULE,
+	?Load = sum{?L | ?S.support(?Sem)[(type->ta; type->ga; type->ra),
+	                               load->?L]@PPLMODULE},
+	if ?Load < 0.9 then (?LimitFloat is 12*?Load, %round(?LimitFloat,?Limit)),
+	// explicit limit overrides proportionality
+	not ?S.support(?Sem)[type->tuition, limit->?_]@PPLMODULE.
+
+?S[tuitionInfo(?Sem) -> remarks(?Remarks)] :-
+	(
+	    ?S:student(?Sem),
+	    ?S.support(?Sem)[type->tuition, remarks->?Remarks]
+	)@PPLMODULE.
+
+
+// Whether tuition waiver is contractual or temporary
+?S[tuitionInfo(?Sem) -> contractual] :-
+	(
+	    ?S:student(?Sem),
+	    (
+		?S.status(?Sem)[type->phd],
+		?S.support(?Sem)[not temporary],
+		?S.support(?Sem)[type->tuition; type->ga; type->ra; type->ta]
+	    ;
+	        ?S.status(?Sem)[type->ms],
+		?S.support(?Sem)[offer]
+	    )
+	)@PPLMODULE.
+?S[tuitionInfo(?Sem) -> temporary] :-
+	?S[tuitionInfo(?Sem) -> {}, not tuitionInfo(?Sem) -> contractual].
+
+
+// Policies about rate
+?S[tuitionInfo(?Sem) -> rate(?Rate)] :-
+	(
+	    ?S:student(?Sem),
+	    ?S.support(?Sem)[type->tuition, rate->?Rate]
+	)@PPLMODULE,
+	!.
+
+// Beginning in S03 those without tuition offers get only in-state tuition
+// Should be the last clause for defining the rate.
+// May need to be modified in the future, if policy changes.
+?S[tuitionInfo(?Sem) -> rate(resident)] :-
+	?Sem[between -> [spring(2003), futuresemester]]@TEMPORAL,
+	!,
+	not cancel_tuition_reduction_policy(?S,?Sem),
+	?S[tuitionInfo(?Sem) -> temporary].
+
+?S[tuitionInfo(?Sem) -> source(spir)] :-
+	(
+	    ?S:student(?Sem),
+	    ?S.support(?Sem)[type->ra, source->spir;
+			    type->ga, source->spir;
+			    type->tuition, source->spir
+			   ]
+	)@PPLMODULE.
+?S[tuitionInfo(?Sem) -> source(?Src)] :-
+	(
+	    ?S:student(?Sem),
+	    ?S.support(?Sem)[type->tuition, source->?Src]
+	)@PPLMODULE.
+
+
+// Policy about whether tuition is waived
+?S[tuitionInfo(?Sem) -> {}] :-
+	(
+	    ?S:student(?Sem),
+	    ?S.support(?Sem)[type->ta;
+			    type->ra;
+			    type->ga;
+			    type->tuition
+			   ]
+	)@PPLMODULE.
+
+// When tuition reduction policy does not apply
+// May need to be modified in the future, if policy changes.
+cancel_tuition_reduction_policy(?S,?Sem) :-
+	?S[tuitionInfo(?Sem) -> source(spir)].
+
+
+%printableTuitionRate(resident,'NY resident rate') :- !.
+%printableTuitionRate(nonresident,'Non-resident rate') :- !.
+%printableTuitionRate(?Rate,?_) :-
+	%abort(('Unknown tuition rate: ', ?Rate))@_sys.
+
+%printableSupportSource(spir,'Paid through SPIR') :- !.
+%printableSupportSource(?_X,?_X) :- !.
+
+
+
+/************************** reports *****************************************/
+
+%print_tuition_roster(?Sem) :-
+      %printquery(print_admin_info(?Sem),
+		  SORT_on_NAME(?S),
+		  querySpec(?S, ${?S[tuitionInfo(?Sem)->{}],
+			        not (?S:onleave(?Sem); ?S:parttime(?Sem))@PPLMODULE})
+		  ),
+      %check_support_and_status_consistency(?Sem).
+
+
+
+%print_tuition_roster_new(?Sem) :-
+	writeln('\n\n--- New this semester (CONTRACTUAL) ---')@_plg(),
+	writeln('---------------------------------------')@_plg(),
+	?Sem[prev->?PrevSem]@TEMPORAL,
+	%printquery(print_admin_info(?Sem),
+		    SORT_on_NAME(?S),
+		    querySpec(?S, ${?S[tuitionInfo(?Sem)->contractual,
+				     not tuitionInfo(?PrevSem)->{}]}
+			     )
+		   ),
+	writeln('\n\n--- New this semester (TEMPORARY) ---')@_plg(),
+	  writeln('-------------------------------------')@_plg(),
+	  %printquery(print_admin_info(?Sem),
+		      SORT_on_NAME(?S),
+		      querySpec(?S, ${?S[tuitionInfo(?Sem)->temporary,
+				       not tuitionInfo(?PrevSem)->{}]}
+			       )
+		     ).
+
+
+// This prints only exceptional info
+?Stud[%print_tuition_support_info(?Sem, ?Indent)] :-
+	if ?Stud[tuitionInfo(?Sem) -> rate(?Rate)]
+	then %printableTuitionRate(?Rate,?PrintableRate),
+	(?Stud[tuitionInfo(?Sem)->limit(?Limit)]; true),
+	(?Stud[tuitionInfo(?Sem)->remarks(?Remarks)]; true),
+	if ?Stud[tuitionInfo(?Sem)->source(?Source)]
+        then %printableSupportSource(?Source,?PrintableSource),
+	if ?Stud[rpe->?_[passed->?_Date[isValid]@TEMPORAL]]@PPLMODULE
+        then  ?G5status = true,
+
+	if (nonvar(?PrintableRate); nonvar(?Limit);
+	    nonvar(?G5status);
+	    (nonvar(?PrintableSource), ?PrintableSource \== '');
+	    (nonvar(?Remarks), ?Remarks \== ''))
+        then (
+	     %indent(?Indent), write('Tuition:  ')@_plg(),
+	     // Tuition rate
+	     if nonvar(?PrintableRate)
+	     then format('~w. ', [?PrintableRate])@_plg(format),
+	     // G5 people are paid for by the grad school
+	     if nonvar(?G5status)
+	     then write('G5. ')@_plg(),
+	     // Credit limit
+	     if nonvar(?Limit)
+	     then format('Up to ~w credits.', [?Limit])@_plg(format),
+	     // Who pays the tuition
+	     if nonvar(?PrintableSource)
+	     then format(' ~w.', [?PrintableSource])@_plg(format),
+	     // Other remarks
+	     if (nonvar(?Remarks), ?Remarks \== '')
+	     then format(' ~w.', [?Remarks])@_plg(format),
+	     nl@_plg()
+	).
+
+%round(?X,?Result) :- ?Result is floor(?X+0.5)@_plg().

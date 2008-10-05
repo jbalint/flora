@@ -1,0 +1,102 @@
+?- insertrule_a{tc(?X,?Y) :- %e(?X,?Y)}.
+?- insertrule_a{tc(?X,?Y) :- tc(?X,?Z),%e(?Z,?Y)}.
+
+?- newmodule{w}.
+?- ['../datafiles/clause_data' >> bar].
+
+?- 	insertrule{(neg c[d] :- h, qq)@w},
+	insertrule{neg rr[d] :- rr, qq},
+	insertrule{neg e[f->?X] :- p(?X)},
+	insertrule{((neg ppp(?X) :- p(?X)),
+	             (neg qqq(?X) :- rrr(?X)),
+		     (neg pppp :- rr))@w}.
+
+neg aaa(a) :- neg bbb(b),c.
+eee(a) :- neg bbb,c(d,k).
+
+
+// %tst1, %tst2: simple rule in the current module
+%tst1 :- 
+        write('tst1: ')@_plg(),
+        clause{?H,?B},
+        ?H ~ tc(?X,?Y), ?B ~ %e(?X,?Y), 
+        writeln('yes')@_plg().
+
+%tst2 :- 
+        write('tst2: ')@_plg(),
+        clause{?H,?B},
+        ?H ~ tc(?X,?Y), ?B = (?B1,?B2), ?B1 ~ tc(?X,?Z), ?B2 ~ %e(?Z,?Y), 
+        writeln('yes')@_plg().
+
+// %tst3, %tst4: simple rule in another module
+?- newmodule{foo}.
+?- insertrule_a{(tc(?X,?Y) :- %e(?X,?Y)@_@)@foo}.
+?- insertrule_a{(tc(?X,?Y) :- tc(?X,?Z),%e(?Z,?Y)@_@)@foo}.
+
+%tst3 :-
+        write('tst3: ')@_plg(),
+        clause{tc(?X,?Y)@foo, ?B},
+        ?B ~ %e(?X,?Y),
+        writeln('yes')@_plg().
+
+%tst4 :-
+        write('tst4: ')@_plg(),
+        clause{tc(?X,?Y)@foo, ?B},
+        ?B = (?B1,?B2), ?B1 ~ tc(?X,?Z)@foo, ?B2 ~ %e(?Z,?Y),
+        writeln('yes')@_plg().
+
+// %tst5, %tst6: conjunction in rule head
+?- insertrule{o[a1->?V1,a2->?V2]:- something(?V1,?V2)}.
+?- insertrule{o[a2->a,a4->b]:- something(a,b)}.
+?- insertrule{o[a1->?V1,a3->?V2]:- somethingelse(?V1,?V2)}.
+
+%tst5 :-
+        write('tst5: ')@_plg(),
+        clause{o[a1->?_V1,a3->?_V2],?Y},
+        ?Y ~ somethingelse(?_,?_),
+        writeln('yes')@_plg().
+
+%tst6 :-
+        write('tst6: ')@_plg(),
+        if clause{o[a1->a,a4->b], ?Y}
+	then writeln('error: succeeded when it should have failed')@_plg
+        else writeln('failed, as expected')@_plg.
+
+// %tst7: built-in and control in rule body
+?- insertrule{fib(?N,?M) :- if ?N<0 then ?M=0 else if ?N==1 then ?M=1 else (?N1 is ?N-1, ?N2 is ?N-2, fib(?N1,?M1), fib(?N2,?M2), ?M is ?M1+?M2)}.
+
+%tst7 :-
+        write('tst7: ')@_plg(),
+        clause{fib(?_,?_), ?_},
+        clause{fib(?_,?_), if ?_ then ?_ else ?_},
+        clause{fib(?_,?_), if ?_ then ?_ else if ?_ then ?_ else ?_},
+        writeln('yes')@_plg().
+
+%tst8 :-
+        write('tst8: ')@_plg(),
+        clause{neg aaa(?), ?X},
+        ?X ~ (neg bbb(?),c),
+        %write(?X)@_io, nl@_plg().
+
+%tst9 :-
+        write('tst9: ')@_plg(),
+        clause{eee(a), ?X},
+        ?X ~ (neg bbb,c(?,?)),
+        %write(?X)@_io, nl@_plg().
+
+%tst10 :-
+        write('tst10: ')@_plg(),
+        clause{neg uuu[? ->xxx]@bar, (foo(?X), ?Y)@bar},
+        %write(?X+?Y)@_io, nl@_plg().
+
+%pretest :-
+	%tst1, %tst2, %tst3, %tst4, %tst5, %tst6, %tst7, %tst8, %tst9, %tst10.
+
+%test :- tell(temp)@_plg(),
+        Method[%mustDefine(on)]@_sys,
+        %pretest,
+        Method[%mustDefine(off)]@_sys,
+        %pretest,
+        told@_plg().
+
+
