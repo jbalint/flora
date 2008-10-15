@@ -23,6 +23,9 @@ files="./flora2/INSTALLATION \
     	./flora2/docs/*.pdf \
     	./flora2/docs/Makefile ./flora2/docs/NMakefile.mak \
     	./flora2/emacs/flora.el \
+    	./flora2/emacs/README \
+    	./flora2/emacs/Makefile \
+    	./flora2/emacs/NMakefile.mak \
     	./flora2/flrincludes/*.flh \
     	./flora2/genincludes/Makefile ./flora2/genincludes/NMakefile.mak \
     	./flora2/genincludes/*.fli \
