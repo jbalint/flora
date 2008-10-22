@@ -73,10 +73,6 @@ FLNEGBodyPREFIX(WRAP_IMVDSIGDEF)(X,Y,CallerInfo) :-
 	CallerInfo = [Caller|_],
         flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_IMVDSIGDEF)(X,Y,CallerInfo)).
 
-FLNEGBodyPREFIX(WRAP_MVDINC)(X,Y,Z,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_MVDINC)(X,Y,Z,CallerInfo)).
-
 FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,CallerInfo) :-
 	CallerInfo = [Caller|_],
         flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,CallerInfo)).
