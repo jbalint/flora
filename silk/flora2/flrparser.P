@@ -574,6 +574,11 @@ is_rule_or_fact(CanoTerm) :- \+is_query(CanoTerm,_), \+is_directive(CanoTerm,_).
 is_labeled_construct(CANOTERM(Funct,2,FL_PARENTHESIS,[Label,Construct],_If,_Ip),Label,Construct) :-
 	get_name(Funct,FL_LABELFUNC).
 
+%% Singleton reification
+is_reification(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),Args,N,Ip) :-
+	get_atom(Funct,Atom),
+	is_reifyop(Atom).
+
 labeled_construct_struct(LabelCode,ContentCode,FLLABELEDCONSTRUCT(LabelCode,ContentCode)).
 
 label_struct(IdPart,MetaPart,Idx,FLLABEL(IdPart,MetaPart,Idx)).
@@ -3163,9 +3168,18 @@ flora_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
         ).
 
 %% clause{[Mode,]Head, Body}
+flora_body_literal(CANOTERM(Funct,_N,FL_BRACE,_Args,If,_Ip),DWS,_Code,Status) :-
+	get_name(Funct,Atom),
+	is_clauseop(Atom),
+	DWS \== NULL,
+	!,
+	parsing_error(If,ERROR_CLAUSEMOD,Status).
+
+%% clause{[Mode,]Head, Body}
 flora_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_clauseop(Atom),
+	DWS==NULL,
 	!,
 	report_context(clause_construct),
 	(Args = [Arg], is_labeled_construct(Arg,Label,Construct) ->
@@ -5459,7 +5473,7 @@ flora_dblit(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_DWS,_Code,Status
         ; Mode == FLREF ->
 	    parsing_error(If,ERROR_REFRESH,Status)
         ; Mode == FLCLS ->
-	    parsing_error(If,ERROR_CLAUSE,Status)
+	    parsing_error(If,ERROR_CLAUSELIT,Status)
 	).
 
 flora_dblit(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
@@ -5545,7 +5559,7 @@ flora_dblit(Mode,CanoniTerm,_DWS,_Code,Status) :-
         ; Mode == FLREF ->
 	    parsing_error(CanoniTerm,ERROR_REFRESH,Status)
         ; Mode == FLCLS ->
-	    parsing_error(CanoniTerm,ERROR_CLAUSE,Status)
+	    parsing_error(CanoniTerm,ERROR_CLAUSELIT,Status)
 	).
 
 
@@ -5794,7 +5808,7 @@ flora_db_objspec(Mode,CANOTERM(Funct,1,FL_PARENTHESIS,[_G],If,_Ip),_DWS,_Code,St
 	; Mode == FLREF ->
 	    parsing_error(If,ERROR_REFRESH,Status)
 	; Mode == FLCLS ->
-	    parsing_error(If,ERROR_CLAUSE,Status)
+	    parsing_error(If,ERROR_CLAUSELIT,Status)
 	).
 
 flora_db_objspec(Mode,CanoniTerm,DWS,Code,Status) :-
@@ -5855,7 +5869,7 @@ flora_db_attmethspec(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),DWS,Code
 	    ; Mode == FLREF ->
 	      parsing_error(If,ERROR_REFRESH,Status)
 	    ; Mode == FLCLS ->
-	      parsing_error(If,ERROR_CLAUSE,Status)
+	      parsing_error(If,ERROR_CLAUSELIT,Status)
 	    )
         ;
 	  F == FL_AT,
@@ -6040,6 +6054,8 @@ flora_dynrule_no_module(CanoniTerm,DWS,Label,Code,Status) :-
 	    ;
 		Status = S
 	    )
+	; is_reification(CanoniTerm,_,_,_) ->
+	    parsing_error(CanoniTerm, NO_REIFICATION, Status) 
 	;
 	    get_flvar_struct(CanoniTerm,Code) -> Status = []
         ;
