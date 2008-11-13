@@ -142,6 +142,7 @@ flora_load_module_internal(InFile,Workspace) :-
 flora_load_module_internal(InFile) :-
 	flora_check_filename(InFile),
 	flora_get_user_program_maybe(InFile,File),
+	%%flcleanuppatch(FLORA_DEFAULT_WORKSPACE),
 	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
 	    flora_flload(FlrFile,FLORA_DEFAULT_WORKSPACE)
 
@@ -190,6 +191,7 @@ flora_load_module_internal(InFile) :-
 **********************************************************************/
 flloadtrailer(TrailerOptions,Workspace) :-
 	valid_flora_module_name(Workspace),
+	%%flcleanuppatch(Workspace),
 	%% Check trailer options
 	findall(O,flora_trailer_registry(Workspace,O),CurrentTrailerOptions),
 	(CurrentTrailerOptions == [],
@@ -247,7 +249,8 @@ flloadtrailer(TrailerOptions,Workspace) :-
 	%% ensures this and that patch rules are never loaded into the same
 	%% module as compiled programs.
 	(flora_module_registry(Workspace) -> true
-	; flloadpatch(Workspace)
+	; 
+	    flloadpatch(Workspace)
 	),
 	!.
 
@@ -285,6 +288,7 @@ flloadpatch(Workspace) :-
 	;
 	    telling(PreOutFile),
 	    tell(UserPatchPFile),
+	    %% Creating .xsb/flora/patch.P
 	    flora_include_file([FLHEADER,FLDEFINITION,FLHEADER2,FLPATCH,
 				FLDYNALIB, FLDYNZLIB,
 				FLOPPOSESBASELIB,
@@ -295,13 +299,45 @@ flloadpatch(Workspace) :-
 	( flora_file_newerthan(UserPatchWSOFile,UserPatchPFile) -> true
 	;
 	    flora_set_xpp_options_for_prolog_compile(Workspace),
-	    %%compile(UserPatchPFile,[optimize,spec_repr,ti_all]),
 	    compile(UserPatchPFile,[optimize,ti_all]),
 	    flora_rename_file(UserPatchOFile,UserPatchWSOFile),
 	    flora_clear_xpp_options
         ),
 	consult(UserPatchWSOFile),
 	!.
+
+/**************************************************************************
+  flcleanuppatch(+Workspace)
+  Abolish predicates used in patch file
+**************************************************************************/
+/*
+flcleanuppatch(Workspace) :-
+	flora_slash(S),
+	%% Get file names in user dir.
+	flora_user_flora_dir(UserFloraDir),
+	flora_concat_atoms([UserFloraDir,S,'patchcleanup.P'],UserCleanupPFile),
+	flora_mainO_filename(UserCleanupPFile,UserCleanupOFile),
+	flora_WSO_filename(UserCleanupPFile,Workspace,UserCleanupWSOFile),
+	%% Copy the main file to user directory.
+	( flora_file_op(exists,UserCleanupPFile) -> true
+	;
+	    telling(PreOutFile),
+	    tell(UserCleanupPFile),
+	    %% Creating .xsb/flora/patchcleanup.P
+	    flora_include_file([FLHEADER,FLABOLISH],_FileStatus),
+	    told,
+	    tell(PreOutFile)
+	),
+	( flora_file_newerthan(UserCleanupWSOFile,UserCleanupPFile) -> true
+	;
+	    flora_set_xpp_options_for_prolog_compile(Workspace),
+	    compile(UserCleanupPFile,[optimize,ti_all]),
+	    flora_rename_file(UserCleanupOFile,UserCleanupWSOFile),
+	    flora_clear_xpp_options
+        ),
+	consult(UserCleanupWSOFile),
+	!.
+*/
 
 
 /*************************************************************************
@@ -489,6 +525,7 @@ flora_load_system_module_internal(ModuleName) :-
 	    %% Issue only important preprocessor warnings
 	    %% to avoid warnings when atoms or strings have \n in them
 	    flora_set_xpp_options_for_prolog_compile(ModuleName, '-warninglevel 0 '),
+	    %%flcleanuppatch(ModuleName),
 	    consult(WSOFile),
 	    flora_clear_xpp_options
 	;
@@ -598,6 +635,7 @@ flora_flload(FlrFile,Workspace) :-
 	  ),
 	  flora_rename_file(MOFile,WSOFile)
         ),
+	%%flcleanuppatch(Workspace),
 	flora_call_hooks(Workspace,LOADTOMODULE,FlrFile,before,AroundHookLink),
 	consult(WSOFile),
 	flora_call_hooks(Workspace,LOADTOMODULE,FlrFile,after,AroundHookLink),
