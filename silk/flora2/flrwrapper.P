@@ -302,6 +302,7 @@ flora_is_flogic_base(WRAP_MVDTOLIST)  :- !.
 flora_is_flogic_base(WRAP_IMVDTOLIST) :- !.
 flora_is_flogic_base(WRAP_OBJEQL)     :- !.
 
+flora_is_hilog_base_wrapper(WRAP_HILOG) :- !.
 flora_is_hilog_base_wrapper(WRAP_NONTABLED_HILOG) :- !.
 flora_is_hilog_base_wrapper(WRAP_TABLED_HILOG) :- !.
 flora_is_neg_hilog_base_wrapper(FLNEGPREFIX(WRAP_TABLED_HILOG)) :- !.
@@ -413,7 +414,8 @@ flora_decode_predicate(Call,CallType,ModuleName,
 	),
 	/*
 	writeln(2, 'Decode predicate call = ' + Call),
-	writeln(2, 'Decode predicate wrap = ' + (WrapPrefix,WrapBase,Wrapper,Negated)),
+	writeln(2, 'Decode predicate wrap = '
+	           + (WrapPrefix,WrapBase,Wrapper,Negated)),
 	*/
         ( (WrapBase == WRAP_NONTABLED_HILOG ; WrapBase == WRAP_TABLED_HILOG) ->
 	    %% a Hilog Predicate
@@ -475,6 +477,13 @@ skeletonize_prolog_call(Call,Skeleton,PredName,ArgList) :-
 	    term_new(PSC,Skeleton),
 	    Call =.. [_|ArgList]
 	).
+
+skeletonize_hilog_call(Call,Skeleton,HiLogPredName,HilogArgs) :-
+	functor(Call,HWrap,Arity),
+	arg(1,Call,HiLogPredName),
+	Arity1 is Arity-1,
+	length(HilogArgs,Arity1),
+	Skeleton =.. [HWrap,HiLogPredName|HilogArgs].
 
 
 /*****************************************************************************
@@ -538,9 +547,9 @@ flora_funct_arity(M,Funct/Arity/Type) :-
 	var(M),
 	!,
 	(var(Funct), Type == prolog
-	-> flora_abort('Internal error: unbound functor passed to flora_funct_arity/2, Funct/Arity/Type')
+	-> flora_abort('Internal error: unbound Prolog functor passed to flora_funct_arity/2, Funct/Arity/Type')
 	; var(Funct), var(Arity)
-	-> flora_abort('Internal error: unbound functor and arity passed to flora_funct_arity/2, Funct/Arity/Type')
+	-> flora_abort('Internal error: unbound HiLog functor and arity passed to flora_funct_arity/2, Funct/Arity/Type')
 	; true
 	),
 	( Type == prolog ->
@@ -548,10 +557,7 @@ flora_funct_arity(M,Funct/Arity/Type) :-
 	;
 	  %% a HiLog predicate
 	  N is Arity+1,
-	  (functor(M,WRAP_NONTABLED_HILOG,N), !
-	  ; functor(M,WRAP_TABLED_HILOG,N), !
-	  ; functor(M,FLNEGPREFIX(WRAP_TABLED_HILOG),N)
-	  ),
+	  functor(M,WRAP_HILOG,N), 
 	  arg(1,M,Funct)
 	),
 	asserta(functor_arity_cache(M,Funct/Arity/Type)).
@@ -561,14 +567,15 @@ flora_funct_arity(M,Funct/Arity/Type) :-
 	functor(M,FunctTerm,N),
 	( N == 0 ->
 	    Funct=FunctTerm,
+	    MSkeleton = Funct,
 	    Arity=N,
 	    Type=prolog
 
 	; flora_is_hilog_base_wrapper(FunctTerm) ->
 	    %% a HiLog term
 	    Type = (hilog),
-	    Arity is N-1,
-	    arg(1,M,Funct)
+	    skeletonize_hilog_call(M,MSkeleton,Funct,_HilogArgs),
+	    Arity is N-1
 
 	; flora_is_neg_hilog_base_wrapper(FunctTerm) ->
 	    %% a negated HiLog term
@@ -579,9 +586,12 @@ flora_funct_arity(M,Funct/Arity/Type) :-
 	;
 	  Funct=FunctTerm,
 	  Arity=N,
+	  skeletonize_prolog_call(M,MSkeleton,_PredName,_ArgList),
 	  Type=prolog
 	),
-	asserta(functor_arity_cache(M,Funct/Arity/Type)).
+	asserta(functor_arity_cache(MSkeleton,Funct/Arity/Type)),
+	!.
+
 
 flora_is_system_module_name(Module) :-
 	%% if we add compound modules, this will need to be extended
