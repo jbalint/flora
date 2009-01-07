@@ -5,8 +5,8 @@
 ** Contact:   kifer@cs.stonybrook.edu
 **
 ** Copyright (C) by
-**      The Research Foundation of the State University of New York, 1999-2008;
-**      and Vulcan, Inc., 2008.
+**      The Research Foundation of the State University of New York, 2008, 2009;
+**      and Vulcan, Inc., 2008, 2009.
 **
 ** All rights reserved.
 **
@@ -23,7 +23,12 @@
 
 // All the FL_* names are defined in flora_terms.flh to make it easier to change
 :- export FL_UNDEFEATED(?,?,?), %refresh.
-
+:- export ?[defeatedBy -> ?],
+	  ?[defeats->?],
+	  ?[conflictsWith->?],
+	  ?[candidate],
+	  ?[disqualifiedDueTo->?].
+:- ignore_depchk %abort(?)@_system.
 
 /*
   Note 1: FL_UNDEFEATED/3 must be called with the third argument bound to
@@ -34,10 +39,19 @@
           If ?R is non-ground, the result is incorrect: false{defeated} ==
           not Exists defeated, while we need Exists not defeated.
 */
+FL_UNDEFEATED(?I,?H,?_Mod) :-
+	flora_trim_last(?H,?Htrimmed)@_prolog(flrtrim),
+	\+ ground(?Htrimmed)@_prolog(basics),
+	!,
+	flora_decode_oid_as_atom(?I,?Iatom)@_prolog(flrdecode),
+	flora_decode_goal_as_atom(?H,?Hatom)@_prolog(flrdecode),
+	%abort(['Invocation of nonground defeasible rule.\n\tLabel: ',
+		 ?Iatom, '\n\tRule head: ',
+		 ?Hatom])@_system.
 FL_UNDEFEATED(?I,?H,?Mod) :-
 	not FL_DEFEATED((?I,?H),?Mod).
-        // Using 't not' directly does not buy performance
-	//'t not'(FL_DEFEATED(?R,?Mod))@_prolog(tables).
+        // cannot use 't not': ?H might not be ground
+	//'t not'(FL_DEFEATED((?I,?H),?Mod)@ _@)@_prolog(tables).
 
 // Axioms for Courteous LP
 
@@ -76,8 +90,79 @@ FL_REBUTS(?R1,?R2,?Mod)  :-
 	not FL_REFUTED(?R2,?Mod).
 
 
-/***************************** Auxiliary Predicates ***********************/
+/***** refresh the tables used by the defeasible theory ********************/
 
+%refresh :-
+	refresh{?(?,?,?), ?(?,?)},
+	flora_abolish_table_call(FL_OPPOSES_AUX(?,?,?))@_prolog(flrtables),
+	flora_abolish_table_call(FL_OVERRIDES_AUX(?,?,?))@_prolog(flrtables),
+	caller{?Mod},
+	refresh{FL_OPPOSES(?,?)@?Mod, FL_OPPOSES(?,?,?,?)@?Mod},
+	refresh{FL_OVERRIDES(?,?)@?Mod, FL_OVERRIDES(?,?,?,?)@?Mod}.
+
+/************************ Debugging ***************************************/
+
+/*
+   starus(Id,Head)[defeatedBy->Reason] can be used to find out what is defeated
+   and why. No need to reify the ?H argument or attach the module to it.
+   This method finds out the caller module and replaces the module of Head
+   with the caller module.
+*/
+
+status(?I,?H)[defeatedBy -> refutedBy(?DI,?DH)] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_REFUTES((?DI,?DH),(?I,?HM),?Mod), not FL_COMPROMISED((?DI,?DH),?Mod).
+status(?I,?H)[defeatedBy -> rebuttedBy(?DI,?DH)] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_REBUTS((?DI,?DH),(?I,?HM),?Mod), not FL_COMPROMISED((?DI,?DH),?Mod).
+status(?I,?H)[defeatedBy -> disqualified] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_DISQUALIFIED((?I,?HM),?Mod).
+
+status(?I,?H)[defeats -> refutes(?Refuted)] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_REFUTES((?I,?HM),?Refuted,?Mod), not FL_COMPROMISED((?I,?HM),?Mod).
+status(?I,?H)[defeats -> rebuts(?Rebutted)] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_REBUTS((?I,?HM),?Rebutted,?Mod), not FL_COMPROMISED((?I,?HM),?Mod).
+
+status(?I,?H)[conflictsWith -> ?Conflict] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_CONFLICTS((?I,?HM),?Conflict,?Mod).
+
+status(?I,?H)[candidate] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_CANDIDATE((?I,?HM),?Mod).
+
+status(?I,?H)[disqualifiedDueTo->defeats(?Defeater,?Defeated)] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_DISQUALIFIED((?I,?HM),?Mod),
+	// FL_TRANS_DEFEATS is constructed so that it will work when Arg2
+	// is bound; it might loop if Arg2 is unbound. This is why ?Defeater
+	// and ?Defeated are in Arg1.
+	FL_TRANS_DEFEATS(?Defeater,(?I,?HM),?Mod),
+	FL_TRANS_DEFEATS(?Defeated,(?I,?HM),?Mod),
+	FL_DEFEATS(?Defeater,?Defeated,?Mod).
+
+change_module(?InA,?_Mod,?_OutA) :-
+	var(?InA),
+	!,
+	%abort('In status(Id,Head)[...]@_gcl: Head must be bound')@_system.
+change_module(?InA,?Mod,?OutA) :-
+	?InA =.. [?T(?A,?)|?Rest],
+	?OutAGeneric =.. [?T(?A,?Mod)|?Rest],
+	convert_to_body_literal(?OutAGeneric,?OutA)@_prolog(flrcanon).
+
+/***************************** Auxiliary Predicates ***********************/
+// this works only if Arg2 is bound
 FL_TRANS_DEFEATS(?R1,?R2,?Mod) :- FL_DEFEATS(?R1,?R2,?Mod).
 FL_TRANS_DEFEATS(?R1,?R3,?Mod) :-
 	// This order seems to be faster than others
@@ -97,22 +182,18 @@ FL_CANDIDATE((?RId,?Head),?Mod) :-
 // Find out if two labels (Id,Head) are in conflict.
 // One of the labels might be a variable
 FL_CONFLICTS(?L1,?L2,?Mod) :-
+	FL_OPPOSES_AUX(?Mod,?L1,?L2),
 	FL_CANDIDATE(?L1,?Mod),
-	FL_CANDIDATE(?L2,?Mod),
-	FL_OPPOSES_AUX(?Mod,?L1,?L2).
+	FL_CANDIDATE(?L2,?Mod).
+        /*
+	  FL_OPPOSES_AUX(?Mod,?L1,?L2).
+	  should be at the beginning, since this is a cheap predicate
+	  compared to checking candidacy.
+	*/
 
 
 // FL_OPPOSES_AUX/3 and FL_OVERRIDES_AUX/3 are defined in
-// genincludes/flrdefeasible/fli
-
-
-%refresh :-
-	refresh{?(?,?,?), ?(?,?)},
-	flora_abolish_table_call(FL_OPPOSES_AUX(?,?,?))@_prolog(flrtables),
-	flora_abolish_table_call(FL_OVERRIDES_AUX(?,?,?))@_prolog(flrtables),
-	caller{?Mod},
-	refresh{FL_OPPOSES(?,?)@?Mod, FL_OPPOSES(?,?,?,?)@?Mod},
-	refresh{FL_OVERRIDES(?,?)@?Mod, FL_OVERRIDES(?,?,?,?)@?Mod}.
+// genincludes/flrdefeasible.fli
 
 
 // Hook for abolishing FL_CANDIDATE/1 after each query
