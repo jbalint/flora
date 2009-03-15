@@ -7307,26 +7307,39 @@ labeled $i_1$ \emph{rebuts} $\rho_2$ labeled $i_2$ if and only if the two
 instances are in conflict and neither instance is refuted by some other
 rule instance.
 
-Rule disqualification is not so commonly agreed upon notion as the other
+Rule disqualification is not so commonly agreed upon a notion as the other
 two.  Some argumentation theories do not use it at all (i.e., nothing is
 disqualified).  The default argumentation theory in \FLORA postulates that a
-rule instance, $\rho_1$ labeled $i_1$, is disqualified if it transitively
-defeats itself, i.e., there is a sequence of labeled rule instances
-$(i_1,\rho_1)$, $(i_2,\rho_2)$, ..., $(i_{n-1},\rho_{n-1})$, $(i_n,\rho_n)$,
-such that $i_n=i_1$, $\rho_n=\rho_1$, and at each step
-$(i_i,\rho_i)$ either refutes or rebuts $(i_{i+1},\rho_{i+1})$.
+rule instance, $\rho_1$ labeled $i_1$, is disqualified in two cases:
+%% 
+\begin{itemize}
+\item If it transitively defeats itself, i.e., there is a sequence of
+  labeled rule instances $(i_1,\rho_1)$, $(i_2,\rho_2)$, ...,
+  $(i_{n-1},\rho_{n-1})$, $(i_n,\rho_n)$, such that $i_n=i_1$,
+  $\rho_n=\rho_1$, and at each step $(i_i,\rho_i)$ either refutes or rebuts
+  $(i_{i+1},\rho_{i+1})$.
+\item If it is \emph{canceled}. A rule instance is canceled if it matches a
+  cancellation literal, which is true and not defeated. More details on
+  cancellation appear in Section~\ref{sec-cancel}.
+\end{itemize}
+%% 
 
-These notions are very useful for the purpose of debugging (finding out why
+These notions are very useful for debugging the knowledge base (finding out why
 certain inferences were or were not made), and we will discuss the
 corresponding debugging primitives in Section~\ref{sec-debugging-defeat}.
 
 
-\subsection{Specifying Defeasible Theories to Use}
+\subsection{Specifying Argumentation Theories to Use}
 
 \FLORA supports a generalized form of defeasible reasoning.
-The user can enable defeasible reasoning on a per-module basis, which is
-specified by placing one of the directives, below, at the top of the
-appropriate module (before any rules).
+The user can enable defeasible reasoning on a per-module basis, and
+different theories of defeasibility can be used in different modules.
+The type of defeasible reasoning to be used depends on the chosen
+\emph{argumentation theory}, which defines the \emph{arguments} (as in
+``arguing'') the reasoner is to use in order to decide what inferences
+are to be defeated. Syntactically, defeasible reasoning is requested
+by placing one of the following directives at the top of the
+appropriate module (before any rules are given):
 
 \index{use\_argumentation\_theory directive}
 %% 
@@ -7432,45 +7445,8 @@ They cannot be negated using {\tt neg}, but the compiler does not check if
 they appear as arguments to {\tt \_opposes}. If they do, this information
 is ignored.
 
-\subsection{Defeasible Rules Must Be Purely Logical}
 
-It must be kept in mind that all rules involved in defeasible reasoning
-must be \emph{purely logical}. This includes both the labeled rules of the
-core knowledge base (whether they are explicitly mentioned in the
-overrides/opposes statements or not) as well as the rules that define the
-predicates {\tt \_overrides} and {\tt \_opposes}.  This means that the
-bodies of such rules cannot use non-logical or dynamic features, such as
-%% 
-\begin{itemize}
-\item  I/O statements
-\item  Insert/delete statements
-\item  Cut, the predicates {\tt ground/1}, {\tt var/1}, {\tt nonvar/1}, and
-  similar.
-  These predicates can be used only if the alternatives (when
-  the predicates fail) cause an abort and issue an error message for the user.
-  For instance, the following predicate
-  %% 
-\begin{verbatim}
-    %check_state(?s) :- ground(?s)@_plg(basics), !.
-    %check_state(?s) :- %abort(['Nonground state found: ', ?s,
-                                '. Might cause infinite recursion.'])@_sys.  
-\end{verbatim}
-  %% 
-  \emph{can} be used in the body of a defeasible rule (or of the rules defining
-  {\tt \_overrides} and {\tt \_opposes}) because the alternative to being
-  ground here aborts the inference process.
-\item  Comparison operators, unless it is assured that both sides of the
-  comparison are ground during the inference.
-\item  Inequality operators, such as {\tt !=}, {\tt !==}, \verb|\=|,
-  \verb|\==|,  unless it is certain that both arguments are bound.
-\end{itemize}
-%%
-Note that the exceptions to the above rules ensure that the above operators
-are used in a completely logical fashion or the computation aborts. Any
-other use of the non-logical or update features of \FLORA in defeasible
-reasoning may lead to unpredictable or incorrect results.
-
-\subsection{Cancellation of Rules}
+\subsection{Cancellation of Rules}\label{sec-cancel}
 
 Sometimes it is useful to disable, or \emph{cancel} a rule instance, if
 certain conditions are satisfied. This can be specified using the special
@@ -7515,6 +7491,22 @@ the rule {\tt c3}.   More interesting, however, is the reason for {\tt
 derivation of {\tt tt3(bb)}. However, rule {\tt c5} cancels rule {\tt c4},
 so {\tt tt3(bb)} stays put.
 
+Observe the use of 1-argument and 2-argument cancellation predicate.
+The first argument is always a term that matches rule labels for the rules
+to be canceled. The second
+argument, if present, matches the heads of the rules to be canceled. For
+instance, {\tt \_cancel(L2)} cancels only the rule labeled {\tt L2}. If more
+than one rule matches {\tt L2} (this is possible, but is not the case in
+our example), then all such rules are canceled. Two-argument cancellation
+predicates cancel only the rules that match both arguments. In our case,
+however, the first argument is a variable, as in {\tt \_cancel(?,tt3(aa))},
+which means that all the rules matching the head are canceled, regardless
+of the label.\footnote{
+  Again, in our case, only one rule head matches the literal {\tt tt3(a)},
+  but in general there can be several.
+}
+%% 
+
 Here is a more sophisticated example:
 %% 
 \begin{verbatim}
@@ -7556,6 +7548,45 @@ Here rule {\tt c1} cancels rule {\tt r}, but {\tt c1} conflicts with {\tt
 stays true.
 
 
+\subsection{Defeasible Rules Must Be Purely Logical}
+
+It must be kept in mind that all rules involved in defeasible reasoning
+must be \emph{purely logical}. This includes both the labeled rules of the
+core knowledge base (whether they are explicitly mentioned in the
+overrides/opposes statements or not) as well as the rules that define the
+predicates {\tt \_overrides} and {\tt \_opposes}.  This means that the
+bodies of such rules cannot use non-logical or dynamic features, such as
+%% 
+\begin{itemize}
+\item  I/O statements
+\item  Insert/delete statements
+\item  Cut, the predicates {\tt ground/1}, {\tt var/1}, {\tt nonvar/1}, and
+  similar.
+  These predicates can be used only if the alternatives (when
+  the predicates fail) cause an abort and issue an error message for the user.
+  For instance, the following predicate
+  %% 
+\begin{verbatim}
+    %check_state(?s) :- ground(?s)@_plg(basics), !.
+    %check_state(?s) :- %abort(['Nonground state found: ', ?s,
+                                '. Might cause infinite recursion.'])@_sys.  
+\end{verbatim}
+  %% 
+  \emph{can} be used in the body of a defeasible rule (or of the rules defining
+  {\tt \_overrides} and {\tt \_opposes}) because the alternative to being
+  ground here aborts the inference process.
+\item  Comparison operators, unless it is assured that both sides of the
+  comparison are ground during the inference.
+\item  Inequality operators, such as {\tt !=}, {\tt !==}, \verb|\=|,
+  \verb|\==|,  unless it is certain that both arguments are bound.
+\end{itemize}
+%%
+Note that the exceptions to the above rules ensure that the above operators
+are used in a completely logical fashion or the computation aborts. Any
+other use of the non-logical or update features of \FLORA in defeasible
+reasoning may lead to unpredictable or incorrect results.
+
+
 \subsection{Debugging Defeasible Knowledge Bases}
 \label{sec-debugging-defeat}
 
@@ -7587,7 +7618,8 @@ The list of methods follows:
     will be returned.
   \item {\tt disqualified}: This is returned if the rule is
     disqualified. (Recall that in the defauls {\tt \_gcl} theory a rule is
-    disqualified if it transitively refutes/rebuts itself.)
+    disqualified if it transitively refutes/rebuts itself or if it is
+    canceled.)
     In this case, an auxiliary method, {\tt disqualifiedDueTo}, can provide
     additional information, as described next. 
   \end{itemize}
