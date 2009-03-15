@@ -18,7 +18,6 @@
 
 
 
-
 :- import
 	push_abort_cutpoint/0,
 	pop_abort_cutpoint/0

@@ -2144,9 +2144,11 @@ compile_label((Id,Meta),Id,Meta,[]) :- !.
 compile_label(Label,LblCode,MetaCode,Status) :-
 	is_fllabel(Label,Id,Meta,Index),
 	(is_flatom(Id,_A) ->
-	    atomobj_struct(Id,LblCode)
+	    atomobj_struct(Id,LblCode),
+	    IdStat = []
 	; is_fltoken(Id,FL_NEWOID,Index1) ->
-	    new_oidobj(Index1,LblCode)
+	    new_oidobj(Index1,LblCode),
+	    IdStat = []
 	; is_fltoken(Id,FL_NEWOID,Num,Index1) ->
 	    flora_get_counter(RULE_NUM, Rule_num), 
 	    new_oidobj(Rule_num,Num,Index1,LblCode),
@@ -2154,17 +2156,22 @@ compile_label(Label,LblCode,MetaCode,Status) :-
 	    %% have the same counter: flora_compile_internal is called right
 	    %% after compile_label, and this will increment the RULE_NUM
 	    %% counter again
-	    flora_increment_counter(RULE_NUM,-1,_,_)
+	    flora_increment_counter(RULE_NUM,-1,_,_),
+	    IdStat = []
 	; is_flvar(Id,VarName,VarIdx) ->
-            compile_flvar(VarName,VarIdx,LblCode)
-	; LblCode = NULL
+            compile_flvar(VarName,VarIdx,LblCode),
+	    IdStat = []
+	; is_flterm(Id,Funct,N,Args) ->
+	    compile_fltermobj(Funct,N,Args,LblCode,_,_,IdStat)
+	; LblCode = NULL,
+	    IdStat = []
 	),
 	(Meta == NULL 
 	-> Status = [],
 	    MetaCode = NULL
 	; compile_head(Meta,MetaCodeConjunct,NULL,NULL,Status1)
 	-> 
-	    (Status1 == []
+	    (IdStat == [], Status1 == []
 	    -> Status = [],
 		%% convert to list
 		compile_conjunct2list(MetaCodeConjunct,MetaCode)

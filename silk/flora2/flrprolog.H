@@ -16,7 +16,6 @@
 */
 
 
-
 %% NOTE: flora_dynprlg exists only because of the way import
 %% is handled in foo@_prolog(mod). In this case, FLORA inserts
 %% a dynamic declaration that foo is a prolog predicate.

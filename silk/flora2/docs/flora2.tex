@@ -7151,35 +7151,37 @@ In all other cases the annotation is discarded.
 The \emph{Label} part of the annotation
 must be a constant, while \emph{Meta} is a comma-separated list of literals.
 Both \emph{Label} and \emph{Meta} are optional. If the first conjunct
-inside @\{...\} is a constant, it is treated as a label given
-to the rule by the user,
-so a constant should never be used as the first conjunct of the
-meta-information part unless a separate rule label is also provided.\footnote{
-  %%
-  Constants probably do not make much sense as meta-information, anyway,
-  so this is not an onerous burden.
-But if one really wants, say, {\tt abc} to be rule's metadata, then she
-could write {\tt @\{xyz,abc\} foo :- bar}. Here {\tt xyz} would
-become the rule's label. Alternatively, if meta-data contains 
-more that just {\tt abc}, then one simply can place {\tt abc} the second or
-later item among the meta-date items. For instance, {\tt @\{p(cde),abc\} foo
-  :- bar}.  This latter rule has meta-data and no explicitly given label label.
-%%
-}
-%%
+inside @\{...\} is a term other than a variable (but it can be a term that
+contains variables), it is treated as a label given
+to the rule by the user. Therefore, a
+term should never be used as the first conjunct of the
+meta-information part unless a separate rule label is also provided.
+If no rule label is needed, then one can put a variable instead. This
+signals the compiler to skip the label part. For instance,
+%% 
+\begin{verbatim}
+ @{?, some[meta->info]} foo(?X) :- bar(?X).
+\end{verbatim}
+%% 
+As we have just mentioned, a rule label can have variables. For instance,
+%% 
+\begin{verbatim}
+@{allow(?Device,?Person)}  authorized(?Person,?Device) :- not abused(?Person,?Device).
+\end{verbatim}
+%% 
 
 
-Instead of a constant, a rule label can be an anonymous oid constant,
-{\tt \_\#}, or a numbered anonymous oid, such as {\tt \_\#1} or {\tt
-  \_\#2}. This can be used when the user wants the compiler to generate a
-new unique rule label automatically. For instance,
+Instead of a ``normal'' term, a rule label can be an anonymous oid
+constant, {\tt \_\#}.  This is useful when the user wants the compiler to
+generate a new unique rule label automatically. For instance,
 %% 
 \begin{verbatim}
    @{_#} foo(?X) :- bar(?X).
 \end{verbatim}
 %% 
-Numbered anonymous oids can also be used;
-they allow to ``capture'' the newly generated
+Numbered anonymous oids, e.g., {\tt \_\#1} or {\tt
+  \_\#2}, can also be used;
+they allow ``capturing'' the newly generated
 rule labels by the rules. For instance,
 %% 
 \begin{verbatim}
@@ -7238,13 +7240,23 @@ such as {\tt id=...} in the meta-part specifies a unique rule Id:
 %% 
 Note that rule labels are not unique here, but rule Ids could be required,
 by convention, to be unique.
-
 In contrast, rule labels are used mostly to support \emph{defeasible
   reasoning}---see Section~\ref{sec-defeasible}.  As shown above, rule
-labels are \emph{not} required to be unique, and in many cases they are
-not. In addition, labels cannot be assigned to rules that have
+labels are \emph{not} required to be unique and in many cases they are
+not. 
+
+One other restriction is that
+rule labels \emph{cannot} be assigned to rules that have
 transactional literals (marked with the \%-sign) in the rule head:
 defeasible reasoning with side-effectful rules is not supported.
+However, other metadata is allowed in such rules.
+For instance,
+%% 
+\begin{verbatim}
+@{lab,some[meta->data]} %action :- ... .    // illegal
+@{?,some[meta->data]}   %action :- ... .    // ok
+\end{verbatim}
+%% 
 
 
 \section{Defeasible Reasoning}
@@ -7255,14 +7267,14 @@ some rule instances can be \emph{defeated}  by other rule instances. The
 defeated rules do not need to be satisfied by the intended model of the
 knowledge base.
 
-The basic mechanisms by which the user can control the course of defeasible
+The basic mechanisms by which the user can control defeasible
 reasoning include the notions of rule \emph{overriding} and literal
 \emph{opposition}.  We will not describe the semantics of defeasible
 reasoning formally, but instead will give an informal overview.
 
 The basic idea is that the user specifies overriding and
 opposition using the appropriate predicates and then the \emph{associated
-defeasible theory} decides which ground instances of which rules are
+argumentation theory} decides which ground instances of which rules are
 defeated (and thus do not need to be satisfied by the intended model).  
 
 A rule instance, $\rho_1$ labeled $i_1$, \emph{opposes} another rule
@@ -7286,7 +7298,7 @@ A rule can be defeated in several different ways. It can be
 \item  \emph{disqualified}. 
 \end{itemize}
 %% 
-Different defeasible theories may assign different meaning to these
+Different argumentation theories may assign different meaning to these
 concepts, but roughly they mean the following. A rule instance $\rho_1$
 labeled $i_1$ \emph{refutes} another rule instance, $\rho_2$ labeled $i_2$, 
 if and only if these rules are in conflict and the former rule instance
@@ -7296,8 +7308,8 @@ instances are in conflict and neither instance is refuted by some other
 rule instance.
 
 Rule disqualification is not so commonly agreed upon notion as the other
-two.  Some defeasible theories do not use it at all (i.e., nothing is
-disqualified).  The default defeasible theory in \FLORA postulates that a
+two.  Some argumentation theories do not use it at all (i.e., nothing is
+disqualified).  The default argumentation theory in \FLORA postulates that a
 rule instance, $\rho_1$ labeled $i_1$, is disqualified if it transitively
 defeats itself, i.e., there is a sequence of labeled rule instances
 $(i_1,\rho_1)$, $(i_2,\rho_2)$, ..., $(i_{n-1},\rho_{n-1})$, $(i_n,\rho_n)$,
@@ -7316,38 +7328,40 @@ The user can enable defeasible reasoning on a per-module basis, which is
 specified by placing one of the directives, below, at the top of the
 appropriate module (before any rules).
 
-\index{use\_defeasible\_theory directive}
+\index{use\_argumentation\_theory directive}
 %% 
 \begin{alltt}
-  :- use_defeasible_theory.
-  :- use_defeasible_theory\{\emph{Module}\}.
+  :- use_argumentation_theory.
+  :- use_argumentation_theory\{\emph{Module}\}.
 \end{alltt}
 %%
 \index{Generalized Courteous Logic}
 \index{GCL}
 \index{\_gcl module}
-The first instruction directs \FLORA to use the default defeasible theory
+The first instruction directs \FLORA to use the default argumentation theory
 module, {\tt \_gcl}, which stands for Generalized Courteous Logic (or GCL).
-The user can choose to implement a different theory of defeasible reasoning,
-load it into module {\tt foo}, and put the directive
+One can use a different theory of defeasible reasoning by implementing an
+appropriate argumentation theory and
+loading its file into some module {\tt foo}.
+A file that actually uses this argumentation theory should have
+the directive
 %% 
 \begin{verbatim}
-    :- use_defeasible_theory{foo}.
+    :- use_argumentation_theory{foo}.
 \end{verbatim}
 %% 
-in any other module of the knowledge base where this form of defeasible
-reasoning is appropriate. Thus, different modules of the same \FLORA
+at the top. Thus, different modules of the same \FLORA
 knowledge base can use different theories of defeasible reasoning.
 
 The defeasible theory in module {\tt foo} must use certain API, which will
-be described in the next version of this manual. Meanwhile, one can
+be described in a later version of this manual. Meanwhile, one can
 construct such theories by analogy with GCL---see {\tt lib/flrgcl.flr}.  
 
-Note that the defeasible theory is applied only to rules that have explicit
+Note that argumentation theories affect only those rules that have explicit
 user-specified labels---just metadata will not do (anonymous labels of the
-form {\tt \_\#} or {\tt \_\#1} are still considered user labels). Facts
+form {\tt \_\#} or {\tt \_\#1} \emph{are} considered user labels). Facts
 that have explicitly specified labels or meta-info are treated as rules
-that have {\tt true} as their bodies.
+that have {\tt true} as the only literal in their bodies.
 
 \subsection{Rule Overriding and Conflicts}\label{sec-overriding-conflict}
 
@@ -7432,7 +7446,7 @@ bodies of such rules cannot use non-logical or dynamic features, such as
 \item  Insert/delete statements
 \item  Cut, the predicates {\tt ground/1}, {\tt var/1}, {\tt nonvar/1}, and
   similar.
-  This predicates can be used only if the alternatives (when
+  These predicates can be used only if the alternatives (when
   the predicates fail) cause an abort and issue an error message for the user.
   For instance, the following predicate
   %% 
@@ -7442,9 +7456,9 @@ bodies of such rules cannot use non-logical or dynamic features, such as
                                 '. Might cause infinite recursion.'])@_sys.  
 \end{verbatim}
   %% 
-  can be used in the body of a defeasible rule (or of the rules defining
+  \emph{can} be used in the body of a defeasible rule (or of the rules defining
   {\tt \_overrides} and {\tt \_opposes}) because the alternative to being
-  grounded will abort the inference process.
+  ground here aborts the inference process.
 \item  Comparison operators, unless it is assured that both sides of the
   comparison are ground during the inference.
 \item  Inequality operators, such as {\tt !=}, {\tt !==}, \verb|\=|,
@@ -7456,11 +7470,96 @@ are used in a completely logical fashion or the computation aborts. Any
 other use of the non-logical or update features of \FLORA in defeasible
 reasoning may lead to unpredictable or incorrect results.
 
+\subsection{Cancellation of Rules}
+
+Sometimes it is useful to disable, or \emph{cancel} a rule instance, if
+certain conditions are satisfied. This can be specified using the special
+predicate {\tt \_cancel}. The default argumentation theory in \FLORA  
+understands two versions of that predicate: a 1-argument version and a
+2-argument version:
+%% 
+\begin{alltt}
+    _cancel(\emph{label}).
+    _cancel(\emph{label},\emph{head}).
+\end{alltt}
+%% 
+The first rule cancels all rule instances whose label unifies with
+\emph{label} and the second version cancels only those rules whose label
+unifies with \emph{label} and whose head unifies with \emph{head}.   
+
+Cancellation rules can also be labeled, overridden,
+and canceled by other cancellation
+rules. To illustrate,  consider the following example:
+%% 
+\begin{verbatim}
+t(aa).
+t(bb).
+@{L1} tt1(?X) :- t(?X).
+@{L2} tt2(?X) :- t(?X).
+@{L3} tt3(?X) :- t(?X).
+
+@{c1} _cancel(?,tt1(bb)).
+@{c2} _cancel(L2).
+@{c3} _cancel(?,tt3(aa)).
+@{c4} _cancel(?,tt3(bb)).
+@{c5} _cancel(c4).
+_overrides(c5,c4).
+\end{verbatim}
+%% 
+Here {\tt tt1} is true only of {\tt aa} and  
+{\tt tt3} only of {\tt bb}. {\tt tt2} is false for both {\tt aa} and {\tt
+  bb}. For instance, {\tt tt1(bb)} is false because of the cancellation
+rule {\tt c1}. Similarly, {\tt tt3(a)} is false because it is canceled by
+the rule {\tt c3}.   More interesting, however, is the reason for {\tt
+  tt3(bb)} being true. Note that rule labeled with {\tt c4} cancels the
+derivation of {\tt tt3(bb)}. However, rule {\tt c5} cancels rule {\tt c4},
+so {\tt tt3(bb)} stays put.
+
+Here is a more sophisticated example:
+%% 
+\begin{verbatim}
+device(printer).          abused(Bob,printer).       pardoned(printer,Bob).
+device(scanner).          abused(Bob,scanner).       pardoned(scanner,Bill).
+device(fax).              abused(Bill,scanner).
+                          abused(Bill,printer).
+                          abused(Mary,fax).
+person(Bob), person(Bill), person(Mary).
+@{id1}               authorized(?Persn,?Device) :- device(?Device), person(?Persn).
+@{id2(?Dev,?Persn)}  _cancel(id1,authorized(?Persn,?Dev)) :- abused(?Persn,?Dev).
+@{id3}               _cancel(id2(?Device,?Persn)) :- pardoned(?Device,?Persn).
+_overrides(id3,id2(?)).
+\end{verbatim}
+%% 
+The most interesting feature here is the label {\tt id2} parametrized with
+variables and the rule labeled {\tt id3}, which uses that parametrized
+label. Note also that here the cancellation rules are conditional.
+The effect is that rule {\tt id3} cancels the instances 
+of the cancellation rule labeled {\tt id2(printer,Bob)} and
+{\tt id2(scanner,Bill)}, which has the effect of authorizing Bob to use the
+printer and Bill to use the scanner, despite of the reported abuses.  
+The reader can verify that the net effect of all the cancellations and
+counter-cancellations is that Bill and Bob can use the fax, Bob and Mary
+are authorized to use the printer, and Bill and Mary can use the scanner.
+
+Another interesting situation arises when cancellation rules are defeated
+not due to overriding, but due to a conflict with some other cancellation
+rule. For instance,
+%% 
+\begin{verbatim}
+@{r}   P.
+@{c1}  _cancel(r).
+@{c2}  neg _cancel(r).
+\end{verbatim}
+%% 
+Here rule {\tt c1} cancels rule {\tt r}, but {\tt c1} conflicts with {\tt
+  c2}, since the two rules contradict each other. As a result, {\tt P}      
+stays true.
+
 
 \subsection{Debugging Defeasible Knowledge Bases}
 \label{sec-debugging-defeat}
 
-To help the user debug defeasible knowledge base, the default defeasible
+To help the user debug defeasible knowledge base, the default argumentation
 theory, {\tt \_gcl}, provides a special API, which can be used to find out
 why certain inferences were or were not made.
 The API consists of several methods, which take status-objects of the form
@@ -7479,9 +7578,10 @@ The list of methods follows:
   {\tt ?Reason} is the result of the query. It can tke three different forms:
   %% 
   \begin{itemize}
-  \item  {\tt refutedBy(ruleId,ruleHead)}: In this case, all the rule
+  \item {\tt refutedBy(ruleId,ruleHead)}: In this case, all the rule
     id/head pairs that refute the rule(s) represented by the {\tt ?I/?H}
-    pair will be returned.
+    pair (i.e., whose label unifies with {\tt ?I} and head with {\tt ?H})
+    will be returned.
   \item {\tt rebuttedBy(ruleId,ruleHead)}: All the rule
     id/head pairs that rebut the rule(s) represented by the {\tt ?I/?H} pair
     will be returned.
@@ -7492,14 +7592,19 @@ The list of methods follows:
     additional information, as described next. 
   \end{itemize}
   %% 
-\item  {\tt status(?I,?H)[disqualifiedDueTo->defeats(?Defeater,?Defeated)]}.\\
+\item  {\tt status(?I,?H)[disqualifiedDueTo->selfdefeat(?Defeater,?Defeated)]}.\\
   If the rules represented by the {\tt ?I/?H} pair are disqualified, this
   method returns the set of terms of the form {\tt
     defeats(?Defeater,?Defeated)}. Here both {\tt ?Defeater} and {\tt
     ?Defeated} are id/head pairs that are defeated by the {\tt ?I/?H} pair
   and, in addition, {\tt ?Defeater} defeats {\tt ?Defeated}. By following
-  these pairs one can discover a cycle of defeats starting with {\tt ?I/?H}
-  and understand why the corresponding rules were disqualified.
+  these pairs one should be able
+  to discover a cycle of defeats starting and ending
+  with {\tt ?I/?H}, which constitutes a self-defeating cycle.
+\item  {\tt status(?I,?H)[disqualifiedDueTo->canceled]}.\\
+  This literal is true if all the rules whose label unifies with
+  {\tt ?I} and head with {\tt ?H} are
+  canceled. 
 \item  {\tt status(?I,?H)[candidate]}.\\
   This method tells whether at least one body of a rule represented by the
   {\tt ?I/?H} pair is satisfied in the intended model. Such satisfaction is
@@ -7538,10 +7643,11 @@ called accordingly. For instance,
 
 The dependency of tabling on knowledge base updates has been extensively
 discussed in Section~\ref{sec-updates-tabling}.
-Since defeasible reasoning theories are implemented using tabled
+Since argumentation theories used by the defeasible reasoning mechanism
+are implemented using tabled
 predicates, it is sometimes necessary to refresh those tables as well when
 the knowledge base is modified by insertion or deletion of facts and rules.
-To simplify this task, the \FLORA modules that implement defeasible
+To simplify this task, \FLORA modules that implement argumentation
 theories must provide the predicate {\tt \%refresh/0}, which is invoked as
 follows:
 %% 
@@ -7549,8 +7655,8 @@ follows:
     ?- %refresh@foo.
 \end{verbatim}
 %% 
-where {\tt foo} is the name of the defeasible theory in question. For
-instance, for the GCL defeasible theory, this task can be performed via the
+where {\tt foo} is the name of the argumentation theory in question. For
+instance, for the GCL argumentation theory, this task can be performed via the
 query
 %% 
 \index{\%refresh predicate}

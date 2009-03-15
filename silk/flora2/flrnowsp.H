@@ -16,6 +16,4 @@
 */
 
 
-
-
 :- export flora_nowsp/2.

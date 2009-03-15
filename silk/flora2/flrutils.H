@@ -16,8 +16,6 @@
 */
 
 
-
-
 :- compiler_options([xpp_on]).
 
 #include "flora_porting.flh"

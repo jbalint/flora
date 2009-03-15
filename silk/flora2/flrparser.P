@@ -949,6 +949,9 @@ ignore_workspace_literal(Lit) :-
 	; is_flrefresh_struct(Lit)
 	).
 
+is_term_struct(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),Funct,N,Args) :-
+	flobject_struct(Funct,_).
+
 flifthenelse_struct(Cond,Then,Else,FLIFTHENELSE(Cond,Then,Else)).
 flifthen_struct(Cond,Then,FLIFTHEN(Cond,Then)).
 
@@ -1944,10 +1947,10 @@ flora_exec_semantics_directive(CANOTERM(Funct,_N,FL_BRACE,Args,_If,_Ip),
 /****************************************************************************
   flora_defeasible_directive(+CanoniTerm,-CodeList,-Status)
 
-      :- use_defeasible_theory.
-      :- use_defeasible_theory(module).
+      :- use_argumentation_theory.
+      :- use_argumentation_theory(module).
    or
-      :- use_defeasible_theory{module}.
+      :- use_argumentation_theory{module}.
 ****************************************************************************/
 flora_defeasible_directive(CANOTERM(Funct,1,_,[Arg],_If,_Ip),[Code],[]) :-
 	get_name(Funct,FL_DEFEASIBLE_DIRECTIVE),
@@ -6237,13 +6240,30 @@ flora_parse_label(CANOTERM(_Funct,_N,FL_BRACE,Args,If,_Ip),VarsOK,Code,Status) :
 	( Args = [First|Rest],
 	    ((is_obj_identifier_struct(First) ; get_spectoken(First,FL_NEWOID))
 	    %% First element in list is Id const
-	    -> flobject_struct(First,IdCode)
-	    ; VarsOK, get_flvar_struct(First,IdCode)
+	    ->
+		flobject_struct(First,IdCode),
+		IdStat = []
+	    ;  %% or a term
+		is_term_struct(First,IdFunc,IdArity,IdArgs)
+	    ->
+		flora_term(IdFunc,IdArity,IdArgs,DISALLOW_TRANS,NULL,
+			   IdCode,IdStat)
+	    ;   %% VarsOK is set if we have a variable in Id position
+		%% in clause{@{?Var,...} ...}
+		VarsOK, get_flvar_struct(First,IdCode)
+	    ->
+		IdStat = []
+	    ;   %% just a variable in the Id position in meta (and not
+		%% in clause{...}) means it as a placeholder that skips the Id
+		get_flvar_struct(First,_),
+		IdCode = NULL,
+		IdStat = []
 	    )
 	;
 	    %% only metapart or nothing
 	    IdCode = NULL,
-	    Rest = Args
+	    Rest = Args,
+	    IdStat = []
 	),
 	(Rest == []
 	-> Status1 = [], MetaCode = NULL
@@ -6254,7 +6274,7 @@ flora_parse_label(CANOTERM(_Funct,_N,FL_BRACE,Args,If,_Ip),VarsOK,Code,Status) :
 	    ; flora_head_literal_list(Rest,NULL,MetaCode,Status1)
 	    )
 	),
-	(Status1 == []
+	(IdStat == [], Status1 == []
 	-> 
 	    label_struct(IdCode,MetaCode,If,Code),
 	    Status = []
