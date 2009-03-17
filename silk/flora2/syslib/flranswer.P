@@ -25,6 +25,9 @@
 #include "standard.h"
 #include "flora_terms.flh"
 
+/* Request number of getting the delay register */
+#define DELAY_REG  2
+
 
 :- import cputime/1 from standard.
 
@@ -32,7 +35,10 @@
 
 :- import length/2 from basics.
 
-:- import stat_flag/2 from machine.
+:- import
+	xwam_state/2,
+	stat_flag/2
+   from machine.
 
 :- import shell/5 from shell.
 
@@ -93,6 +99,7 @@ flora_print_all(Gs,NVs) :-
 	    flora_if_then_else(
 			       flora_call(Gs),
 			       (
+				 xwam_state(DELAY_REG,RegVal),
 				 cputime(T1),
 				 T is T1-T0,
 				 ( flora_switch(chatter) ->
@@ -100,7 +107,7 @@ flora_print_all(Gs,NVs) :-
 							  [T])
 				 ; true
 				 ),
-				 flora_write_Yes
+				 flora_write_Yes_or_Unknown(RegVal)
 			       ),
 			       flora_write_No
 			      )
@@ -120,7 +127,7 @@ flora_print_all(Gs,NVs) :-
 
 	    flora_call_hooks(_Mod,QUERYHOOK,QueryCall,before,AroundHookLink),
 	    catch(
-		  findall(NVs,QueryCall,TempL),
+		  findall((NVs,RegVal),(QueryCall,xwam_state(DELAY_REG,RegVal)),TempL),
 		  Exception,
 		  flranswer_all_answers_query_handler(Exception,QueryCall,AroundHookLink)),
 	    cputime(T1),
@@ -189,10 +196,16 @@ flora_print_all(Gs,NVs) :-
 /********************************************************************/
 flora_print_one(Gs,NVs) :-
 	( NVs == []
-	->  flora_if_then_else(flora_call(Gs), flora_write_Yes,flora_write_No)
+	->  flora_if_then_else(flora_call(Gs),
+			       (
+				 xwam_state(DELAY_REG,RegVal),
+				 flora_write_Yes_or_Unknown(RegVal)
+			       ),
+			       flora_write_No)
 	;
 	    ( flora_call(Gs),
-		flora_write_pairs(NVs),
+		xwam_state(DELAY_REG,RegVal),
+		flora_write_pairs(NVs,RegVal),
 		flora_fail_unless_return
 	    ;
 		flora_write_No
@@ -223,6 +236,10 @@ flora_fail_unless_return :- flora_fail_unless_return, fail.
 /********************************************************************/
 flora_write_Yes :- flora_stdfdbk_line('~nYes~n').
 flora_write_No  :- flora_stdfdbk_line('~nNo~n').
+flora_write_Yes_or_Unknown(DelayRegVal) :-
+	(DelayRegVal =:= 0 -> flora_stdfdbk_line('~nYes~n')
+	; flora_stdfdbk_line('~nYes  - unknown~n')
+	).
 
 
 /********************************************************************/
@@ -245,19 +262,25 @@ flora_call(_Goal) :-
 /********************************************************************/
 flora_write_matches([]).
 
-flora_write_matches([M|Ms]) :-
-	flora_write_pairs(M),
+flora_write_matches([(M,DelayRegVal)|Ms]) :-
+	flora_write_pairs(M,DelayRegVal),
 	flora_stdfdbk_nl,
 	flora_write_matches(Ms).
 
 
-flora_write_pairs([]).
+flora_write_pairs([],_).
 
-flora_write_pairs([N=V|NVs]) :-
+flora_write_pairs([N=V|NVs],DelayRegVal) :-
 	flora_stdfdbk_nl,
 	flora_stdfdbk_string('~w = ',[N]),
 	flora_display_feedback(V),
-	flora_write_pairs(NVs).
+	flora_write_if_undefined(DelayRegVal),
+	flora_write_pairs(NVs,DelayRegVal).
+
+flora_write_if_undefined(DelayRegVal) :-
+	(DelayRegVal =:= 0 -> true
+	; flora_stdfdbk_string('  - unknown')
+	).
 
 
 /**************************************************************************
