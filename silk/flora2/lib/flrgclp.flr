@@ -23,11 +23,13 @@
 
 // All the FL_* names are defined in flora_terms.flh to make it easier to change
 :- export FL_UNDEFEATED(?,?,?), %refresh.
-:- export ?[defeatedBy -> ?],
+:- export ?[howDefeated -> ?],
 	  ?[defeats->?],
 	  ?[conflictsWith->?],
 	  ?[candidate],
-	  ?[disqualifiedDueTo->?].
+	  ?[howDisqualified->?].
+:- export opposes(?,?),
+	  overrides(?,?).
 :- ignore_depchk %abort(?)@_system.
 
 /*
@@ -53,6 +55,14 @@ FL_UNDEFEATED(?I,?H,?Mod) :-
 	not FL_DEFEATED((?I,?H),?Mod).
         // cannot use 't not': ?H might not be ground
 	//'t not'(FL_DEFEATED((?I,?H),?Mod)@ _@)@_prolog(tables).
+
+// These are for debugging only
+opposes(?L1,?L2) :-
+	caller{?Mod},
+	FL_OPPOSES_AUX(?Mod,?L1,?L2).
+overrides(?R1,?R2) :-
+	caller{?Mod},
+	FL_OVERRIDES_AUX(?Mod,?R1,?R2).
 
 // Axioms for Courteous LP
 
@@ -94,7 +104,7 @@ FL_REBUTS(?R1,?R2,?Mod)  :-
 	not FL_COMPROMISED(?R1,?Mod).
 	//not FL_REFUTED(?R1,?Mod).
 	//not FL_REFUTED(?R2,?Mod).   // this seems wrong
-	//not FL_DEFEATED(?R1,?Mod).  // this is what's needed, but dumps core
+	//not FL_DEFEATED(?R1,?Mod).  // this dumps core
 
 
 /***** refresh the tables used by the defeasible theory ********************/
@@ -112,21 +122,21 @@ FL_REBUTS(?R1,?R2,?Mod)  :-
 /************************ Debugging ***************************************/
 
 /*
-   starus(Id,Head)[defeatedBy->Reason] can be used to find out what is defeated
+   starus(Id,Head)[howDefeated->Reason] can be used to find out what is defeated
    and why. No need to reify the ?H argument or attach the module to it.
    This method finds out the caller module and replaces the module of Head
    with the caller module.
 */
 
-status(?I,?H)[defeatedBy -> refutedBy(?DI,?DH)] :-
+status(?I,?H)[howDefeated -> refutedBy(?DI,?DH)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
 	FL_REFUTES((?DI,?DH),(?I,?HM),?Mod), not FL_COMPROMISED((?DI,?DH),?Mod).
-status(?I,?H)[defeatedBy -> rebuttedBy(?DI,?DH)] :-
+status(?I,?H)[howDefeated -> rebuttedBy(?DI,?DH)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
 	FL_REBUTS((?DI,?DH),(?I,?HM),?Mod), not FL_COMPROMISED((?DI,?DH),?Mod).
-status(?I,?H)[defeatedBy -> disqualified] :-
+status(?I,?H)[howDefeated -> disqualified] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
 	FL_DISQUALIFIED((?I,?HM),?Mod).
@@ -134,11 +144,11 @@ status(?I,?H)[defeatedBy -> disqualified] :-
 status(?I,?H)[defeats -> refutes(?Refuted)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	FL_REFUTES((?I,?HM),?Refuted,?Mod), not FL_COMPROMISED((?I,?HM),?Mod).
+	FL_REFUTES((?I,?HM),?Refuted,?Mod).
 status(?I,?H)[defeats -> rebuts(?Rebutted)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	FL_REBUTS((?I,?HM),?Rebutted,?Mod), not FL_COMPROMISED((?I,?HM),?Mod).
+	FL_REBUTS((?I,?HM),?Rebutted,?Mod).
 
 status(?I,?H)[conflictsWith -> ?Conflict] :-
 	caller{?Mod},
@@ -150,7 +160,7 @@ status(?I,?H)[candidate] :-
 	change_module(?H,?Mod,?HM),
 	FL_CANDIDATE((?I,?HM),?Mod).
 
-status(?I,?H)[disqualifiedDueTo->selfdefeat(?Defeater,?Defeated)] :-
+status(?I,?H)[howDisqualified->defeatCycle(?Defeater,?Defeated)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
 	FL_DISQUALIFIED((?I,?HM),?Mod),
@@ -159,9 +169,10 @@ status(?I,?H)[disqualifiedDueTo->selfdefeat(?Defeater,?Defeated)] :-
 	// and ?Defeated are in Arg1.
 	FL_TRANS_DEFEATS(?Defeater,(?I,?HM),?Mod),
 	FL_TRANS_DEFEATS(?Defeated,(?I,?HM),?Mod),
+	?Defeater != ?Defeated,
 	FL_DEFEATS(?Defeater,?Defeated,?Mod).
 
-status(?I,?H)[disqualifiedDueTo->canceled] :-
+status(?I,?H)[howDisqualified->canceled] :-
 	caller{?Mod},
 	FL_CANCEL_AUX(?Mod,(?I,?H)).
 
