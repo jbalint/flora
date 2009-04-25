@@ -72,7 +72,7 @@ member ()
 
 # float_tests: don't pass. --mk
 # regmatch_tests: don't pass on solaris
-default_testlist="general_tests apptests exporttest"
+default_testlist="general_tests apptests exporttest defeasible/new_gclp"
 
 testlist="$default_testlist $added_tests"
 
@@ -81,11 +81,12 @@ for tst in $testlist ; do
   if member "$tst" "$excluded_tests" ; then
     continue
   else
+    currdir=`pwd`
     cd $tst
     if test -f core ; then
 	rm -f core
     fi
-    ../test_dir.sh "$FLORADIR" "-e segfault_handler(warn). $options"
-    cd ..
+    $currdir/test_dir.sh $currdir "$FLORADIR" "-e segfault_handler(warn). $options"
+    cd $currdir
   fi
 done

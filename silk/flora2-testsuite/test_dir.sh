@@ -8,8 +8,9 @@ echo "-------------------------------------------------------"
 echo "--- Running $dir/test_dir.sh                       ---"
 echo "-------------------------------------------------------"
 
-FLORADIR=$1
-options=$2
+basedir=$1
+FLORADIR=$2
+options=$3
 
 file_list=*.flr
 
@@ -56,8 +57,8 @@ OBJEXT=.xwam
 rm -f *.P *${OBJEXT} *.fld *.fdb *.con
 rm -f programs/*.P programs/*${OBJEXT} programs/*.fld programs/*.fdb
 rm -f gpmanager/*.P gpmanager/*${OBJEXT} gpmanager/*.fld gpmanager/*.fdb
-rm -f ../datafiles/*.P    ../datafiles/*${OBJEXT}  ../datafiles/*.fld  ../datafiles/*.fdb
-rm -f ../exporttest/*.P    ../exporttest/*${OBJEXT}  ../exporttest/*.fld  ../exporttest/*.fdb
+rm -f $basedir/datafiles/*.P    $basedir/datafiles/*${OBJEXT}  $basedir/datafiles/*.fld  $basedir/datafiles/*.fdb
+rm -f $basedir/exporttest/*.P    $basedir/exporttest/*${OBJEXT}  $basedir/exporttest/*.fld  $basedir/exporttest/*.fdb
 
 
 # run the tests
@@ -67,6 +68,6 @@ for file in $file_list ; do
     fi
     prog=`basename $file .flr`
     touch $file
-    ../test_one_file.sh $FLORADIR/runflora $prog "$flora_command"
+    $basedir/test_one_file.sh $FLORADIR/runflora $prog "$flora_command"
 done
 
