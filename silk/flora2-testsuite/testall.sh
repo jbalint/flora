@@ -72,7 +72,7 @@ member ()
 
 # float_tests: don't pass. --mk
 # regmatch_tests: don't pass on solaris
-default_testlist="general_tests apptests exporttest defeasible/new_gclp"
+default_testlist="general_tests apptests exporttest defeasible/new_gclp defeasible/old_gclp"
 
 testlist="$default_testlist $added_tests"
 
