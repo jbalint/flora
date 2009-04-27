@@ -1,4 +1,4 @@
-/* File:      flrgclp.flr
+/* File:      ogclp.flr
 **
 ** Author(s): Michael Kifer
 **
@@ -17,11 +17,9 @@
 */
 
 
-/*** The default argumentation theory: GCL, Generalized Courteous Logic.
-     Obtained from theoriginal Grosof's GCLP by modifying defeasibility
-     and rebuttal.
-     The only difference is that this argumentation theory also
-     supports cancellation.
+/*** This argumentation theory corresponds to the original Grosof's
+     Generalized Courteous Logic Programming.
+     This argumentation theory also supports cancellation.
 */
 
 #include "flora_terms.flh"
@@ -31,8 +29,7 @@
 :- export ?[howDefeated -> ?],
 	  ?[defeats->?],
 	  ?[conflictsWith->?],
-	  ?[candidate],
-	  ?[howDisqualified->?].
+	  ?[candidate].
 :- export opposes(?,?),
 	  overrides(?,?).
 :- ignore_depchk %abort(?)@_system.
@@ -71,7 +68,7 @@ overrides(?R1,?R2) :-
 
 // Axioms for Courteous LP
 
-FL_DEFEATED(?R,?Mod) :- FL_DEFEATS(?S,?R,?Mod), not FL_COMPROMISED(?S,?Mod).
+FL_DEFEATED(?R,?Mod) :- FL_DEFEATS(?,?R,?Mod).
 FL_DEFEATED(?R,?Mod) :- FL_DISQUALIFIED(?R,?Mod).
 
 FL_DEFEATS(?R1,?R2,?Mod) :- FL_REFUTES(?R1,?R2,?Mod).
@@ -81,24 +78,7 @@ FL_REFUTED(?R,?Mod)   :- FL_REFUTES(?,?R,?Mod).
 // rebutted/2 is unused in this version of the argumentation theory
 FL_REBUTTED(?R,?Mod)  :- FL_REBUTS(?,?R,?Mod).
 
-// Modifiers of the original GCL
-FL_COMPROMISED(?R,?Mod)  :- FL_REFUTED(?R,?Mod), FL_DEFEATED(?R,?Mod).
-FL_DISQUALIFIED(?R,?Mod) :- FL_TRANS_DEFEATS(?R,?R,?Mod).
 FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
-
-/*
-// other possibilities
-FL_COMPROMISED(?R,?Mod)  :- FL_REFUTED(?R,?Mod).
-FL_COMPROMISED(?R,?Mod)  :- FL_DEFEATED(?R,?Mod).
-*/
-
-// The original GCL essentially amounts to defining
-// FL_COMPROMISED/2 and FL_DISQUALIFIED/2 defined as below.
-/*
-FL_COMPROMISED(?,?)  :- false.
-FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
-*/
-
 
 FL_REFUTES(?R1,?R2,?Mod) :-
 	// This order is potentially better, since normally
@@ -107,11 +87,8 @@ FL_REFUTES(?R1,?R2,?Mod) :-
 	FL_CONFLICTS(?R1,?R2,?Mod).
 FL_REBUTS(?R1,?R2,?Mod)  :-
 	FL_CONFLICTS(?R1,?R2,?Mod),
-	// but if compromised=defeated then XSB dumps core
-	not FL_COMPROMISED(?R1,?Mod).
-	//not FL_REFUTED(?R1,?Mod).
-	//not FL_REFUTED(?R2,?Mod).   // this seems wrong
-	//not FL_DEFEATED(?R1,?Mod).  // this dumps core
+	not FL_REFUTED(?R1,?Mod),
+	not FL_REFUTED(?R2,?Mod).
 
 
 /***** refresh the tables used by the defeasible theory ********************/
@@ -138,15 +115,15 @@ FL_REBUTS(?R1,?R2,?Mod)  :-
 status(?I,?H)[howDefeated -> refutedBy(?DI,?DH)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	FL_REFUTES((?DI,?DH),(?I,?HM),?Mod), not FL_COMPROMISED((?DI,?DH),?Mod).
+	FL_REFUTES((?DI,?DH),(?I,?HM),?Mod).
 status(?I,?H)[howDefeated -> rebuttedBy(?DI,?DH)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	FL_REBUTS((?DI,?DH),(?I,?HM),?Mod), not FL_COMPROMISED((?DI,?DH),?Mod).
-status(?I,?H)[howDefeated -> disqualified] :-
+	FL_REBUTS((?DI,?DH),(?I,?HM),?Mod).
+status(?I,?H)[howDefeated -> canceled] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	FL_DISQUALIFIED((?I,?HM),?Mod).
+	FL_CANCEL_AUX(?Mod,(?I,?HM)).
 
 status(?I,?H)[defeats -> refutes(?Refuted)] :-
 	caller{?Mod},
@@ -167,23 +144,6 @@ status(?I,?H)[candidate] :-
 	change_module(?H,?Mod,?HM),
 	FL_CANDIDATE((?I,?HM),?Mod).
 
-status(?I,?H)[howDisqualified->defeatCycle(?Defeater,?Defeated)] :-
-	caller{?Mod},
-	change_module(?H,?Mod,?HM),
-	FL_TRANS_DEFEATS((?I,?HM),(?I,?HM),?Mod),
-	// FL_TRANS_DEFEATS is constructed so that it will work when Arg2
-	// is bound; it might loop if Arg2 is unbound. This is why ?Defeater
-	// and ?Defeated are in Arg1.
-	FL_TRANS_DEFEATS(?Defeater,(?I,?HM),?Mod),
-	FL_TRANS_DEFEATS(?Defeated,(?I,?HM),?Mod),
-	?Defeater != ?Defeated,
-	FL_DEFEATS(?Defeater,?Defeated,?Mod).
-
-status(?I,?H)[howDisqualified->canceled] :-
-	caller{?Mod},
-	change_module(?H,?Mod,?HM),
-	FL_CANCEL_AUX(?Mod,(?I,?HM)).
-
 change_module(?InA,?_Mod,?_OutA) :-
 	var(?InA),
 	!,
@@ -197,13 +157,6 @@ change_module(?InA,?Mod,?OutA) :-
 	?InA@?Mod = ?OutA.
 
 /***************************** Auxiliary Predicates ***********************/
-// this works only if Arg2 is bound
-FL_TRANS_DEFEATS(?R1,?R2,?Mod) :- FL_DEFEATS(?R1,?R2,?Mod).
-FL_TRANS_DEFEATS(?R1,?R3,?Mod) :-
-	// This order seems to be faster than others
-	FL_TRANS_DEFEATS(?R2,?R3,?Mod),
-	FL_DEFEATS(?R1,?R2,?Mod).
-
 // Given a rule Id and possibly Head, find body and test if it is satisfied.
 // This predicate's tables are abolished after each query by an
 // after-query hook because sometimes it is called with RId/Head as a var.

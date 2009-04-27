@@ -21,6 +21,7 @@ PROLOGEXT=.P
 FLORADIR=..
 
 ALL = 	flrxml_aux${PROLOGEXT} javaAPI${PROLOGEXT} \
+	ogclp${PROLOGEXT} \
         persistentmodules${PROLOGEXT} prettyprint${PROLOGEXT}
 
 Option = [optimize]

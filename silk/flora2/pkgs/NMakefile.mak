@@ -24,6 +24,7 @@ OBJEXT = .xwam
 PROLOGEXT = .P
 
 ALLOBJS = flrxml_aux$(PROLOGEXT) javaAPI$(PROLOGEXT) \
+	  ogclp$(PROLOGEXT) \
 	  persistentmodules$(PROLOGEXT) prettyprint$(PROLOGEXT)
 
 OPTIONS=[optimize]
