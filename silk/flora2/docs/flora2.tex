@@ -7487,7 +7487,6 @@ t(bb).
 @{c3} _cancel(?,tt3(aa)).
 @{c4} _cancel(?,tt3(bb)).
 @{c5} _cancel(c4).
-_overrides(c5,c4).
 \end{verbatim}
 %% 
 Here {\tt tt1} is true only of {\tt aa} and  
@@ -7527,7 +7526,6 @@ person(Bob), person(Bill), person(Mary).
 @{id1}               authorized(?Persn,?Device) :- device(?Device), person(?Persn).
 @{id2(?Dev,?Persn)}  _cancel(id1,authorized(?Persn,?Dev)) :- abused(?Persn,?Dev).
 @{id3}               _cancel(id2(?Device,?Persn)) :- pardoned(?Device,?Persn).
-_overrides(id3,id2(?)).
 \end{verbatim}
 %% 
 The most interesting feature here is the label {\tt id2} parametrized with
@@ -7554,6 +7552,60 @@ rule. For instance,
 Here rule {\tt c1} cancels rule {\tt r}, but {\tt c1} conflicts with {\tt
   c2}, since the two rules contradict each other. As a result, {\tt P}      
 stays true.
+
+Finally, we should note that if a rule that is being canceled overrides
+the canceling rule than the first-mentioned rule stands and the
+cancellation rule is defeated instead. For instance,
+%% 
+\begin{verbatim}
+@{L1} foo(1).
+@{L2} foo(2).
+@{L3} _cancel(?,foo(?)).  
+_overrides(L1,foo(1),?,_cancel(L1,foo(1))).
+\end{verbatim}
+%% 
+then the instance {\tt \_cancel(L1,foo(1))} is defeated and {\tt foo(1)}
+remains true. However, {\tt foo(2)} gets canceled.
+
+One might think that it makes little sense to specify the rule being
+canceled as having higher priority than the canceling rule and that it is
+simply a case of ill-design. However, there can be good reasons to design
+rules in this way. Suppose the following information is given at two different sites:
+%% 
+\begin{verbatim}
+Site 1:
+   @{L11} foo(1).
+   @{L12} bar.
+
+Site 2:
+   @{L21} _cancel(?,foo(?)).  
+   @{L22} foo(2).
+\end{verbatim}
+%% 
+Site 1 might want to merge the rules from Site 2, but it is unwilling to
+let the {\tt \_cancel(?,foo(?))} statement labeled {\tt L21} to have effect
+on the rules of Site 1. That is, for the merged set of rules, it is ok to
+let the {\tt L22} statement to be canceled (because it was supposed to be
+canceled at Site 2), but it is not ok for the newly merged rules to cancel
+{\tt L21}. To achieve this effect, we can add the following statements to
+the above:
+%% 
+\begin{verbatim}
+    origin(L11,site1).
+    origin(L12,site1).
+    origin(L21,site2).
+    origin(L22,site2).
+    _overrides(?lab1,?, ?lab2,?) :- origin(?lab1,site1), origin(?lab2,site2).
+\end{verbatim}
+%% 
+The first four facts simply tell the system where each rule came from.  The
+last rule says that the rules that came from {\tt site1} take precedence
+over the rules that came from {\tt site2}.  Note that we are in the same
+situation as described earlier: the fact {\tt L21} cancels both {\tt L11}
+and {\tt L22}, but {\tt L11} has higher priority. As a result, {\tt L22}
+remains canceled and is false, but {\tt L11} is not canceled and remains
+true.
+
 
 
 \subsection{Defeasible Rules Must Be Purely Logical}
