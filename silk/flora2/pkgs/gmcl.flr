@@ -1,4 +1,4 @@
-/* File:      flrgclp.flr
+/* File:      gmcl.flr
 **
 ** Author(s): Michael Kifer
 **
@@ -6,7 +6,7 @@
 **
 ** Copyright (C) by
 **      The Research Foundation of the State University of New York, 2008, 2009;
-**      and Vulcan, Inc., 2008, 2009.
+**      and Vulcan, Inc., 2009.
 **
 ** All rights reserved.
 **
@@ -17,22 +17,25 @@
 */
 
 
-/*** The default argumentation theory: GCL, Generalized Courteous Logic.
-     Obtained from theoriginal Grosof's GCLP by modifying defeasibility
-     and rebuttal.
-     The only difference is that this argumentation theory also
-     supports cancellation.
+/*** This argumentation theory allows k-ary mutexes:
+     General Mutex Courteous Logic.
+     This argumentation theory also supports cancellation.
 */
 
 #include "flora_terms.flh"
 
 // All the FL_* names are defined in flora_terms.flh to make it easier to change
+/*
 :- export FL_UNDEFEATED(?,?,?), %refresh.
 :- export ?[howDefeated -> ?],
-	  ?[info->?],
-	  ?[howDisqualified->?].
-:- export opposes(?,?),
+	  ?[info->?].
+// These are exported for debugging
+:- export
+	  ?[opposers(?)->?],
+          opposes(?,?),
 	  overrides(?,?).
+*/
+
 :- ignore_depchk %abort(?)@_system.
 
 /*
@@ -59,7 +62,8 @@ FL_UNDEFEATED(?I,?H,?Mod) :-
         // cannot use 't not': ?H might not be ground
 	//'t not'(FL_DEFEATED((?I,?H),?Mod)@ _@)@_prolog(tables).
 
-// These are for debugging only
+// These are for debugging only; exported
+// Can also use ?Mutex[opposers(?Mod)->?Opposer],
 opposes(?L1,?L2) :-
 	caller{?Mod},
 	FL_OPPOSES_AUX(?Mod,?L1,?L2).
@@ -69,49 +73,50 @@ overrides(?R1,?R2) :-
 
 // Axioms for Courteous LP
 
-FL_DEFEATED(?R,?Mod) :- FL_DEFEATS(?S,?R,?Mod), not FL_COMPROMISED(?S,?Mod).
+FL_DEFEATED(?R,?Mod) :-
+	?Mutex[opposers(?Mod)->?R],
+	not ?Mutex[beater(?Mod)->?R].
+FL_DEFEATED(?R,?Mod) :-
+	FL_OPPOSES_AUX(?Mod,?R,?),
+	not beater(?R,?Mod).
 FL_DEFEATED(?R,?Mod) :- FL_DISQUALIFIED(?R,?Mod).
 
-FL_DEFEATS(?R1,?R2,?Mod) :- FL_REFUTES(?R1,?R2,?Mod).
-FL_DEFEATS(?R1,?R2,?Mod) :- FL_REBUTS(?R1,?R2,?Mod).
+?Mutex[beater(?Mod)->?B] :-
+	competes(?B,?Other,?Mutex,?Mod),
+	not FL_REBUTS(?Other,?B,?Mutex,?Mod).
+beater(?B,?Mod) :-
+	competes(?B,?Other,?Mod),
+	not FL_REBUTS(?Other,?B,?Mod).
 
-FL_REFUTED(?R,?Mod)   :- FL_REFUTES(?,?R,?Mod).
-// rebutted/2 is unused in this version of the argumentation theory
-FL_REBUTTED(?R,?Mod)  :- FL_REBUTS(?,?R,?Mod).
-
-// Modifiers of the original GCL
-FL_COMPROMISED(?R,?Mod)  :- FL_REFUTED(?R,?Mod), FL_DEFEATED(?R,?Mod).
-FL_DISQUALIFIED(?R,?Mod) :- FL_TRANS_DEFEATS(?R,?R,?Mod).
 FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
 FL_DISQUALIFIED(?R,?Mod) :- FL_DISQUALIFIED_AUX(?R,?Mod).
 
-/*
-// other possibilities
-FL_COMPROMISED(?R,?Mod)  :- FL_REFUTED(?R,?Mod).
-FL_COMPROMISED(?R,?Mod)  :- FL_DEFEATED(?R,?Mod).
-*/
-
-// The original GCL essentially amounts to defining
-// FL_COMPROMISED/2 and FL_DISQUALIFIED/2 defined as below.
-/*
-FL_COMPROMISED(?,?)  :- false.
-FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
-*/
-
-
-FL_REFUTES(?R1,?R2,?Mod) :-
-	// This order is potentially better, since normally
-	// there are fewer overrides than conflicts.
+// FL_REFUTES/4
+FL_REFUTES(?R1,?R2,?Mutex,?Mod) :-
+	competes(?R1,?R2,?Mutex,?Mod),
 	FL_OVERRIDES_AUX(?Mod,?R1,?R2),
-	FL_CONFLICTS(?R1,?R2,?Mod).
-FL_REBUTS(?R1,?R2,?Mod)  :-
-	FL_CONFLICTS(?R1,?R2,?Mod),
-	// but if compromised=defeated then XSB dumps core
-	not FL_COMPROMISED(?R1,?Mod).
-	//not FL_REFUTED(?R1,?Mod).
-	//not FL_REFUTED(?R2,?Mod).   // this seems wrong
-	//not FL_DEFEATED(?R1,?Mod).  // this dumps core
+	FL_CANDIDATE(?R1,?Mod).
+// FL_REFUTES/3
+FL_REFUTES(?R1,?R2,?Mod) :-
+	competes(?R1,?R2,?Mod),
+	FL_OVERRIDES_AUX(?Mod,?R1,?R2),
+	FL_CANDIDATE(?R1,?Mod).
 
+// FL_REBUTS/4
+FL_REBUTS(?R1,?R2,?Mutex,?Mod)  :-
+	competes(?R1,?R2,?Mutex,?Mod),
+	FL_CANDIDATE(?R1,?Mod),
+	not FL_REFUTES(?R2,?R1,?Mutex,?Mod).
+// FL_REBUTS/3
+FL_REBUTS(?R1,?R2,?Mod)  :-
+	competes(?R1,?R2,?Mod),
+	FL_CANDIDATE(?R1,?Mod),
+	not FL_REFUTES(?R2,?R1,?Mod).
+
+competes(?R1,?R2,?Mutex,?Mod) :-
+	?Mutex[opposers(?Mod)->{?R1,?R2}], ?R1 != ?R2.
+competes(?R1,?R2,?Mod) :-
+	FL_OPPOSES_AUX(?Mod,?R1,?R2).
 
 /***** refresh the tables used by the defeasible theory ********************/
 
@@ -134,54 +139,42 @@ FL_REBUTS(?R1,?R2,?Mod)  :-
    with the caller module.
 */
 
-status(?I,?H)[howDefeated -> refutedBy(?DI,?DH)] :-
+status(?I,?H)[howDefeated -> notBeaterFor(?Mutex)] :-
+	caller{?Mod},
+	?R = (?I,?H),
+        ?Mutex[opposers(?Mod)->?R],
+	not ?Mutex[beater(?Mod)->?R].
+status(?I,?H)[howDefeated -> notBeaterFor(classicalMutex)] :-
+	caller{?Mod},
+	?R = (?I,?H),
+	FL_OPPOSES_AUX(?Mod,?R,?),
+	not beater(?R,?Mod).
+status(?I,?H)[howDefeated -> canceled] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	FL_REFUTES((?DI,?DH),(?I,?HM),?Mod), not FL_COMPROMISED((?DI,?DH),?Mod).
-status(?I,?H)[howDefeated -> rebuttedBy(?DI,?DH)] :-
-	caller{?Mod},
-	change_module(?H,?Mod,?HM),
-	FL_REBUTS((?DI,?DH),(?I,?HM),?Mod), not FL_COMPROMISED((?DI,?DH),?Mod).
-status(?I,?H)[howDefeated -> disqualified] :-
-	caller{?Mod},
-	change_module(?H,?Mod,?HM),
-	FL_DISQUALIFIED((?I,?HM),?Mod).
+	FL_CANCEL_AUX(?Mod,(?I,?HM)).
 
 status(?I,?H)[info -> refutes(?Refuted)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
 	FL_REFUTES((?I,?HM),?Refuted,?Mod).
+status(?I,?H)[info -> refutes(?Refuted)] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_REFUTES((?I,?HM),?Refuted,?_Mutex,?Mod).
 status(?I,?H)[info -> rebuts(?Rebutted)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
 	FL_REBUTS((?I,?HM),?Rebutted,?Mod).
-
-status(?I,?H)[info->conflictsWith(?Conflict)] :-
+status(?I,?H)[info -> rebuts(?Rebutted)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	FL_CONFLICTS((?I,?HM),?Conflict,?Mod).
+	FL_REBUTS((?I,?HM),?Rebutted,?_Mutex,?Mod).
 
 status(?I,?H)[info->candidate] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
 	FL_CANDIDATE((?I,?HM),?Mod).
-
-status(?I,?H)[howDisqualified->defeatCycle(?Defeater,?Defeated)] :-
-	caller{?Mod},
-	change_module(?H,?Mod,?HM),
-	FL_TRANS_DEFEATS((?I,?HM),(?I,?HM),?Mod),
-	// FL_TRANS_DEFEATS is constructed so that it will work when Arg2
-	// is bound; it might loop if Arg2 is unbound. This is why ?Defeater
-	// and ?Defeated are in Arg1.
-	FL_TRANS_DEFEATS(?Defeater,(?I,?HM),?Mod),
-	FL_TRANS_DEFEATS(?Defeated,(?I,?HM),?Mod),
-	?Defeater != ?Defeated,
-	FL_DEFEATS(?Defeater,?Defeated,?Mod).
-
-status(?I,?H)[howDisqualified->canceled] :-
-	caller{?Mod},
-	change_module(?H,?Mod,?HM),
-	FL_CANCEL_AUX(?Mod,(?I,?HM)).
 
 change_module(?InA,?_Mod,?_OutA) :-
 	var(?InA),
@@ -196,13 +189,6 @@ change_module(?InA,?Mod,?OutA) :-
 	?InA@?Mod = ?OutA.
 
 /***************************** Auxiliary Predicates ***********************/
-// this works only if Arg2 is bound
-FL_TRANS_DEFEATS(?R1,?R2,?Mod) :- FL_DEFEATS(?R1,?R2,?Mod).
-FL_TRANS_DEFEATS(?R1,?R3,?Mod) :-
-	// This order seems to be faster than others
-	FL_TRANS_DEFEATS(?R2,?R3,?Mod),
-	FL_DEFEATS(?R1,?R2,?Mod).
-
 // Given a rule Id and possibly Head, find body and test if it is satisfied.
 // This predicate's tables are abolished after each query by an
 // after-query hook because sometimes it is called with RId/Head as a var.
@@ -213,14 +199,16 @@ FL_CANDIDATE((?RId,?Head),?Mod) :-
 	show_rule_signature(?RId,?,?Mod,?Head,?Body,?,?DefeatCond,?,?)@_prolog(flrcanon),
 	?DefeatCond !== NULL,
 	call(?Body).
-// Find out if two labels (Id,Head) are in conflict.
-// One of the labels might be a variable
-FL_CONFLICTS(?L1,?L2,?Mod) :-
-	// FL_OPPOSES_AUX(?Mod,?L1,?L2) should be at the beginning, since
-	// this is a cheap predicate compared to checking candidacy.
-	FL_OPPOSES_AUX(?Mod,?L1,?L2),
-	FL_CANDIDATE(?L1,?Mod),
-	FL_CANDIDATE(?L2,?Mod).
+
+// suck in the opposersdeclared by the user
+?Mutex[opposers(?Mod)->(?L,?HH)] :-
+	(?Mutex:_Mutex[_opposers->(?L,?H)])@?Mod,
+	?HH = ?H@?Mod.
+// opposer without the rule label
+?Mutex[opposers(?Mod)->(?,?HH)] :-
+	(?Mutex:_Mutex[_opposers->?H])@?Mod,
+	?H != (?,?),
+	?HH = ?H@?Mod.
 
 
 // FL_OPPOSES_AUX/3, FL_OVERRIDES_AUX/3, FL_CANCEL_AUX/2 are defined in
