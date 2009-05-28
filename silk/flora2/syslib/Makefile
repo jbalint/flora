@@ -58,7 +58,8 @@ ALLOBJS = flranswer$(OBJEXT) \
 	  flrimport$(OBJEXT) \
 	  flrhooks$(OBJEXT) \
 	  flrcallflora$(OBJEXT) \
-	  flrcommon_definitions${OBJEXT} \
+	  flrcommon_definitions$(OBJEXT) \
+	  flrrulesigops$(OBJEXT) \
 	  flrprefixdef$(OBJEXT)
 
 FLORA_INCLUDES_DIR = ../flrincludes

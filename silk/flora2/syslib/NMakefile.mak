@@ -58,6 +58,7 @@ ALLOBJS =  flranswer$(OBJEXT) \
 	   flrimport$(OBJEXT) \
 	   flrcallflora$(OBJEXT) \
 	   flrcommon_definitions$(OBJEXT) \
+	   flrrulesigops$(OBJEXT) \
 	   flrprefixdef$(OBJEXT)
 
 OPTIONS = [optimize,ti_all]
