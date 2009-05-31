@@ -7470,10 +7470,6 @@ They cannot be negated using {\tt neg}, but the compiler does not check if
 they appear as arguments to {\tt \_opposes}. If they do, this information
 is ignored.
 
-\subsection{General Exclusion Constraints}\label{sec-exclusion-constr}
-
-TODO
-
 \subsection{Cancellation of Rules}\label{sec-cancel}
 
 Sometimes it is useful to disable, or \emph{cancel} a rule instance, if
@@ -7627,6 +7623,78 @@ remains canceled and is false, but {\tt L11} is not canceled and remains
 true.
 
 
+\subsection{Supported Argumentation Theories}\label{sec-exclusion-constr}
+
+At present, \FLORA supports three different argumentation theories: the new
+and the original generalized courteous logics and general courteous
+logic with general exclusion constraints.
+
+\subsubsection{The New and the Original Courteous Argumentation Theories}
+
+These argumentation theories are very similar to each other; the
+differences lie on the edges. Both theories use the {\tt \_opposes} and
+{\tt \_overrides} predicates as well as the notions of rebuttal,
+refutation, and cancellation as the means for determining which rule
+instances are to be defeated. The difference is that, in the original courteous
+theory, a rule, $R$, is defeated if another rule defeats, rebuts, or
+cancels $R$.
+In the new theory, that other rule must not itself be defeated in order to
+defeat $R$.
+
+The new argumentation theory is the default one. It can be invoked by placing
+%% 
+\begin{verbatim}
+   :- use_argumentation_theory.
+\end{verbatim}
+%% 
+at the top of a \FLORA module where defeasible reasoning is to be used.
+This loads the new courteous argumentation theory into the module {\tt
+  \_gcl}. For the original courteous argumentation theory, place the
+following at the top:
+%% 
+\begin{verbatim}
+    :- use_argumentation_theory{ogcl}.
+    ?- [ogclp>>ogcl].
+\end{verbatim}
+%% 
+The original argumentation theory is then avaolable in the module {\tt ogcl}.
+(Of course, the user can choose a different module name.
+
+\subsubsection{Courteous Logic with Exclusion Constraints}
+
+This argumentation theory can be invoked by placing the following at the
+top of an appropriate module:
+%% 
+\begin{verbatim}
+    :- use_argumentation_theory{gcle}.
+    ?- [gclpe>>gcle].
+\end{verbatim}
+%% 
+Again, the user can choose to load this argumentation theory into a
+differently named module.
+
+The main difference between this argumentation theory and the two previous
+ones is that it allows more than two rule heads to oppose each other.
+The syntax is
+%% 
+\begin{verbatim}
+    id:_Exclusion[_opposers->{opposer1, ..., opposerN}].
+\end{verbatim}
+%% 
+This kind of statements is called an \emph{exclusion constraint} and it
+means that {\tt opposer1}, ..., {\tt opposerN} cannot be all true    
+at the same time. The term {\tt id} is the identifier of the
+exclusion constraint.
+The usual {\tt \_opposes} statements are also understood; they are
+treated as binary exclusion constraints.
+As with {\tt \_opposes}, the above exclusion constraints can have variables
+and they can also be defined by rules.
+
+In case all opposers in an inclusion constraint are true, overriding
+determines which of them are defeated.  Intuitively, the defeated opposers
+are those that do not ``beat'' (rebut) any other opposer in the same
+exclusion constraint.
+
 
 \subsection{Defeasible Rules Must Be Purely Logical}
 
@@ -7717,37 +7785,28 @@ The list of methods follows:
   This literal is true if all the rules whose label unifies with
   {\tt ?I} and head with {\tt ?H} are
   canceled. 
-\item  {\tt status(?I,?H)[candidate]}.\\
-  This method tells whether at least one body of a rule represented by the
-  {\tt ?I/?H} pair is satisfied in the intended model. Such satisfaction is
-  a prerequisite for any conflict or for deriving the rule head as true.
-  However, this is not a sufficient condition, as the rule might be
-  defeated by another rule.
-\item  {\tt status(?I,?H)[conflictsWith -> ?Conflict].}\\
-  This method returns all Id/head pairs of the rules that are in conflict
-  with the rules represented by the {\tt ?I/?H} pair. 
-\item  {\tt status(?I,?H)[defeats -> ?Mode]}.\\
-  If the {\tt ?I/?H} pair defeats (rebuts or refutes) any rule, this method
-  will provide the relevant information. The result, denoted as {\tt
-    ?Mode}, can have one of these two forms:
-  %% 
-  \begin{itemize}
-  \item  {\tt refutes(?Refuted)}: Here {\tt ?Refuted} gets bound to Id/head
-    pairs of the rules refuted by {\tt ?I/?H}. If none exists, the query
-    fails.
-  \item  {\tt rebuts(?Rebutted)}: Here {\tt ?Rebutted} gets bound to Id/head
-    pairs of the rules refuted by {\tt ?I/?H}. If none exists, the query
-    fails.
-  \end{itemize}
+\item  {\tt status(?I,?H)[info->?Info]}.\\
+  This method provides all kinds of details about the behavior of the rule
+  head {\tt ?H} in rules labeled {\tt ?I}. The information returned
+  includes {\tt candidate} (if the corresponding rule is a candidate),
+  {\tt conflictsWith(?LabeledHead)}, {\tt refutes(?LabeledHead)}, and
+  {\tt rebuts(?LabeledHead)}.   
   %% 
 \end{itemize}
 %% 
-All these methods are provided by the {\tt \_gcl} module, and thus must be
-called accordingly. For instance, 
+All these methods are provided by all three argumentation theories and are
+available in the modules {\tt \_gcl}, {\tt ogcl}, and {\tt gcle}. However,
+the information returned by these methods differs from one argumentation theory
+to another. For instance, for {\tt \_gcl} and {\tt ogcl}, the method
+{\tt howDefeated} may return {\tt refutedBy(...)} and {\tt
+  rebuttedBy(...)}, but in case of {\tt gcle} this method might return
+{\tt notBeaterFor(ExclusionConstraintId)}.    
+For instance,
 %% 
 \begin{verbatim}
-    ?- status(?I, configuration(0,block4,square7))[conflictsWith->?X]@_gcl.
+    ?- status(?I,configuration(0,block4,square7))[info->conflictsWith(?X)]@_gcl.
     ?- status(?I,configuration(nxt(nxt(0)),block4,square3))[howDefeated->?X]@_gcl.
+    ?- status(?I,configuration(0,block4,square7))[info->competes(?Exclusion,?O)]@gcle.
 \end{verbatim}
 %% 
 
