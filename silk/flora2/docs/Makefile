@@ -15,27 +15,27 @@
 ##
 
 
-all:  flora2.pdf flora-packages.pdf
+all:  flora2-manual.pdf flora-packages.pdf
 
-flora2.dvi: flora2.tex
+flora2-manual.dvi: flora2-manual.tex
 	@echo
-	@echo Compiling flora2.tex
-	latex flora2
+	@echo Compiling flora2-manual.tex
+	latex flora2-manual
 	@echo
 	@echo Making bibliography...
-	bibtex flora2
+	bibtex flora2-manual
 	@echo
 	@echo Making index...
-	makeindex flora2
+	makeindex flora2-manual
 	@echo
 	@echo Recompiling...
-	latex flora2
-	latex flora2
+	latex flora2-manual
+	latex flora2-manual
 
-flora2.pdf: flora2.dvi
+flora2-manual.pdf: flora2-manual.dvi
 	@echo
-	@echo Making pdf for flora2
-	dvipdf flora2
+	@echo Making pdf for flora2-manual
+	dvipdf flora2-manual
 
 flora-packages.dvi: flora-packages.tex flora-persistence.tex flora-flrxml.tex flora-protege.tex
 	@echo
