@@ -116,7 +116,7 @@
 :- import
 	flora_divide_program/3,
 	flora_extern_code/2,
-	flora_build_struct/6,
+	flora_build_struct/7,
 	flora_intern_code/4
    from flrcoder.
 
