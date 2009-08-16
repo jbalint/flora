@@ -132,6 +132,25 @@ public class PrologFlora extends FloraConstants
 	}
         return cmdsuccess;
     }
+
+    
+    /* Function to use _compileadd to compile FLORA-2 file for adding to moduleName
+    ** fileName   : name of the file to compile for addition
+    ** moduleName : name of FLORA module for which to compile-add
+    */
+    public boolean compileaddFile(String fileName,String moduleName)
+    {
+	boolean cmdsuccess = false; 
+	String cmd = "'_compileadd'('"+fileName + "'>>" + moduleName+")";
+	try {
+		cmdsuccess = engine.command(cmd);
+	}
+	catch(IPException ipe) {
+	    ipe.printStackTrace();
+	    throw new FlrException("j2flora2: Command "+ cmd + " failed");
+	}
+        return cmdsuccess;
+    }
     
     
 

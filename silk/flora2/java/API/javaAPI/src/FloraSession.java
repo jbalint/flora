@@ -135,7 +135,7 @@ public class FloraSession extends FloraConstants
     
     /* Compile a FLORA-2 file for a module
     ** fileName : file to be compiled 
-    ** moduleName : module name to compiled the file for
+    ** moduleName : module name to compile the file for
     */
     public boolean compileFile(String fileName,String moduleName)
     {
@@ -145,11 +145,21 @@ public class FloraSession extends FloraConstants
 
     /* Add a FLORA-2 file to an existing module
     ** fileName : file to be added 
-    ** moduleName : module name to added the file to
+    ** moduleName : module name to add the file to
     */
     public boolean addFile(String fileName,String moduleName)
     {
 	return flora.addFile(fileName,moduleName);
+    }
+
+
+    /* Compile a FLORA-2 file for addition to a module
+    ** fileName : file to be compiled 
+    ** moduleName : module name to compile the file for
+    */
+    public boolean compileaddFile(String fileName,String moduleName)
+    {
+	return flora.compileaddFile(fileName,moduleName);
     }
     
     
