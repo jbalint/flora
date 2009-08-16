@@ -25,7 +25,7 @@
 ** 
 */
 
-package net.sourceforge.flora.javaAPI.util;
+package javaAPI.util;
 
 /** An Exception related to Flora processing in general */
 public class FlrException extends RuntimeException{

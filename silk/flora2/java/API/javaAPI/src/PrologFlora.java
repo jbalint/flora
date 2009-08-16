@@ -24,12 +24,12 @@
 */
 
 
-package net.sourceforge.flora.javaAPI.src;
+package javaAPI.src;
 
 import java.io.File;
 import java.util.Vector;
 
-import net.sourceforge.flora.javaAPI.util.FlrException;
+import javaAPI.util.FlrException;
 
 import com.declarativa.interprolog.PrologEngine;
 import com.declarativa.interprolog.TermModel;
@@ -83,7 +83,7 @@ public class PrologFlora extends FloraConstants
     */
     public boolean loadFile(String fileName,String moduleName)
     {
-    boolean cmdsuccess = false; 
+	boolean cmdsuccess = false; 
 	String cmd = "'_load'('"+fileName + "'>>" + moduleName+")";
 	try {
 		cmdsuccess = engine.command(cmd);
@@ -96,9 +96,28 @@ public class PrologFlora extends FloraConstants
     }
 
 
+    /* Function to use _compile to compile FLORA-2 file for moduleName
+    ** fileName   : name of the file to compile
+    ** moduleName : name of FLORA module for which to compile
+    */
+    public boolean compileFile(String fileName,String moduleName)
+    {
+	boolean cmdsuccess = false; 
+	String cmd = "'_compile'('"+fileName + "'>>" + moduleName+")";
+	try {
+		cmdsuccess = engine.command(cmd);
+	}
+	catch(IPException ipe) {
+	    ipe.printStackTrace();
+	    throw new FlrException("j2flora2: Command "+ cmd + " failed");
+	}
+        return cmdsuccess;
+    }
+
+
     /* Function to use _add to add FLORA-2 file to moduleName
-    ** fileName   : name of the file to load
-    ** moduleName : name of FLORA module in which to load
+    ** fileName   : name of the file to add
+    ** moduleName : name of FLORA module to which to add
     */
     public boolean addFile(String fileName,String moduleName)
     {

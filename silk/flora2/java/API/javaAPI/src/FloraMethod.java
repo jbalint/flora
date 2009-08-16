@@ -25,7 +25,7 @@
 **
 ** 
 */
-package net.sourceforge.flora.javaAPI.src;
+package javaAPI.src;
  
 import java.util.Vector;
 

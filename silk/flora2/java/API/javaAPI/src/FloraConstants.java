@@ -25,8 +25,8 @@
 ** 
 */
 
-package net.sourceforge.flora.javaAPI.src;
-import net.sourceforge.flora.javaAPI.util.FlrException;
+package javaAPI.src;
+import javaAPI.util.FlrException;
 
 
 /**

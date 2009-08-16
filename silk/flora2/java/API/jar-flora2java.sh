@@ -18,4 +18,4 @@
 
 . ./build.sh
 
-${JAVA_BIN}/jar -cvf ../flora2java.jar net/sourceforge/flora/javaAPI/src/*.class net/sourceforge/flora/javaAPI/util/*.class
+${JAVA_BIN}/jar -cvf ../flora2java.jar javaAPI/src/*.class javaAPI/util/*.class

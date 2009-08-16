@@ -25,13 +25,13 @@
 ** 
 */
 
-package net.sourceforge.flora.javaAPI.src;
+package javaAPI.src;
 
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Vector;
 
-import net.sourceforge.flora.javaAPI.util.FlrException;
+import javaAPI.util.FlrException;
 
 import com.declarativa.interprolog.PrologEngine;
 import com.declarativa.interprolog.TermModel;
@@ -129,13 +129,23 @@ public class FloraSession extends FloraConstants
     */
     public boolean loadFile(String fileName,String moduleName)
     {
-    return flora.loadFile(fileName,moduleName);
+	return flora.loadFile(fileName,moduleName);
+    }
+    
+    
+    /* Compile a FLORA-2 file for a module
+    ** fileName : file to be compiled 
+    ** moduleName : module name to compiled the file for
+    */
+    public boolean compileFile(String fileName,String moduleName)
+    {
+	return flora.compileFile(fileName,moduleName);
     }
 
 
     /* Add a FLORA-2 file to an existing module
-    ** fileName : file to be loaded 
-    ** moduleName : module name to load the file into
+    ** fileName : file to be added 
+    ** moduleName : module name to added the file to
     */
     public boolean addFile(String fileName,String moduleName)
     {

@@ -8,7 +8,7 @@
     the high-level API.
 ***********************************************************************/
 
-import net.sourceforge.flora.javaAPI.src.*;
+import javaAPI.src.*;
 import java.util.*;
 
 public class fooExample{

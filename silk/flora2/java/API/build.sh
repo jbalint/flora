@@ -22,6 +22,5 @@
 rm -f javaAPI/util/*.class
 rm -f javaAPI/src/*.class
 
-# add -Xlint when we convert to Java 1.5 completely
 ${JAVA_BIN}/javac -deprecation -Xlint:unchecked -Xlint -classpath ..:../interprolog.jar javaAPI/util/*.java javaAPI/src/*.java  
 

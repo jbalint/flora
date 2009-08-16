@@ -25,13 +25,13 @@
 ** 
 */
 
-package net.sourceforge.flora.javaAPI.src;
+package javaAPI.src;
  
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Vector;
 
-import net.sourceforge.flora.javaAPI.util.FlrException;
+import javaAPI.util.FlrException;
 
 import com.declarativa.interprolog.TermModel;
 

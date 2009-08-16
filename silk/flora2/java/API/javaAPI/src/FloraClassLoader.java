@@ -25,7 +25,7 @@
 ** 
 */
 
-package net.sourceforge.flora.javaAPI.src;
+package javaAPI.src;
  
 
 /* Class to load the java classes corresponding to flora classes
