@@ -29,6 +29,7 @@
 #define NEWPREDICATE        	newpredicate
 #define NEWOID                  FL_NEWOID_SYM
 #define RULE_NUM                rule_num
+#define DEFAULT_RULE_LABEL      default_rule_label
 #define NEWOID_COUNT        	FL_NEWOID_PREFIX
 #define TMPDIRECT        	tmpdirect
 #define TMPOPTION	        tmpoption
@@ -76,7 +77,10 @@ is_flsemantics(FLSEMANTICS(A),A).
 is_flsetsemantics(FLSETSEMANTICS(A),A).
 is_flcmpopt(FLCMPOPT(OptList),OptList).
 
-is_defeasible(FLDEFEASIBLE(Module),Module).
+is_fldefeasible(FLDEFEASIBLE(Module),Module).
+
+is_fldefeasible_rule_default(FLDEFEASIBLE_RULE_DEFAULT).
+is_flnondefeasible_rule_default(FLNONDEFEASIBLE_RULE_DEFAULT).
 
 is_verbatim(FLVERBATIM(Instruction),Instruction).
 
@@ -145,6 +149,8 @@ is_fldelete(FLDELETE(Op,List),Op,List).
 is_fltablerefresh(FLREFRESH(List),List).
 
 is_fltruthvalue(FLTRUTHVALUE(Formula,Op),Formula,Op).
+
+is_fllabelprimitive(FLLABELPRIMITIVE(Label,HeadList),Label,HeadList).
 
 is_flclause(FLCLAUSE(Head,Body),Head,Body).
 is_flclause(FLCLAUSE(Mode,Head,Body),Mode,Head,Body).
@@ -787,6 +793,9 @@ throw_struct(Error,Code) :-
 truthvalue_struct(Formula,Opname,Code) :-
 	florasyslib_struct(FLLIBTRUTHVALUE,2,[Formula,Opname],Code).
 
+labelprimitive_struct(Label,Module,Code) :-
+	florasyslib_struct(FLLIBLABELPRIMITIVE,2,[Label,Module],Code).
+
 %% p2h{...}
 p2h_struct(Prolog,Hilog,Code) :-
 	atomobj_struct(P2H_PREDICATE,P2HCode),
@@ -1153,6 +1162,22 @@ new_predicate(Name) :-
 	atom_codes(OldValAtm,OldValLst),
 	flora_concat_atoms([NEWPREDICATE,OldValAtm],Name).
 
+/****************************************************************************
+  reset_defaultlabel/0
+  new_defaultlabel(-Name)
+****************************************************************************/
+reset_defaultlabel :- flora_set_counter(DEFAULT_RULE_LABEL,1).
+
+new_defaultlabel(Name) :-
+	flora_increment_counter(DEFAULT_RULE_LABEL,1,OldVal,_NewVal),
+	number_codes(OldVal,OldValLst),
+	atom_codes(OldValAtm,OldValLst),
+	flora_concat_atoms([DEFAULT_RULE_LABEL,OldValAtm],Name).
+
+is_defaultlabel(LabObj) :-
+	is_atomobj_struct(LabObj,LabName),
+	str_sub(DEFAULT_RULE_LABEL,LabName).
+
 
 /****************************************************************************
   flora_reset_newvar/0
@@ -1242,7 +1267,6 @@ is_datatypeobj_struct(PRDATATYPE(Sort,Lit,I),Sort,Lit,I).
 is_urisqobj_struct(PRURISQ(_Prefix,_Localname)).
 
 is_transactionalvar_struct(PRTRANSACTIONALVARIABLE(Name,Index),Name,Index).
-
 
 /****************************************************************************
   allvars(+CompilerTerm,-Vars)
@@ -1653,6 +1677,7 @@ report_option(Option,Idx) :-
 flora_clear_compilation_permaoptions :- retractall(PERMAOPTION(_)).
 set_permaoption(X) :- assert(PERMAOPTION(X)).
 has_permaoption(X) :- PERMAOPTION(X).
+clear_permaoption(X) :- retractall(PERMAOPTION(X)).
 
 clear_context(X) :- retractall(COMPILATION_CONTEXT(X)).
 set_context(X) :- assert(COMPILATION_CONTEXT(X)).
@@ -1694,6 +1719,7 @@ initialize_work :-
 flora_reset_compiler :-
 	reset_newpredicate,
 	reset_rulenum,
+	reset_defaultlabel,
 	reset_newoid.
 
 /****************************************************************************
@@ -1892,7 +1918,7 @@ compile_direct(DirectTerm,_DirIdx,[Code],[]) :-
 	directive_struct(Direct,Code).
 
 compile_direct(DirectTerm,DirIdx,[Code],[]) :-
-	is_defeasible(DirectTerm,Module),
+	is_fldefeasible(DirectTerm,Module),
 	!,
 	is_flatom(Module,Name),
 	set_permaoption(FLDEFEASIBLE(Name)),
@@ -1906,6 +1932,16 @@ compile_direct(DirectTerm,DirIdx,[Code],[]) :-
 	defeasible_struct(Name,Direct),
 	directive_struct(Direct,Code).
 
+
+compile_direct(DirectTerm,_DirIdx,[],[]) :-
+	is_fldefeasible_rule_default(DirectTerm),
+	!,
+	set_permaoption(FLDEFEASIBLE_RULE_DEFAULT).
+	
+compile_direct(DirectTerm,_DirIdx,[],[]) :-
+	is_flnondefeasible_rule_default(DirectTerm),
+	!,
+	clear_permaoption(FLDEFEASIBLE_RULE_DEFAULT).
 	
 
 %% Operator definition. Must also induce executable op definition,
@@ -2034,7 +2070,9 @@ compile_fact(Head,CodeList-ListTail,Status) :-
 		add_attrvar_code(L,H2BCode,BodyCode),
 		get_directive(DirectCodeList),
 		append(DirectCodeList,T,CodeList),
-		split_ruleheads_add_rulesig(HeadCodeList,BodyCode,(NULL,NULL),
+		compile_label((NULL,NULL),LblCode,MetaCode,_),
+		split_ruleheads_add_rulesig(HeadCodeList,BodyCode,
+					    (LblCode,MetaCode),
 					    T-ListTail,[]),
 		check_vars(Head,[],Status)
 	    )
@@ -2133,22 +2171,30 @@ compile_labeled_construct(Label,Contents,CodeList-ListTail,Status) :-
 
 
 %% LblCode is NULL or an atom object
+%% If permaoption is FLDEFEASIBLE_RULE_DEFAULT, then generate labels
+%% even for unlabeled rules
 %% MetaCode is NULL or a list of codes for meta frames
-compile_label(NULL,NULL,NULL,[]) :- !.
+compile_label(NULL,LblCode,NULL,[]) :-
+	!,
+	construct_default_label(LblCode).
 compile_label(Label,NULL,NULL,[]) :-
 	var(Label),
 	!.
 %% already compiled
-compile_label((Id,Meta),Id,Meta,[]) :- !.
-
+compile_label((Id,Meta),LblCode,Meta,[]) :-
+	!,
+	(Id == NULL
+	-> construct_default_label(LblCode)
+	;  LblCode = Id
+	).
 compile_label(Label,LblCode,MetaCode,Status) :-
 	is_fllabel(Label,Id,Meta,Index),
 	(is_flatom(Id,_A) ->
 	    atomobj_struct(Id,LblCode),
-	    IdStat = []
+	    IdStatus = []
 	; is_fltoken(Id,FL_NEWOID,Index1) ->
 	    new_oidobj(Index1,LblCode),
-	    IdStat = []
+	    IdStatus = []
 	; is_fltoken(Id,FL_NEWOID,Num,Index1) ->
 	    flora_get_counter(RULE_NUM, Rule_num), 
 	    new_oidobj(Rule_num,Num,Index1,LblCode),
@@ -2157,21 +2203,24 @@ compile_label(Label,LblCode,MetaCode,Status) :-
 	    %% after compile_label, and this will increment the RULE_NUM
 	    %% counter again
 	    flora_increment_counter(RULE_NUM,-1,_,_),
-	    IdStat = []
+	    IdStatus = []
 	; is_flvar(Id,VarName,VarIdx) ->
             compile_flvar(VarName,VarIdx,LblCode),
-	    IdStat = []
+	    IdStatus = []
 	; is_flterm(Id,Funct,N,Args) ->
-	    compile_fltermobj(Funct,N,Args,LblCode,_,_,IdStat)
-	; LblCode = NULL,
-	    IdStat = []
+	    compile_fltermobj(Funct,N,Args,LblCode,_,_,IdStatus)
+	; Id == FL_SKIP_LABEL ->  %% requested that there should be no label
+	    LblCode = FL_SKIP_LABEL,
+	    IdStatus = []
+	; construct_default_label(LblCode),
+	    IdStatus = []
 	),
 	(Meta == NULL 
 	-> Status = [],
 	    MetaCode = NULL
 	; compile_head(Meta,MetaCodeConjunct,NULL,NULL,Status1)
 	-> 
-	    (IdStat == [], Status1 == []
+	    (IdStatus == [], Status1 == []
 	    -> Status = [],
 		%% convert to list
 		compile_conjunct2list(MetaCodeConjunct,MetaCode)
@@ -2182,6 +2231,15 @@ compile_label(Label,LblCode,MetaCode,Status) :-
 	    Status = [Err]
 	).
 
+
+%% default label: either NULL or the DEFAULT_RULE_LABELNNNN atom
+construct_default_label(LblCode) :-
+	(has_permaoption(FLDEFEASIBLE_RULE_DEFAULT)
+	->  new_defaultlabel(Rule_lab),
+	    atomobj_struct(Rule_lab,LblCode)
+	;
+	    LblCode = FL_SKIP_LABEL
+	).
 
 
 /***************************************************************************
@@ -2275,15 +2333,16 @@ construct_export_struct(TermCode,WSCode,IsUpdatableCode,ModuleListCode,Code) :-
 
 
 /****************************************************************************
-  compile_rule(+Head,+Body,+LabelCode,-CodeDiffList,-Status)
+  compile_rule(+Head,+Body,+Annotation,-CodeDiffList,-Status)
 
-  LabelCode has the form (LblCode, MetaCode). LblCode is NULL or an atom-object.
+  Annotation has the form (LblCode, MetaCode).
+  LblCode is NULL or an atom-object.
   MetaCode is a NULL or a list of codes.
 
   CodeDiffList is a difference list in the form of [...|T]-T. It is for
   the optimization of append.
 ****************************************************************************/
-compile_rule(Head,Body,(LblCode,MetaCode),CodeList-ListTail,Status) :-
+compile_rule(Head,Body,Annotation,CodeList-ListTail,Status) :-
 	compile_head(Head,HeadCode,H2BCodeHead,H2BCodeTail,HS),
 	compile_conjunct2list(HeadCode,HeadCodeList),
 	( HS == [] ->
@@ -2296,6 +2355,7 @@ compile_rule(Head,Body,(LblCode,MetaCode),CodeList-ListTail,Status) :-
 	    ( BS == [] ->
 		get_directive(DirectCodeList),
 		append(DirectCodeList,Tail,CodeList),
+		compile_label(Annotation,LblCode,MetaCode,_),
 		split_ruleheads_add_rulesig(HeadCodeList,BodyCode,
 					    (LblCode,MetaCode),
 					    Tail-ListTail, Status1),
@@ -2311,7 +2371,7 @@ compile_rule(Head,Body,(LblCode,MetaCode),CodeList-ListTail,Status) :-
         ).
 
 /****************************************************************************
-  split_ruleheads_add_rulesig(+HeadCodeList,+BodyCode,+LabelCode,-CodeDiffList,-Status)
+  split_ruleheads_add_rulesig(+HeadCodeList,+BodyCode,?LabelCode,-CodeDiffList,-Status)
 
   HeadCodeList is a list of atoms in the rule head. BodyCode is the formula
   in the rule body. This procedure splits the list of atoms in the rule
@@ -2321,10 +2381,16 @@ compile_rule(Head,Body,(LblCode,MetaCode),CodeList-ListTail,Status) :-
   MetaCode is a NULL or a list of codes.
 ****************************************************************************/
 
-split_ruleheads_add_rulesig([H],Body,(LblCode,MetaCode),[InsSigCode,Code|T]-T,Status) :-
+split_ruleheads_add_rulesig([H],Body,(LblCodeIn,MetaCode),[InsSigCode,Code|T]-T,Status) :-
 	!,
+	%% Adjust LblCode for the case when compile_label created a
+	%% default label for rules due to FLDEFEASIBLE_RULE_DEFAULT being on.
+	(is_prtransactionallit(H,Index), is_defaultlabel(LblCodeIn)
+	-> LblCode = FL_SKIP_LABEL
+	;  LblCode = LblCodeIn
+	),
 	%% Only a single atom appears in the rule head.
-	(is_prtransactionallit(H,Index), LblCode \= NULL
+	(is_prtransactionallit(H,Index), LblCode \= NULL, LblCode \= FL_SKIP_LABEL
 	-> compiling_error(Index,LABELED_TRANSACTION_NOT_ALLOWED,Err),
 	    Status = [Err]
 	; construct_defeasible_condition(LblCode,DefeatCond),
@@ -2353,8 +2419,14 @@ split_ruleheads_add_rulesig(HeadList,Body,(LblCode,MetaCode),[InsSigCode,Code|Co
 
 rule_difflist([],_B,_LblCode,CodeList-CodeList,[]) :- !.
 
-rule_difflist([H|L],B,LblCode,[HC|LC]-T,Status) :-
-	(is_prtransactionallit(H,Index), LblCode \= NULL
+rule_difflist([H|L],B,LblCodeIn,[HC|LC]-T,Status) :-
+	%% Adjust LblCode for the case when compile_label created a
+	%% default label for rules due to FLDEFEASIBLE_RULE_DEFAULT being on.
+	(is_prtransactionallit(H,Index), is_defaultlabel(LblCodeIn)
+	-> LblCode = NULL
+	;  LblCode = LblCodeIn
+	),
+	(is_prtransactionallit(H,Index), LblCode \= NULL, LblCode \= FL_SKIP_LABEL
 	-> compiling_error(Index,LABELED_TRANSACTION_NOT_ALLOWED,Err),
 	    Status = [Err]
 	; construct_defeasible_condition(H,LblCode,DefeatCond),
@@ -2380,6 +2452,7 @@ insert_rule_signature_multihead(HeadList,Body,(LblCode,MetaCode),Newpred,Code) :
 %% If ProposedId == NULL, invent a new Id
 make_real_label_id(ProposedId,RealId) :-
 	(ProposedId == NULL -> new_oidobj(NO_INDEX,RealId)
+	; ProposedId == FL_SKIP_LABEL -> new_oidobj(NO_INDEX,RealId)
 	; RealId = ProposedId
 	).
 
@@ -2395,7 +2468,7 @@ add_defeasible_condition_to_body(DefeatCondCode,BodyCode,NewBodyCode) :-
 %% NewVar is used because this type of defeasible condition is used in rule
 %% signatures and dynamic rules; NewVar is bound to the head at run time.
 construct_defeasible_condition(LblCode,DefeatCondCode) :-
-	(has_permaoption(FLDEFEASIBLE(LibModule)), LblCode \= NULL
+	(has_permaoption(FLDEFEASIBLE(LibModule)), LblCode \= NULL, LblCode \= FL_SKIP_LABEL
 	->
 	    %% create FL_UNDEFEATED(LblCode,NewVar,ThisModule)
 	    atomobj_struct(FL_UNDEFEATED,UnDefeatFuncCode),
@@ -2417,7 +2490,7 @@ construct_defeasible_condition(LblCode,DefeatCondCode) :-
 %% TABLED_HILOG_WRAPPER(FL_UNDEFEATED,LblCode,HeadCode,ThisModule)
 %% The difference is that instead of NewVar we insert head code at compile time.
 construct_defeasible_condition(HeadCode,LblCode,DefeatCondCode) :-
-	(has_permaoption(FLDEFEASIBLE(LibModule)), LblCode \= NULL
+	(has_permaoption(FLDEFEASIBLE(LibModule)), LblCode \= NULL, LblCode \= FL_SKIP_LABEL
 	->
 	    %% create FL_UNDEFEATED(LblCode,NewVar,ThisModule)
 	    atomobj_struct(FL_UNDEFEATED,UnDefeatFuncCode),
@@ -2690,6 +2763,10 @@ compile_body_literal(ParserTerm,Code,Status) :-
 
 	; is_fltruthvalue(ParserTerm,Formula,Atom) ->
 	    compile_truthvalue(Formula,Atom,SpecCode,Status),
+	    OidCode=NULL
+
+	; is_fllabelprimitive(ParserTerm,Label,HeadList) ->
+	    compile_labelprimitive(Label,HeadList,SpecCode,Status),
 	    OidCode=NULL
 
 	; is_flcatch(ParserTerm,Goal,Error,Handler) ->
@@ -4962,6 +5039,25 @@ compile_truthvalue(Formula,Op,Code,Status) :-
 	).
 
 
+/****************************************************************************
+   compile_labelprimitive(+LabelParserTerm,?HeadList,-Code,-Status)
+****************************************************************************/
+compile_labelprimitive(LabelParserTerm,HeadList,Code,Status) :-
+	compile_pathexp(LabelParserTerm,LabCode,_,_,S1),
+	(S1 == []
+	->
+	    set_context(compile_with_var_module),
+	    set_context(compiling_headliteral),
+	    compile_fldelete_list(HeadList,HLC,Status),
+	    clear_context(compiling_headliteral),
+	    ( Status == [] ->
+		list_struct(HLC,[],HeadListCode),
+		labelprimitive_struct(LabCode,HeadListCode,Code)
+	    ; true
+	    )
+	; Status = S1
+	).
+
 
 /****************************************************************************
   compile_prologliblit(+ParserTerm,-OidCode,-Code,-Status)
@@ -6092,20 +6188,30 @@ compile_fldynrule(Op,R,RCode,Status) :-
 		conjunct_code(BCodeList,BodyCode),
 	        list_struct(HeadCodeList,[],HCL),
                 flora_new_varobj(NO_INDEX,BVL),
-		compile_label(Label,LblCode,MetaCode,StatL),
-		construct_defeasible_condition(LblCode,DefeatCondCode),
+		compile_label(Label,LblCodeIn,MetaCode,StatL),
+		%% Adjust LblCode for the case when compile_label created a
+		%% default rule label when FLDEFEASIBLE_RULE_DEFAULT is on.
+		(has_prtransactionallit(HeadCodeList,_),
+		    is_defaultlabel(LblCodeIn)
+		-> LblCode = NULL
+		; LblCodeIn == FL_SKIP_LABEL -> LblCode = NULL
+		;  LblCode = LblCodeIn
+		),
 		(StatL == []
-		-> (has_prtransactionallit(HeadCodeList,Idx), LblCode \= NULL
-		   -> compiling_error(Idx,LABELED_TRANSACTION_NOT_ALLOWED,Err),
-		       Status = [Err]
-		   ;  Status = []
-		   )
+		-> (has_prtransactionallit(HeadCodeList,Idx), LblCode \= NULL, LblCode \= FL_SKIP_LABEL
+		    %% Transactional literals can't be defeasible
+		    -> compiling_error(Idx,LABELED_TRANSACTION_NOT_ALLOWED,Err),
+			Status = [Err]
+		    ;  Status = []
+		    )
 		; Status = StatL
 		),
+		construct_defeasible_condition(LblCode,DefeatCondCode),
 		( Status == []
 		->
-		    %% Note: If LblCode == NULL, a unique rule Id will be created
-		    %% by flrcanon:flora_record_rule_signature at run time.
+		    %% Note: If LblCode == NULL, a unique rule id will be
+		    %% created by flrcanon:flora_record_rule_signature at
+		    %% runtime.
 		    dynrule_struct(HCL,BodyCode,HVL,BVL,(LblCode,MetaCode,DefeatCondCode),RCode),
 		    ( is_fldeleteruleop(Op)
 		    ->  true
@@ -6153,8 +6259,9 @@ compile_flrefresh(List,Code,Status) :-
   compile_flclause(+Mode,+HeadList,+Body,-Code,-Status)
 ****************************************************************************/
 compile_flclause(Label,Mode,HeadList,Body,Code,Status) :-
-	(Label == NULL -> LblCode = NULL, MetaCode = NULL, LabStatus=[]
-	; compile_label(Label,LblCode,MetaCode,LabStatus)
+	compile_label(Label,LblCode1,MetaCode,LabStatus),
+	(LblCode1 == FL_SKIP_LABEL -> LblCode = NULL
+	; LblCode = LblCode1
 	),
 	(LabStatus==[]
 	->

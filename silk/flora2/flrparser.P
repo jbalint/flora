@@ -914,9 +914,12 @@ is_truthvalue_op(FL_FALSE) :- !.
 is_truthvalue_op(FL_FAIL) :- !.
 is_truthvalue_op(FL_UNKNOWN) :- !.
 
+is_labelprimitive_op(FL_LABEL_PRIMITIVE) :- !.
+
 flrefresh_struct(List,FLREFRESH(List)).
 
 fltruthvalue_struct(Formula,OpName,FLTRUTHVALUE(Formula,OpName)).
+fllabelprimitive_struct(Label,Head,FLLABELPRIMITIVE(Label,Head)).
 
 flinsert_struct(Op,List,Cond,FLINSERT(Op,List,Cond)).
 flinsert_struct(Op,List,FLINSERT(Op,List)).
@@ -3110,6 +3113,30 @@ flora_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
 	    flora_tablerefresh(Args,DWS,Code,Status)
 	).
 
+%% clause{[Mode,]Head, Body}
+flora_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),DWS,_Code,Status) :-
+	get_name(Funct,Atom),
+	is_labelprimitive_op(Atom),
+	( DWS \== NULL -> parsing_error(If,ERROR_LABELPRIMITIVEMOD,Status)
+	; N \= 2 -> parsing_error(If,ERROR_LABELPRIMITIVEARITY,Status)
+	).
+
+%% label{...} and label{...}@Mod
+flora_body_literal(CANOTERM(Funct,2,FL_BRACE,[Label,Head],_If,_Ip),DWS,Code,Status) :-
+	get_name(Funct,Atom),
+	is_labelprimitive_op(Atom),
+	!,
+	flora_term_or_var(Label,LabelCode,S1),
+	(S1 == [] ->
+	    flora_dbliteral_list(FLCLS,[Head],DWS,HeadCodeList,Status),
+	    ( Status == []
+	    -> fllabelprimitive_struct(LabelCode,HeadCodeList,Code)
+	    ; true
+	    )
+	;
+	    Status = S1
+	).
+
 %% insert{...}
 flora_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
@@ -3941,6 +3968,14 @@ flora_name_or_var(CanoniTerm,Code) :-
         ),
 	!.
 
+flora_term_or_var(CanoniTerm,Code,Status) :-
+	( get_flname_struct(CanoniTerm,Code), Status = [], !
+        ; get_flvar_struct(CanoniTerm,Code), Status = [], !
+	; CanoniTerm = CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),
+	    flora_term(Funct,N,Args,DISALLOW_TRANS,NULL,Code,Status) 
+        ),
+	!.
+
 %% support for adding files to modules
 flora_addfile(CANOTERM(Funct,1,FL_PARENTHESIS,[L],_If,_Ip),Code,Status) :-
 	get_atom(Funct,FL_PLUS),
@@ -4013,7 +4048,7 @@ flora_prlgterm(CanoniTerm,_DWS,_Code,Status) :-
 
 
 /****************************************************************************
-  flora_term(+Funct,+Arity,+Args,+TransFlag,-Code,-Status)
+  flora_term(+Funct,+Arity,+Args,+TransFlag,+DSW,-Code,-Status)
 
   Parse a term Funct-spec(Args). Arguments are parsed according to
   the argument spec in flora_argdef. The final parsed term is composed
@@ -6272,9 +6307,9 @@ flora_parse_label(CANOTERM(_Funct,_N,FL_BRACE,Args,If,_Ip),VarsOK,Code,Status) :
 	    ->
 		IdStat = []
 	    ;   %% just a variable in the Id position in meta (and not
-		%% in clause{...}) means it as a placeholder that skips the Id
+		%% in clause{...}) means it is a placeholder that skips the Id
 		get_flvar_struct(First,_),
-		IdCode = NULL,
+		IdCode = FL_SKIP_LABEL,
 		IdStat = []
 	    )
 	;
