@@ -16,7 +16,6 @@ files="./flora2/INSTALLATION \
     	./flora2/debugger/*.in ./flora2/debugger/*.P \
     	./flora2/debugger/Makefile ./flora2/debugger/NMakefile.mak \
     	./flora2/demos/*.flr ./flora2/demos/*.sh \
-    	./flora2/demos/*.flh \
     	./flora2/demos/sgml/*.flr ./flora2/demos/sgml/expectedoutput \
     	./flora2/demos/xpath/*.flr ./flora2/demos/xpath/expectedoutput \
     	./flora2/demos/Makefile ./flora2/demos/NMakefile.mak \
