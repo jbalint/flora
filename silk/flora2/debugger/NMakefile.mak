@@ -20,7 +20,7 @@
 !INCLUDE ..\.prolog_path_wind
 !ENDIF
 
-OBJEXT = .O
+OBJEXT = .xwam
 PROLOGEXT = .P
 
 ALLOBJS=  flrdebugger$(OBJEXT) dynamic_data.dat static_data.dat

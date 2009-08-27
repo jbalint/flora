@@ -21,7 +21,7 @@ if not "%1" == "-c"  set PROLOG=%1 -s -m 40000 -c 4000
 if "%PROLOG%" == "" echo Usage:  makeflora [-c] full-path-to-prolog
 if "%PROLOG%" == "" goto end
 
-if "%1" == "clean" nmake /f NMakefile.mak clean
+if "%1" == "clean" and not exist binary-distribution.txt nmake /f NMakefile.mak clean
 if "%1" == "clean" goto end
 
 if not exist .prolog_path_wind  echo. > .prolog_path_wind
@@ -37,11 +37,12 @@ del prolog2hilog.dll prolog2hilog.lib prolog2hilog.def prolog2hilog.exp
 del prolog2hilog.obj prolog2hilog.a prolog2hilog.o prolog2hilog.xwam
 echo ***The above `Could Not Find prolog2hilog.*' messages are NORMAL
 
-if "%1" == "-c" nmake /f NMakefile.mak
-if "%1" == "-c" del prolog2hilog.obj
+if "%1" == "-c" and not exist ..\binary-distribution.txt nmake /f NMakefile.mak
+if "%1" == "-c" and not exist ..\binary-distribution.txt del prolog2hilog.obj
 
 cd ..
-nmake /f NMakefile.mak
+
+if not exist binary-distribution.txt  nmake /f NMakefile.mak
 
 :end
 @echo.
