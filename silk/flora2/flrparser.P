@@ -915,11 +915,13 @@ is_truthvalue_op(FL_FAIL) :- !.
 is_truthvalue_op(FL_UNKNOWN) :- !.
 
 is_labelprimitive_op(FL_LABEL_PRIMITIVE) :- !.
+is_prefixprimitive_op(FL_PREFIX_PRIMITIVE) :- !.
 
 flrefresh_struct(List,FLREFRESH(List)).
 
 fltruthvalue_struct(Formula,OpName,FLTRUTHVALUE(Formula,OpName)).
 fllabelprimitive_struct(Label,Head,FLLABELPRIMITIVE(Label,Head)).
+flprefixprimitive_struct(Prefix,Expansion,Module,FLPREFIXPRIMITIVE(Prefix,Expansion,Module)).
 
 flinsert_struct(Op,List,Cond,FLINSERT(Op,List,Cond)).
 flinsert_struct(Op,List,FLINSERT(Op,List)).
@@ -3115,7 +3117,7 @@ flora_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
 	    flora_tablerefresh(Args,DWS,Code,Status)
 	).
 
-%% clause{[Mode,]Head, Body}
+%% label{Label, Head}
 flora_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),DWS,_Code,Status) :-
 	get_name(Funct,Atom),
 	is_labelprimitive_op(Atom),
@@ -3123,7 +3125,7 @@ flora_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),DWS,_Code,Status) :-
 	; N \= 2 -> parsing_error(If,ERROR_LABELPRIMITIVEARITY,Status)
 	).
 
-%% label{...} and label{...}@Mod
+%% label{?Label,?Head}.  label{...}@Mod is not supported
 flora_body_literal(CANOTERM(Funct,2,FL_BRACE,[Label,Head],_If,_Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_labelprimitive_op(Atom),
@@ -3137,6 +3139,30 @@ flora_body_literal(CANOTERM(Funct,2,FL_BRACE,[Label,Head],_If,_Ip),DWS,Code,Stat
 	    )
 	;
 	    Status = S1
+	).
+
+%% iriprefix{?X,?Expansion} and iriprefix{?X,?Expansion}@Module
+flora_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),_DWS,_Code,Status) :-
+	get_name(Funct,Atom),
+	is_prefixprimitive_op(Atom),
+	N \= 2,
+	!,
+	parsing_error(If,ERROR_PREFIXPRIMITIVEARITY,Status).
+
+%% iriprefix{?X,?Expansion} and iriprefix{?X,?Expansion}@Module
+flora_body_literal(CANOTERM(Funct,2,FL_BRACE,[Prefix,Expansion],If,_Ip),DWS,Code,Status) :-
+	get_name(Funct,Atom),
+	is_prefixprimitive_op(Atom),
+	!,
+	(get_module_from_spec(DWS,_ModuleType,ModuleCode) -> true
+	; %% Module part is NULL (not specified)
+	    ModuleCode = NULL
+	),
+	(flora_name_or_var(Prefix,PrefixCode),
+	    flora_name_or_var(Expansion,ExpansionCode) ->
+	    flprefixprimitive_struct(PrefixCode,ExpansionCode,ModuleCode,Code),
+	    Status = []
+	; parsing_error(If,ERROR_PREFIXPRIMITIVESYNTAX,Status)
 	).
 
 %% insert{...}

@@ -94,19 +94,28 @@ flora_term_to_atom_quote(Term,Atom) :-
 	%%fmt_write_string(Atom,'%S',arg(Term)).
 
 %% This concats items or any type - atoms, numbers, etc.
+flora_concat_items(List,Atom) :-
+	copy_term(List,List1),
+	%% this is done because otherwise term_to_atom will convert
+	%% every variable to _h0. With numbervars, each variable is
+	%% encoded as $VAR(XYZ), with different variables getting
+	%% different names, and then term_to_atom decodes them to XYZ.
+	num_vars:numbervars(List1),
+	flora_concat_items_aux(List1,Atom).
+
 %% Make the most common case fast!
-flora_concat_items([Item1,Item2],Atom) :-
+flora_concat_items_aux([Item1,Item2],Atom) :-
 	!,
-	flora_term_to_atom(Item1,Item1atm),
-	flora_term_to_atom(Item2,Item2atm),
+	term_to_atom(Item1,Item1atm,[ignore_ops(canonical),quoted(false),numbervars(true)]),
+	term_to_atom(Item2,Item2atm,[ignore_ops(canonical),quoted(false),numbervars(true)]),
 	atom_concat(Item1atm,Item2atm,Atom).
 	%%fmt_write_string(Atom, '%S%S', arg(Item1,Item2)).
-flora_concat_items([Item|ItemList],Atom) :-
+flora_concat_items_aux([Item|ItemList],Atom) :-
 	%%fmt_write_string(Atom1, '%S', arg(Item)),
-	flora_term_to_atom(Item,Atom1),
-	flora_concat_items(ItemList,Atom2),
+	term_to_atom(Item,Atom1,[ignore_ops(canonical),quoted(false),numbervars(true)]),
+	flora_concat_items_aux(ItemList,Atom2),
 	atom_concat(Atom1,Atom2,Atom).
-flora_concat_items([],'').
+flora_concat_items_aux([],'').
 
 %% If all members are atoms, this is more efficient
 %% Make the most common case fast!
