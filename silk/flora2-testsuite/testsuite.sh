@@ -214,7 +214,7 @@ if test -n "$coredumps" ; then
   echo "End of the core dumps list" >> $RES_FILE
 fi
 # check for seg fault, but not for segfault_handler
-$GREP "fault" $LOG_FILE | grep -v "segfault_handler" >> $RES_FILE
+$GREP "fault" $LOG_FILE | $GREP -v "segfault_handler" | $GREP -v default >> $RES_FILE
 # core dumped
 $GREP "dumped" $LOG_FILE >> $RES_FILE
 # when no output file is generated
