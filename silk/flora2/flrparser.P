@@ -441,6 +441,20 @@ arrange_arguments([A|L],S,Index,Left,Right,_Iright,CanoniTerm) :-
 	T=CANOTERM(FunctTerm,N,FL_BRACKET,ArgList,Index,I1),
 	arrange_arguments(L,T,Index,CanoniTerm).
 
+%% Datatype operator is not treated right by the composer when it appears
+%% in the predicate position:  "aaa"^^bbb(f,g)
+%% is composed as ^^("aaa",(bbb(f,g))) instead of ^^("aaa",bbb)(f,g).
+%% We rectify the associativity here.
+arrange_arguments([A|L],S,Index,Left,Right,_Iright,CanoniTerm) :-
+	is_datatypeop(S),
+	A = ARGUMENT(FL_PARENTHESIS,Arg,I1,_I2),
+	comma_separated_list(Arg,ArgList,N),
+	!,
+	Funct=OBJECT(QUOTED_ATOM(S),Index),
+	FunctTerm=CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],Index,NO_INDEX),
+	T=CANOTERM(FunctTerm,N,FL_PARENTHESIS,ArgList,Index,I1),
+	arrange_arguments(L,T,Index,CanoniTerm).
+
 arrange_arguments([A|L],S,Index,Left,Right,Iright,CanoniTerm) :-
 	( A = ARGUMENT(B,Arg,I1,_I2) ->
 	    comma_separated_list(Arg,ArgList,N)
@@ -5780,6 +5794,25 @@ flora_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),HF,_DWS,Code
 	;
 	  parsing_error(R,ERROR_WSNAME,Status)
         ).
+
+flora_db_pathexp(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),_HF,DWS,Code,Status) :-
+	get_atom(Funct,F),
+	is_datatypeop(F),
+	!,
+	flora_head_pathexplist([L,R],DWS,[LCode,RCode],Status1),
+	(Status1==[] ->
+	    (is_flstring_struct(LCode,Literal,Idx)
+	    ->  fldatatype_struct(RCode,Literal,Idx,Code),
+		Status = []
+	    ; is_flvar_struct(LCode,_,Idx)
+	    ->  fldatatype_struct(RCode,LCode,Idx,Code),
+		Status = []
+	    ;
+		parsing_error(If,ERROR_DATATYPE_LITERAL,Status)
+	    )
+	; Status = Status1
+	).
+
 
 flora_db_pathexp(Mode,CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),HF,DWS,Code,Status) :-
 	!,
