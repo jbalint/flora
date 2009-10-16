@@ -157,6 +157,8 @@
 	flora_warning_line/1,
 	flora_warning_line/2,
 	
+	flora_loader_message/1,
+	flora_loader_message/2,
 	flora_message_line/1,
 	flora_message_line/2
    from flrprint.

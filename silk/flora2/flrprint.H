@@ -18,6 +18,8 @@
 
 :- import format/2, format/3 from format.
 
+:- import flora_banner_control/1 from flrporting.
+
 
 :- export
 	flora_current_out_nl/0,
@@ -54,8 +56,6 @@
 	flora_error_indentline/0,
 	flora_warning_heading/0,
 	flora_warning_indentline/0,
-	flora_message_heading/0,
-	flora_message_tailing/0,
 	
 	flora_error_line/1,
 	flora_error_line/2,
@@ -65,6 +65,8 @@
 	
 	flora_message_line/1,
 	flora_message_line/2,
+	flora_loader_message/1,
+	flora_loader_message/2,
 	
 	flora_err_stream/1,
 	flora_warn_stream/1,
