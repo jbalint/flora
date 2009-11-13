@@ -38,7 +38,11 @@ public class flogicbasicsExample{
 	    System.out.println("Invalid path to example file!");
 	    System.exit(0);
 	}
-	session.loadFile(fileName,"example");
+	if (session.loadFile(fileName,"example"))
+	    System.out.println("Example loaded successfully!");
+	else
+	    System.out.println("Error loading the example file!");
+
 	
 	/* Examples of uses of the low-level Java-FLORA-2 API */
 	
