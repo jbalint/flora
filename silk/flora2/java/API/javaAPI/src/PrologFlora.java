@@ -86,9 +86,9 @@ public class PrologFlora extends FloraConstants
 	boolean cmdsuccess = false; 
 	String cmd = "'_load'('"+fileName + "'>>" + moduleName+")";
 	try {
-		cmdsuccess = engine.deterministicGoal(cmd);
-		// Don't use command: it is not error-sensitive
-		//cmdsuccess = engine.command(cmd);
+	    cmdsuccess = engine.deterministicGoal(cmd);
+	    // Don't use command: it is not error-sensitive
+	    //cmdsuccess = engine.command(cmd);
 	}
 	catch(IPException ipe) {
 	    ipe.printStackTrace();
@@ -107,9 +107,9 @@ public class PrologFlora extends FloraConstants
 	boolean cmdsuccess = false; 
 	String cmd = "'_compile'('"+fileName + "'>>" + moduleName+")";
 	try {
-		cmdsuccess = engine.deterministicGoal(cmd);
-		// command is not error-sensitive
-		// cmdsuccess = engine.command(cmd);
+	    cmdsuccess = engine.deterministicGoal(cmd);
+	    // command is not error-sensitive
+	    //cmdsuccess = engine.command(cmd);
 	}
 	catch(IPException ipe) {
 	    ipe.printStackTrace();
@@ -128,8 +128,8 @@ public class PrologFlora extends FloraConstants
     boolean cmdsuccess = false;
 	String cmd = "'_add'('"+fileName + "'>>" + moduleName+")";
 	try {
-		cmdsuccess = engine.deterministicGoal(cmd);
-		// cmdsuccess = engine.command(cmd);
+	    cmdsuccess = engine.deterministicGoal(cmd);
+	    //cmdsuccess = engine.command(cmd);
 	}
 	catch(IPException ipe) {
 	    ipe.printStackTrace();
@@ -148,8 +148,8 @@ public class PrologFlora extends FloraConstants
 	boolean cmdsuccess = false; 
 	String cmd = "'_compileadd'('"+fileName + "'>>" + moduleName+")";
 	try {
-		cmdsuccess = engine.deterministicGoal(cmd);
-		//cmdsuccess = engine.command(cmd);
+	    cmdsuccess = engine.deterministicGoal(cmd);
+	    //cmdsuccess = engine.command(cmd);
 	}
 	catch(IPException ipe) {
 	    ipe.printStackTrace();
