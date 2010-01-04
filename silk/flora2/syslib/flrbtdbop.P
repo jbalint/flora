@@ -134,13 +134,15 @@ flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,(First,Rest),Modul
                 flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,Rest,ModuleName1,Caller)])
             )
         ;
-            First = ','(FLLIBMODOBJ(F,A,MN,C,O),MoreObj),
+            First = ','(FLLIBMODOBJ(F,A,MN,C,O),MoreObj) ->
             FLLIBMODOBJ(F,A,MN,C,O),
             ( O=FLLIBMODLIT(_,_,_,_) ->
                 flora_abort(['Uninstantiated predicate in an argument positition in ',FL_BTINSERT,'{...}'])
             ;
                 flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,(MoreObj,Rest),ModuleName1,Caller)])
             )
+	;
+	    flora_storage_insertfacts_bt(ThisModuleName,[First,Rest])
         ),
 	flora_storage_insertfacts_bt(ThisModuleName,T).
 
@@ -159,9 +161,13 @@ flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(F,Args,ModuleName1,Call
         ;
             HeadP = P
         ),
+	( var(HeadP) ->
+	    flora_abort(['Uninstantiated module name in ',FL_BTINSERT,'{...}'])
+	 ;
 	flora_fdb_storage_name(NewMod,StorageName),
 	flora_internal_db_insert_bt(StorageName,HeadP),
-	flora_storage_insertfacts_bt(ThisModuleName,T).
+	flora_storage_insertfacts_bt(ThisModuleName,T)
+	).
 
 flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODOBJ(F,Args,ModuleName1,Caller,O)|T]) :-
 	!,
@@ -256,13 +262,13 @@ FLLIBBTDELETE(ThisModuleName,[NP],true) :-
         var(NP),
         !,
         flora_module_registry(ModuleName),
-        flora_fdb_storage_name(ModuleName,StorageName),
+	flora_fdb_storage_name(ModuleName,StorageName),
         flora_check_export_registry_internal(ThisModuleName,ModuleName,P,FLEXPORT_UPDATABLE),
         ( var(P) ->
-            flora_db_find_base(StorageName,P),
+	    flora_db_find_base(StorageName,P),
             flora_add_last(P,NP,ThisModuleName)
         ;
-            flora_db_find_base(StorageName,P),
+	    flora_db_find_base(StorageName,P),
             NP = P
         ),
         !,
@@ -290,9 +296,9 @@ FLLIBBTDELETE(ThisModuleName,[FLLIBMODLIT(Wrap,Var,ModuleName,_Caller)],true) :-
 	    flora_db_find_base(StorageName,P),
             NP = P
         ),
-	(Wrap == FL_TRANSLIBMOD -> PredType == FL_NOTTABLED
+	(Wrap == FL_TRANSLIBMOD -> PredType = FL_NOTTABLED
 	; Wrap == FL_NEGLIBMOD -> PredType = FL_TABLED_NEG
-	; PredType == FL_TABLED
+	; PredType = FL_TABLED
 	),
         get_canonical_form(NP,FLCANON(_,_,_,Var,PredType)),
         !,
@@ -369,9 +375,9 @@ FLLIBBTDELETEALL(ThisModuleName,[FLLIBMODLIT(Wrap,Var,ModuleName,_Caller)],true)
 	(Wrap == FL_LIBMOD ; Wrap == FL_NEGLIBMOD ; Wrap == FL_TRANSLIBMOD),
         %% FL_BTDELETE all predicates in Modulename
         !,
-	(Wrap == FL_TRANSLIBMOD -> PredType == FL_NOTTABLED
+	(Wrap == FL_TRANSLIBMOD -> PredType = FL_NOTTABLED
 	; Wrap == FL_NEGLIBMOD -> PredType = FL_TABLED_NEG
-	; PredType == FL_TABLED
+	; PredType = FL_TABLED
 	),
         findall(FLSYSDBUPDATE(Var,Storage),
 		(flora_construct_delete_predicate(ThisModuleName,ModuleName,Var),
