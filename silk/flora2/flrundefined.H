@@ -24,7 +24,6 @@
 
 :- import
 	%%reverse/2,
-	%%ground/1,
 	length/2
    from basics.
 
