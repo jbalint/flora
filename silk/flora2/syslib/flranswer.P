@@ -112,30 +112,37 @@ flora_print_all(Gs,NVs) :-
 			       flora_write_No
 			      )
 	;
-	    %% Here we construct a temporary predicate and rule for the query
-	    %% The predicate (FL_QUERY_PREDICATE) is made to be tabled so that
-	    %% the returned answers will be automatically checked for
-	    %% duplicates. Reason: some answer lists might have thousands and
+	    %% Construct a temporary trie-indexed predicate, FL_QUERY_PREDICATE
+	    %% All answers are asserted into that predicate.
+	    %% Since it is trie-indexed, duplicates are deleted.
+	    %% Reason: some answer lists might have thousands and
 	    %% millions of items, which takes a long time to sort. Sometimes
-	    %% sort runs out of memory and crashes XSB. Having a tabled query
-	    %% predicate adds a very small penalty to each query, but overall
-	    %% speeds up returning the answers, and sometimes avoids crashes.
-	    QueryCall =.. [FL_QUERY_PREDICATE|NVs],
+	    %% sort runs out of memory and crashes XSB. 
+	    %% Having a trie-asserted query predicate adds a very small
+	    %% penalty to each query, but overall speeds up 
+	    %% returning the answers, and sometimes avoids crashes.
+	    QueryTemplate =.. [FL_QUERY_PREDICATE|NVs],
 	    length(NVs,QueryArity),
-	    table(FL_QUERY_PREDICATE/QueryArity),
-	    asserta((QueryCall :- flora_call(Gs))),
+	    dynamic(FL_QUERY_PREDICATE/QueryArity),
+	    index(FL_QUERY_PREDICATE/QueryArity,trie),
 
-	    flora_call_hooks(_Mod,QUERYHOOK,QueryCall,before,AroundHookLink),
+	    flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,before,AroundHookLink),
 	    catch(
-		  findall((NVs,RegVal),(QueryCall,xwam_state(DELAY_REG,RegVal)),TempL),
+		  findall((NVs,RegVal),
+			  (flora_call(Gs),
+			      (\+ QueryTemplate -> assert(QueryTemplate)),
+			      xwam_state(DELAY_REG,RegVal)
+			  ),
+			  TempL
+			 ),
 		  Exception,
-		  flranswer_all_answers_query_handler(Exception,QueryCall,AroundHookLink)),
+		  flranswer_all_answers_query_handler(Exception,QueryTemplate,AroundHookLink)
+		 ),
 	    cputime(T1),
 	    T is T1-T0,
-	    flora_call_hooks(_Mod,QUERYHOOK,QueryCall,after,AroundHookLink),
+	    flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
 	    flora_reclaim_storage_space,
-	    retractall(QueryCall),
-	    abolish_table_pred(QueryCall),
+	    abolish(FL_QUERY_PREDICATE/QueryArity),
 	    sort(TempL,L),
 	    length(L,N),
 	    ( N == 0 -> flora_write_No
@@ -157,40 +164,6 @@ flora_print_all(Gs,NVs) :-
 		flora_write_Yes
 	    )
 	).
-
-/*
-flora_print_all(Gs,NVs) :-
-	cputime(T0),
-	( NVs == []
-	->
-	    flora_if_then_else(flora_call(Gs),flora_write_Yes,flora_write_No)
-	;
-	    flora_call_hooks(_Mod,QUERYHOOK,QueryCall,before,AroundHookLink),
-	    findall(NVs,flora_call(Gs),TempL),
-	    cputime(T1),
-	    T is T1-T0,
-	    flora_call_hooks(_Mod,QUERYHOOK,QueryCall,after,AroundHookLink),
-	    flora_reclaim_storage_space,
-	    sort(TempL,L),
-	    length(L,N),
-	    ( N == 0 -> flora_write_No
-	    ;
-		flora_write_matches(L),
-		( flora_switch(chatter) ->
-		    flora_stdfdbk_string('~n~w solution(s) in ~w seconds',
-					 [N,T]),
-		    (  windows_os, flora_stdfdbk_nl, !
-		    ;
-			flora_stdfdbk_string(' on '),
-			shell(hostname,block,STDFDBK,block,_)
-		    )
-		;
-		    true
-		),
-		flora_write_Yes
-	    )
-	).
-*/
 
 
 /********************************************************************/
@@ -328,9 +301,9 @@ flora_nonbuiltin_class(C) :- \+flora_builtin_datatype(C).
 
 
 %% clean up after query, if error
-flranswer_all_answers_query_handler(Exception,QueryCall,AroundHookLink) :-
-	flora_call_hooks(_Mod,QUERYHOOK,QueryCall,after,AroundHookLink),
+flranswer_all_answers_query_handler(Exception,QueryTemplate,AroundHookLink) :-
+	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
 	flora_reclaim_storage_space,
-	retractall(QueryCall),
-	flora_abolish_table_predicate(QueryCall),
+	%%retractall(QueryTemplate),
+	abolish(QueryTemplate),
 	throw(Exception).
