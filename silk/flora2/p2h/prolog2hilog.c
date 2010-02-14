@@ -207,8 +207,8 @@ static prolog_term hilog2prolog(CTXTdeclc prolog_term hterm, char *apply, int un
 #endif
 
   for (i=2; i<=arity; i++) {
-    extern_p2p_unify(hilog2prolog(CTXTc extern_p2p_arg(hterm,i), apply,unify_vars),
-	      extern_p2p_arg(pterm, i-1));
+    extern_p2p_unify(hilog2prolog(CTXTc extern_p2p_arg(hterm,i),apply,unify_vars),
+		     extern_p2p_arg(pterm, i-1));
 #ifdef P2HDEBUG_VERBOSE
     xsb_dbgmsg("h2p loop: Pterm=%s", pterm2string(CTXTc pterm));
 #endif
