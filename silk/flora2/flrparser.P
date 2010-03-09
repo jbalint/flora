@@ -2564,11 +2564,29 @@ flora_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_WS,_DWS,_Code,Status) 
 	!,
         parsing_error(If,ERROR_ELSEBODY,Status).
 
-%% Parse the a<--b form of if-then
-flora_body(CANOTERM(Funct,2,FL_PARENTHESIS,[IfPart,ThenPart],_If,_Ip),WS,DWS,Code,Status) :-
-	get_name(Funct,FL_LEFTARROW),
+%% Parse the a<~~b form of if-then
+flora_body(CANOTERM(Funct,2,FL_PARENTHESIS,[ThenPart,IfPart],_If,_Ip),WS,DWS,Code,Status) :-
+	get_name(Funct,FL_LEFTNAFIMPLY),
 	!,
-	flora_leftarrow_implication(IfPart,ThenPart,WS,DWS,Code,Status).
+	flora_leftNAF_implication(IfPart,ThenPart,WS,DWS,Code,Status).
+
+%% Parse the a~~>b form of if-then
+flora_body(CANOTERM(Funct,2,FL_PARENTHESIS,[IfPart,ThenPart],_If,_Ip),WS,DWS,Code,Status) :-
+	get_name(Funct,FL_RIGHTNAFIMPLY),
+	!,
+	flora_leftNAF_implication(IfPart,ThenPart,WS,DWS,Code,Status).
+
+%% Parse the a<==b form of if-then (using NEG instead of NAF)
+flora_body(CANOTERM(Funct,2,FL_PARENTHESIS,[ThenPart,IfPart],_If,_Ip),WS,DWS,Code,Status) :-
+	get_name(Funct,FL_LEFTNEGIMPLY),
+	!,
+	flora_leftNEG_implication(IfPart,ThenPart,WS,DWS,Code,Status).
+
+%% Parse the a==>b form of if-then (using NEG instead of NAF)
+flora_body(CANOTERM(Funct,2,FL_PARENTHESIS,[IfPart,ThenPart],_If,_Ip),WS,DWS,Code,Status) :-
+	get_name(Funct,FL_RIGHTNEGIMPLY),
+	!,
+	flora_leftNEG_implication(IfPart,ThenPart,WS,DWS,Code,Status).
 
 %% Parse the ~ meta predicate
 flora_body(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
@@ -2871,16 +2889,36 @@ flora_body_ifthenelse(CanoniTerm,WS,DWS,[],[],Code,Status) :-
 
 
 /*****************************************************************************
-   flora_leftarrow_implication(+IfPart,+ThenPart,+WS,+DWS,-Code,-Status)
-   If-then expressed using <-
+   flora_leftNAF_implication(+IfPart,+ThenPart,+WS,+DWS,-Code,-Status)
+   If-then expressed using <~~ (naf-implication)
 *****************************************************************************/
-flora_leftarrow_implication(IfPart,ThenPart,WS,DWS,Code,Status) :-
+flora_leftNAF_implication(IfPart,ThenPart,WS,DWS,Code,Status) :-
 	flora_body(IfPart,WS,DWS,IfCode,Stat1),
 	(Stat1==[]
 	-> flora_body(ThenPart,WS,DWS,ThenCode,Status),
 	    (Status==[]
 	    ->
 		flifthen_struct(IfCode,ThenCode,Code)
+	    ; true
+	    )
+	;
+	    Status = Stat1
+	).
+
+
+/*****************************************************************************
+   flora_leftNEG_implication(+IfPart,+ThenPart,+WS,+DWS,-Code,-Status)
+   If-then expressed using <== (neg-implication)
+*****************************************************************************/
+flora_leftNEG_implication(IfPart,ThenPart,WS,DWS,Code,Status) :-
+	flora_body(IfPart,WS,DWS,IfCode,Stat1),
+	(Stat1==[]
+	-> flora_body(ThenPart,WS,DWS,ThenCode,Status),
+	    (Status==[]
+	    ->
+		get_index(IfPart,Idx),
+		flneg_struct(IfCode,Idx,NegIfCode),
+		fldisjunct_struct(NegIfCode,ThenCode,Code)
 	    ; true
 	    )
 	;

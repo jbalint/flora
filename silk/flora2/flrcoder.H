@@ -106,4 +106,3 @@
 	is_prreify/2,
 	is_flogic/4,
 	is_fllibdb/1.
-
