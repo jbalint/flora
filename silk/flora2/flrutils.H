@@ -200,6 +200,8 @@
 
 :- dynamic flora_compiler_environment(_,_).
 
+:- dynamic flora_warnings_level(_).
+
 :- export
 	flora_abort/0,
 	flora_abort/1,
@@ -233,6 +235,7 @@
 	flora_clear_xpp_options/0,
         flora_add_xpp_options/1,
 	flora_replace_xpp_options/1,
+
 	flora_copy_and_preprocess/3,
 	flora_list2conjunct/2,
 
@@ -262,4 +265,5 @@
 
 	flora_patch_full_filename/1,
 
+	flora_warnings_level/1,
         flora_coder_error/1.
