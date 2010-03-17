@@ -38,6 +38,10 @@ FLNEGPREFIX(WRAP_SUB)(Z,Y,CallerInfo) :-
 	silent_sub(X,Z,CallerInfo),
 	FLNEGTRAILERPREFIX(WRAP_SUB)(X,Y,CallerInfo).
 
+FLNEGPREFIX(WRAP_SUB)(Z,Y,CallerInfo) :-
+        WRAP_ISA(X,Z,CallerInfo),
+	FLNEGTRAILERPREFIX(WRAP_ISA)(X,Y,CallerInfo).
+
 
 /***************************************************************************
   closure rules for neg O:C

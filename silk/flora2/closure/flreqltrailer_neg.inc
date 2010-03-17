@@ -46,6 +46,18 @@ FLNEGTRAILERPREFIX(WRAP_SUB_EQL)(X,Y,CallerInfo) :-
 	WRAP_DIFFOBJEQL(Y,OY,CallerInfo),
 	FLNEGTRAILERPREFIX(WRAP_SUB)(OX,OY,CallerInfo).
 
+%% FLNEGPREFIX(WRAP_SUB)/3
+FLNEGPREFIX(WRAP_SUB)(X,Y,CallerInfo) :-
+	FLNEGTRAILERPREFIX(WRAP_SUB_EQL)(X,Y,CallerInfo).
+
+FLNEGPREFIX(WRAP_SUB)(Z,Y,CallerInfo) :-
+	silent_sub(X,Z,CallerInfo),
+	FLNEGTRAILERPREFIX(WRAP_SUB_EQL)(X,Y,CallerInfo).
+
+FLNEGPREFIX(WRAP_SUB)(Z,Y,CallerInfo) :-
+        WRAP_ISA(X,Z,CallerInfo),
+	FLNEGTRAILERPREFIX(WRAP_ISA_EQL)(X,Y,CallerInfo).
+
 
 
 /***************************************************************************
