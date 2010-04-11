@@ -6,7 +6,7 @@
 ** Contact:   kifer@cs.stonybrook.edu
 **
 ** Copyright (C) by
-**      The Research Foundation of the State University of New York, 1999-2009.
+**      The Research Foundation of the State University of New York, 1999-2010.
 **
 ** All rights reserved.
 **
@@ -142,7 +142,6 @@ flora_load_module_internal(InFile,Workspace) :-
 flora_load_module_internal(InFile) :-
 	flora_check_filename(InFile),
 	flora_get_user_program_maybe(InFile,File),
-	%%flcleanuppatch(FLORA_DEFAULT_WORKSPACE),
 	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
 	    flora_flload(FlrFile,FLORA_DEFAULT_WORKSPACE)
 
@@ -156,6 +155,10 @@ flora_load_module_internal(InFile) :-
 	    %% the target of FLORA compilation?
 	    flora_set_xpp_options_for_prolog_compile(FLORA_DEFAULT_WORKSPACE),
 	    flora_add_xpp_options('-warninglevel 1 '),
+	    (flora_tabling_method(subsumptive)
+	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
+	    ;  true
+	    ),
 	    consult(PFile),
 	    flora_clear_xpp_options
 
@@ -184,14 +187,14 @@ flora_load_module_internal(InFile) :-
 
 /**********************************************************************
   flloadtrailer(+TrailerOptions,+Workspace)
-  TrailerOptions is a list [FL_EQUALITY(...),FL_INHERITANCE(...),FL_CUSTOM(...)]
+  TrailerOptions is a list
+  [FL_EQUALITY(...),FL_INHERITANCE(...),FL_TABLING(...),FL_CUSTOM(...)]
   The FLOBJEQLDEF option is also possible.
   Maintains trailer registry.
   Won't load trailer if the workspace has a trailer with identical semantics.
 **********************************************************************/
 flloadtrailer(TrailerOptions,Workspace) :-
 	valid_flora_module_name(Workspace),
-	%%flcleanuppatch(Workspace),
 	%% Check trailer options
 	findall(O,flora_trailer_registry(Workspace,O),CurrentTrailerOptions),
 	(CurrentTrailerOptions == [],
@@ -229,10 +232,17 @@ flloadtrailer(TrailerOptions,Workspace) :-
 	      tell(PreOutFile)
 	    ),
 	    check_custom_trailer_file(SortedNewTrailerOptions),
-	    ( flora_file_newerthan(UserTrailerWSOFile,UserTrailerPFile) ->
+	    ( flora_file_newerthan(UserTrailerWSOFile,UserTrailerPFile),
+	        \+flora_tabling_method(_)
+	    ->
 		true
 	    ; 
 		flora_set_xpp_options_for_prolog_compile(Workspace),
+		(flora_tabling_method(subsumptive)
+		-> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
+		;
+		    true
+		),
 		%%compile(UserTrailerPFile,[optimize,spec_repr,ti_all]),
 		compile(UserTrailerPFile,[optimize,ti_all]),
 		flora_rename_file(UserTrailerOFile,UserTrailerWSOFile),
@@ -296,48 +306,22 @@ flloadpatch(Workspace) :-
 	    told,
 	    tell(PreOutFile)
 	),
-	( flora_file_newerthan(UserPatchWSOFile,UserPatchPFile) -> true
+	( flora_file_newerthan(UserPatchWSOFile,UserPatchPFile),
+	    \+flora_tabling_method(_)
+	->
+	    true
 	;
 	    flora_set_xpp_options_for_prolog_compile(Workspace),
+	    (flora_tabling_method(subsumptive)
+	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
+	    ;  true
+	    ),
 	    compile(UserPatchPFile,[optimize,ti_all]),
 	    flora_rename_file(UserPatchOFile,UserPatchWSOFile),
 	    flora_clear_xpp_options
         ),
 	consult(UserPatchWSOFile),
 	!.
-
-/**************************************************************************
-  flcleanuppatch(+Workspace)
-  Abolish predicates used in patch file
-**************************************************************************/
-/*
-flcleanuppatch(Workspace) :-
-	flora_slash(S),
-	%% Get file names in user dir.
-	flora_user_flora_dir(UserFloraDir),
-	flora_concat_atoms([UserFloraDir,S,'patchcleanup.P'],UserCleanupPFile),
-	flora_mainO_filename(UserCleanupPFile,UserCleanupOFile),
-	flora_WSO_filename(UserCleanupPFile,Workspace,UserCleanupWSOFile),
-	%% Copy the main file to user directory.
-	( flora_file_op(exists,UserCleanupPFile) -> true
-	;
-	    telling(PreOutFile),
-	    tell(UserCleanupPFile),
-	    %% Creating .xsb/flora/patchcleanup.P
-	    flora_include_file([FLHEADER,FLABOLISH],_FileStatus),
-	    told,
-	    tell(PreOutFile)
-	),
-	( flora_file_newerthan(UserCleanupWSOFile,UserCleanupPFile) -> true
-	;
-	    flora_set_xpp_options_for_prolog_compile(Workspace),
-	    compile(UserCleanupPFile,[optimize,ti_all]),
-	    flora_rename_file(UserCleanupOFile,UserCleanupWSOFile),
-	    flora_clear_xpp_options
-        ),
-	consult(UserCleanupWSOFile),
-	!.
-*/
 
 
 /*************************************************************************
@@ -412,6 +396,10 @@ flora_compile_then_prolog_compile_add(FlrFile,ModuleName) :-
 	    %% to avoid warnings when atoms or strings have \n in them
 	    flora_set_xpp_options_for_prolog_compile(ModuleName),
 	    flora_add_xpp_options('-warninglevel 1 '),
+	    (flora_tabling_method(subsumptive)
+	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
+	    ;  true
+	    ),
 	    compile(APFile,[optimize,ti_all]) ->
 	      true
 	  ;
@@ -453,6 +441,10 @@ flora_compile_then_prolog_compile(FlrFile,ModuleName) :-
 	    %% to avoid warnings when atoms or strings have \n in them
 	    flora_set_xpp_options_for_prolog_compile(ModuleName),
 	    flora_add_xpp_options('-warninglevel 1 '),
+	    (flora_tabling_method(subsumptive)
+	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
+	    ;  true
+	    ),
 	    compile(MPFile,[optimize,ti_all]) ->
 	      true
 	  ;
@@ -506,9 +498,12 @@ flora_load_system_module_internal(ModuleName) :-
 	    flora_configuration(installdir,FloraDir),
 	    flora_slash(S),
 	    flora_concat_atoms([FloraDir,S,SubDir,S,BaseName,'.flr'],FlrFile),
+	    flora_mainP_filename(FlrFile,PFile),
 	    flora_WSO_filename(FlrFile,ModuleName,WSOFile),
 	    !,
-	    ( flora_file_newerthan(WSOFile,FlrFile) ->
+	    ( flora_file_newerthan(PFile,FlrFile),
+		\+flora_tabling_method(_)
+	    ->
 		true
 
 	    ; flora_file_op(exists,FlrFile) ->
@@ -521,11 +516,16 @@ flora_load_system_module_internal(ModuleName) :-
 	      fail
 	    ),
 	    !,
+	    %% Seems system modules are always prolog-compiled.
+	    %% Probably not necessary, but need to look into this.
 	    flora_loader_message('loading FLORA system module `~w''',[ModuleName]),
 	    %% Issue only important preprocessor warnings
 	    %% to avoid warnings when atoms or strings have \n in them
 	    flora_set_xpp_options_for_prolog_compile(ModuleName, '-warninglevel 0 '),
-	    %%flcleanuppatch(ModuleName),
+	    (flora_tabling_method(subsumptive)
+	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
+	    ;  true
+	    ),
 	    consult(WSOFile),
 	    flora_clear_xpp_options
 	;
@@ -569,12 +569,18 @@ flora_fladd(FlrFile,Workspace) :-
 	),
 	!,
 	flora_loader_message('Adding ~w into module ~w',[FlrFile,Workspace]),
-	( flora_file_newerthan(WSOFile,APFile) ->
+	( flora_file_newerthan(WSOFile,APFile),
+	    \+flora_tabling_method(_)
+	->
 	    true
 	;
 	  (
 	    flora_set_xpp_options_for_prolog_compile(Workspace),
 	    flora_add_xpp_options('-warninglevel 0 '),
+	    (flora_tabling_method(subsumptive)
+	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
+	    ;  true
+	    ),
 	    compile(APFile,[optimize,ti_all])
 	  ->
 	    true
@@ -620,12 +626,18 @@ flora_flload(FlrFile,Workspace) :-
 	),
 	!,
 	flora_loader_message('Loading ~w into module ~w',[FlrFile,Workspace]),
-	( flora_file_newerthan(WSOFile,MPFile) ->
+	( flora_file_newerthan(WSOFile,MPFile),
+	    \+flora_tabling_method(_)
+	->
 	    true
 	;
 	  (
 	    flora_set_xpp_options_for_prolog_compile(Workspace),
 	    flora_add_xpp_options('-warninglevel 0 '),
+	    (flora_tabling_method(subsumptive)
+	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
+	    ;  true
+	    ),
 	    compile(MPFile,[optimize,ti_all])
 	  ->
 	    true
@@ -635,7 +647,6 @@ flora_flload(FlrFile,Workspace) :-
 	  ),
 	  flora_rename_file(MOFile,WSOFile)
         ),
-	%%flcleanuppatch(Workspace),
 	flora_call_hooks(Workspace,LOADTOMODULE,FlrFile,before,AroundHookLink),
 	consult(WSOFile),
 	flora_call_hooks(Workspace,LOADTOMODULE,FlrFile,after,AroundHookLink),
@@ -820,14 +831,11 @@ flora_set_xpp_options_for_compile(Module) :-
 	flora_set_xpp_options(compile,Module).
 flora_set_xpp_options_for_compile(Module,ExtraOpts) :-
 	flora_set_xpp_options(compile,Module,ExtraOpts).
-%%flora_set_xpp_options_for_prolog_compile :-
-%%	flora_set_xpp_options(prolog_compile).
 flora_set_xpp_options_for_prolog_compile(Module) :-
 	flora_set_xpp_options(prolog_compile,Module).
 flora_set_xpp_options_for_prolog_compile(Module,ExtraOpts) :-
 	flora_set_xpp_options(prolog_compile,Module,ExtraOpts).
 
-%%flora_set_xpp_options_for_dump(Module) :- flora_set_xpp_options(dump,Module).
 flora_set_xpp_options_for_dump(Module,ExtraOpts) :-
 	flora_set_xpp_options(dump,Module,ExtraOpts).
 
@@ -2843,9 +2851,10 @@ flora_abort(Msg,AbortType) :-
 flora_make_trailer_filename(TrailerOptions,TrailerFilerFN) :-
 	member(FL_EQUALITY(Equality),TrailerOptions),
 	member(FL_INHERITANCE(Inheritance),TrailerOptions),
+	member(FL_TABLING(Tabling),TrailerOptions),
 	member(FL_CUSTOM(Custom),TrailerOptions),
 	encode_path_as_filename(Custom,CustomFN),
-	flora_concat_atoms(['trailer$eq=',Equality,'+inh=',Inheritance,'+cus=',CustomFN,'.',PROLOG_PFILE_EXT], TrailerFilerFN).
+	flora_concat_atoms(['trailer$eq=',Equality,'+inh=',Inheritance,'+tbl=',Tabling,'+cus=',CustomFN,'.',PROLOG_PFILE_EXT], TrailerFilerFN).
 
 /*
    Converts full path to a single filename that is acceptable to both Unix 
@@ -2904,6 +2913,8 @@ include_trailer_control_definitions(TrailerOptions) :-
 	flora_current_out_string('#define EQUALITY~w~n', [EqType]),
 	member(FL_INHERITANCE(InhType),TrailerOptions),
 	flora_current_out_string('#define INHERITANCE~w~n', [InhType]),
+	member(FL_TABLING(TabType),TrailerOptions),
+	flora_current_out_string('#define TABLING~w~n', [TabType]),
 	member(FL_CUSTOM(CusFile),TrailerOptions),
 	(CusFile == NONE
 	-> flora_current_out_line('#define CUSTOMnone')
@@ -2948,6 +2959,12 @@ found_option_conflicts(InputFile,OptList) :-
 	!,
 	print_option_conflict_error(InputFile,FL_INHERITANCE,IdxX,IdxY).
 found_option_conflicts(InputFile,OptList) :-
+	member((FL_TABLING(X),IdxX), OptList),
+	member((FL_TABLING(Y),IdxY), OptList),
+	X \= Y,
+	!,
+	print_option_conflict_error(InputFile,FL_INHERITANCE,IdxX,IdxY).
+found_option_conflicts(InputFile,OptList) :-
 	member((FL_CUSTOM(X),IdxX), OptList),
 	member((FL_CUSTOM(Y),IdxY), OptList),
 	X \= Y,
@@ -2978,7 +2995,9 @@ strip_indices_from_options_and_split([(Option,_I)|Rest],
 				     StrippedOptions,
 				     [Option|RestTrailer]) :-
 	(Option = FLOBJEQLDEF; Option = FL_EQUALITY(_);
-	    Option = FL_INHERITANCE(_); Option = FL_CUSTOM(_)),
+	    Option = FL_INHERITANCE(_); Option = FL_CUSTOM(_);
+	    Option = FL_TABLING(_)
+	),
 	!,
 	strip_indices_from_options_and_split(Rest,StrippedOptions,RestTrailer).
 strip_indices_from_options_and_split([(Option,_I)|Rest], [Option|StrippedRest], TrailerOptions) :-
@@ -2991,21 +3010,19 @@ strip_indices_from_options_and_split([(Option,_I)|Rest], [Option|StrippedRest], 
    Always succeeds.
 */
 fixup_trailer_options(TrailerOptions,Defaults,NewTrailerOptions) :-
+	var(TrailerOptions),
+	!,
+	fixup_trailer_options([],Defaults,NewTrailerOptions),
+	TrailerOptions = NewTrailerOptions.
+
+fixup_trailer_options(TrailerOptions,Defaults,NewTrailerOptions) :-
 	(member(FLOBJEQLDEF,TrailerOptions)
 	->
-	    delete_from_list(FLOBJEQLDEF,TrailerOptions,TrailerOptions1),
+	    flrporting:flora_delete_from_list(FLOBJEQLDEF,TrailerOptions,TrailerOptions1),
 	    /*
-	    %% This makes :=: in the head to override the explicit
-	    %% equality(none) option, but our stated policy is that
+	    %% This makes :=: in the head override the explicit
+	    %% equality(none) option. But our stated policy is that
 	    %% the explicit directive overrides the implicit ones
-	    (member(FL_EQUALITY(EqType),TrailerOptions1)
-	    ->
-		(var(EqType) -> TrailerOptions2 = TrailerOptions1
-		;
-		    delete_from_list(FL_EQUALITY(NONE),TrailerOptions1,TrailerOptions2),
-		    NewTrailerOptions1 = [FL_EQUALITY(BASIC)|TrailerOptions2]
-		)
-	    ; member(FL_EQUALITY(_),TrailerOptions1)
 	    */
 	    ( member(FL_EQUALITY(_),TrailerOptions1)
 	    -> 
@@ -3030,18 +3047,25 @@ fixup_trailer_options(TrailerOptions,Defaults,NewTrailerOptions) :-
 	    member(FL_INHERITANCE(InhType),Defaults),
 	    NewTrailerOptions3 = [FL_INHERITANCE(InhType)|NewTrailerOptions2]
 	),
-	(member(FL_CUSTOM(File),NewTrailerOptions3)
+	(member(FL_TABLING(_),NewTrailerOptions3)
+	->
+	    NewTrailerOptions4 = NewTrailerOptions3
+	;
+	    member(FL_TABLING(TabType),Defaults),
+	    NewTrailerOptions4 = [FL_TABLING(TabType)|NewTrailerOptions3]
+	),
+	(member(FL_CUSTOM(File),NewTrailerOptions4)
 	->
 	    ( (var(File) ; File == NONE)
-	    -> NewTrailerOptions = NewTrailerOptions3
+	    -> NewTrailerOptions = NewTrailerOptions4
 	    ;
 		flora_file_op(expand,File,ExpandedFile),
-		delete_from_list(FL_CUSTOM(File),NewTrailerOptions3,NewTrailerOptions4),
-		NewTrailerOptions = [FL_CUSTOM(ExpandedFile)|NewTrailerOptions4]
+		flrporting:flora_delete_from_list(FL_CUSTOM(File),NewTrailerOptions4,NewTrailerOptions5),
+		NewTrailerOptions = [FL_CUSTOM(ExpandedFile)|NewTrailerOptions5]
 	    )
 	;
 	    member(FL_CUSTOM(CusFile),Defaults),
-	    NewTrailerOptions = [FL_CUSTOM(CusFile)|NewTrailerOptions3]
+	    NewTrailerOptions = [FL_CUSTOM(CusFile)|NewTrailerOptions4]
 	).
 
 check_custom_trailer_file(TrailerOptions) :-
@@ -3058,11 +3082,6 @@ check_custom_trailer_file(TrailerOptions) :-
 	;
 	    true
 	).
-
-
-delete_from_list(Element, [Element|Rest_Elements], Rest_Elements).
-delete_from_list(Element, [Element1|Rest_L1], [Element1|Rest_L2]) :-
-	delete_from_list(Element, Rest_L1, Rest_L2).
 
 
 

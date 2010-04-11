@@ -5,8 +5,8 @@
 ** Contact:   kifer@cs.stonybrook.edu
 **
 ** Copyright (C) by
-**      The Research Foundation of the State University of New York, 1999-2009;
-**      and Vulcan, Inc., 2008, 2009.
+**      The Research Foundation of the State University of New York, 1999-2010;
+**      and Vulcan, Inc., 2008 - 2010.
 **
 ** All rights reserved.
 **
@@ -4146,6 +4146,13 @@ flora_term(Funct,N,Args,_TransFlag,DWS,Code,Status) :-
 	    true
 	).
 
+flora_term(Funct,_N,Args,_TransFlag,DWS,Code,Status) :-
+	get_atom(Funct,F),
+	is_datatypeop(F),
+	!,
+	get_index(Funct,If),
+	flora_parse_datatype(Args,If,DWS,Code,Status).
+
 flora_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
         fltransactionalobject_struct(Funct,F),
         !,
@@ -4393,27 +4400,7 @@ flora_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),_HF,DWS,Code,Status) 
 	get_atom(Funct,F),
 	is_datatypeop(F),
 	!,
-	flora_pathexplist(Args,DWS,ArgsCode,Status1),
-	(Status1==[]
-	->
-	    ArgsCode=[LiteralCode,SortCode],
-	    (is_flstring_struct(LiteralCode,Literal,Idx)
-	    ->  fldatatype_struct(SortCode,Literal,Idx,Code),
-		Status = []
-	    ; is_flvar_struct(LiteralCode,_,Idx)
-	    ->  fldatatype_struct(SortCode,LiteralCode,Idx,Code),
-		Status = []
-	    %% In datatype lists allow only explicit enumerations, no [...|...]
-	    ; is_fllist_struct(LiteralCode, FrontCode, [], Idx)
-	    ->
-		fldatatype_listvalue_struct(FrontCode,FrontCodeListval),
-		fldatatype_struct(SortCode,FrontCodeListval,Idx,Code),
-		Status = []
-	    ;
-		parsing_error(If,ERROR_DATATYPE_LITERAL,Status)
-	    )
-	; Status = Status1
-	).
+	flora_parse_datatype(Args,If,DWS,Code,Status).
 
 %% This clause handles module specification @_prolog() and @_prologall()
 %% in the argument position.
@@ -5057,21 +5044,7 @@ flora_head_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),HF,DWS,Code,Stat
 	    )
 
 	; is_datatypeop(F) ->
-	    flora_head_pathexplist(Args,DWS,ArgsCode,Status1),
-	    (Status1==[]
-	    ->
-		ArgsCode=[LiteralCode,SortCode],
-		(is_flstring_struct(LiteralCode,Literal,Idx)
-		->  fldatatype_struct(SortCode,Literal,Idx,Code),
-		    Status = []
-		; is_flvar_struct(LiteralCode,_,Idx)
-		->  fldatatype_struct(SortCode,LiteralCode,Idx,Code),
-		    Status = []
-		;
-		    parsing_error(If,ERROR_DATATYPE_LITERAL,Status)
-		)
-	    ; Status = Status1
-	    )
+	    flora_parse_datatype(Args,If,DWS,Code,Status)
 	    
 	; flora_head_term(Funct,2,Args,HF,DWS,Code,Status)
         ).
@@ -5837,19 +5810,7 @@ flora_db_pathexp(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),_HF,DWS,Cod
 	get_atom(Funct,F),
 	is_datatypeop(F),
 	!,
-	flora_head_pathexplist([L,R],DWS,[LCode,RCode],Status1),
-	(Status1==[] ->
-	    (is_flstring_struct(LCode,Literal,Idx)
-	    ->  fldatatype_struct(RCode,Literal,Idx,Code),
-		Status = []
-	    ; is_flvar_struct(LCode,_,Idx)
-	    ->  fldatatype_struct(RCode,LCode,Idx,Code),
-		Status = []
-	    ;
-		parsing_error(If,ERROR_DATATYPE_LITERAL,Status)
-	    )
-	; Status = Status1
-	).
+	flora_parse_datatype([L,R],If,DWS,Code,Status).
 
 
 flora_db_pathexp(Mode,CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),HF,DWS,Code,Status) :-
@@ -6434,3 +6395,27 @@ flora_parse_label(CANOTERM(_Funct,_N,FL_BRACE,Args,If,_Ip),VarsOK,Code,Status) :
 	    parsing_error(If,INVALID_META_IN_LABEL,Status)
 	),
 	clear_context(parsing_label).
+
+
+flora_parse_datatype(Args,If,DWS,Code,Status) :-
+	flora_pathexplist(Args,DWS,ArgsCode,Status1),
+	(Status1==[]
+	->
+	    ArgsCode=[LiteralCode,SortCode],
+	    (is_flstring_struct(LiteralCode,Literal,Idx)
+	    ->  fldatatype_struct(SortCode,Literal,Idx,Code),
+		Status = []
+	    ; is_flvar_struct(LiteralCode,_,Idx)
+	    ->  fldatatype_struct(SortCode,LiteralCode,Idx,Code),
+		Status = []
+	    %% In datatype lists allow only explicit enumerations, no [...|...]
+	    ; is_fllist_struct(LiteralCode, FrontCode, [], Idx)
+	    ->
+		fldatatype_listvalue_struct(FrontCode,FrontCodeListval),
+		fldatatype_struct(SortCode,FrontCodeListval,Idx,Code),
+		Status = []
+	    ;
+		parsing_error(If,ERROR_DATATYPE_LITERAL,Status)
+	    )
+	; Status = Status1
+	).

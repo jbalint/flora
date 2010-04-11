@@ -28,7 +28,10 @@
 
 :- import cwd/1, cd/1 from shell.
 
-:- import flora_configuration/2 from flrregistry.
+:- import
+	flora_module_registry/1,
+	flora_configuration/2
+   from flrregistry.
 
 :- import
 	flora_slash/1,
@@ -87,10 +90,12 @@
 
 :- import
 	flloadtrailer/2,
+	fltrailersemantics/2,
 	flora_shell_command_line/3,
 	flora_load_module_internal/1,
 	flora_end_of_input/1,
 	flora_check_filename/1,
+	flora_tabling_method/1,
 	flora_warnings_level/1
    from flrutils.
 

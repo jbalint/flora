@@ -6,7 +6,7 @@
 ** Contact:   kifer@cs.stonybrook.edu
 **
 ** Copyright (C) by
-**      The Research Foundation of the State University of New York, 1999-2008.
+**      The Research Foundation of the State University of New York, 1999-2010.
 **
 ** All rights reserved.
 **
@@ -333,7 +333,14 @@ make_trace_interactive :-
 	flora_load_module_internal(File),
 	cd(CurrWorkingDir),
 	flora_module_path_remove(DemoDir).
+/*********************************************************************/
 
+%% Control warnings level
+
+'_warnings'(X) :- 
+        var(X),
+	!,
+	flora_warnings_level(X).
 '_warnings'(off) :- 
 	retractall(flora_warnings(_)),
 	assert(flora_warnings_level(nocompiler)),
@@ -347,5 +354,47 @@ make_trace_interactive :-
 	'_warnings'(off),
         retract(flora_warnings_level(nodependency)).
 '_warnings'(X) :- 
-	    flora_error_line('invalid warnings control option: ~w', [X]),
-	    throw(FLORA_TOP_LEVEL).
+	flora_error_line('invalid warnings control option: ~w', [X]),
+	throw(FLORA_TOP_LEVEL).
+
+%% Control tabling method
+'_tabling'(X) :-
+        %% this case is written currently for debugging.
+        %% To be changed to programmable later
+        var(X),
+	!,
+	write('\nTabling method requested: '),
+	(flora_tabling_method(M) -> writeln(M)
+	; writeln(none)
+	),
+	writeln('Tabling methods in effect in various loaded modules:'),
+	(flrregistry:FLORA_SYMBOL('tabling_method')(Mod,Meth),
+	    write('    Module  '), write(Mod), write(': '),
+	    writeln(Meth), fail
+	;
+	    true
+	).
+	
+'_tabling'(subsumptive) :-
+        retractall(flora_tabling_method(_)),
+	assert(flora_tabling_method(subsumptive)),
+	reload_module_trailers_for_tabling(subsumptive).
+'_tabling'(variant) :-
+        retractall(flora_tabling_method(_)),
+	assert(flora_tabling_method(variant)),
+	reload_module_trailers_for_tabling(variant).
+%% do not change the existing tabling method during loading
+'_tabling'(clear) :-
+        retractall(flora_tabling_method(_)).
+'_tabling'(X) :- 
+	flora_error_line('invalid tabling option: ~w', [X]),
+	throw(FLORA_TOP_LEVEL).
+
+reload_module_trailers_for_tabling(Method) :-
+	flora_module_registry(Module),
+	fltrailersemantics(Options,Module),
+	flrporting:flora_delete_from_list(FL_TABLING(_),Options,NewOpt),
+	flloadtrailer([FL_TABLING(Method)|NewOpt],Module),
+	fail.
+reload_module_trailers_for_tabling(_Method).
+

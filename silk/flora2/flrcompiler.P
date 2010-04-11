@@ -5,8 +5,8 @@
 ** Contact:   kifer@cs.stonybrook.edu
 **
 ** Copyright (C) by
-**      The Research Foundation of the State University of New York, 1999-2009;
-**      and Vulcan, Inc., 2008-2009.
+**      The Research Foundation of the State University of New York, 1999-2010;
+**      and Vulcan, Inc., 2008-2010.
 **
 ** All rights reserved.
 **
@@ -949,6 +949,7 @@ sigattspec_struct(LiteralContext,Object,AttObj,RefType,ValObj,Code) :-
         ).
 
 
+%% cardinality constraints in the body
 sigattconstr_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,RefType,Code) :-
 	(
 	is_mvdsigspecop(RefType) ->
@@ -959,13 +960,13 @@ sigattconstr_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,RefType,Code)
 	).
 
 
-sigattcondef_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,RefType,Code) :-
-	(
-	is_mvdsigspecop(RefType) ->
-	    mvdcondef_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,Code) 
+%% cardinality constraints in the head
+sigattcondef_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,RefType,ValObj,Code) :-
+	( is_mvdsigspecop(RefType) ->
+	    mvdcondef_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,ValObj,Code) 
 
 	; is_imvdsigspecop(RefType) ->
-	    imvdcondef_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,Code) 
+	    imvdcondef_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,ValObj,Code) 
 	).
 
 mvdsigspec_struct(Context,Object,AttObj,ValObj,PRMVDSIG(Object,AttObj,ValObj,Caller)) :-
@@ -973,18 +974,20 @@ mvdsigspec_struct(Context,Object,AttObj,ValObj,PRMVDSIG(Object,AttObj,ValObj,Cal
 imvdsigspec_struct(Context,Object,AttObj,ValObj,PRIMVDSIG(Object,AttObj,ValObj,Caller)) :-
 	determine_caller_info(Context,Caller).
 
+%% This is for cardinality constraints in the body
 mvdcon_struct(Context,Object,AttObj,LowerObj,UpperObj,PRMVDCON(Object,AttObj,LowerObj,UpperObj,Caller)) :-
 	determine_caller_info(Context,Caller).
 imvdcon_struct(Context,Object,AttObj,LowerObj,UpperObj,PRIMVDCON(Object,AttObj,LowerObj,UpperObj,Caller)) :-
 	determine_caller_info(Context,Caller).
 
-mvdcondef_struct(Context,Object,AttObj,LowerObj,UpperObj,PRMVDCONDEF(Object,AttObj,LowerObj,UpperObj,Caller)) :-
+%% This is for cardinality constraints in the head
+mvdcondef_struct(Context,Object,AttObj,LowerObj,UpperObj,ValObj,PRMVDCONDEF(Object,AttObj,LowerObj,UpperObj,ValObj,Caller)) :-
 	determine_caller_info(Context,Caller).
-imvdcondef_struct(Context,Object,AttObj,LowerObj,UpperObj,PRIMVDCONDEF(Object,AttObj,LowerObj,UpperObj,Caller)) :-
+imvdcondef_struct(Context,Object,AttObj,LowerObj,UpperObj,ValObj,PRIMVDCONDEF(Object,AttObj,LowerObj,UpperObj,ValObj,Caller)) :-
 	determine_caller_info(Context,Caller).
 
-is_prmvdcondef(PRMVDCONDEF(_Object,_AttObj,_LowerObj,_UpperObj,_Caller)).
-is_primvdcondef(PRIMVDCONDEF(_Object,_AttObj,_LowerObj,_UpperObj,_Caller)).
+is_prmvdcondef(PRMVDCONDEF(_Object,_AttObj,_LowerObj,_UpperObj,_Type,_Caller)).
+is_primvdcondef(PRIMVDCONDEF(_Object,_AttObj,_LowerObj,_UpperObj,_Type,_Caller)).
 
 boolsig_struct(Context,Object,AttObj,PRBOOLSIG(Object,AttObj,Caller)):-
 	determine_caller_info(Context,Caller).
@@ -2211,6 +2214,8 @@ compile_label(Label,LblCode,MetaCode,Status) :-
 	; is_flvar(Id,VarName,VarIdx) ->
             compile_flvar(VarName,VarIdx,LblCode),
 	    IdStatus = []
+	; is_fldatatype(Id,_Sort,_Lit,_Index) ->
+	    datatypeobj_struct(Id,LblCode,IdStatus)
 	; is_flterm(Id,Funct,N,Args) ->
 	    compile_fltermobj(Funct,N,Args,LblCode,_,_,IdStatus)
 	; Id == FL_SKIP_LABEL ->  %% requested that there should be no label
@@ -4125,7 +4130,7 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 		    compile_head_pathexp(ValTerm,ValObj,VCode,VH2BCodeHead,VH2BCodeTail,Status),
 		    ( Status == [] ->
 			sigattspec_struct(HEADLITERAL,Object,AttObj,RefType,ValObj,SCode),
-			sigattcondef_struct(HEADLITERAL,Object,AttObj,OLower,OUpper,RefType,CSCode),
+			sigattcondef_struct(HEADLITERAL,Object,AttObj,OLower,OUpper,RefType,ValObj,CSCode),
 			conjunct_code([SCode,CSCode,ACode,CCode,VCode],Code),
 			conjunct_code([AH2BCodeHead,CH2BCodeHead,VH2BCodeHead],H2BCodeHead),
 			conjunct_code([AH2BCodeTail,CH2BCodeTail,VH2BCodeTail],H2BCodeTail)
@@ -5790,11 +5795,11 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 		    compile_head_wsflpathexp(ValTerm,WS,ValObj,VCode,VH2BCodeHead,VH2BCodeTail,Status),
 		    ( Status == [] ->
 			attach_workspace(WS,
-				     sigattspec_struct(HEADLITERAL,Object,AttObj,RefType,ValObj,SCode),
-				     SCode,WSSCode),
+					 sigattspec_struct(HEADLITERAL,Object,AttObj,RefType,ValObj,SCode),
+					 SCode,WSSCode),
 			attach_workspace(WS,
-				     sigattcondef_struct(HEADLITERAL,Object,AttObj,OLower,OUpper,RefType,CSCode),
-				     CSCode,CWSSCode),
+					 sigattcondef_struct(HEADLITERAL,Object,AttObj,OLower,OUpper,RefType,ValObj,CSCode),
+					 CSCode,CWSSCode),
 			conjunct_code([ACode,CCode,VCode,WSSCode,CWSSCode],Code),
 			conjunct_code([AH2BCodeHead,CH2BCodeHead,VH2BCodeHead],H2BCodeHead),
 			conjunct_code([AH2BCodeTail,CH2BCodeTail,VH2BCodeTail],H2BCodeTail)
