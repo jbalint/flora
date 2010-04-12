@@ -200,6 +200,7 @@ else
 	NeXT_DATE=0
 fi
 
+/usr/bin/time -f "TESTTIME user: %U, elapsed: %E" \
 ./testall.sh -opts "$options" -exclude "$excluded_tests" \
                               -add "$added_tests"  \
 	      $FLORADIR  >> $LOG_FILE 2>&1
@@ -214,7 +215,7 @@ if test -n "$coredumps" ; then
   echo "End of the core dumps list" >> $RES_FILE
 fi
 # check for seg fault, but not for segfault_handler
-$GREP "fault" $LOG_FILE | $GREP -v "segfault_handler" | $GREP -v default >> $RES_FILE
+$GREP "fault" $LOG_FILE | $GREP -v "segfault_handler" | $GREP -v default | $GREP -v pagefault  >> $RES_FILE
 # core dumped
 $GREP "dumped" $LOG_FILE >> $RES_FILE
 # when no output file is generated
@@ -271,6 +272,7 @@ if test -s $RES_FILE; then
 	rm -f $MSG_FILE
 else
 	echo "PASSED testsuite for $FLORADIR/runflora on $HOSTNAME"
+	$GREP "TESTTIME" $LOG_FILE
 	rm -f $NEW_LOG
 fi
 
