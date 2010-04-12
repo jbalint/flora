@@ -758,7 +758,8 @@ prologterm_struct(F,N,Args,PROLOGTERM(F,N,Args)).
 %% when we encode them as module:goo. This is in addition to 
 %% :- import goo from module. When XSB allows the notation foo:bar
 %% in assert/retract, the :- module feature will be deprecated.
-prologterm_struct(F,N,Args,Module,PROLOGTERM(F,N,Args,Module)).
+prologterm_struct(F,N,Args,Module,PROLOGTERM(F,N,Args,ModuleCode)) :-
+	atomobj_struct(Module,ModuleCode).
 
 prologliblit_struct(PrologTerm,PROLOGLIBLIT(PrologTerm)).
 is_prologterm(PROLOGTERM(_F,_N,_Args)).
@@ -1426,7 +1427,7 @@ collect_datatype_var_terms(CompilerTermOrList,NewVars,Vars) :-
 	    varobj_struct(UsrGivenVarName,VarIdx,UsrGivenVarCode),
 	    is_datatypeobj_struct(DataTypeVarStruct,SortCode,VarCode,NO_INDEX),
 	    atomobj_struct(FL_UNIVEQ,UnivEQCode),
-	    prologterm_struct(UnivEQCode,2, [UsrGivenVarCode,DataTypeVarStruct],
+	    prologterm_struct(UnivEQCode,2,[UsrGivenVarCode,DataTypeVarStruct],
 			      DatatypeVarCode),
 	    NewVars = [DatatypeVarCode|Vars]
 	; is_list(VarCode)
@@ -2119,8 +2120,7 @@ add_attrvar_code([],Code,Code) :- !.
 add_attrvar_code([(Var,Val)|L],BCode,NewCode) :-
         atomobj_struct(put_attr,FCode),
         atomobj_struct(usermod,MCode),
-	atomobj_struct(machine,MachCode),
-        prologterm_struct(FCode,3,[Var,MCode,Val],MachCode,VCode),
+        prologterm_struct(FCode,3,[Var,MCode,Val],machine,VCode),
         prologliblit_struct(VCode,Code),
         add_attrvar_code(L,BCode,LCode),
         conjunct_struct(Code,LCode,NewCode).
@@ -2483,7 +2483,7 @@ construct_defeasible_condition(LblCode,DefeatCondCode) :-
 	    atomobj_struct(FL_UNDEFEATED,UnDefeatFuncCode),
 	    thismodule_struct(ThisModule),
 	    %% DummyVarObj is unified with Head in flora_record_rule_signature
-	    %% flrcanon.P and flrdynrule.P
+	    %% in flrcanon.P and flrdynrule.P
 	    flora_new_varobj(NO_INDEX,DummyVarObj),
 	    termlit_struct(BODYLITERAL,UnDefeatFuncCode,3,[LblCode,DummyVarObj,ThisModule],
 			   UnDefeatLitCode),
@@ -5281,11 +5281,10 @@ compile_prlgterm(Funct,N,Args,Object,OidCode,Code,Status) :-
 	!.
 
 /*
-%% Uncomment when XSB fully supports the foo:bar notation in assert/retract
+%% Generate prolog term with module prefix
 compile_prlgterm(Funct,N,Args,Module,Object,OidCode,Code,Status) :-
 	atomobj_struct(Funct,FObj),
-	atomobj_struct(Module,ModuleCode),
-	prologterm_struct(FObj,N,AObj,ModuleCode,Object),
+	prologterm_struct(FObj,N,AObj,Module,Object),
 	compile_pathexplist(Args,AObj,OidCode,Code,Status),
 	!.
 */
@@ -6239,7 +6238,7 @@ compile_fldynrule(Op,R,RCode,Status) :-
 		construct_defeasible_condition(LblCode,DefeatCondCode),
 		( Status == []
 		->
-		    %% Note: If LblCode == NULL, a unique rule id will be
+		    %% Note: If LblCode == NULL, a unique rule Id will be
 		    %% created by flrcanon:flora_record_rule_signature at
 		    %% runtime.
 		    dynrule_struct(HCL,BodyCode,HVL,BVL,(LblCode,MetaCode,DefeatCondCode),RCode),
