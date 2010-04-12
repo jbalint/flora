@@ -1,15 +1,23 @@
 @echo off
 
 REM  Call:
-REM     makeflora [-c] full-path-to-prolog
+REM     makeflora [-S] [-c] full-path-to-prolog
 REM     makeflora clean
 
-REM   makeflora -c full-path-to-prolog means use the C compiler
-REM                  to recompile the directory .\p2h - developer's option
+REM   makeflora -S full-path-to-prolog
+REM       means: configure FLORA for subsumptive tabling
+REM   makeflora -c full-path-to-prolog
+REM       means: use the C compiler to recompile the directory
+REM   .\p2h - developer's option
 
 REM  NOTE: DOS batch language is very brittle. For instance, replacing
 REM        %1 with %ARG%, where set ARG=%1 will not work if
 REM        full-path-to-prolog has a file extension, e.g., \xsb\bin\wxsb.bat
+
+set current_tabling=flrincludes\.flora_current_tabling
+echo. > %current_tabling%
+if "%1" == "-S" echo #define FLORA_SUBSUMPTIVE_TABLING > %current_tabling%
+if "%1" == "-S" shift
 
 if "%1" == "" echo Usage:  makeflora [-c] full-path-to-prolog
 if "%1" == "" goto end
