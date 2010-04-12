@@ -375,26 +375,37 @@ make_trace_interactive :-
 	    true
 	).
 	
-'_tabling'(subsumptive) :-
+'_tabling'(Method) :-
+        (Method == variant ; Method = subsumptive),
+	!,
         retractall(flora_tabling_method(_)),
-	assert(flora_tabling_method(subsumptive)),
-	reload_module_trailers_for_tabling(subsumptive).
-'_tabling'(variant) :-
-        retractall(flora_tabling_method(_)),
-	assert(flora_tabling_method(variant)),
-	reload_module_trailers_for_tabling(variant).
+	assert(flora_tabling_method(Method)),
+	reload_module_trailers_for_tabling(Method).
 %% do not change the existing tabling method during loading
 '_tabling'(clear) :-
         retractall(flora_tabling_method(_)).
-'_tabling'(X) :- 
-	flora_error_line('invalid tabling option: ~w', [X]),
+'_tabling'(Method) :- 
+	flora_error_line('invalid tabling method: ~w', [Method]),
 	throw(FLORA_TOP_LEVEL).
 
 reload_module_trailers_for_tabling(Method) :-
 	flora_module_registry(Module),
-	fltrailersemantics(Options,Module),
-	flrporting:flora_delete_from_list(FL_TABLING(_),Options,NewOpt),
-	flloadtrailer([FL_TABLING(Method)|NewOpt],Module),
+	reload_module_trailer_for_tabling(Module,Method),
 	fail.
 reload_module_trailers_for_tabling(_Method).
 
+
+%% Method=subsumptive/variant
+'_tabling'(Module,Method) :-
+        (Method == variant ; Method = subsumptive),
+	!,
+	reload_module_trailer_for_tabling(Module,Method).
+'_tabling'(Module,Method) :-
+	flora_error_line('invalid tabling method ~w requested fro module ~w',
+			 [Method,Module]),
+	throw(FLORA_TOP_LEVEL).
+
+reload_module_trailer_for_tabling(Module,Method) :-
+	fltrailersemantics(Options,Module),
+	flrporting:flora_delete_from_list(FL_TABLING(_),Options,NewOpt),
+	flloadtrailer([FL_TABLING(Method)|NewOpt],Module).
