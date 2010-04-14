@@ -129,7 +129,6 @@
 	flora_configuration/2,
 	flora_storage_registry/1,
 	flora_trailer_registry/2,
-	flora_tabling_method/2,
 	flora_module_registry/1
    from flrregistry.
 

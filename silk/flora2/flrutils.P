@@ -155,7 +155,7 @@ flora_load_module_internal(InFile) :-
 	    %% the target of FLORA compilation?
 	    flora_set_xpp_options_for_prolog_compile(FLORA_DEFAULT_WORKSPACE),
 	    flora_add_xpp_options('-warninglevel 1 '),
-	    (flora_tabling_method(FLORA_DEFAULT_WORKSPACE,subsumptive)
+	    (subsumptive_tabling_in_effect(FLORA_DEFAULT_WORKSPACE)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
@@ -196,11 +196,11 @@ flora_load_module_internal(InFile) :-
 flloadtrailer(TrailerOptions,Workspace) :-
 	valid_flora_module_name(Workspace),
 	%% Check trailer options
-	findall(O,flora_trailer_registry(Workspace,O),CurrentTrailerOptions),
-	(CurrentTrailerOptions == [],
-	    DefaultTrailerOptions = FLORA_DEFAULT_SEMANTICS,
-	    !
-	; DefaultTrailerOptions = CurrentTrailerOptions
+	get_trailer_options(Workspace,CurrentTrailerOptions),
+	(CurrentTrailerOptions == []
+	-> DefaultTrailerOptions = FLORA_DEFAULT_SEMANTICS
+	;
+	    DefaultTrailerOptions = CurrentTrailerOptions
 	),
 	sort(DefaultTrailerOptions,SortedDefaultTrailerOptions),
 	fixup_trailer_options(TrailerOptions,SortedDefaultTrailerOptions,NewTrailerOptions),
@@ -245,7 +245,7 @@ flloadtrailer(TrailerOptions,Workspace) :-
 		true
 	    ; 
 		flora_set_xpp_options_for_prolog_compile(Workspace),
-		(flora_tabling_method(Workspace,subsumptive)
+		(subsumptive_tabling_requested(SortedNewTrailerOptions)
 		-> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 		;
 		    true
@@ -275,7 +275,7 @@ flloadtrailer(TrailerOptions,Workspace) :-
 fltrailersemantics(TrailerOptions,Workspace) :-
 	valid_flora_module_name(Workspace),
 	%% Check trailer options
-	findall(O,flora_trailer_registry(Workspace,O),CurrentTrailerOptions),
+	get_trailer_options(Workspace,CurrentTrailerOptions),
 	(CurrentTrailerOptions == []  % nonexisting module
 	-> CurrentTrailerOptions = TrailerOptions
 	;
@@ -318,7 +318,7 @@ flloadpatch(Workspace) :-
 	    true
 	;
 	    flora_set_xpp_options_for_prolog_compile(Workspace),
-	    (flora_tabling_method(Workspace,subsumptive)
+	    (subsumptive_tabling_in_effect(Workspace)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
@@ -402,7 +402,7 @@ flora_compile_then_prolog_compile_add(FlrFile,ModuleName) :-
 	    %% to avoid warnings when atoms or strings have \n in them
 	    flora_set_xpp_options_for_prolog_compile(ModuleName),
 	    flora_add_xpp_options('-warninglevel 1 '),
-	    (flora_tabling_method(ModuleName,subsumptive)
+	    (subsumptive_tabling_in_effect(ModuleName)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
@@ -447,7 +447,7 @@ flora_compile_then_prolog_compile(FlrFile,ModuleName) :-
 	    %% to avoid warnings when atoms or strings have \n in them
 	    flora_set_xpp_options_for_prolog_compile(ModuleName),
 	    flora_add_xpp_options('-warninglevel 1 '),
-	    (flora_tabling_method(ModuleName,subsumptive)
+	    (subsumptive_tabling_in_effect(ModuleName)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
@@ -527,7 +527,7 @@ flora_load_system_module_internal(ModuleName) :-
 	    %% Issue only important preprocessor warnings
 	    %% to avoid warnings when atoms or strings have \n in them
 	    flora_set_xpp_options_for_prolog_compile(ModuleName, '-warninglevel 0 '),
-	    (flora_tabling_method(ModuleName,subsumptive)
+	    (subsumptive_tabling_in_effect(ModuleName)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
@@ -581,7 +581,7 @@ flora_fladd(FlrFile,Workspace) :-
 	  (
 	    flora_set_xpp_options_for_prolog_compile(Workspace),
 	    flora_add_xpp_options('-warninglevel 0 '),
-	    (flora_tabling_method(Workspace,subsumptive)
+	    (subsumptive_tabling_in_effect(Workspace)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
@@ -637,7 +637,7 @@ flora_flload(FlrFile,Workspace) :-
 	  (
 	    flora_set_xpp_options_for_prolog_compile(Workspace),
 	    flora_add_xpp_options('-warninglevel 0 '),
-	    (flora_tabling_method(Workspace,subsumptive)
+	    (subsumptive_tabling_in_effect(Workspace)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
@@ -2934,6 +2934,15 @@ include_trailer_control_definitions(TrailerOptions) :-
 
 
 
+%% collect all trailer options for module
+get_trailer_options(Module,Options) :-
+	findall(O,flora_trailer_registry(Module,O),Options).
+
+subsumptive_tabling_requested(TrailerOptions) :-
+	member(FL_TABLING(FL_SUBSUMPTIVE),TrailerOptions).
+subsumptive_tabling_in_effect(Module) :-
+	flrregistry:flora_trailer_registry(Module,FL_TABLING(FL_SUBSUMPTIVE)).
+	
 
 /*
    extract_trailer_options(+OldOptions,-NewOptions,-TrailerOptions)

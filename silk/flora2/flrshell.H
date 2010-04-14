@@ -102,7 +102,6 @@
 	flora_load_module_internal/1,
 	flora_end_of_input/1,
 	flora_check_filename/1,
-	flora_tabling_method/1,
 	flora_warnings_level/1
    from flrutils.
 
