@@ -46,6 +46,7 @@
 	flora_stdmsg_string/1,
 	flora_stdmsg_string/2,
 	flora_stdmsg_line/1,
+	flora_stdmsg_line/2,
 	
 	flora_stdfdbk_nl/0,
 	flora_stdfdbk_string/1,

@@ -155,7 +155,7 @@ flora_load_module_internal(InFile) :-
 	    %% the target of FLORA compilation?
 	    flora_set_xpp_options_for_prolog_compile(FLORA_DEFAULT_WORKSPACE),
 	    flora_add_xpp_options('-warninglevel 1 '),
-	    (flora_tabling_method(subsumptive)
+	    (flora_tabling_method(FLORA_DEFAULT_WORKSPACE,subsumptive)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
@@ -228,17 +228,24 @@ flloadtrailer(TrailerOptions,Workspace) :-
 	      flora_current_out_line(':- compiler_options([xpp_on]).'),
 	      include_trailer_control_definitions(['LOADABLETRAILER'|SortedNewTrailerOptions]),
 	      flora_include_file([FLTRAILER],_FileStatus),
+	      /*
+		  Must include FLHEADER2, which has static tabling definitions
+	          :- table ...
+                  Otherwise, XSB dumps core when dynamic tabling directives
+	          ?- table ...
+		  are executed.
+	      */
+	      flora_include_file([FLHEADER2],_FileStatus),
 	      told,
 	      tell(PreOutFile)
 	    ),
 	    check_custom_trailer_file(SortedNewTrailerOptions),
-	    ( flora_file_newerthan(UserTrailerWSOFile,UserTrailerPFile),
-	        \+flora_tabling_method(_)
+	    ( flora_file_newerthan(UserTrailerWSOFile,UserTrailerPFile)
 	    ->
 		true
 	    ; 
 		flora_set_xpp_options_for_prolog_compile(Workspace),
-		(flora_tabling_method(subsumptive)
+		(flora_tabling_method(Workspace,subsumptive)
 		-> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 		;
 		    true
@@ -281,7 +288,7 @@ fltrailersemantics(TrailerOptions,Workspace) :-
 
 /**********************************************************************
   flloadpatch(+Workspace)
-  This is loaded only in the shell and only once per workspace name.
+  This is loaded only in the shell and only once per module.
   Compiled programs have their patch rules included by flora_generate_Pfile/8,
   and they don't need flloadpatch/1. (In fact, compiled rules and patch
   rules clash and should never be loaded into the same workspace.
@@ -306,13 +313,12 @@ flloadpatch(Workspace) :-
 	    told,
 	    tell(PreOutFile)
 	),
-	( flora_file_newerthan(UserPatchWSOFile,UserPatchPFile),
-	    \+flora_tabling_method(_)
+	( flora_file_newerthan(UserPatchWSOFile,UserPatchPFile)
 	->
 	    true
 	;
 	    flora_set_xpp_options_for_prolog_compile(Workspace),
-	    (flora_tabling_method(subsumptive)
+	    (flora_tabling_method(Workspace,subsumptive)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
@@ -396,7 +402,7 @@ flora_compile_then_prolog_compile_add(FlrFile,ModuleName) :-
 	    %% to avoid warnings when atoms or strings have \n in them
 	    flora_set_xpp_options_for_prolog_compile(ModuleName),
 	    flora_add_xpp_options('-warninglevel 1 '),
-	    (flora_tabling_method(subsumptive)
+	    (flora_tabling_method(ModuleName,subsumptive)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
@@ -441,7 +447,7 @@ flora_compile_then_prolog_compile(FlrFile,ModuleName) :-
 	    %% to avoid warnings when atoms or strings have \n in them
 	    flora_set_xpp_options_for_prolog_compile(ModuleName),
 	    flora_add_xpp_options('-warninglevel 1 '),
-	    (flora_tabling_method(subsumptive)
+	    (flora_tabling_method(ModuleName,subsumptive)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
@@ -501,8 +507,7 @@ flora_load_system_module_internal(ModuleName) :-
 	    flora_mainP_filename(FlrFile,PFile),
 	    flora_WSO_filename(FlrFile,ModuleName,WSOFile),
 	    !,
-	    ( flora_file_newerthan(PFile,FlrFile),
-		\+flora_tabling_method(_)
+	    ( flora_file_newerthan(PFile,FlrFile)
 	    ->
 		true
 
@@ -522,7 +527,7 @@ flora_load_system_module_internal(ModuleName) :-
 	    %% Issue only important preprocessor warnings
 	    %% to avoid warnings when atoms or strings have \n in them
 	    flora_set_xpp_options_for_prolog_compile(ModuleName, '-warninglevel 0 '),
-	    (flora_tabling_method(subsumptive)
+	    (flora_tabling_method(ModuleName,subsumptive)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
@@ -569,15 +574,14 @@ flora_fladd(FlrFile,Workspace) :-
 	),
 	!,
 	flora_loader_message('Adding ~w into module ~w',[FlrFile,Workspace]),
-	( flora_file_newerthan(WSOFile,APFile),
-	    \+flora_tabling_method(_)
+	( flora_file_newerthan(WSOFile,APFile)
 	->
 	    true
 	;
 	  (
 	    flora_set_xpp_options_for_prolog_compile(Workspace),
 	    flora_add_xpp_options('-warninglevel 0 '),
-	    (flora_tabling_method(subsumptive)
+	    (flora_tabling_method(Workspace,subsumptive)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
@@ -626,15 +630,14 @@ flora_flload(FlrFile,Workspace) :-
 	),
 	!,
 	flora_loader_message('Loading ~w into module ~w',[FlrFile,Workspace]),
-	( flora_file_newerthan(WSOFile,MPFile),
-	    \+flora_tabling_method(_)
+	( flora_file_newerthan(WSOFile,MPFile)
 	->
 	    true
 	;
 	  (
 	    flora_set_xpp_options_for_prolog_compile(Workspace),
 	    flora_add_xpp_options('-warninglevel 0 '),
-	    (flora_tabling_method(subsumptive)
+	    (flora_tabling_method(Workspace,subsumptive)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),

@@ -17,6 +17,11 @@
 */
 
 
+:- compiler_options([xpp_on]).
+
+#include "flora_porting.flh"
+#include "flora_terms.flh"
+
 
 :- import
 	push_abort_cutpoint/0,
@@ -29,6 +34,7 @@
 :- import cwd/1, cd/1 from shell.
 
 :- import
+	flora_tabling_method/2,
 	flora_module_registry/1,
 	flora_configuration/2
    from flrregistry.
@@ -78,6 +84,7 @@
 :- import
 	flora_stdmsg_nl/0,
 	flora_stdmsg_line/1,
+	flora_stdmsg_line/2,
 	flora_stdmsg_string/2,
 	flora_stdfdbk_line/0,
 	flora_stdfdbk_string/1,

@@ -125,9 +125,11 @@
 	flora_debug_code/2
    from flrundefined.
 
-:- import flora_configuration/2,
+:- import
+	flora_configuration/2,
 	flora_storage_registry/1,
 	flora_trailer_registry/2,
+	flora_tabling_method/2,
 	flora_module_registry/1
    from flrregistry.
 
@@ -202,8 +204,6 @@
 
 :- dynamic flora_warnings_level(_).
 
-:- dynamic flora_tabling_method(_).
-
 :- export
 	flora_abort/0,
 	flora_abort/1,
@@ -266,8 +266,6 @@
 	flora_read_parse_compile_build_loop/3,
 
 	flora_patch_full_filename/1,
-
-	flora_tabling_method/1,
 
 	flora_warnings_level/1,
         flora_coder_error/1.

@@ -357,51 +357,55 @@ make_trace_interactive :-
 	flora_error_line('invalid warnings control option: ~w', [X]),
 	throw(FLORA_TOP_LEVEL).
 
+
 %% Control tabling method
 '_tabling'(X) :-
-        %% this case is written currently for debugging.
-        %% To be changed to programmable later
+        %% this case is for debugging.
         var(X),
 	!,
-	write('\nTabling method requested: '),
-	(flora_tabling_method(M) -> writeln(M)
-	; writeln(none)
-	),
-	writeln('Tabling methods in effect in various loaded modules:'),
-	(flrregistry:FLORA_SYMBOL('tabling_method')(Mod,Meth),
-	    write('    Module  '), write(Mod), write(': '),
-	    writeln(Meth), fail
+	flora_stdmsg_line('Tabling regimes in various loaded modules:'),
+	(flora_tabling_method(Mod,Meth),
+	    flora_stdmsg_line('    Module ~w: ~w',[Mod,Meth]),
+	    flrwrapper:flora_module_predicate(WRAP_SUB,[_,_,_],Mod,SubPred),
+	    flrwrapper:flora_module_predicate(WRAP_IMVD,[_,_,_,_],Mod,MvdPred),
+	    flrwrapper:flora_module_predicate(WRAP_TABLED_HILOG,[_,_],Mod,Hilog2Pred),
+	    flrwrapper:flora_module_predicate(WRAP_TABLED_HILOG,[_,_,_],Mod,Hilog3Pred),
+	    (SubPred, ! ; true),
+	    (MvdPred, ! ; true),
+	    (Hilog2Pred, ! ; true),
+	    (Hilog3Pred, ! ; true),
+	    tables:get_calls(SubPred,SubHandle,_),
+	    tables:table_state(SubHandle,TablingSub,_,_),
+	    tables:get_calls(MvdPred,MvdHandle,_),
+	    tables:table_state(MvdHandle,TablingMvd,_,_),
+	    tables:get_calls(Hilog2Pred,Handle2,_),
+	    tables:table_state(Handle2,Tabling2,_,_),
+	    tables:get_calls(Hilog3Pred,Handle3,_),
+	    tables:table_state(Handle3,Tabling3,_,_),
+	    flora_stdmsg_line('    ~w: ~w',[SubPred,TablingSub]),
+	    flora_stdmsg_line('    ~w: ~w',[MvdPred,TablingMvd]),
+	    flora_stdmsg_line('    ~w: ~w',[Hilog2Pred,Tabling2]),
+	    flora_stdmsg_line('    ~w: ~w',[Hilog3Pred,Tabling3]),
+	    fail
 	;
-	    true
+	    abolish_all_tables
 	).
 	
 '_tabling'(Method) :-
-        (Method == variant ; Method = subsumptive),
-	!,
-        retractall(flora_tabling_method(_)),
-	assert(flora_tabling_method(Method)),
-	reload_module_trailers_for_tabling(Method).
-%% do not change the existing tabling method during loading
-'_tabling'(clear) :-
-        retractall(flora_tabling_method(_)).
-'_tabling'(Method) :- 
-	flora_error_line('invalid tabling method: ~w', [Method]),
-	throw(FLORA_TOP_LEVEL).
-
-reload_module_trailers_for_tabling(Method) :-
 	flora_module_registry(Module),
-	reload_module_trailer_for_tabling(Module,Method),
+	'_tabling'(Module,Method),
 	fail.
-reload_module_trailers_for_tabling(_Method).
-
+'_tabling'(_Method).
 
 %% Method=subsumptive/variant
 '_tabling'(Module,Method) :-
         (Method == variant ; Method = subsumptive),
 	!,
+        retractall(flora_tabling_method(Module,_)),
+	assert(flora_tabling_method(Module,Method)),
 	reload_module_trailer_for_tabling(Module,Method).
 '_tabling'(Module,Method) :-
-	flora_error_line('invalid tabling method ~w requested fro module ~w',
+	flora_error_line('invalid tabling method ~w requested for module ~w',
 			 [Method,Module]),
 	throw(FLORA_TOP_LEVEL).
 

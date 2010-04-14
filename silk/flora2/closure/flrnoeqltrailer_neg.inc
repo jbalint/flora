@@ -56,7 +56,7 @@ FLNEGPREFIX(WRAP_ISA)(O,S,CallerInfo) :-
 
 
 /*****************************************************************************
-  closure for neg X[Y->Z], neg X[Y*->Z], neg X[]
+  closure for neg X[Y->Z], neg X[Y*->Z], neg X[Y->{}]
 *****************************************************************************/
 FLNEGPREFIX(WRAP_IMVD)(C,M,V,CallerInfo) :-
 	FLNEGTRAILERPREFIX(WRAP_IMVD)(C,M,V,CallerInfo).
@@ -67,8 +67,16 @@ FLNEGPREFIX(WRAP_MVD)(O,M,V,CallerInfo) :-
 FLNEGPREFIX(WRAP_MVDDEF)(O,M,CallerInfo) :-
 	FLNEGTRAILERPREFIX(WRAP_MVDDEF)(O,M,CallerInfo).
 
-FLNEGPREFIX(WRAP_MVDDEF)(O,M,CallerInfo) :-
-	FLNEGPREFIX(WRAP_MVD)(O,M,_V,CallerInfo).
+FLNEGPREFIX(WRAP_MVD)(O,M,_V,CallerInfo) :-
+	FLNEGPREFIX(WRAP_MVDDEF)(O,M,CallerInfo).
+
+FLNEGPREFIX(WRAP_IMVDDEF)(O,M,CallerInfo) :-
+	FLNEGTRAILERPREFIX(WRAP_IMVDDEF)(O,M,CallerInfo).
+
+/* note: for neg WRAP_MVDDEF the implication goes in the opposite direction
+   than for WRAP_MVDDEF */
+FLNEGPREFIX(WRAP_IMVD)(O,M,_V,CallerInfo) :-
+	FLNEGPREFIX(WRAP_IMVDDEF)(O,M,CallerInfo).
 
 
 /*****************************************************************************
@@ -100,8 +108,8 @@ FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,CallerInfo) :-
 	WRAP_ISA(O,C,CallerInfo),
 	FLNEGPREFIX(WRAP_MVDSIGDEF)(O,M,CallerInfo).
 
-FLNEGPREFIX(WRAP_MVDSIGDEF)(O,M,CallerInfo) :-
-	FLNEGPREFIX(WRAP_MVDSIG)(O,M,_V,CallerInfo).
+FLNEGPREFIX(WRAP_MVDSIG)(O,M,_V,CallerInfo) :-
+	FLNEGPREFIX(WRAP_MVDSIGDEF)(O,M,CallerInfo).
 
 
 %% WRAP_IMVDSIG/4
@@ -121,8 +129,10 @@ FLNEGPREFIX(WRAP_IMVDSIGDEF)(S,M,CallerInfo) :-
 	inheritance_sub(C,S,CallerInfo),
 	FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,CallerInfo).
 
-FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,CallerInfo) :-
-	FLNEGPREFIX(WRAP_IMVDSIG)(C,M,_V,CallerInfo).
+/* note: for neg WRAP_IMVDSIGDEF the implication goes in the opposite direction
+   than for WRAP_IMVDDEF */
+FLNEGPREFIX(WRAP_IMVDSIG)(C,M,_V,CallerInfo) :-
+	FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,CallerInfo).
 
 
 %% WRAP_BOOLSIG/3
