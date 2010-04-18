@@ -22,6 +22,7 @@ FLORADIR=..
 
 ALL = 	flrxml_aux${PROLOGEXT} javaAPI${PROLOGEXT} \
 	ogclp${PROLOGEXT} \
+	gclpe${PROLOGEXT} \
 	ogclpe${PROLOGEXT} \
         persistentmodules${PROLOGEXT} prettyprint${PROLOGEXT}
 

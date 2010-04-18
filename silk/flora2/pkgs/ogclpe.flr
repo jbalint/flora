@@ -17,7 +17,8 @@
 */
 
 
-/*** This argumentation theory allows k-ary exclusion constraints:
+/*** This argumentation theory, also known as ATCK1,
+     allows k-ary exclusion constraints:
      Courteous Logic with General Exclusion Constraints.
      This argumentation theory also supports cancellation.
 */
@@ -31,8 +32,8 @@
 // These are exported for debugging
 :- export
 	  ?[opposers(?)->?],
-	  ?[beater(?)->?],
-          beater(?,?,?),
+	  ?[FL_BEATER(?)->?],
+          FL_BEATER(?,?,?),
           opposes(?,?),
 	  overrides(?,?).
 
@@ -79,22 +80,23 @@ overrides(?R1,?R2) :-
 FL_DEFEATED(?R,?Mod) :-
 	?R=(?,?H),
 	?Exclusion[opposers(?Mod)->?H],
-	not ?Exclusion[beater(?Mod)->?H].
+	not ?Exclusion[FL_BEATER(?Mod)->?H].
 FL_DEFEATED(?R,?Mod) :-
 	?R=(?,?H),
 	// this brings in the classical mutex and user-defined _opposes/2
 	FL_OPPOSES_AUX(?Mod,?R,?Other),
 	?Other=(?_OtherL,?OtherH),
-	not beater(?H,?OtherH,?Mod).
+	not FL_BEATER(?H,?OtherH,?Mod).
 FL_DEFEATED(?R,?Mod) :- FL_DISQUALIFIED(?R,?Mod).
 
-?Exclusion[beater(?Mod)->?H] :-
-	beater(?H,?_OtherH,?Exclusion,?Mod).
-beater(?H,?OtherH,?Exclusion,?Mod) :-
-	competes(?H,?OtherH,?Exclusion,?Mod),
+?Exclusion[FL_BEATER(?Mod)->?H] :-
+	beater_aux(?H,?_OtherH,?Exclusion,?Mod).
+beater_aux(?H,?OtherH,?Exclusion,?Mod) :-
+	FL_COMPETES(?H,?OtherH,?Exclusion,?Mod),
 	not FL_REBUTS(?OtherH,?H,?Exclusion,?Mod).
-beater(?H,?OtherH,?Mod) :-
-	competes(?H,?OtherH,?Mod),
+// beater for binary predicates
+FL_BEATER(?H,?OtherH,?Mod) :-
+	FL_COMPETES(?H,?OtherH,?Mod),
 	not FL_REBUTS(?OtherH,?H,?Mod).
 
 FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
@@ -110,52 +112,41 @@ FL_DISQUALIFIED(?R,?Mod) :- FL_DISQUALIFIED_AUX(?R,?Mod).
 // FL_REFUTES/4   Note: 1st arg is a head, second - a handle
 FL_REFUTES(?H1,?R2,?Exclusion,?Mod) :-
 	?R1 = (?_L1,?H1), ?R2 = (?_L2,?H2),
-	competes(?H1,?H2,?Exclusion,?Mod),
+	FL_COMPETES(?H1,?H2,?Exclusion,?Mod),
 	FL_OVERRIDES_AUX(?Mod,?R1,?R2),
 	FL_CANDIDATE(?R1,?Mod).
 // FL_REFUTES/3   Note: 1st arg is a head, not handle
 FL_REFUTES(?H1,?R2,?Mod) :-
 	?R1 = (?_L1,?H1), ?R2 = (?_L2,?H2),
-	competes(?H1,?H2,?Mod),
+	FL_COMPETES(?H1,?H2,?Mod),
 	FL_OVERRIDES_AUX(?Mod,?R1,?R2),
 	FL_CANDIDATE(?R1,?Mod).
 
 // FL_REBUTS/4
 FL_REBUTS(?H1,?H2,?Exclusion,?Mod)  :-
-	competes(?H1,?H2,?Exclusion,?Mod),
+	FL_COMPETES(?H1,?H2,?Exclusion,?Mod),
 	?R1 = (?,?H1),
 	FL_CANDIDATE(?R1,?Mod),
 	not FL_REFUTES(?H2,?R1,?Exclusion,?Mod).
 // FL_REBUTS/3
 FL_REBUTS(?H1,?H2,?Mod)  :-
-	competes(?H1,?H2,?Mod),
+	FL_COMPETES(?H1,?H2,?Mod),
 	?R1 = (?,?H1),
 	FL_CANDIDATE(?R1,?Mod),
 	not FL_REFUTES(?H2,?R1,?Mod).
 
-competes(?H1,?H2,?Exclusion,?Mod) :-
+FL_COMPETES(?H1,?H2,?Exclusion,?Mod) :-
 	?Exclusion[opposers(?Mod)->{?H1,?H2}],
 	?H1 != ?H2.
-competes(?H1,?H2,?Mod) :-
+FL_COMPETES(?H1,?H2,?Mod) :-
 	FL_OPPOSES_AUX(?Mod,(?,?H1),(?,?H2)),
 	?H1 != ?H2.
 
-/***** refresh the tables used by the defeasible theory ********************/
-
-%refresh :-
-	refresh{?(?,?,?), ?(?,?)},
-	flora_abolish_table_call(FL_OPPOSES_AUX(?,?,?))@_prolog(flrtables),
-	flora_abolish_table_call(FL_OVERRIDES_AUX(?,?,?))@_prolog(flrtables),
-	flora_abolish_table_call(FL_CANCEL_AUX(?,?))@_prolog(flrtables),
-	caller{?Mod},
-	refresh{FL_OPPOSES(?,?)@?Mod, FL_OPPOSES(?,?,?,?)@?Mod},
-	refresh{FL_OVERRIDES(?,?)@?Mod, FL_OVERRIDES(?,?,?,?)@?Mod},
-	refresh{FL_CANCEL(?)@?Mod, FL_CANCEL(?,?)@?Mod}.
 
 /************************ Debugging ***************************************/
 
 /*
-   starus(Id,Head)[howDefeated->Reason] can be used to find out what is defeated
+   status(Id,Head)[howDefeated->Reason] can be used to find out what is defeated
    and why. No need to reify the ?H argument or attach the module to it.
    This method finds out the caller module and replaces the module of Head
    with the caller module.
@@ -165,14 +156,14 @@ status(?_L,?H)[howDefeated -> notBeaterFor(?Exclusion)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
         ?Exclusion[opposers(?Mod)->?HM],
-	not ?Exclusion[beater(?Mod)->?HM].
+	not ?Exclusion[FL_BEATER(?Mod)->?HM].
 status(?L,?H)[howDefeated -> notBeaterFor(binaryExclusion(?HM,?OtherH))] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
 	?R1 = (?L,?HM),
 	FL_OPPOSES_AUX(?Mod,?R1,?R2),
 	?R2 = (?_L2,?OtherH),
-	not beater(?HM,?OtherH,?Mod).
+	not FL_BEATER(?HM,?OtherH,?Mod).
 status(?L,?H)[howDefeated -> canceled] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
@@ -199,20 +190,21 @@ status(?_L,?H)[info -> rebuts(?Rebutted)] :-
 status(?_L,?H)[info->beats(?Exclusion,?Beaten)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	beater(?HM,?Beaten,?Exclusion,?Mod).
+	beater_aux(?HM,?Beaten,?Exclusion,?Mod).
 status(?_L,?H)[info->beats(?Beaten)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	beater(?HM,?Beaten,?Mod).
+	FL_BEATER(?HM,?Beaten,?Mod).
 
-status(?_L,?H)[info->competes(?Exclusion,?Competitor)] :-
+// restrict to competitors that are actually candidates?
+status(?_L,?H)[info->FL_COMPETES(?Exclusion,?Competitor)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	competes(?HM,?Competitor,?Exclusion,?Mod).
-status(?_L,?H)[info->competes(?Competitor)] :-
+	FL_COMPETES(?HM,?Competitor,?Exclusion,?Mod).
+status(?_L,?H)[info->FL_COMPETES(?Competitor)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	competes(?HM,?Competitor,?Mod).
+	FL_COMPETES(?HM,?Competitor,?Mod).
 
 status(?I,?H)[info->candidate] :-
 	caller{?Mod},
@@ -238,10 +230,11 @@ change_module(?InA,?Mod,?OutA) :-
 // It may succeed for one query and will be tabled.
 // If it is, then when called for another query, wrong result may be returned.
 FL_CANDIDATE((?RId,?Head),?Mod) :-
+	tag{?RId,?Head},
 	clause{@{?RId} ?Head@?Mod, ?Body},
 	call(?Body).
 
-// opposer without the rule label
+// opposer without the rule tag
 ?Exclusion[opposers(?Mod)->?HH] :-
 	(?Exclusion:_Exclusion[_opposers->?H])@?Mod,
 	?HH = ?H@?Mod.
@@ -250,6 +243,18 @@ FL_CANDIDATE((?RId,?Head),?Mod) :-
 // FL_OPPOSES_AUX/3, FL_OVERRIDES_AUX/3, FL_CANCEL_AUX/2 are defined in
 // genincludes/flrdefeasible.fli
 
+
+/***** refresh the tables used by the defeasible theory ********************/
+
+%refresh :-
+	refresh{?(?,?,?), ?(?,?)},
+	flora_abolish_table_call(FL_OPPOSES_AUX(?,?,?))@_prolog(flrtables),
+	flora_abolish_table_call(FL_OVERRIDES_AUX(?,?,?))@_prolog(flrtables),
+	flora_abolish_table_call(FL_CANCEL_AUX(?,?))@_prolog(flrtables),
+	caller{?Mod},
+	refresh{FL_OPPOSES(?,?)@?Mod, FL_OPPOSES(?,?,?,?)@?Mod},
+	refresh{FL_OVERRIDES(?,?)@?Mod, FL_OVERRIDES(?,?,?,?)@?Mod},
+	refresh{FL_CANCEL(?)@?Mod, FL_CANCEL(?,?)@?Mod}.
 
 // Hook for abolishing FL_CANDIDATE/1 after each query
 FL_DEFEASIBLE_CLEANUP(?,?) :- flora_abolish_table_call(${FL_CANDIDATE(?,?)})@_prolog(flrtables).

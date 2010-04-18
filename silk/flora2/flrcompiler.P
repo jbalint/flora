@@ -29,7 +29,7 @@
 #define NEWPREDICATE        	newpredicate
 #define NEWOID                  FL_NEWOID_SYM
 #define RULE_NUM                rule_num
-#define DEFAULT_RULE_LABEL      default_rule_label
+#define DEFAULT_RULE_LABEL      default_rule_tag
 #define NEWOID_COUNT        	FL_NEWOID_PREFIX
 #define TMPDIRECT        	tmpdirect
 #define TMPOPTION	        tmpoption
@@ -2061,8 +2061,8 @@ compile_flatomvar(T,Code) :-
   the optimization of append.
 
   Note: a fact containing a path expression might cause this
-        fact to become a rule. However, we strip labels from facts in
-	the parser, so no need here to take rule labels/meta info into account.
+        fact to become a rule. However, we strip annotations from facts in
+	the parser, so no need here to take rule tag/meta info into account.
 ****************************************************************************/
 compile_fact(Head,CodeList-ListTail,Status) :-
 	set_context(compiling_facts), 
@@ -2179,7 +2179,7 @@ compile_labeled_construct(Label,Contents,CodeList-ListTail,Status) :-
 
 %% LblCode is NULL or an atom object
 %% If permaoption is FLDEFEASIBLE_RULE_DEFAULT, then generate labels
-%% even for unlabeled rules
+%% even for untagged rules
 %% MetaCode is NULL or a list of codes for meta frames
 compile_label(NULL,LblCode,NULL,[]) :-
 	!,
@@ -2205,7 +2205,7 @@ compile_label(Label,LblCode,MetaCode,Status) :-
 	; is_fltoken(Id,FL_NEWOID,Num,Index1) ->
 	    flora_get_counter(RULE_NUM, Rule_num), 
 	    new_oidobj(Rule_num,Num,Index1,LblCode),
-	    %% Decrement RULE_NUM counter so that the label and the rule will
+	    %% Decrement RULE_NUM counter so that the tag and the rule will
 	    %% have the same counter: flora_compile_internal is called right
 	    %% after compile_label, and this will increment the RULE_NUM
 	    %% counter again
@@ -2218,7 +2218,7 @@ compile_label(Label,LblCode,MetaCode,Status) :-
 	    datatypeobj_struct(Id,LblCode,IdStatus)
 	; is_flterm(Id,Funct,N,Args) ->
 	    compile_fltermobj(Funct,N,Args,LblCode,_,_,IdStatus)
-	; Id == FL_SKIP_LABEL ->  %% requested that there should be no label
+	; Id == FL_SKIP_LABEL ->  %% requested that there should be no tag
 	    LblCode = FL_SKIP_LABEL,
 	    IdStatus = []
 	; construct_default_label(LblCode),
@@ -2241,7 +2241,7 @@ compile_label(Label,LblCode,MetaCode,Status) :-
 	).
 
 
-%% default label: either NULL or the DEFAULT_RULE_LABELNNNN atom
+%% default tag: either NULL or the DEFAULT_RULE_LABELNNNN atom
 construct_default_label(LblCode) :-
 	(has_permaoption(FLDEFEASIBLE_RULE_DEFAULT)
 	->  new_defaultlabel(Rule_lab),
@@ -2393,7 +2393,7 @@ compile_rule(Head,Body,Annotation,CodeList-ListTail,Status) :-
 split_ruleheads_add_rulesig([H],Body,(LblCodeIn,MetaCode),[InsSigCode,Code|T]-T,Status) :-
 	!,
 	%% Adjust LblCode for the case when compile_label created a
-	%% default label for rules due to FLDEFEASIBLE_RULE_DEFAULT being on.
+	%% default tag for rules due to FLDEFEASIBLE_RULE_DEFAULT being on.
 	(is_prtransactionallit(H,Index), is_defaultlabel(LblCodeIn)
 	-> LblCode = FL_SKIP_LABEL
 	;  LblCode = LblCodeIn
@@ -2430,7 +2430,7 @@ rule_difflist([],_B,_LblCode,CodeList-CodeList,[]) :- !.
 
 rule_difflist([H|L],B,LblCodeIn,[HC|LC]-T,Status) :-
 	%% Adjust LblCode for the case when compile_label created a
-	%% default label for rules due to FLDEFEASIBLE_RULE_DEFAULT being on.
+	%% default tag for rules due to FLDEFEASIBLE_RULE_DEFAULT being on.
 	(is_prtransactionallit(H,Index), is_defaultlabel(LblCodeIn)
 	-> LblCode = NULL
 	;  LblCode = LblCodeIn
@@ -6010,8 +6010,8 @@ compile_flinsert_list([H|T],Code,Status) :-
 		list_struct(HCode,[],HCL),
 		conjunct_code([H2BCodeHead,H2BCodeTail],H2BCode),
 		%% Since this rule came from a dynamic fact that contains
-		%% a path expression, the label code is (NULL,NULL,NULL):
-		%% there could not have been an explicit label.
+		%% a path expression, the annotation code is (NULL,NULL,NULL):
+		%% there could not have been an explicit tag.
 		%% The third NULL is the defeasible condition to be
 		%% attached to rule bodies.
 		dynrule_struct(HCL,H2BCode,HVL,BVL,(NULL,NULL,NULL),HDynruleCode),
@@ -6219,7 +6219,7 @@ compile_fldynrule(Op,R,RCode,Status) :-
                 flora_new_varobj(NO_INDEX,BVL),
 		compile_label(Label,LblCodeIn,MetaCode,StatL),
 		%% Adjust LblCode for the case when compile_label created a
-		%% default rule label when FLDEFEASIBLE_RULE_DEFAULT is on.
+		%% default rule tag when FLDEFEASIBLE_RULE_DEFAULT is on.
 		(has_prtransactionallit(HeadCodeList,_),
 		    is_defaultlabel(LblCodeIn)
 		-> LblCode = NULL

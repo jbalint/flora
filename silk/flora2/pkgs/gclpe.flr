@@ -17,7 +17,8 @@
 */
 
 
-/*** This argumentation theory allows k-ary exclusion constraints:
+/*** This argumentation theory, also known as ATCK2,
+     allows k-ary exclusion constraints:
      Courteous Logic with General Exclusion Constraints.
      This argumentation theory also supports cancellation.
 */
@@ -31,14 +32,16 @@
 // These are exported for debugging
 :- export
 	  ?[opposers(?)->?],
-	  ?[beater(?)->?],
-          beater(?,?,?),
+	  ?[FL_BEATER(?)->?],
+          FL_BEATER(?,?,?),
           opposes(?,?),
 	  overrides(?,?).
 
 :- ignore_depchk %abort(?)@_system.
 ?- Method[%mustDefine(off, ?:_Exclusion@?)]@_system,
    Method[%mustDefine(off, ?::_Exclusion@?)]@_system.
+
+?- Method[%mustDefine(on)]@_system.
 
 /*
   Note 1: FL_UNDEFEATED/3 must be called with the third argument bound to
@@ -79,24 +82,38 @@ overrides(?R1,?R2) :-
 FL_DEFEATED(?R,?Mod) :-
 	?R=(?,?H),
 	?Exclusion[opposers(?Mod)->?H],
-	not ?Exclusion[beater(?Mod)->?H].
+	not ?Exclusion[FL_BEATER(?Mod)->?H].
 FL_DEFEATED(?R,?Mod) :-
 	?R=(?,?H),
-	// this brings in the classical mutex and user-defined _opposes/2
+	// this incorporates the classical mutex and user-defined _opposes/2
 	FL_OPPOSES_AUX(?Mod,?R,?Other),
 	?Other=(?_OtherL,?OtherH),
-	not beater(?H,?OtherH,?Mod).
+	not FL_BEATER(?H,?OtherH,?Mod).
 FL_DEFEATED(?R,?Mod) :- FL_DISQUALIFIED(?R,?Mod).
 
-?Exclusion[beater(?Mod)->?H] :-
-	beater(?H,?_OtherH,?Exclusion,?Mod).
-beater(?H,?OtherH,?Exclusion,?Mod) :-
-	competes(?H,?OtherH,?Exclusion,?Mod),
-	not FL_REBUTS(?OtherH,?H,?Exclusion,?Mod).
-beater(?H,?OtherH,?Mod) :-
-	competes(?H,?OtherH,?Mod),
-	not FL_REBUTS(?OtherH,?H,?Mod).
+/***************************** FL_BEATER ************************************/
+?Exclusion[FL_BEATER(?Mod)->?H] :-
+	beater_aux(?H,?,?Exclusion,?Mod).
+// auxiliary FL_BEATER predicate
+beater_aux(?H,?Beaten,?Exclusion,?Mod) :-
+	FL_COMPETES(?H,?Beaten,?Exclusion,?Mod),
+	(FL_DOMINATES(?H,?Beaten,?Mod)
+         or
+         FL_STOMPED(?Beaten,?Mod)
+        ).
+/*
+  The FL_BEATER predicate for binary exclusions (_opposes)
+  This corresponds to something like exclusion(?H,?_Beaten)[FL_BEATER(?Mod)->?H]
+  In other words, ?Beaten is part of the exclusion Id and can't be eliminated
+*/
+FL_BEATER(?H,?Beaten,?Mod) :-
+	FL_COMPETES(?H,?Beaten,?Mod),
+	(FL_DOMINATES(?H,?Beaten,?Mod)
+         or
+         FL_STOMPED(?Beaten,?Mod)
+        ).
 
+/******************** FL_DISQUALIFIED **************************************/
 FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
 /* FL_DISQUALIFIED_AUX is defined in genincludes/flrdefeasible.fli
    roughly by axioms of the form:
@@ -107,55 +124,109 @@ FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
 */
 FL_DISQUALIFIED(?R,?Mod) :- FL_DISQUALIFIED_AUX(?R,?Mod).
 
-// FL_REFUTES/4   Note: 1st arg is a head, second - a handle
-FL_REFUTES(?H1,?R2,?Exclusion,?Mod) :-
-	?R1 = (?_L1,?H1), ?R2 = (?_L2,?H2),
-	competes(?H1,?H2,?Exclusion,?Mod),
-	FL_OVERRIDES_AUX(?Mod,?R1,?R2),
-	FL_CANDIDATE(?R1,?Mod).
-// FL_REFUTES/3   Note: 1st arg is a head, not handle
-FL_REFUTES(?H1,?R2,?Mod) :-
-	?R1 = (?_L1,?H1), ?R2 = (?_L2,?H2),
-	competes(?H1,?H2,?Mod),
-	FL_OVERRIDES_AUX(?Mod,?R1,?R2),
-	FL_CANDIDATE(?R1,?Mod).
 
-// FL_REBUTS/4
-FL_REBUTS(?H1,?H2,?Exclusion,?Mod)  :-
-	competes(?H1,?H2,?Exclusion,?Mod),
-	?R1 = (?,?H1),
-	FL_CANDIDATE(?R1,?Mod),
-	not FL_REFUTES(?H2,?R1,?Exclusion,?Mod).
-// FL_REBUTS/3
-FL_REBUTS(?H1,?H2,?Mod)  :-
-	competes(?H1,?H2,?Mod),
-	?R1 = (?,?H1),
-	FL_CANDIDATE(?R1,?Mod),
-	not FL_REFUTES(?H2,?R1,?Mod).
 
-competes(?H1,?H2,?Exclusion,?Mod) :-
+/************************ Competition **************************************/
+FL_COMPETES(?H1,?H2,?Exclusion,?Mod) :-
 	?Exclusion[opposers(?Mod)->{?H1,?H2}],
 	?H1 != ?H2.
-competes(?H1,?H2,?Mod) :-
+FL_COMPETES(?H1,?H2,?Mod) :-
 	FL_OPPOSES_AUX(?Mod,(?,?H1),(?,?H2)),
 	?H1 != ?H2.
 
-/***** refresh the tables used by the defeasible theory ********************/
 
-%refresh :-
-	refresh{?(?,?,?), ?(?,?)},
-	flora_abolish_table_call(FL_OPPOSES_AUX(?,?,?))@_prolog(flrtables),
-	flora_abolish_table_call(FL_OVERRIDES_AUX(?,?,?))@_prolog(flrtables),
-	flora_abolish_table_call(FL_CANCEL_AUX(?,?))@_prolog(flrtables),
-	caller{?Mod},
-	refresh{FL_OPPOSES(?,?)@?Mod, FL_OPPOSES(?,?,?,?)@?Mod},
-	refresh{FL_OVERRIDES(?,?)@?Mod, FL_OVERRIDES(?,?,?,?)@?Mod},
-	refresh{FL_CANCEL(?)@?Mod, FL_CANCEL(?,?)@?Mod}.
+/************************ Stomping *****************************************
+** FL_STOMPED(?Lit) =def=
+**         tightExclusion(?Excl,?Lit) and
+**         Forall ?Competitor ( FL_COMPETES(?Competitor,?Lit,?Excl) ~~>
+**                                           FL_DOMINATES(?Competitor,?Lit)
+**                            )
+****************************************************************************/
+FL_STOMPED(?Lit,?Mod) :-
+	tightExclusion(?Excl,?Lit,?Mod),
+	not existsCompetitorWhoDoesNotDominate(?Lit,?Excl,?Mod).
+existsCompetitorWhoDoesNotDominate(?Lit,?Excl,?Mod) :-
+	FL_COMPETES(?Lit,?Competitor,?Excl,?Mod),
+	not FL_DOMINATES(?Competitor,?Lit,?Mod).
+// binary version of stomping
+FL_STOMPED(?Lit,?Mod) :-
+	tag{?,?Lit},
+	tightBinaryExclusion(?Competitor,?Lit,?Mod),
+	if FL_COMPETES(?Competitor,?Lit,?Mod)
+	then FL_DOMINATES(?Competitor,?Lit,?Mod).
+
+/*********************** FL_DOMINATES ****************************************
+** FL_DOMINATES(?Lit,?Dominee) =def=
+**    Forall ?DomineeTag ( candidate(?DomineeTag,?Dominee) ~~>
+**                 Exists ?Tag ( candidate(?Tag,?Lit) and
+**                               _overrides((?Tag,?Lit),(?DomineeTag,?Dominee))
+**                             )
+**                       )
+  Question: should it be _overrides((?Tag,?Lit),(?DomineeTag,?Dominee)) or
+                         _overrides(?Tag,?DomineeTag)
+****************************************************************************/
+FL_DOMINATES(?Lit,?Dominee,?Mod) :-
+	tag{?,?Lit}, tag{?,?Dominee}, // may not be needed
+	not existsRuleWithNoOverrider(?Lit,?Dominee,?Mod).
+existsRuleWithNoOverrider(?Lit,?Dominee,?Mod) :-
+	FL_CANDIDATE((?DomineeTag,?Dominee),?Mod),
+	not((
+	     FL_CANDIDATE((?Tag,?Lit),?Mod),
+	     FL_OVERRIDES_AUX(?Mod,(?Tag,?Lit),(?DomineeTag,?Dominee))
+	   )).
+
+/*********************** Tight Exclusion ***********************************
+**  tightExclusion(?Excl,?Lit) =def=
+**       candidate(?Tag,?Lit) and
+**           Forall ?Competitor (
+**                     FL_COMPETES(?Competitor,?Lit,?Excl) ~~>
+**                       Exists ?CompetitorTag (
+**                                  candidate(?CompetitorTag,?Competitor) and
+**                                  not FL_STOMPED(?Competitor)
+**                                             )
+**                               )
+****************************************************************************/
+tightExclusion(?Excl,?Lit,?Mod) :-
+	?Excl:_Exclusion@?Mod,
+	FL_CANDIDATE((?,?Lit),?Mod),
+	not existsCompetitorNonCadidateOrStomped(?Excl,?Lit,?Mod).
+existsCompetitorNonCadidateOrStomped(?Excl,?Lit,?Mod) :-
+	tag{?,?Competitor}, // may not be needed
+	FL_COMPETES(?Lit,?Competitor,?Excl,?Mod),
+	not((FL_CANDIDATE((?,?Competitor),?Mod),
+	     // not FL_STOMPED in some exclusion
+	     not FL_STOMPED(?Competitor,?Mod))).
+
+// for binary exclusions (_opposes)
+tightBinaryExclusion(?Competitor,?Lit,?Mod) :-
+	tag{?,?Competitor},
+	FL_CANDIDATE((?,?Lit),?Mod),
+	if FL_COMPETES(?Competitor,?Lit,?Mod)
+        then (
+	    FL_CANDIDATE((?,?Competitor),?Mod),
+	    not FL_STOMPED(?Competitor,?Mod)
+	).
+
+
+/********************* Conflictful Exclusion *******************************
+**  ConflictfulExclusion(?Excl,?Mod) =def=
+**       Forall ?Opposer ( opposerOf(?Excl,?Opposer) ~~>
+**                              Exists ?Tag candidate(?Tag,?Opposer)
+**                       )
+****************************************************************************/
+ConflictfulExclusion(?Excl,?Mod) :-
+	?Excl:_Exclusion@?Mod,
+	not existsOpposerWithNoCandidates(?Excl,?Mod).
+existsOpposerWithNoCandidates(?Excl,?Opposer,?Mod) :-
+	tag{?,?Opposer}, // may not be needed
+	?Excl[opposers(?Mod)->?Opposer]@?Mod,
+	not((tag{?Tag,?}, FL_CANDIDATE((?Tag,?Opposer),?Mod))).
+
 
 /************************ Debugging ***************************************/
 
 /*
-   starus(Id,Head)[howDefeated->Reason] can be used to find out what is defeated
+   status(Id,Head)[howDefeated->Reason] can be used to find out what is defeated
    and why. No need to reify the ?H argument or attach the module to it.
    This method finds out the caller module and replaces the module of Head
    with the caller module.
@@ -165,56 +236,48 @@ status(?_L,?H)[howDefeated -> notBeaterFor(?Exclusion)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
         ?Exclusion[opposers(?Mod)->?HM],
-	not ?Exclusion[beater(?Mod)->?HM].
-status(?L,?H)[howDefeated -> notBeaterFor(binaryExclusion(?HM,?OtherH))] :-
+	not ?Exclusion[FL_BEATER(?Mod)->?HM].
+status(?L,?H)[howDefeated -> notBeaterFor(binaryExclusion(?HM,?Beaten))] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
 	?R1 = (?L,?HM),
 	FL_OPPOSES_AUX(?Mod,?R1,?R2),
-	?R2 = (?_L2,?OtherH),
-	not beater(?HM,?OtherH,?Mod).
+	?R2 = (?_L2,?Beaten),
+	not FL_BEATER(?HM,?Beaten,?Mod).
 status(?L,?H)[howDefeated -> canceled] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
 	FL_CANCEL_AUX(?Mod,(?L,?HM)).
 
-status(?_L,?H)[info -> refutes(?Refuted)] :-
+status(?_L,?H)[info -> stomped] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	FL_REFUTES(?HM,?Refuted,?Mod).
-status(?_L,?H)[info -> refutes(?Refuted)] :-
-	caller{?Mod},
-	change_module(?H,?Mod,?HM),
-	FL_REFUTES(?HM,?Refuted,?_Exclusion,?Mod).
+	FL_STOMPED(?HM,?Mod).
 
-status(?_L,?H)[info -> rebuts(?Rebutted)] :-
+status(?_L,?H)[info -> dominates(?Dominee)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	FL_REBUTS(?HM,?Rebutted,?Mod).
-status(?_L,?H)[info -> rebuts(?Rebutted)] :-
-	caller{?Mod},
-	change_module(?H,?Mod,?HM),
-	FL_REBUTS(?HM,?Rebutted,?_Exclusion,?Mod).
+	FL_DOMINATES(?HM,?Dominee,?Mod).
 
 status(?_L,?H)[info->beats(?Exclusion,?Beaten)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	beater(?HM,?Beaten,?Exclusion,?Mod).
+	beater_aux(?HM,?Beaten,?Exclusion,?Mod).
 status(?_L,?H)[info->beats(?Beaten)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	beater(?HM,?Beaten,?Mod).
+	FL_BEATER(?HM,?Beaten,?Mod).
 
-// need to add competitors that are actually candidates
 status(?_L,?H)[info->competes(?Exclusion,?Competitor)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	competes(?HM,?Competitor,?Exclusion,?Mod).
-// this is probably not good. need somehow to identify who competes with whom
+	FL_COMPETES(?HM,?Competitor,?Exclusion,?Mod),
+	FL_CANDIDATE((?,?Competitor),?Mod).
 status(?_L,?H)[info->competes(?Competitor)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
-	competes(?HM,?Competitor,?Mod).
+	FL_COMPETES(?HM,?Competitor,?Mod),
+	FL_CANDIDATE((?,?Competitor),?Mod).
 
 status(?I,?H)[info->candidate] :-
 	caller{?Mod},
@@ -240,10 +303,11 @@ change_module(?InA,?Mod,?OutA) :-
 // It may succeed for one query and will be tabled.
 // If it is, then when called for another query, wrong result may be returned.
 FL_CANDIDATE((?RId,?Head),?Mod) :-
+	tag{?RId,?Head},
 	clause{@{?RId} ?Head@?Mod, ?Body},
 	call(?Body).
 
-// opposer without the rule label
+// opposer without the rule tag
 ?Exclusion[opposers(?Mod)->?HH] :-
 	(?Exclusion:_Exclusion[_opposers->?H])@?Mod,
 	?HH = ?H@?Mod.
@@ -252,6 +316,18 @@ FL_CANDIDATE((?RId,?Head),?Mod) :-
 // FL_OPPOSES_AUX/3, FL_OVERRIDES_AUX/3, FL_CANCEL_AUX/2 are defined in
 // genincludes/flrdefeasible.fli
 
+
+/***** refresh the tables used by the defeasible theory ********************/
+
+%refresh :-
+	refresh{?(?,?,?), ?(?,?)},
+	flora_abolish_table_call(FL_OPPOSES_AUX(?,?,?))@_prolog(flrtables),
+	flora_abolish_table_call(FL_OVERRIDES_AUX(?,?,?))@_prolog(flrtables),
+	flora_abolish_table_call(FL_CANCEL_AUX(?,?))@_prolog(flrtables),
+	caller{?Mod},
+	refresh{FL_OPPOSES(?,?)@?Mod, FL_OPPOSES(?,?,?,?)@?Mod},
+	refresh{FL_OVERRIDES(?,?)@?Mod, FL_OVERRIDES(?,?,?,?)@?Mod},
+	refresh{FL_CANCEL(?)@?Mod, FL_CANCEL(?,?)@?Mod}.
 
 // Hook for abolishing FL_CANDIDATE/1 after each query
 FL_DEFEASIBLE_CLEANUP(?,?) :- flora_abolish_table_call(${FL_CANDIDATE(?,?)})@_prolog(flrtables).
