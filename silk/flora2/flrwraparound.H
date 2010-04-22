@@ -34,7 +34,7 @@
 :- import
 	flora_set_xpp_options_for_read/0,
 	flora_clear_xpp_options/0,
-	flora_check_filename/1,
+	flora_check_filename/2,
 	flora_locate_file/3
    from flrutils.
 

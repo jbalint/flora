@@ -74,13 +74,6 @@ fllibload([T|L],HostFile,HostMod,Location) :-
         the load list can be constructed at runtime.
 *********************************************************************/
 %% adding files to modules
-flora_load_file(FL_PLUS(T),_HostFile,_HostMod,_Location) :-
-	atom(T),
-	!,
-	%% Don't check module overriding - we are adding rules
-	%%flora_check__module_overriding(T,FLORA_DEFAULT_WORKSPACE,_HostFile,_HostMod,_Location),
-	flora_add_module_dyn(T).
-
 flora_load_file(FL_PLUS(T),_,_,_) :-
 	var(T),
 	!,
@@ -88,45 +81,34 @@ flora_load_file(FL_PLUS(T),_,_,_) :-
 	flora_error_line('unbound file name in _add(...)'),
 	fail.
 
+flora_load_file(FL_PLUS(T),_HostFile,_HostMod,_Location) :-
+	%% Don't check module overriding - we are adding rules
+	%%flora_check_module_overriding(T,FLORA_DEFAULT_WORKSPACE,_HostFile,_HostMod,_Location),
+	flora_add_module_dyn(T),
+	!.
 
 %% adding files to modules
 flora_load_file(FL_RIGHTTO(FL_PLUS(FileName),Workspace),_HostFile,_HostMod,_Location) :-
 	!,
 	%% Don't check module overriding - we are adding rules
-	%%flora_check__module_overriding(FileName,Workspace,_HostFile,_HostMod,_Location),
-	( atom(FileName) ->
-	    ( atom(Workspace) ->
-		flora_add_module_dyn(FileName,Workspace)
+	%%flora_check_module_overriding(FileName,Workspace,_HostFile,_HostMod,_Location),
+	( atom(Workspace) ->
+	    flora_add_module_dyn(FileName,Workspace)
+	;
+	    flora_stderr_nl,
+	    ( var(Workspace) ->
+		flora_error_line('uninstantiated module name in _add(...)')
 	    ;
-	      flora_stderr_nl,
-	      ( var(Workspace) ->
-		  flora_error_line('uninstantiated module name in _add(...)')
-	      ;
 	        flora_error_heading,
 		flora_stderr_string('invalid module name: '),
 		flora_display_error(Workspace),
 		flora_stderr_nl
-	      ),
-	      !,
-	      fail
-	    )
-	;
-	  flora_stderr_nl,
-	  flora_error_heading,
-	  flora_stderr_string('invalid file name: '),
-	  flora_display_error(FileName),
-	  flora_stderr_nl,
-	  !,
-	  fail
+	    ),
+	    !,
+	    fail
         ).
 
 %% Replacing contents of modules
-flora_load_file(T,HostFile,HostMod,Location) :-
-	atom(T),
-	!,
-	flora_check__module_overriding(T,FLORA_DEFAULT_WORKSPACE,HostFile,HostMod,Location),
-	flora_load_module_internal(T).
-
 flora_load_file(T,_,_,_) :-
 	var(T),
 	!,
@@ -134,33 +116,28 @@ flora_load_file(T,_,_,_) :-
 	flora_error_line('unbound file name in _load(...)'),
 	fail.
 
+flora_load_file(T,HostFile,HostMod,Location) :-
+	flora_check_module_overriding(T,FLORA_DEFAULT_WORKSPACE,HostFile,HostMod,Location),
+	flora_load_module_internal(T),
+	!.
+
 flora_load_file(FL_RIGHTTO(FileName,Workspace),HostFile,HostMod,Location) :-
 	!,
-	flora_check__module_overriding(FileName,Workspace,HostFile,HostMod,Location),
-	( atom(FileName) ->
-	    ( atom(Workspace) ->
-		flora_load_module_internal(FileName,Workspace)
+	flora_check_module_overriding(FileName,Workspace,HostFile,HostMod,Location),
+	( atom(Workspace) ->
+	    flora_load_module_internal(FileName,Workspace)
+	;
+	    flora_stderr_nl,
+	    ( var(Workspace) ->
+		flora_error_line('uninstantiated module name in _load(...)')
 	    ;
-	      flora_stderr_nl,
-	      ( var(Workspace) ->
-		  flora_error_line('uninstantiated module name in _load(...)')
-	      ;
 	        flora_error_heading,
 		flora_stderr_string('invalid module name: '),
 		flora_display_error(Workspace),
 		flora_stderr_nl
-	      ),
-	      !,
-	      fail
-	    )
-	;
-	  flora_stderr_nl,
-	  flora_error_heading,
-	  flora_stderr_string('invalid file name: '),
-	  flora_display_error(FileName),
-	  flora_stderr_nl,
-	  !,
-	  fail
+	    ),
+	    !,
+	    fail
         ).
 
 flora_load_file(X,_,_,_) :-
@@ -176,17 +153,17 @@ flora_load_file(X,_,_,_) :-
 /***************************************************************************
   Don't allow a module to load into itself
 ***************************************************************************/
-flora_check__module_overriding(_LoadFile,_Workspace,userin,main,_Location) :-
+flora_check_module_overriding(_LoadFile,_Workspace,userin,main,_Location) :-
 	!.
 
 %% Don't do the check if we are loading a prolog module
 %% (i.e., it doesn't have the .flr file and no workspace was given in [...])
-flora_check__module_overriding(LoadFile,main,_HostFile,_HostMod,_Location) :-
+flora_check_module_overriding(LoadFile,main,_HostFile,_HostMod,_Location) :-
 	not flora_locate_file(LoadFile,FLORA_FILE_EXT,_FlrFile),
 	!.
 
 
-flora_check__module_overriding(LoadFile,Workspace,HostFile,HostMod,[Line,Char]) :-
+flora_check_module_overriding(LoadFile,Workspace,HostFile,HostMod,[Line,Char]) :-
 	HostMod == Workspace,
 	!,
 	flora_stderr_nl,
@@ -195,4 +172,4 @@ flora_check__module_overriding(LoadFile,Workspace,HostFile,HostMod,[Line,Char]) 
 			 [HostFileBasename,LoadFile,HostMod,Line,Char]),
 	flora_abort.
 
-flora_check__module_overriding(_LoadFile,_Workspace,_HostFile,_HostMod,_Location).
+flora_check_module_overriding(_LoadFile,_Workspace,_HostFile,_HostMod,_Location).

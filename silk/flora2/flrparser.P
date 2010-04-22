@@ -3992,23 +3992,24 @@ flora_loaditem(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Code,Status) :-
 	get_atom(Funct,FL_RIGHTTO),
 	flobject_struct(Funct,FCode),
 	!,
-	( ( flora_name_or_normvar(L,LCode)
-	  ; get_flbuiltin_identifier_struct(L,LCode)
+	( ( flora_name_or_normvar(L,LCode), LStatus = []
+	  ; get_flbuiltin_identifier_struct(L,LCode), LStatus = []
+	  ; flora_urlfile(L,LCode,LStatus)
 	  )
 	->
 	    ( flora_name_or_normvar(R,RCode)
 	    ->
 		flterm_struct(FCode,2,[LCode,RCode],Code),
-		Status=[]
+		Status=LStatus
 	    ;
 	      parsing_error(R,ERROR_WSNAME,Status)
 	    )
-	; flora_addfile(L,LCode,_S)
+	; flora_addfile(L,LCode,LStatus)
 	-> %% support for adding files to modules
 	    ( flora_name_or_normvar(R,RCode)
 	    ->
 		flterm_struct(FCode,2,[LCode,RCode],Code),
-		Status=[]
+		Status=LStatus
 	    ;
 		parsing_error(R,ERROR_WSNAME,Status)
 	    )
@@ -4016,15 +4017,17 @@ flora_loaditem(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Code,Status) :-
 	    parsing_error(L,ERROR_LOADFILE,Status)
         ).
 
-flora_loaditem(CanoniTerm,Code,[]) :-
-	( (flora_name_or_normvar(CanoniTerm,Code)
-	  ; get_flbuiltin_identifier_struct(CanoniTerm,Code)
+flora_loaditem(CanoniTerm,Code,Status) :-
+	(
+	  (flora_name_or_normvar(CanoniTerm,Code), Status = []
+	  ; get_flbuiltin_identifier_struct(CanoniTerm,Code), Status = []
 	  ; get_atom(CanoniTerm,FL_INLINEMODULE,Idx),
-	      flatom_struct(FL_INLINEMODULE,Idx,Code)
+	      flatom_struct(FL_INLINEMODULE,Idx,Code), Status = []
+	  ; flora_urlfile(CanoniTerm,Code,Status)
 	  ),
-	    !
+	  !
 	;
-	    flora_addfile(CanoniTerm,Code,_S)
+	    flora_addfile(CanoniTerm,Code,Status)
 	),
 	!.
 
@@ -4061,15 +4064,23 @@ flora_addfile(CANOTERM(Funct,1,FL_PARENTHESIS,[L],_If,_Ip),Code,Status) :-
 	get_atom(Funct,FL_PLUS),
 	flobject_struct(Funct,FCode),
 	!,
-	( ( flora_name_or_normvar(L,LCode)
-	  ; get_flbuiltin_identifier_struct(L,LCode)
+	( ( flora_name_or_normvar(L,LCode), LStatus = []
+	  ; get_flbuiltin_identifier_struct(L,LCode), LStatus = []
+	  ; flora_urlfile(L,LCode,LStatus)
 	  )
 	->
 	    flterm_struct(FCode,1,[LCode],Code),
-	    Status=[]
+	    Status=LStatus
 	;
 	    parsing_error(L,ERROR_ADDFILE,Status)
         ).
+
+flora_urlfile(CANOTERM(Funct,1,FL_PARENTHESIS,[L],_If,_Ip),Code,Status) :-
+	get_atom(Funct,FL_URL),
+	!,
+	CanoniTerm = CANOTERM(Funct,1,FL_PARENTHESIS,[L],_If,_Ip),
+	flora_prlgterm(CanoniTerm,_DWS,Code,Status).
+
 
 thismodule_token(CanoniTerm,ThisModToken) :-
 	get_spectoken(CanoniTerm,FL_THISMODULE),

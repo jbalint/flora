@@ -47,8 +47,8 @@ flora_compile_internal(File) :-
   Compiles user modules
   The OBJ file is renamed using the module name
 ******************************************************************************/
-flora_compile_internal(File,Workspace) :-
-	flora_check_filename(File),
+flora_compile_internal(OrigFile,Workspace) :-
+	flora_check_filename(OrigFile,File),
 	valid_flora_module_name(Workspace),
 	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
 	    flora_compile_then_prolog_compile(FlrFile,Workspace)
@@ -73,8 +73,8 @@ flora_compile_add(File) :-
   Compiles flora files for adding into module
   The OBJ file is renamed using the module name
 ******************************************************************************/
-flora_compile_add(File,Workspace) :-
-	flora_check_filename(File),
+flora_compile_add(OrigFile,Workspace) :-
+	flora_check_filename(OrigFile,File),
 	valid_flora_module_name(Workspace),
 	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
 	    flora_compile_then_prolog_compile_add(FlrFile,Workspace)
@@ -89,8 +89,8 @@ flora_compile_add(File,Workspace) :-
   flora_add_module_dyn(+File,+Workspace)
   File must be a FLORA file.
 **********************************************************************/
-flora_add_module_dyn(InFile,Workspace) :-
-	flora_check_filename(InFile),
+flora_add_module_dyn(OrigInFile,Workspace) :-
+	flora_check_filename(OrigInFile,InFile),
 	valid_flora_module_name(Workspace),
 	(\+ '_isloaded'(Workspace)
 	-> flora_error_line('Cannot add clauses to an unloaded module, ~w~n',
@@ -121,8 +121,8 @@ flora_add_module_dyn(InFile) :-
   flora_load_module_internal(+File,+Workspace)
   File must be a FLORA file.
 **********************************************************************/
-flora_load_module_internal(InFile,Workspace) :-
-	flora_check_filename(InFile),
+flora_load_module_internal(OrigInFile,Workspace) :-
+	flora_check_filename(OrigInFile,InFile),
 	valid_flora_module_name(Workspace),
 	flora_get_user_program_maybe(InFile,File),
 	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
@@ -139,8 +139,8 @@ flora_load_module_internal(InFile,Workspace) :-
   flora_load_module_internal(+File)
   File may be a FLORA file, Prolog file, or OBJ file.
 **********************************************************************/
-flora_load_module_internal(InFile) :-
-	flora_check_filename(InFile),
+flora_load_module_internal(OrigInFile) :-
+	flora_check_filename(OrigInFile,InFile),
 	flora_get_user_program_maybe(InFile,File),
 	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
 	    flora_flload(FlrFile,FLORA_DEFAULT_WORKSPACE)
@@ -689,15 +689,70 @@ flora_get_user_program_maybe(InFile,File) :-
 
   InFile must have ExtType as extension or no extension (in this case,
   ExtType is appended).
+  In case of a URL, copy the Web module into the Web cache directory
+  $HOME/.xsb/flora/www_cache/
 *************************************************************************/
+flora_locate_file(FL_URL(InFile),ExtType,ExtFile) :-
+	!,
+	%% for URLs we don't check for existence until the curl
+	%% package stabilizes
+	check_attach_extension(InFile,ExtType,ExtFileName),
+	%% FixMe: In principle, we could first check the modtime of the URL
+	%% and download it only if it is newer than ExtFile
+	curl:load_page(FL_URL(ExtFileName),Document,
+		       [redirect(true)],  %% decide which options make sense
+		       [DirEnc,FileEnc,_Size,_WebTime],Warn),
+	(Warn==[] -> true
+	;
+	    flora_warning_line('while loading ~w: ~w', [InFile,Warn])
+	),
+	flora_user_flora_dir(UserDir),
+	flora_slash(S),
+	%% $HOME/.xsb/flora/www_cache/
+	flora_concat_atoms([UserDir,S,www_cache],UserWebCache),
+	( flora_file_op(exists,UserWebCache) -> true
+	;
+	    ( flora_file_op(mkdir,UserWebCache) -> true
+	    ;
+		flora_abort(['Cannot create directory: ',UserWebCache])
+	    )
+	),
+	flora_concat_atoms([UserWebCache,S,DirEnc],InFileCacheDirectory),
+	( flora_file_op(exists,InFileCacheDirectory) -> true
+	;
+	    ( flora_file_op(mkdir,InFileCacheDirectory) -> true
+	    ;
+		flora_abort(['Cannot create directory: ',InFileCacheDirectory])
+	    )
+	),
+	%% $HOME/.xsb/flora/www_cache/encoded_web_directory/web_file
+	flora_concat_atoms([InFileCacheDirectory,S,FileEnc],ExtFile),
+	%% FixMe: In a perfect world, we should be checking if ExtFile exists
+	%% and is newer than the web page
+	%%flora_file_op(modtime,ExtFile,ExtFileTime),
+	(Document == ''
+	->
+	    flora_error_line('Web document ~w[.{~w|~w|~w}] does not exist or is not readable',
+			   [InFile,FLORA_FILE_EXT,PROLOG_PFILE_EXT,PROLOG_OFILE_EXT]),
+	    fail
+	;   %% FixMe: ExtFileTime >= WebTime ->
+	    open(ExtFile,write,Stream),
+	    write(Stream,Document),
+	    close(Stream)
+	%%FixMe: ;   true
+	).
+
+
 flora_locate_file(InFile,ExtType,ExtFile) :-
+	check_attach_extension(InFile,ExtType,ExtFileName),
+	flora_locate_file(ExtFileName,ExtFile),
+	!.
+check_attach_extension(InFile,ExtType,ExtFileName) :-
 	parse_filename(InFile,_,_,Ext),
 	( Ext == ExtType -> ExtFileName=InFile
 	;
 	    flora_concat_atoms([InFile,'.',ExtType],ExtFileName)
-	),
-	flora_locate_file(ExtFileName,ExtFile),
-	!.
+	).
 
 
 /*************************************************************************
@@ -809,12 +864,13 @@ flora_FLR_filename(File,FlrFile) :-
 /*************************************************************************
   utilities
 *************************************************************************/
-flora_check_filename(Name) :-
-	( not atom(Name) ->
-	    flora_error_line('Invalid file name: ~w', [Name]),
+flora_check_filename(OrigFile,File) :-
+	P2H_CONVERSION(File,OrigFile),
+	(atom(File), !
+	; File = FL_URL(Atom), atom(Atom), !
+	; 
+	    flora_error_line('invalid file name: ~w', [OrigFile]),
 	    fail
-	;
-	  true
 	).
 
 
@@ -1438,8 +1494,8 @@ flora_generate_DBfile(DBFileName,FactList,FileStatus) :-
   could be either a Flora user module, or a Flora system module. In the
   latter case, it is structured term.
 *************************************************************************/
-flora_loaddyn_data(InFile,ModuleName,Ext) :-
-	flora_check_filename(InFile),
+flora_loaddyn_data(OrigInFile,ModuleName,Ext) :-
+	flora_check_filename(OrigInFile,InFile),
 	( flora_file_op(isabsolute,InFile) ->
 	    InFileAbs=InFile
 
@@ -1524,8 +1580,8 @@ flora_put_attr_and_insert_fact(StorageName,Term) :-
 	   
 *************************************************************************/
 
-flora_save_module_internal(Module,File) :-
-	flora_check_filename(File),
+flora_save_module_internal(Module,OrigFile) :-
+	flora_check_filename(OrigFile,File),
 	valid_flora_module_name(Module),
 	
 	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
@@ -1884,7 +1940,7 @@ flora_rpc_file(MaxErr,ErrNum,CompiledRuleList,FileOptionList,RuleStatus,FileStat
 *************************************************************************/
 flora_discard_tokens :-
 	flora_stdwarn_nl,
-	flora_warning_line('Discarding tokens (rule delimeter `.'' or EOF expected)'),
+	flora_warning_line('discarding tokens (rule delimeter `.'' or EOF expected)'),
 	flora_stdwarn_nl,
 	repeat,
 	flora_tokens(Tokens,Status),
@@ -2684,8 +2740,8 @@ FL_DUMP(InFile) :-
   format. If SquashingOption == squash, ignore Workspace in the final round 
   of gpp pre-processing.
 *************************************************************************/
-flora_dump_file(InFile,Workspace,SquashingOption) :-
-	flora_check_filename(InFile),
+flora_dump_file(OrigInFile,Workspace,SquashingOption) :-
+	flora_check_filename(OrigInFile,InFile),
 	valid_flora_module_name(Workspace),
 	( flora_locate_file(InFile,FLORA_FILE_EXT,FlrFile), !
 	; flora_flrfilename_error(InFile),

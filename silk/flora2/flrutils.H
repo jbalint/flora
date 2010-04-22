@@ -169,6 +169,7 @@
 	flora_sysmod_file/3
    from flrlibman.
 
+:- import P2H_PREDICATE/4 from prolog2hilog.
 
 :- import prettyprint_stdin/0 from flrpretifydump.
 
@@ -225,7 +226,7 @@
 	flora_end_of_input/1,
 	flora_not_end_of_input/1,
 	flora_shell_command_line/3,
-	flora_check_filename/1,
+	flora_check_filename/2,
 	flora_set_xpp_options_for_compile/0,
 	flora_set_xpp_options_for_compile/1,
 	flora_set_xpp_options_for_compile/2,
