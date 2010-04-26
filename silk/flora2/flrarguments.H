@@ -15,6 +15,7 @@
 **
 */
 
+:- dynamic flora_arguments_spec_dyn/4.
 
 :- import
 	get_module_from_spec/3,
@@ -22,4 +23,5 @@
    from flrparser.
 
 :- export
+	flora_set_argdef/4,
 	flora_argdef/4.

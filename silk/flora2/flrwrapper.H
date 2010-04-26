@@ -81,6 +81,7 @@
 	flora_check_module_name/1,
 	valid_flora_module_name/1,
 	flora_module_name_error/1,
+	flora_change_module/4,
 
 	flora_is_transactional_wrapper/1,
 	flora_is_neg_wrapper/1,
