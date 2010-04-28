@@ -292,7 +292,7 @@ reify_struct(Formula,PRREIFY(Formula)) :-
 	report_option(FLSYSLIB(FLLIBUNIVEQFORM),NO_INDEX).
 
 %% We use this import directive support mechanism for @_prolog(module)
-import_struct(F,N,M,PRIMPORT(F,N,M)).
+%%import_struct(F,N,M,PRIMPORT(F,N,M)).
 cmpopt_struct(OptList,PRCMPOPT(OptList)).
 ignoredep_struct(SpecList,PRIGNOREDEP(SpecList)).
 prefixdef_struct(PrefixName,PrefixStr,PRPREFIXDEF(PrefixName,PrefixStr)).
@@ -1674,7 +1674,8 @@ check_vars(HeadTermList,BodyTerm,Status) :-
 ****************************************************************************/
 clear_directive :- retractall(TMPDIRECT(_)).
 get_directive(L) :- findall(D,TMPDIRECT(D),L).
-report_directive(Direct) :- assert(TMPDIRECT(Direct)).
+%% Not used any more. Instead of import we use the module:pred notation
+%%report_directive(Direct) :- assert(TMPDIRECT(Direct)).
 
 
 clear_options :- retractall(TMPOPTION(_,_)).
@@ -5116,12 +5117,12 @@ compile_prologliblit(ParserTerm,OidCode,Code,Status) :-
 compile_prologliblit(ParserTerm,Module,OidCode,Code,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
 	    is_flatom(Funct,FAtom),
-	    compile_prlgterm(Funct,N,Args,TCode,OidCode,ACode,Status)
+	    compile_prlgterm(Funct,N,Args,Module,TCode,OidCode,ACode,Status)
 	;
 	    is_flatom(ParserTerm,FAtom),
 	    atomobj_struct(ParserTerm,FObj),
 	    N=0,
-	    prologterm_struct(FObj,0,[],TCode),
+	    prologterm_struct(FObj,0,[],Module,TCode),
 	    ACode=NULL,
 	    OidCode=NULL,
 	    Status=[]
@@ -5129,12 +5130,7 @@ compile_prologliblit(ParserTerm,Module,OidCode,Code,Status) :-
 	( Status == [] ->
 	    %% build a special structure for the coder
 	    prologliblit_struct(TCode,PCode),
-	    conjunct_code([ACode,PCode],Code),
-	    %% generate an import statement for the corresponding XSB predicate
-	    is_flatom(Module,MName),
-	    import_struct(FAtom,N,MName,ICode),
-	    directive_struct(ICode,DCode),
-	    report_directive(DCode)
+	    conjunct_code([ACode,PCode],Code)
 	;
 	  true
 	),
@@ -5175,10 +5171,10 @@ compile_prologallliblit(ParserTerm,Module,OidCode,Code,Status) :-
 	%% PrelimTermLitCode is bound and we decompose it
 	prologliblit_struct(PrelimTermCode,PrelimTermLitCode),
 	%% PrelimTermCode is bound and we decompose it
-	prologterm_struct(FunctCode,N,ArgsCode,PrelimTermCode),
+	prologterm_struct(FunctCode,N,ArgsCode,Module,PrelimTermCode),
 	new_varobjlist(N,NewVarList),
 	generate_convert_to_prolog_code(ArgsCode,NewVarList,ToPrologCode),
-	prologterm_struct(FunctCode,N,NewVarList,TermCode),
+	prologterm_struct(FunctCode,N,NewVarList,Module,TermCode),
 	prologliblit_struct(TermCode,TermLitCode),
 	generate_convert_from_prolog_code(ArgsCode,NewVarList,FromPrologCode),
 	conjunct_code([ACode,ToPrologCode,TermLitCode,FromPrologCode],Code).
@@ -5213,25 +5209,15 @@ compile_prologlibobj(ParserTerm,Object,OidCode,Code,Status) :-
 compile_prologlibobj(ParserTerm,Module,Object,OidCode,Code,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
 	    is_flatom(Funct,FAtom),
-	    compile_prlgterm(Funct,N,Args,Object,OidCode,Code,Status)
+	    compile_prlgterm(Funct,N,Args,Module,Object,OidCode,Code,Status)
 	;
 	    is_flatom(ParserTerm,FAtom),
 	    atomobj_struct(ParserTerm,FObj),
 	    N=0,
-	    prologterm_struct(FObj,0,[],Object),
+	    prologterm_struct(FObj,0,[],Module,Object),
 	    Code=NULL,
 	    OidCode=NULL,
 	    Status=[]
-	),
-	!,
-	( Status == [] ->
-	    %% generate an import statement for the corresponding XSB predicate
-	    is_flatom(Module,MName),
-	    import_struct(FAtom,N,MName,ICode),
-	    directive_struct(ICode,DCode),
-	    report_directive(DCode)
-	;
-	  true
 	),
 	!.
 
@@ -5280,14 +5266,12 @@ compile_prlgterm(Funct,N,Args,Object,OidCode,Code,Status) :-
 	compile_pathexplist(Args,AObj,OidCode,Code,Status),
 	!.
 
-/*
 %% Generate prolog term with module prefix
 compile_prlgterm(Funct,N,Args,Module,Object,OidCode,Code,Status) :-
 	atomobj_struct(Funct,FObj),
 	prologterm_struct(FObj,N,AObj,Module,Object),
 	compile_pathexplist(Args,AObj,OidCode,Code,Status),
 	!.
-*/
 
 
 /*************************************************************************
