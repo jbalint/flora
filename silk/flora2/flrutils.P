@@ -167,7 +167,7 @@ flora_load_module_internal(OrigInFile) :-
 	    flora_loader_message('Consulting ~w',[OFile]),
 	    consult(OFile)
 
-	; parse_filename(File,_,_,Ext),
+	; parse_filename(File,_,_,Ext), 
           Ext \== '', Ext \== PROLOG_OFILE_EXT, Ext \== PROLOG_PFILE_EXT, Ext \== FLORA_FILE_EXT,
 	  flora_file_op(exists,File)
 	->
@@ -701,7 +701,7 @@ flora_locate_file(FL_URL(InFile),ExtType,ExtFile) :-
 	%% and download it only if it is newer than ExtFile
 	curl:load_page(FL_URL(ExtFileName),Document,
 		       [redirect(true)],  %% decide which options make sense
-		       [DirEnc,FileBase,Suffix,_Size,_WebTime],Warn),
+		       [DirEnc,FileBase,Suffix,_Size,WebTime],Warn),
 	curl:www_cache_filename([redirect(true)],FileBase,Suffix,WWW_cache_Filename),
 	(Warn==[] -> true
 	;
@@ -728,22 +728,22 @@ flora_locate_file(FL_URL(InFile),ExtType,ExtFile) :-
 	),
 	%% $HOME/.xsb/flora/www_cache/encoded_web_directory/web_file
 	flora_concat_atoms([InFileCacheDirectory,S,WWW_cache_Filename],ExtFile),
-	%% FixMe: In a perfect world, we should be checking if ExtFile exists
-	%% and is newer than the web page
-	%%flora_file_op(modtime,ExtFile,ExtFileTime),
-	%%writeln(webtime=_WebTime),
-	%%writeln(cachetime=ExtFileTime),
-	%% test: [url('http://www.cs.sunysb.edu/~kifer/test/test.flr')].
+	(flora_file_op(exists,ExtFile)
+	-> flora_file_op(modtime,ExtFile,ExtFileTime)
+	;  ExtFileTime = 0
+	),
 	(Document == ''
 	->
 	    flora_error_line('Web document ~w[.{~w|~w|~w}] does not exist or is not readable',
 			   [InFile,FLORA_FILE_EXT,PROLOG_PFILE_EXT,PROLOG_OFILE_EXT]),
 	    fail
-	;   %% FixMe: ExtFileTime >= WebTime ->
+	;   ExtFileTime =< WebTime 
+	->
+	    %% test: [url('http://www.cs.sunysb.edu/~kifer/test/test.flr')].
 	    open(ExtFile,write,Stream),
 	    write(Stream,Document),
 	    close(Stream)
-	%%FixMe: ;   true
+	;   true
 	).
 
 
@@ -1313,7 +1313,7 @@ flora_compile_file(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	    true
 	;
 	    T is T1-T0,
-	    flora_loader_message('Done! CPU time used: ~w seconds~n',[T])
+	    flora_loader_message('Done! CPU time used: ~w seconds',[T])
 	),
 	flora_print_warnings([depend(DepErrList)|RuleStatus]),
 	flora_print_errors([depend(DepErrList)|RuleStatus]),
