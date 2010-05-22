@@ -649,6 +649,9 @@ is_nafop(FL_NAF)	:- !.
 is_notop(FL_TNOT)	:- !.
 is_notop(FL_NOT)	:- !.
 
+is_hypothetical(FL_POSSIBLE)   :- !.
+is_hypothetical(FL_IMPOSSIBLE) :- !.
+
 is_emptyterm(CANOEMPTYTERM(_I)) :- !.
 
 emptyterm_struct(Index,FLEMPTYTERM(Index)).
@@ -845,6 +848,8 @@ fldisjunct_struct(Cond1,Cond2,FLDISJUNCT(Cond1,Cond2)).
 flnaf_struct(Goal,FLNAF(Goal)).
 flnot_struct(Goal,FLNOT(Goal)).
 flneg_struct(Goal,Index,FLNEG(Goal,Index)).
+
+flhypothetical_struct(Op,Goal,Index,FLHYPOTHETICAL(Op,Goal,Index)).
 
 flload_struct(List,FLLOAD(List)).
 
@@ -2494,13 +2499,27 @@ flora_body(CANOTERM(Funct,1,FL_PARENTHESIS,[G],_If,_Ip),WS,DWS,Code,Status) :-
 flora_body(CANOTERM(Funct,1,FL_PARENTHESIS,[G],If,_Ip),WS,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_negop(F),
-	!, % Module name is distributive over negation.
+	!, %% Module name is distributive over negation.
 	%% flora_body is too general here. We do not want to allow
 	%% anything but conjunctions/disjunctions of F-logic/first-order
 	%% atomic formulas. No update ops, NOT, NAF, etc.
 	%% This is taken care of by the compiler in neg_struct/head_neg_struct.
 	flora_body(G, WS, DWS,LitCode,Status),
 	( Status == [] -> flneg_struct(LitCode,If,Code)
+	;
+	    true
+        ).
+
+
+flora_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
+	get_atom(Funct,F),
+	is_hypothetical(F),
+	!, %% Module name is distributive over hypothetical.
+	(N > 1 -> flora_list_to_conjunct(Args, HypoBody, If, Ip)
+	; Args = [HypoBody]
+	),
+	flora_body(HypoBody, WS, DWS,HypoBodyCode,Status),
+	( Status == [] -> flhypothetical_struct(F,HypoBodyCode,If,Code)
 	;
 	    true
         ).

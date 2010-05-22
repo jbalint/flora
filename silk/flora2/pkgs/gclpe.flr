@@ -17,29 +17,28 @@
 */
 
 
-/*** This argumentation theory, also known as ATCK2,
-     allows k-ary exclusion constraints:
+/*** This argumentation theory is also known as ATCK2 or ATCK3 - depending on
+     whether ATCK3 is #define'd
+     It allows k-ary exclusion constraints:
      Courteous Logic with General Exclusion Constraints.
      This argumentation theory also supports cancellation.
 */
 
+// #define ATCK3
+
 #include "flora_terms.flh"
 
 // All the FL_* names are defined in flora_terms.flh to make it easier to change
-/*
 :- export FL_UNDEFEATED(?,?,?), %refresh.
 :- export ?[howDefeated -> ?],
 	  ?[info->?].
-*/
 // These are exported for debugging
-/*
 :- export
 	  ?[opposers(?)->?],
 	  ?[FL_BEATER(?)->?],
           FL_BEATER(?,?,?),
           opposes(?,?),
 	  overrides(?,?).
-*/
 
 :- ignore_depchk %abort(?)@_system.
 ?- Method[%mustDefine(off, ?:_Exclusion@?)]@_system,
@@ -103,7 +102,11 @@ beater_aux(?H,?Beaten,?Exclusion,?Mod) :-
 	FL_COMPETES(?H,?Beaten,?Exclusion,?Mod),
 	(FL_DOMINATES(?H,?Beaten,?Mod)
          or
+#ifdef ATCK3
+         neg ?Beaten
+#else   // ATCK2
          FL_STOMPED(?Beaten,?Mod)
+#endif
         ).
 /*
   The FL_BEATER predicate for binary exclusions (_opposes)
@@ -114,7 +117,11 @@ FL_BEATER(?H,?Beaten,?Mod) :-
 	FL_COMPETES(?H,?Beaten,?Mod),
 	(FL_DOMINATES(?H,?Beaten,?Mod)
          or
+#ifdef ATCK3
+         neg ?Beaten
+#else   // ATCK2
          FL_STOMPED(?Beaten,?Mod)
+#endif
         ).
 
 /******************** FL_DISQUALIFIED **************************************/
@@ -138,6 +145,10 @@ FL_COMPETES(?H1,?H2,?Mod) :-
 	FL_OPPOSES_AUX(?Mod,(?,?H1),(?,?H2)),
 	?H1 != ?H2.
 
+competitors(?H1,?H2,?Mod) :-
+	FL_COMPETES(?H1,?H2,?_Exclusion,?Mod)
+        or
+        FL_COMPETES(?H1,?H2,?Mod).
 
 /************************ Stomping *****************************************
 ** FL_STOMPED(?Lit) =def=
@@ -171,6 +182,7 @@ FL_STOMPED(?Lit,?Mod) :-
 ****************************************************************************/
 FL_DOMINATES(?Lit,?Dominee,?Mod) :-
 	tag{?,?Lit},
+	competitors(?Lit,?Dominee,?Mod),
 	// tag{?,?Dominee} - must not be used: binary dominee may have no tag 
 	not existsRuleWithNoOverrider(?Lit,?Dominee,?Mod).
 existsRuleWithNoOverrider(?Lit,?Dominee,?Mod) :-
@@ -187,7 +199,7 @@ existsRuleWithNoOverrider(?Lit,?Dominee,?Mod) :-
 **                     FL_COMPETES(?Competitor,?Lit,?Excl) ~~>
 **                       Exists ?CompetitorTag (
 **                                  candidate(?CompetitorTag,?Competitor) and
-**                                  not FL_STOMPED(?Competitor)
+**                                  not FL_STOMPED(?Competitor)  --- for ATCK2
 **                                             )
 **                               )
 ****************************************************************************/

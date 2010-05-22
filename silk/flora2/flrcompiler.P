@@ -97,6 +97,8 @@ is_flnaf(FLNAF(Goal),Goal).
 is_flnot(FLNOT(Goal),Goal).
 is_flneg(FLNEG(Goal,Idx),Goal,Idx).
 
+is_flhypothetical(FLHYPOTHETICAL(Op,Goal,Index),Op,Goal,Index).
+
 is_flload(FLLOAD(LoadList),LoadList).
 
 is_flconstraint(FLCONSTRAINT(ConstrBody),ConstrBody).
@@ -920,6 +922,13 @@ aggregate_syslib(FL_COLLECTSET,FLLIBCOLLECTSET) :- !.
 aggregate_syslib(FL_COLLECTBAG,FLLIBCOLLECTBAG) :- !.
 aggregate_syslib(FL_SET,FLLIBCOLLECTSET) :- !.
 aggregate_syslib(FL_BAG,FLLIBCOLLECTBAG) :- !.
+
+hypothetical_struct(Op,Goal,Index,Code) :-
+	hypothetical_syslib(Op,Lib), %% Op is a plain atom, not flatom
+	florasyslib_struct(Index,Lib,2,[Op,Goal],Code).
+
+hypothetical_syslib(FL_POSSIBLE,FLLIBHYPOTHETICAL)      :- !.
+hypothetical_syslib(FL_IMPOSSIBLE,FLLIBHYPOTHETICAL)    :- !.
 
 objexists_struct(Context,Obj,PREXISTS(Obj,Caller)) :-
 	determine_caller_info(Context,Caller).
@@ -2659,7 +2668,21 @@ compile_body(ParserTerm,Code,Status) :-
 	is_flnot(ParserTerm,G),
 	!,
 	compile_body(G,GCode,Status),
-	(Status == [] -> not_struct(GCode,Code); true).
+	(Status == [] -> not_struct(GCode,Code)
+	;
+	    true
+	).
+
+
+compile_body(ParserTerm,Code,Status) :-
+	is_flhypothetical(ParserTerm,Op,Goal,Index),
+	!,
+	compile_body(Goal,GCode,Status),
+	(Status == [] -> hypothetical_struct(Op,GCode,Index,Code)
+	;
+	    true
+	).
+
 
 compile_body(ParserTerm,Code,Status) :-
         compile_body_literal(ParserTerm,Code,Status).

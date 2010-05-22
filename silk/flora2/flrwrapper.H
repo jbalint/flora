@@ -77,6 +77,7 @@
 
 	flora_canonic_wrapper_symbol/2,
 	negate_wrapper/2,
+	negate_predicate/2,
 	flora_is_system_module_name/1,
 	flora_check_module_name/1,
 	valid_flora_module_name/1,

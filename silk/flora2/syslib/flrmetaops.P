@@ -19,6 +19,7 @@
 
 :- compiler_options([xpp_on]).
 #include "flora_terms.flh"
+#include "flora_porting.flh"
 
 :- import append/3, length/2 from basics.
 
@@ -429,6 +430,10 @@ FLLIBMETAUNIV(X,Y) :-
 	( PredType == (prolog)
 	-> (FullWrapper==WRAP_HILOG %% HiLog term
 	   -> Args = [HiLogFunctor|FunctorArgs], Y = [WRAP_HILOG(hilog,HiLogFunctor)|FunctorArgs]
+	   ; logical_operator(FullWrapper,FL_HYPOTHETICAL) ->
+	       Args = [HypoOp|Goal], Y = [WRAP_HILOG(FL_HYPOTHETICAL,HypoOp)|Goal]
+	   ; logical_operator(FullWrapper,OpWrap,Op) ->
+	       Y = [WRAP_HILOG(OpWrap,Op)|Args]
 	   %% libraries like insert
 	   ; fllib_wrapper(FullWrapper) -> fail
 	   %% Aggregates look like (fllibavg(...), ...)
@@ -537,6 +542,16 @@ FLLIBMETAUNIV(X,Y) :-
 	    flrwrapper:negate_wrapper(FullWrapper,FullWrapperNeg),
 	    flora_module_predicate(FullWrapperNeg,AugmentedArgs,WS,X)
 	;
+	    Head = WRAP_HILOG(FL_HYPOTHETICAL,Op)
+	->
+	    logical_operator(Library,FL_HYPOTHETICAL),
+	    X =.. [Library,Op|Args]
+	;
+	    Head = WRAP_HILOG(FL_NEGATION,Op)
+	->
+	    logical_operator(Predicate,FL_NEGATION,Op),
+	    X =.. [Predicate|Args]
+	;
 	    Head = WRAP_HILOG(flogic,_)
 	->
 	    flora_decode_goal_as_atom(X,Xdecoded),
@@ -545,31 +560,32 @@ FLLIBMETAUNIV(X,Y) :-
 			 ' :  wrong syntax to the right of =..'])
 	).
 
-%% For now, this predicate fails for most of the wrong syntax
+%% Currently, this predicate fails for most of the wrong syntax
 
 
 %% Arguments: Flogic wrapper, visual symbol, #of required arguments
-flogic_wrapper(FLBodyPREFIX(WRAP_MVD), '->', 3).
-flogic_wrapper(FLBodyPREFIX(WRAP_IMVD), '*->', 3).
-flogic_wrapper(FLBodyPREFIX(WRAP_MVDSIG), '=>', 3).
-flogic_wrapper(FLBodyPREFIX(WRAP_IMVDSIG), '*=>', 3).
-flogic_wrapper(FLBodyPREFIX(WRAP_MVDCONDEF), '{:}', 4).
-flogic_wrapper(FLBodyPREFIX(WRAP_IMVDCONDEF), '{:}*', 4).
-flogic_wrapper(FLBodyPREFIX(WRAP_MVDINC), '+>', 3).
-flogic_wrapper(FLBodyPREFIX(WRAP_IMVDINC), '*+>', 3).
-flogic_wrapper(FLBodyPREFIX(WRAP_MVDTOLIST), '->->', 3).
-flogic_wrapper(FLBodyPREFIX(WRAP_IMVDTOLIST), '*->->', 3).
-flogic_wrapper(FLBodyPREFIX(WRAP_ISA), ':', 2).
-flogic_wrapper(FLBodyPREFIX(WRAP_SUB), '::', 2).
-flogic_wrapper(FLBodyPREFIX(WRAP_METH), 'boolean', 2).
-flogic_wrapper(FLBodyPREFIX(WRAP_IMETH), '*boolean', 2).
-flogic_wrapper(FLBodyPREFIX(WRAP_TRAN), '%boolean', 2).
-flogic_wrapper(FLBodyPREFIX(WRAP_BOOLSIG), '=>boolean', 2).
-flogic_wrapper(FLBodyPREFIX(WRAP_IBOOLSIG), '*=>boolean', 2).
-flogic_wrapper(FLBodyPREFIX(WRAP_TRANSIG), '=>%boolean', 2).
-flogic_wrapper(FLBodyPREFIX(WRAP_ITRANSIG), '*=>%boolean', 2).
-flogic_wrapper(FLBodyPREFIX(WRAP_OBJEQL), ':=:', 2).
-flogic_wrapper(FLBodyPREFIX(WRAP_EXISTS), '[]', 1).
+flogic_wrapper(WRAP_MVD, '->', 3).
+flogic_wrapper(WRAP_IMVD, '*->', 3).
+flogic_wrapper(WRAP_MVDSIG, '=>', 3).
+flogic_wrapper(WRAP_IMVDSIG, '*=>', 3).
+flogic_wrapper(WRAP_MVDCONDEF, '{:}', 4).
+flogic_wrapper(WRAP_IMVDCONDEF, '{:}*', 4).
+flogic_wrapper(WRAP_MVDINC, '+>', 3).
+flogic_wrapper(WRAP_IMVDINC, '*+>', 3).
+flogic_wrapper(WRAP_MVDTOLIST, '->->', 3).
+flogic_wrapper(WRAP_IMVDTOLIST, '*->->', 3).
+flogic_wrapper(WRAP_ISA, ':', 2).
+flogic_wrapper(WRAP_SUB, '::', 2).
+flogic_wrapper(WRAP_METH, 'boolean', 2).
+flogic_wrapper(WRAP_IMETH, '*boolean', 2).
+flogic_wrapper(WRAP_TRAN, '%boolean', 2).
+flogic_wrapper(WRAP_BOOLSIG, '=>boolean', 2).
+flogic_wrapper(WRAP_IBOOLSIG, '*=>boolean', 2).
+flogic_wrapper(WRAP_TRANSIG, '=>%boolean', 2).
+flogic_wrapper(WRAP_ITRANSIG, '*=>%boolean', 2).
+%% These still have not been worked out for =..
+flogic_wrapper(WRAP_OBJEQL, ':=:', 2).
+flogic_wrapper(WRAP_EXISTS, '[]', 1).
 
 %% used to skip internal libraries in decomposition of prolog terms
 %% =.. simply fails on such libraries
@@ -612,6 +628,10 @@ fllib_wrapper(FLLIBSUM).
 fllib_wrapper(FLLIBMAX).
 fllib_wrapper(FLLIBMIN).
 fllib_wrapper(FLLIBCOUNT).
+
+logical_operator(FLORA_TNOT_PREDICATE, FL_NEGATION, FL_NOT).
+logical_operator(FL_NAF, FL_NEGATION, FL_NAF).
+logical_operator(FLLIBHYPOTHETICAL, FL_HYPOTHETICAL).
 
 compare_wrappers(Wrap1,Wrap2) :- Wrap1 = Wrap2, !.
 compare_wrappers(Wrap1,Wrap2) :-
