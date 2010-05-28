@@ -36,7 +36,9 @@
 :- import length/2 from basics.
 
 :- import
+	close_open_tables/0,
 	xwam_state/2,
+	stat_set_flag/2,
 	stat_flag/2
    from machine.
 
@@ -93,89 +95,88 @@ fllibprogramans(Gs,NVs) :-
   Gs is a list of goals to evaluate
 ********************************************************************/
 flora_print_all(Gs,NVs) :-
+	NVs == [],
+	!,
 	cputime(T0),
-	( NVs == []
+	( flora_call(Gs),
+	    close_open_tables
 	->
-	    flora_if_then_else(
-			       flora_call(Gs),
-			       (
-				 xwam_state(DELAY_REG,RegVal),
-				 cputime(T1),
-				 T is T1-T0,
-				 ( flora_switch(chatter) ->
-				     flora_stdfdbk_string('~nElapsed time ~w seconds~n',
-							  [T])
-				 ; true
-				 ),
-				 flora_write_Yes_or_Unknown(RegVal)
-			       ),
-			       flora_write_No
-			      )
+	    (
+	      xwam_state(DELAY_REG,RegVal),
+	      cputime(T1),
+	      T is T1-T0,
+	      ( flora_switch(chatter) ->
+		  flora_stdfdbk_string('~nElapsed time ~w seconds~n', [T])
+	      ; true
+	      ),
+	      flora_write_Yes_or_Unknown(RegVal)
+	    ),
+	    fail
 	;
-	    %% Construct a temporary trie-indexed predicate, FL_QUERY_PREDICATE
-	    %% All answers are asserted into that predicate.
-	    %% Since it is trie-indexed, duplicates are deleted.
-	    %% Reason: some answer lists might have thousands and
-	    %% millions of items, which takes a long time to sort. Sometimes
-	    %% sort runs out of memory and crashes XSB. 
-	    %% Having a trie-asserted query predicate adds a very small
-	    %% penalty to each query, but overall speeds up 
-	    %% returning the answers, and sometimes avoids crashes.
-	    QueryTemplate =.. [FL_QUERY_PREDICATE|NVs],
-	    length(NVs,QueryArity),
-	    dynamic(FL_QUERY_PREDICATE/QueryArity),
-	    index(FL_QUERY_PREDICATE/QueryArity,trie),
+	    flora_write_No
+	).
 
-	    flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,before,AroundHookLink),
-	    catch(
-		  findall((NVs,RegVal),
-			  (flora_call(Gs),
-			      (\+ QueryTemplate -> assert(QueryTemplate)),
-			      xwam_state(DELAY_REG,RegVal)
-			  ),
-			  TempL
-			 ),
-		  Exception,
-		  flranswer_all_answers_query_handler(Exception,QueryTemplate,AroundHookLink)
-		 ),
-	    cputime(T1),
-	    T is T1-T0,
-	    flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
-	    flora_reclaim_storage_space,
-	    abolish(FL_QUERY_PREDICATE/QueryArity),
-	    sort(TempL,L),
-	    length(L,N),
-	    ( N == 0 -> flora_write_No
+flora_print_all(Gs,NVs) :-
+	cputime(T0),
+	%% Construct a temporary trie-indexed predicate, FL_QUERY_PREDICATE
+	%% All answers are asserted into that predicate.
+	%% Since it is trie-indexed, duplicates are deleted.
+	%% Reason: some answer lists might have thousands and
+	%% millions of items, which takes a long time to sort. Sometimes
+	%% sort runs out of memory and crashes XSB. 
+	%% Having a trie-asserted query predicate adds a very small
+	%% penalty to each query, but overall speeds up 
+	%% returning the answers, and sometimes avoids crashes.
+	QueryTemplate =.. [FL_QUERY_PREDICATE|NVs],
+	length(NVs,QueryArity),
+	dynamic(FL_QUERY_PREDICATE/QueryArity),
+	index(FL_QUERY_PREDICATE/QueryArity,trie),
+	
+	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,before,AroundHookLink),
+	catch(
+	      findall((NVs,RegVal),
+		      (flora_call(Gs),
+			  (\+ QueryTemplate -> assert(QueryTemplate)),
+			  xwam_state(DELAY_REG,RegVal)
+		      ),
+		      TempL
+		     ),
+	      Exception,
+	      flranswer_all_answers_query_handler(Exception,QueryTemplate,AroundHookLink)
+	     ),
+	cputime(T1),
+	T is T1-T0,
+	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
+	flora_reclaim_storage_space,
+	abolish(FL_QUERY_PREDICATE/QueryArity),
+	sort(TempL,L),
+	length(L,N),
+	( N == 0 -> flora_write_No, fail
+	;
+	    flora_write_matches(L),
+	    ( flora_switch(chatter) ->
+		flora_stdfdbk_string('~n~w solution(s) in ~w seconds~n', [N,T])
 	    ;
-		flora_write_matches(L),
-		( flora_switch(chatter) ->
-		    flora_stdfdbk_string('~n~w solution(s) in ~w seconds~n',
-					 [N,T])
-		/*
-		    (  windows_os, flora_stdfdbk_nl, !
-		    ;
-			flora_stdfdbk_string(' on '),
-			shell(hostname,block,STDFDBK,block,_)
-		    )
-		*/
-		;
-		    true
-		),
-		flora_write_Yes
-	    )
+		true
+	    ),
+	    flora_write_Yes,
+	    !,
+	    fail
 	).
 
 
 /********************************************************************/
 flora_print_one(Gs,NVs) :-
-	( NVs == []
-	->  flora_if_then_else(flora_call(Gs),
-			       (
-				 xwam_state(DELAY_REG,RegVal),
-				 flora_write_Yes_or_Unknown(RegVal)
-			       ),
-			       flora_write_No)
+	NVs == [],
+	!,
+	(flora_call(Gs)
+	->
+	    xwam_state(DELAY_REG,RegVal),
+	    flora_write_Yes_or_Unknown(RegVal)
 	;
+	    flora_write_No
+	).
+flora_print_one(Gs,NVs) :-
 	    ( flora_call(Gs),
 		xwam_state(DELAY_REG,RegVal),
 		flora_write_pairs(NVs,RegVal),
@@ -183,17 +184,18 @@ flora_print_one(Gs,NVs) :-
 	    ;
 		flora_write_No
 	    ),
-	    flora_reclaim_storage_space
-	).
+	    flora_reclaim_storage_space.
 
 
 /********************************************************************/
+/*
 flora_if_then_else(Condition,Then,_Else) :-
 	call(Condition),
 	call(Then).
 
 flora_if_then_else(_Condition,_Then,Else) :-
 	call(Else).
+*/
 
 
 /********************************************************************/
@@ -229,8 +231,6 @@ flora_call(_Goal) :-
 	flora_handle_notrace,
 	fail.
 
-
-%%flora_findall(X,Y,Z) :- findall(X,Y,Z).
 
 /********************************************************************/
 flora_write_matches([]).

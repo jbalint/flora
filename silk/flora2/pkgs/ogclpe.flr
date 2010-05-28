@@ -83,23 +83,31 @@ FL_DEFEATED(?R,?Mod) :-
 	not ?Exclusion[FL_BEATER(?Mod)->?H].
 FL_DEFEATED(?R,?Mod) :-
 	?R=(?,?H),
-	// this brings in the classical mutex and user-defined _opposes/2
+	// this incorporates the classical mutex and user-defined _opposes/2
 	FL_OPPOSES_AUX(?Mod,?R,?Other),
 	?Other=(?_OtherL,?OtherH),
 	not FL_BEATER(?H,?OtherH,?Mod).
 FL_DEFEATED(?R,?Mod) :- FL_DISQUALIFIED(?R,?Mod).
 
+/***************************** FL_BEATER ************************************/
 ?Exclusion[FL_BEATER(?Mod)->?H] :-
-	beater_aux(?H,?_OtherH,?Exclusion,?Mod).
-beater_aux(?H,?OtherH,?Exclusion,?Mod) :-
-	FL_COMPETES(?H,?OtherH,?Exclusion,?Mod),
-	not FL_REBUTS(?OtherH,?H,?Exclusion,?Mod).
-// beater for binary predicates
-FL_BEATER(?H,?OtherH,?Mod) :-
-	FL_COMPETES(?H,?OtherH,?Mod),
-	not FL_REBUTS(?OtherH,?H,?Mod).
+	beater_aux(?H,?,?Exclusion,?Mod).
+// auxiliary FL_BEATER predicate
+beater_aux(?H,?Beaten,?Exclusion,?Mod) :-
+	FL_COMPETES(?H,?Beaten,?Exclusion,?Mod),
+	not FL_REBUTS(?Beaten,?H,?Exclusion,?Mod).
+/*
+  The FL_BEATER predicate for binary exclusions (_opposes)
+  This corresponds to something like exclusion(?H,?_Beaten)[FL_BEATER(?Mod)->?H]
+  In other words, ?Beaten is part of the exclusion Id and can't be eliminated
+*/
+FL_BEATER(?H,?Beaten,?Mod) :-
+	FL_COMPETES(?H,?Beaten,?Mod),
+	not FL_REBUTS(?Beaten,?H,?Mod).
 
+/******************** FL_DISQUALIFIED **************************************/
 FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
+
 /* FL_DISQUALIFIED_AUX is defined in genincludes/flrdefeasible.fli
    roughly by axioms of the form:
    FL_DISQUALIFIED((?Id1,_cancel(?Id2,?Head2))) :-
@@ -135,12 +143,41 @@ FL_REBUTS(?H1,?H2,?Mod)  :-
 	FL_CANDIDATE(?R1,?Mod),
 	not FL_REFUTES(?H2,?R1,?Mod).
 
+
+/************************ Competition **************************************/
 FL_COMPETES(?H1,?H2,?Exclusion,?Mod) :-
 	?Exclusion[opposers(?Mod)->{?H1,?H2}],
 	?H1 != ?H2.
 FL_COMPETES(?H1,?H2,?Mod) :-
 	FL_OPPOSES_AUX(?Mod,(?,?H1),(?,?H2)),
 	?H1 != ?H2.
+
+competitors(?H1,?H2,?Mod) :-
+	FL_COMPETES(?H1,?H2,?_Exclusion,?Mod)
+        or
+        FL_COMPETES(?H1,?H2,?Mod).
+
+/*********************** FL_DOMINATES ****************************************
+** FL_DOMINATES(?Lit,?Dominee) =def=
+**    Forall ?DomineeTag ( candidate(?DomineeTag,?Dominee) ~~>
+**                 Exists ?Tag ( candidate(?Tag,?Lit) and
+**                               _overrides((?Tag,?Lit),(?DomineeTag,?Dominee))
+**                             )
+**                       )
+  Question: should it be _overrides((?Tag,?Lit),(?DomineeTag,?Dominee)) or
+                         _overrides(?Tag,?DomineeTag)
+****************************************************************************/
+FL_DOMINATES(?Lit,?Dominee,?Mod) :-
+	tag{?,?Lit},
+	// tag{?,?Dominee} - must not be used: binary dominee may have no tag 
+	competitors(?Lit,?Dominee,?Mod),
+	not existsRuleWithNoOverrider(?Lit,?Dominee,?Mod).
+existsRuleWithNoOverrider(?Lit,?Dominee,?Mod) :-
+	FL_CANDIDATE((?DomineeTag,?Dominee),?Mod),
+	not((
+	     FL_CANDIDATE((?Tag,?Lit),?Mod),
+	     FL_OVERRIDES_AUX(?Mod,(?Tag,?Lit),(?DomineeTag,?Dominee))
+	   )).
 
 
 /************************ Debugging ***************************************/
@@ -157,17 +194,22 @@ FL_STATUS(?_L,?H)[howDefeated -> notBeaterFor(?Exclusion)] :-
 	change_module(?H,?Mod,?HM),
         ?Exclusion[opposers(?Mod)->?HM],
 	not ?Exclusion[FL_BEATER(?Mod)->?HM].
-FL_STATUS(?L,?H)[howDefeated -> notBeaterFor(binaryExclusion(?HM,?OtherH))] :-
+FL_STATUS(?L,?H)[howDefeated -> notBeaterFor(binaryExclusion(?HM,?Beaten))] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
 	?R1 = (?L,?HM),
 	FL_OPPOSES_AUX(?Mod,?R1,?R2),
-	?R2 = (?_L2,?OtherH),
-	not FL_BEATER(?HM,?OtherH,?Mod).
+	?R2 = (?_L2,?Beaten),
+	not FL_BEATER(?HM,?Beaten,?Mod).
 FL_STATUS(?L,?H)[howDefeated -> canceled] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
 	FL_CANCEL_AUX(?Mod,(?L,?HM)).
+
+FL_STATUS(?_L,?H)[info -> dominates(?Dominee)] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_DOMINATES(?HM,?Dominee,?Mod).
 
 FL_STATUS(?_L,?H)[info -> refutes(?Refuted)] :-
 	caller{?Mod},
@@ -196,7 +238,6 @@ FL_STATUS(?_L,?H)[info->beats(?Beaten)] :-
 	change_module(?H,?Mod,?HM),
 	FL_BEATER(?HM,?Beaten,?Mod).
 
-// restrict to competitors that are actually candidates?
 FL_STATUS(?_L,?H)[info->competes(?Exclusion,?Competitor)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),

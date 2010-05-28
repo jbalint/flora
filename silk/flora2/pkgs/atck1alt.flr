@@ -5,8 +5,8 @@
 ** Contact:   kifer@cs.stonybrook.edu
 **
 ** Copyright (C) by
-**      The Research Foundation of the State University of New York, 2008-2010;
-**      and Vulcan, Inc., 2009-2010.
+**      The Research Foundation of the State University of New York, 2008 - 2010;
+**      and Vulcan, Inc., 2009 - 2010.
 **
 ** All rights reserved.
 **
@@ -17,7 +17,7 @@
 */
 
 
-/*** This argumentation theory, also known as ATCK2,
+/*** This argumentation theory, also known as ATCK1 (alternative formulation),
      allows k-ary exclusion constraints:
      Courteous Logic with General Exclusion Constraints.
      This argumentation theory also supports cancellation.
@@ -26,26 +26,20 @@
 #include "flora_terms.flh"
 
 // All the FL_* names are defined in flora_terms.flh to make it easier to change
-/*
 :- export FL_UNDEFEATED(?,?,?), %refresh.
 :- export ?[howDefeated -> ?],
 	  ?[info->?].
-*/
 // These are exported for debugging
-/*
 :- export
 	  ?[opposers(?)->?],
 	  ?[FL_BEATER(?)->?],
           FL_BEATER(?,?,?),
           opposes(?,?),
 	  overrides(?,?).
-*/
 
 :- ignore_depchk %abort(?)@_system.
 ?- Method[%mustDefine(off, ?:_Exclusion@?)]@_system,
    Method[%mustDefine(off, ?::_Exclusion@?)]@_system.
-
-?- Method[%mustDefine(on)]@_system.
 
 /*
   Note 1: FL_UNDEFEATED/3 must be called with the third argument bound to
@@ -113,6 +107,7 @@ FL_BEATER(?H,?Beaten,?Mod) :-
 
 /******************** FL_DISQUALIFIED **************************************/
 FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
+
 /* FL_DISQUALIFIED_AUX is defined in genincludes/flrdefeasible.fli
    roughly by axioms of the form:
    FL_DISQUALIFIED((?Id1,_cancel(?Id2,?Head2))) :-
@@ -122,6 +117,31 @@ FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
 */
 FL_DISQUALIFIED(?R,?Mod) :- FL_DISQUALIFIED_AUX(?R,?Mod).
 
+// FL_REFUTES/4   Note: 1st arg is a head, second - a handle
+FL_REFUTES(?H1,?R2,?Exclusion,?Mod) :-
+	?R1 = (?_L1,?H1), ?R2 = (?_L2,?H2),
+	FL_COMPETES(?H1,?H2,?Exclusion,?Mod),
+	FL_OVERRIDES_AUX(?Mod,?R1,?R2),
+	FL_CANDIDATE(?R1,?Mod).
+// FL_REFUTES/3   Note: 1st arg is a head, not handle
+FL_REFUTES(?H1,?R2,?Mod) :-
+	?R1 = (?_L1,?H1), ?R2 = (?_L2,?H2),
+	FL_COMPETES(?H1,?H2,?Mod),
+	FL_OVERRIDES_AUX(?Mod,?R1,?R2),
+	FL_CANDIDATE(?R1,?Mod).
+
+// FL_REBUTS/4
+FL_REBUTS(?H1,?H2,?Exclusion,?Mod)  :-
+	FL_COMPETES(?H1,?H2,?Exclusion,?Mod),
+	?R1 = (?,?H1),
+	FL_CANDIDATE(?R1,?Mod),
+	not FL_REFUTES(?H2,?R1,?Exclusion,?Mod).
+// FL_REBUTS/3
+FL_REBUTS(?H1,?H2,?Mod)  :-
+	FL_COMPETES(?H1,?H2,?Mod),
+	?R1 = (?,?H1),
+	FL_CANDIDATE(?R1,?Mod),
+	not FL_REFUTES(?H2,?R1,?Mod).
 
 
 /************************ Competition **************************************/
@@ -191,6 +211,24 @@ FL_STATUS(?_L,?H)[info -> dominates(?Dominee)] :-
 	change_module(?H,?Mod,?HM),
 	FL_DOMINATES(?HM,?Dominee,?Mod).
 
+FL_STATUS(?_L,?H)[info -> refutes(?Refuted)] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_REFUTES(?HM,?Refuted,?Mod).
+FL_STATUS(?_L,?H)[info -> refutes(?Refuted)] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_REFUTES(?HM,?Refuted,?_Exclusion,?Mod).
+
+FL_STATUS(?_L,?H)[info -> rebuts(?Rebutted)] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_REBUTS(?HM,?Rebutted,?Mod).
+FL_STATUS(?_L,?H)[info -> rebuts(?Rebutted)] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?HM),
+	FL_REBUTS(?HM,?Rebutted,?_Exclusion,?Mod).
+
 FL_STATUS(?_L,?H)[info->beats(?Exclusion,?Beaten)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?HM),
@@ -216,8 +254,10 @@ FL_STATUS(?I,?H)[info->candidate] :-
 	change_module(?H,?Mod,?HM),
 	FL_CANDIDATE((?I,?HM),?Mod).
 
+
 change_module(?InA,?Mod,?OutA) :-
 	flora_change_module(?InA,?OutA,?Mod,['In ',FL_STATUS,'(Id,Head)[...]@',_@,': Head must be bound'])@_prolog(flrwrapper).
+
 
 /***************************** Auxiliary Predicates ***********************/
 // Given a rule Id and possibly Head, find body and test if it is satisfied.
