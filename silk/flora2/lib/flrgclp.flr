@@ -34,6 +34,7 @@
 :- export opposes(?,?),
 	  overrides(?,?),
 	  defeated(?).
+
 :- ignore_depchk %abort(?)@_system.
 
 /*
@@ -63,20 +64,40 @@ FL_UNDEFEATED(?I,?H,?Mod) :-
 // These are mostly for debugging
 // Note: when ?H,?H1,?H2 are bound by the user, they should be reified
 // For instance: defeated((?I,${neg a}))@_gcl.
+defeated(?) :-
+	caller{?Mod},
+	check_module_to_AT_association(?Mod).
 defeated((?T,?H)) :-
 	caller{?Mod},
 	change_module_nocheck(?H,?Mod,?MH),
 	FL_DEFEATED((?T,?MH),?Mod).
+
+opposes(?,?) :-
+	caller{?Mod},
+	check_module_to_AT_association(?Mod).
 opposes((?T1,?H1),(?T2,?H2)) :-
 	caller{?Mod},
 	change_module_nocheck(?H1,?Mod,?MH1),
 	change_module_nocheck(?H2,?Mod,?MH2),
 	FL_OPPOSES_AUX(?Mod,(?T1,?MH1),(?T2,?MH2)).
+
+overrides(?,?) :-
+	caller{?Mod},
+	check_module_to_AT_association(?Mod).
 overrides((?T1,?H1),(?T2,?H2)) :-
 	caller{?Mod},
 	change_module_nocheck(?H1,?Mod,?MH1),
 	change_module_nocheck(?H2,?Mod,?MH2),
 	FL_OVERRIDES_AUX(?Mod,(?T1,?MH1),(?T2,?MH2)).
+
+check_module_to_AT_association(?Mod) :-
+	\+flora_defeasible_module_registry(?Mod,_@)@_prolog(flrregistry),
+	?Mod \== _@,
+	!,
+	%abort(['User module ', ?Mod,
+	        ' is not associated with the argumentation theory residing in module ',
+		 _@])@_system.
+
 
 // Axioms for Courteous LP
 
@@ -139,11 +160,20 @@ FL_REBUTS(?R1,?R2,?Mod)  :-
 /************************ Debugging ***************************************/
 
 /*
-   FL_STATUS(Id,Head)[howDefeated->Reason] can be used to find out what is defeated
-   and why. No need to reify the ?H argument or attach the module to it.
+   FL_STATUS(Id,Head)[howDefeated->Reason] can be used to find out what is
+   defeated and why. No need to reify the ?H argument or attach a module to it.
    This method finds out the caller module and replaces the module of Head
    with the caller module.
 */
+
+FL_STATUS(?,?)[?Meth->?] :-
+	check_method_for_status_query(?Meth),
+	caller{?Mod},
+	check_module_to_AT_association(?Mod).
+
+check_method_for_status_query(howDefeated).
+check_method_for_status_query(info).
+check_method_for_status_query(howDisqualified).
 
 FL_STATUS(?I,?H)[howDefeated -> refutedBy(?DI,?DH)] :-
 	caller{?Mod},
@@ -201,12 +231,14 @@ FL_STATUS(?I,?H)[howDisqualified->canceled] :-
 change_module(?InA,?Mod,?OutA) :-
 	flora_change_module(?InA,?OutA,?Mod,['In ',FL_STATUS,'(Id,Head)[...]@',_@,': Head must be bound'])@_prolog(flrwrapper).
 
+
 change_module_nocheck(?InA,?,?OutA) :-
 	var(?InA),
 	!,
 	?OutA = ?InA.
 change_module_nocheck(?InA,?Mod,?OutA) :-
 	flora_change_module(?InA,?OutA,?Mod,'In defeated/overrides/opposes: something wrong')@_prolog(flrwrapper).
+
 
 /***************************** Auxiliary Predicates ***********************/
 // this works only if Arg2 is bound
