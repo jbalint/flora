@@ -88,19 +88,25 @@
 	flora_is_neg_wrapper/1,
 	flora_funct_arity/2.
 
+%% There is a conflict in the way (as) is defined in XSB and FLORA-2, so
+%% XSB gives an error if we don't put parens around.
+%% XSB might change its definition and then we'll be ok.
 :- table
-	flora_storage_module/2,
-	flora_is_system_module_name/1.
+	(flora_storage_module/2,
+	flora_is_system_module_name/1,
+	module_name_syntax_internal/1)
+   as opaque.
 :- table
-	flora_fdb_storage_name/2,
+	(flora_fdb_storage_name/2,
 	flora_fld_storage_name/2,
 	flora_is_fld_storage/1,
-	flora_is_fdb_storage/1.
-:- table module_name_syntax_internal/1.
-:- table flora_is_neg_wrapper/1.
+	flora_is_fdb_storage/1)
+   as opaque.
 :- table
+	(flora_is_neg_wrapper/1,
 	negate_wrapper/2,
-	flora_canonic_wrapper_symbol/2.
+	flora_canonic_wrapper_symbol/2)
+   as opaque.
 
 %% This does not seem to affect anything
 %%:- table flora_check_module_name/1.

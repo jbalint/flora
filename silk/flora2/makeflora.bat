@@ -18,6 +18,10 @@ set current_tabling=flrincludes\.flora_current_tabling
 echo. > %current_tabling%
 if "%1" == "-S" echo #define FLORA_SUBSUMPTIVE_TABLING > %current_tabling%
 if "%1" == "-S" shift
+if "%1" == "-I" echo #define FLORA_INCREMENTAL_TABLING > %current_tabling%
+if "%1" == "-I" shift
+if "%1" == "-S" echo #define FLORA_SUBSUMPTIVE_TABLING > %current_tabling%
+if "%1" == "-S" shift
 
 if "%1" == "" echo Usage:  makeflora [-c] full-path-to-prolog
 if "%1" == "" goto end

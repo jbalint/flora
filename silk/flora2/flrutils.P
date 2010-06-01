@@ -157,7 +157,11 @@ flora_load_module_internal(OrigInFile) :-
 	    flora_add_xpp_options('-warninglevel 1 '),
 	    (subsumptive_tabling_in_effect(FLORA_DEFAULT_WORKSPACE)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
-	    ;  true
+	    ; true
+	    ),
+	    (incremental_tabling_in_effect(FLORA_DEFAULT_WORKSPACE)
+	    -> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
+	    ; true
 	    ),
 	    consult(PFile),
 	    flora_clear_xpp_options
@@ -247,8 +251,11 @@ flloadtrailer(TrailerOptions,Workspace) :-
 		flora_set_xpp_options_for_prolog_compile(Workspace),
 		(subsumptive_tabling_requested(SortedNewTrailerOptions)
 		-> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
-		;
-		    true
+		;  true
+		),
+		(incremental_tabling_requested(SortedNewTrailerOptions)
+		-> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
+		;  true
 		),
 		%%compile(UserTrailerPFile,[optimize,spec_repr,ti_all]),
 		compile(UserTrailerPFile,[optimize,ti_all]),
@@ -271,19 +278,19 @@ flloadtrailer(TrailerOptions,Workspace) :-
 	),
 	!.
 
+
 %% Unify TrailerOptions with the module semantics
 fltrailersemantics(TrailerOptions,Workspace) :-
 	valid_flora_module_name(Workspace),
 	%% Check trailer options
 	get_trailer_options(Workspace,CurrentTrailerOptions),
-	(CurrentTrailerOptions == []  % nonexisting module
-	-> CurrentTrailerOptions = TrailerOptions
-	;
-	    sort(CurrentTrailerOptions,SortedCurrentTrailerOptions),
-	    fixup_trailer_options(TrailerOptions,SortedCurrentTrailerOptions,NewTrailerOptions),
-	    sort(NewTrailerOptions,SortedNewTrailerOptions),
-	    SortedCurrentTrailerOptions = SortedNewTrailerOptions
-	).
+	fixup_trailer_options([],CurrentTrailerOptions,FixedTrailerOptions),
+	unify_trailer_options(TrailerOptions,FixedTrailerOptions).
+
+unify_trailer_options([],_FixedTrailerOptions).
+unify_trailer_options([Opt|TrailerOptions],FixedTrailerOptions) :-
+	member(Opt,FixedTrailerOptions),
+	unify_trailer_options(TrailerOptions,FixedTrailerOptions).
 
 
 /**********************************************************************
@@ -320,6 +327,10 @@ flloadpatch(Workspace) :-
 	    flora_set_xpp_options_for_prolog_compile(Workspace),
 	    (subsumptive_tabling_in_effect(Workspace)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
+	    ;  true
+	    ),
+	    (incremental_tabling_in_effect(Workspace)
+	    -> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
 	    ;  true
 	    ),
 	    compile(UserPatchPFile,[optimize,ti_all]),
@@ -406,6 +417,10 @@ flora_compile_then_prolog_compile_add(FlrFile,ModuleName) :-
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
+	    (incremental_tabling_in_effect(ModuleName)
+	    -> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
+	    ;  true
+	    ),
 	    compile(APFile,[optimize,ti_all]) ->
 	      true
 	  ;
@@ -449,6 +464,10 @@ flora_compile_then_prolog_compile(FlrFile,ModuleName) :-
 	    flora_add_xpp_options('-warninglevel 1 '),
 	    (subsumptive_tabling_in_effect(ModuleName)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
+	    ;  true
+	    ),
+	    (incremental_tabling_in_effect(ModuleName)
+	    -> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
 	    ;  true
 	    ),
 	    compile(MPFile,[optimize,ti_all]) ->
@@ -531,6 +550,10 @@ flora_load_system_module_internal(ModuleName) :-
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
 	    ),
+	    (incremental_tabling_in_effect(ModuleName)
+	    -> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
+	    ;  true
+	    ),
 	    consult(WSOFile),
 	    flora_clear_xpp_options
 	;
@@ -583,6 +606,10 @@ flora_fladd(FlrFile,Workspace) :-
 	    flora_add_xpp_options('-warninglevel 0 '),
 	    (subsumptive_tabling_in_effect(Workspace)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
+	    ;  true
+	    ),
+	    (incremental_tabling_in_effect(Workspace)
+	    -> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
 	    ;  true
 	    ),
 	    compile(APFile,[optimize,ti_all])
@@ -639,6 +666,10 @@ flora_flload(FlrFile,Workspace) :-
 	    flora_add_xpp_options('-warninglevel 0 '),
 	    (subsumptive_tabling_in_effect(Workspace)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
+	    ;  true
+	    ),
+	    (incremental_tabling_in_effect(Workspace)
+	    -> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
 	    ;  true
 	    ),
 	    compile(MPFile,[optimize,ti_all])
@@ -2914,10 +2945,11 @@ flora_abort(Msg,AbortType) :-
 flora_make_trailer_filename(TrailerOptions,TrailerFilerFN) :-
 	member(FL_EQUALITY(Equality),TrailerOptions),
 	member(FL_INHERITANCE(Inheritance),TrailerOptions),
-	member(FL_TABLING(Tabling),TrailerOptions),
+	member(FL_TABLING(Tabling1),TrailerOptions),
+	member(FL_TABLING(Tabling2),TrailerOptions), Tabling1 \== Tabling2,
 	member(FL_CUSTOM(Custom),TrailerOptions),
 	encode_path_as_filename(Custom,CustomFN),
-	flora_concat_atoms(['trailer$eq=',Equality,'+inh=',Inheritance,'+tbl=',Tabling,'+cus=',CustomFN,'.',PROLOG_PFILE_EXT], TrailerFilerFN).
+	flora_concat_atoms(['trailer$eq=',Equality,'+inh=',Inheritance,'+tbl=',Tabling1,'+',Tabling2,'+cus=',CustomFN,'.',PROLOG_PFILE_EXT], TrailerFilerFN).
 
 /*
    Converts full path to a single filename that is acceptable to both Unix 
@@ -2976,8 +3008,10 @@ include_trailer_control_definitions(TrailerOptions) :-
 	flora_current_out_string('#define EQUALITY~w~n', [EqType]),
 	member(FL_INHERITANCE(InhType),TrailerOptions),
 	flora_current_out_string('#define INHERITANCE~w~n', [InhType]),
-	member(FL_TABLING(TabType),TrailerOptions),
-	flora_current_out_string('#define TABLING~w~n', [TabType]),
+	member(FL_TABLING(TabType1),TrailerOptions),
+	flora_current_out_string('#define TABLING~w~n', [TabType1]),
+	member(FL_TABLING(TabType2),TrailerOptions), TabType1 \== TabType2,
+	flora_current_out_string('#define TABLING~w~n', [TabType2]),
 	member(FL_CUSTOM(CusFile),TrailerOptions),
 	(CusFile == NONE
 	-> flora_current_out_line('#define CUSTOMnone')
@@ -3003,6 +3037,11 @@ subsumptive_tabling_requested(TrailerOptions) :-
 subsumptive_tabling_in_effect(Module) :-
 	flrregistry:flora_trailer_registry(Module,FL_TABLING(FL_SUBSUMPTIVE)).
 	
+incremental_tabling_requested(TrailerOptions) :-
+	member(FL_TABLING(FL_INCREMENTAL),TrailerOptions).
+incremental_tabling_in_effect(Module) :-
+	flrregistry:flora_trailer_registry(Module,FL_TABLING(FL_INCREMENTAL)).
+	
 
 /*
    extract_trailer_options(+OldOptions,-NewOptions,-TrailerOptions)
@@ -3018,30 +3057,52 @@ extract_trailer_options(InputFile,OldOptions,Defaults,NewOptions,NewTrailerOptio
 	strip_indices_from_options_and_split(OldOptions,NewOptions,TrailerOptions),
 	fixup_trailer_options(TrailerOptions,Defaults,NewTrailerOptions).
 
+%% This should be replaced by a recursive procedure that takes a list like
+%% [FL_EQUALITY,FL_INHERITANCE,FL_TABLING,FL_CUSTOM]
+%% and checks every element for conflicts
 found_option_conflicts(InputFile,OptList) :-
 	member((FL_EQUALITY(X),IdxX), OptList),
 	member((FL_EQUALITY(Y),IdxY), OptList),
-	X \= Y,
+	conflicting_semantics_options(FL_EQUALITY(X),FL_EQUALITY(Y)),
 	!,
 	print_option_conflict_error(InputFile,FL_EQUALITY,IdxX,IdxY).
 found_option_conflicts(InputFile,OptList) :-
 	member((FL_INHERITANCE(X),IdxX), OptList),
 	member((FL_INHERITANCE(Y),IdxY), OptList),
-	X \= Y,
+	conflicting_semantics_options(FL_INHERITANCE(X),FL_INHERITANCE(Y)),
 	!,
 	print_option_conflict_error(InputFile,FL_INHERITANCE,IdxX,IdxY).
 found_option_conflicts(InputFile,OptList) :-
 	member((FL_TABLING(X),IdxX), OptList),
 	member((FL_TABLING(Y),IdxY), OptList),
-	X \= Y,
+	conflicting_semantics_options(FL_TABLING(X),FL_TABLING(Y)),
 	!,
 	print_option_conflict_error(InputFile,FL_INHERITANCE,IdxX,IdxY).
 found_option_conflicts(InputFile,OptList) :-
 	member((FL_CUSTOM(X),IdxX), OptList),
 	member((FL_CUSTOM(Y),IdxY), OptList),
-	X \= Y,
+	conflicting_semantics_options(FL_CUSTOM(X),FL_CUSTOM(Y)),
 	!,
 	print_option_conflict_error(InputFile,FL_CUSTOM,IdxX,IdxY).
+
+conflicting_semantics_options(FL_EQUALITY(X),FL_EQUALITY(Y)) :-
+	nonvar(X), nonvar(Y), X \= Y.
+conflicting_semantics_options(FL_INHERITANCE(X),FL_INHERITANCE(Y)) :-
+	nonvar(X), nonvar(Y),  X \= Y.
+conflicting_semantics_options(FL_CUSTOM(X),FL_CUSTOM(Y)) :-
+	nonvar(X), nonvar(Y),  X \= Y.
+conflicting_semantics_options(FL_TABLING(X),FL_TABLING(Y)) :-
+	nonvar(X), nonvar(Y),
+	( X == FL_SUBSUMPTIVE, Y == FL_VARIANT, !
+	; Y == FL_SUBSUMPTIVE, X == FL_VARIANT
+	),
+	!.
+conflicting_semantics_options(FL_TABLING(X),FL_TABLING(Y)) :-
+	nonvar(X), nonvar(Y),
+	( X == FL_INCREMENTAL, Y == FL_NONINCREMENTAL, !
+	; Y == FL_INCREMENTAL, X == FL_NONINCREMENTAL
+	),
+	!.
 
 print_option_conflict_error(InputFile,OptionName,Idx1,Idx2) :-
 	(flora_nth_token(Idx1,Tk1),
@@ -3082,12 +3143,15 @@ strip_indices_from_options_and_split([(Option,_I)|Rest], [Option|StrippedRest], 
    Always succeeds.
 */
 fixup_trailer_options(TrailerOptions,Defaults,NewTrailerOptions) :-
+	fixup_trailer_options1(TrailerOptions,Defaults,NewTrailerOptions1),
+	sort(NewTrailerOptions1,NewTrailerOptions).
+fixup_trailer_options1(TrailerOptions,Defaults,NewTrailerOptions) :-
 	var(TrailerOptions),
 	!,
-	fixup_trailer_options([],Defaults,NewTrailerOptions),
+	fixup_trailer_options1([],Defaults,NewTrailerOptions),
 	TrailerOptions = NewTrailerOptions.
 
-fixup_trailer_options(TrailerOptions,Defaults,NewTrailerOptions) :-
+fixup_trailer_options1(TrailerOptions,Defaults,NewTrailerOptions) :-
 	(member(FLOBJEQLDEF,TrailerOptions)
 	->
 	    flrporting:flora_delete_from_list(FLOBJEQLDEF,TrailerOptions,TrailerOptions1),
@@ -3105,40 +3169,39 @@ fixup_trailer_options(TrailerOptions,Defaults,NewTrailerOptions) :-
 	;
 	    NewTrailerOptions1 = TrailerOptions
 	),
-	(member(FL_EQUALITY(_),NewTrailerOptions1)
+	(member(FL_CUSTOM(File),NewTrailerOptions1)
 	->
-	    NewTrailerOptions2 = NewTrailerOptions1
-	;
-	    member(FL_EQUALITY(EqType),Defaults),
-	    NewTrailerOptions2 = [FL_EQUALITY(EqType)|NewTrailerOptions1]
-	),
-	(member(FL_INHERITANCE(_),NewTrailerOptions2)
-	->
-	    NewTrailerOptions3 = NewTrailerOptions2
-	;
-	    member(FL_INHERITANCE(InhType),Defaults),
-	    NewTrailerOptions3 = [FL_INHERITANCE(InhType)|NewTrailerOptions2]
-	),
-	(member(FL_TABLING(_),NewTrailerOptions3)
-	->
-	    NewTrailerOptions4 = NewTrailerOptions3
-	;
-	    member(FL_TABLING(TabType),Defaults),
-	    NewTrailerOptions4 = [FL_TABLING(TabType)|NewTrailerOptions3]
-	),
-	(member(FL_CUSTOM(File),NewTrailerOptions4)
-	->
+	    %% custom files must be expanded
 	    ( (var(File) ; File == NONE)
-	    -> NewTrailerOptions = NewTrailerOptions4
+	    -> NewTrailerOptions2 = NewTrailerOptions1
 	    ;
 		flora_file_op(expand,File,ExpandedFile),
-		flrporting:flora_delete_from_list(FL_CUSTOM(File),NewTrailerOptions4,NewTrailerOptions5),
-		NewTrailerOptions = [FL_CUSTOM(ExpandedFile)|NewTrailerOptions5]
+		flrporting:flora_delete_from_list(FL_CUSTOM(File),NewTrailerOptions1,NewTrailerOptions1Tmp),
+		NewTrailerOptions2 = [FL_CUSTOM(ExpandedFile)|NewTrailerOptions1Tmp]
 	    )
+	; NewTrailerOptions2 = NewTrailerOptions1
+	),
+	add_default_options(Defaults,NewTrailerOptions2,NewTrailerOptions).
+
+
+add_default_options([],Options,Options) :- !.
+add_default_options([Opt|Defaults],CurrentOptions,NewOptions) :-
+	add_one_option(Opt,CurrentOptions,NewOptions1),
+	add_default_options(Defaults,NewOptions1,NewOptions).
+
+add_one_option(Option,[],[Option]) :- !.
+add_one_option(Option,[HeadOpt|Options],[HeadOpt|NewOptions]) :-
+	(
+	  (conflicting_semantics_options(Option,HeadOpt)
+	  ; Option = HeadOpt
+	  )
+	->
+	  NewOptions = Options
 	;
-	    member(FL_CUSTOM(CusFile),Defaults),
-	    NewTrailerOptions = [FL_CUSTOM(CusFile)|NewTrailerOptions4]
+	  add_one_option(Option,Options,NewOptions)
 	).
+
+
 
 check_custom_trailer_file(TrailerOptions) :-
 	( member(FL_CUSTOM(File),TrailerOptions)

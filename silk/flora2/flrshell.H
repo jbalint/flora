@@ -34,7 +34,6 @@
 :- import cwd/1, cd/1 from shell.
 
 :- import
-	flora_tabling_method/2,
 	flora_module_registry/1,
 	flora_configuration/2
    from flrregistry.

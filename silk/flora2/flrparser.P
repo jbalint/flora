@@ -6305,28 +6305,17 @@ flora_dynhead(CanoniTerm,DWS,[Code],Status) :-
         ).
 
 %%% semantics directive
-parse_semantics_directive_args(_,[],[],[]).
+parse_semantics_directive_args(_,[],[],[]) :- !.
 
-parse_semantics_directive_args(AllowVariables,[CANOTERM(F,1,FL_PARENTHESIS,[Arg],If,_Ip)|Rest],[HCode|RestCode],Status) :-
-	get_atom(F,FAtom),
-	flobject_struct(Arg,ArgStruct),
-	is_valid_semantics_direct_option(AllowVariables,FAtom,ArgStruct),
+parse_semantics_directive_args(AllowVariables,[CANOTERM(F,N,FL_PARENTHESIS,Args,_If,_Ip)|Rest],HCode,Status) :-
+	N>0,
+	parse_one_semantics_directive_option(AllowVariables,F,Args,HCode-RestCode,S1),
 	!,
-	( flora_prlgterm(CANOTERM(F,1,FL_PARENTHESIS,[Arg],If,_Ip),
-			 NULL,CodeHilog,S1),
-	    %% Check if S1 can be a var. Otherwise, can substitute [] for S1
-	    S1 == [],
-	    flplib_struct(CodeHilog,HCode)
-	-> 
+	(S1==[]
+	->
 	    parse_semantics_directive_args(AllowVariables,Rest,RestCode,Status)
 	;
-	    get_index(Arg,Ind),
-	    (AllowVariables == ALLOW_VARIABLES
-	    ->
-		parsing_error(Ind,ERROR_SEMOPT,Status)
-	    ;
-		parsing_error(Ind,ERROR_SETSEMOPT,Status)
-	    )
+	    Status = S1
 	).
 
 parse_semantics_directive_args(AllowVariables, [Arg|_], _, Status) :-
@@ -6337,6 +6326,28 @@ parse_semantics_directive_args(AllowVariables, [Arg|_], _, Status) :-
 	    parsing_error(Ind,ERROR_SEMOPT,Status)
 	;
 	    parsing_error(Ind,ERROR_SETSEMOPT,Status)
+	).
+
+parse_one_semantics_directive_option(_,_F,[],Tail-Tail,[]) :- !.
+parse_one_semantics_directive_option(AllowVariables,F,[Arg|Args],[OptCode|OtherOptsCode]-Tail,Status) :-
+	get_atom(F,FAtom),
+	flobject_struct(Arg,ArgStruct),
+	is_valid_semantics_direct_option(AllowVariables,FAtom,ArgStruct),
+	!,
+	get_index(Arg,Ind),
+	(flora_prlgterm(CANOTERM(F,1,FL_PARENTHESIS,[Arg],Ind,_Ip),NULL,CodeHilog,S1),
+	    %% Check if S1 can be a var here. Then, we could replace S1 with []
+	    S1 == []
+	->
+	    flplib_struct(CodeHilog,OptCode),
+	    parse_one_semantics_directive_option(AllowVariables,F,Args,OtherOptsCode-Tail,Status)
+	;
+	    (AllowVariables == ALLOW_VARIABLES
+	    ->
+		parsing_error(Ind,ERROR_SEMOPT,Status)
+	    ;
+		parsing_error(Ind,ERROR_SETSEMOPT,Status)
+	    )
 	).
 
 
