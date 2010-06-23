@@ -24,6 +24,7 @@ PROLOG = none
 FLORADIR = ..
 
 ALLOBJS = flrdatatype$(OBJEXT) \
+	flrdtype_sub$(OBJEXT) \
 	flrdatatype_parse$(OBJEXT) \
 	flrtime_arith$(OBJEXT) \
 	flrdatatype_utils$(OBJEXT)

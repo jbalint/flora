@@ -24,7 +24,10 @@ OBJEXT = .xwam
 PROLOGEXT = .P
 
 ALLOBJS = flrdatatype$(OBJEXT) \
-	flrdatatype_parse$(OBJEXT)
+	flrdtype_sub$(OBJEXT) \
+	flrdatatype_parse$(OBJEXT) \
+	flrtime_arith$(OBJEXT) \
+	flrdatatype_utils$(OBJEXT)
 
 OPTIONS = [optimize]
 

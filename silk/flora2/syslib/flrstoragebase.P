@@ -48,6 +48,12 @@
 	storage_insert_fact/3,
 	storage_delete_fact_bt/5,
 	storage_delete_fact/3,
+	incr_storage_insert_fact_bt/3,
+	incr_storage_insert_fact/3,
+	incr_storage_delete_fact_bt/3,
+	incr_storage_delete_fact/3
+   from storage.
+:- import
 	storage_find_fact/2,
 	storage_reclaim_space/1,
 	storage_delete_all/1,
@@ -65,6 +71,8 @@
 	flora_storage_module/2,
 	flora_is_fdb_storage/1
    from flrwrapper.
+
+:- import flora_trailer_registry/2 from flrregistry.
 
 
 %% Lop off the last argument before inserting/querying the database
@@ -143,42 +151,65 @@ flora_db_find_base(StorageName,Call) :-
 
 %% Inserts facts. On backtracking, the fact is deleted.
 flora_storage_insert_fact_bt(StorageName,Fact,Call,Inserted) :-	
-	storage_insert_fact_bt(StorageName,Fact,Inserted,
-			       true,
-			       %% Refresh on backtracking.  Forward refresh is
-			       %% done in flrbtdbop.P and flrdbop.P
-			       %% Forward refresh can't be done here, since
-			       %% flora_storage_insert_fact is too low level
-			       %% and is used elsewhere.  Refreshing of tables
-			       %% on forward execution here is too low level
-			       %% and can be dangerous
-			       flora_refresh_tables(Call)).
+	flora_storage_module(StorageName,Module),
+	(
+	  flora_trailer_registry(Module,FL_TABLING(FL_INCREMENTAL))
+	-> incr_storage_insert_fact_bt(StorageName,Fact,Inserted)
+	;
+	    storage_insert_fact_bt(StorageName,Fact,Inserted,
+				   true,
+				   %% Refresh on backtracking. Forward refresh
+				   %% is done in flrbtdbop.P and flrdbop.P
+				   %% Forward refresh can't be done here, since
+				   %% flora_storage_insert_fact is too low
+				   %% level and is used elsewhere. Refreshing
+				   %% of tables on forward execution here is
+				   %% too low level and can be dangerous
+				   flora_refresh_tables(Call))
+	).
 
 
 %% Nonbacktrackable insert
 flora_storage_insert_fact(StorageName,Fact,Inserted) :-	
-	storage_insert_fact(StorageName,Fact,Inserted).
+	flora_storage_module(StorageName,Module),
+	(
+	  flora_trailer_registry(Module,FL_TABLING(FL_INCREMENTAL))
+	-> incr_storage_insert_fact(StorageName,Fact,Inserted)
+	;
+	    storage_insert_fact(StorageName,Fact,Inserted)
+	).
 
 
 %% Backtrackable delete.
 %% Doesn't remove anything, but instead "marks" for deletion.
 %% On backtracking: unmarks facts that are marked for deletion
-
 flora_storage_delete_fact_bt(StorageName,Fact,Call,Deleted) :-
-	storage_delete_fact_bt(StorageName,Fact,Deleted,
-			       true,
-			       %% Refresh on backtracking.  Forward refresh is
-			       %% done in flrbtdbop.P and flrdbop.P
-			       %% Forward refresh can't be done here, since
-			       %% flora_storage_delete_fact is too low level
-			       %% and is used elsewhere.  Refreshing of tables
-			       %% on forward execution here is too low level
-			       %% and can be dangerous
-			       flora_refresh_tables(Call)).
+	flora_storage_module(StorageName,Module),
+	(
+	  flora_trailer_registry(Module,FL_TABLING(FL_INCREMENTAL))
+	-> incr_storage_delete_fact_bt(StorageName,Fact,Deleted)
+	;
+	  storage_delete_fact_bt(StorageName,Fact,Deleted,
+				 true,
+				 %% Refresh on backtracking. Forward refresh is
+				 %% done in flrbtdbop.P and flrdbop.P
+				 %% Forward refresh can't be done here, since
+				 %% flora_storage_delete_fact is too low level
+				 %% and is used elsewhere. Refreshing of tables
+				 %% on forward execution here is too low level
+				 %% and can be dangerous
+				 flora_refresh_tables(Call))
+	).
 
 %% Nonbacktrackable delete
 flora_storage_delete_fact(StorageName,Fact,Deleted) :-
-	storage_delete_fact(StorageName,Fact,Deleted).
+	flora_storage_module(StorageName,Module),
+	(
+	  flora_trailer_registry(Module,FL_TABLING(FL_INCREMENTAL))
+	-> incr_storage_delete_fact(StorageName,Fact,Deleted)
+	;
+	  storage_delete_fact(StorageName,Fact,Deleted)
+	).
 
 %% deletes the whole trie
 %% exported
