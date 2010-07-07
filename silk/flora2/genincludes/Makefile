@@ -19,6 +19,7 @@
 FLORADIR = ..
 
 ALLOBJS = flrpatch.flh flrpreddef.flh flrindex_P.flh \
+	  flrdyndeclare.flh \
 	  flrdyna.flh flrdynz.flh \
 	  flrexportcheck.flh \
 	  flrtable.flh flrhilogtable.flh \

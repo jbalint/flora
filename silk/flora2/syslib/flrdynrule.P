@@ -36,6 +36,7 @@
 	length/2
    from basics.
 :- import assert/3 from assert.
+:- import incr_assert/3, incr_retract/1 from increval.
 :- import put_attr/3,
           get_attr/3,
           install_verify_attribute_handler/4
@@ -266,7 +267,7 @@ flora_expand_and_ins_rules(Id,InsOp,HeadList,Body,Meta,DefeatCond) :-
 	%% multi-headed rules. This is because the variables in Head/Body
 	%% would be different from the variables in the head/bridge rules.
 	copy_term(BridgeRule,BridgeRule1),
-	assert(BridgeRule,CONSERVE_REGISTERS,INDEXED_ARG),
+	adaptive_assert(BridgeRule),
 	flora_insert_multiheaded_rule(InsOp,Id,HeadList,NewPred,Body,Meta,DefeatCond,[BridgeRule1]).
 
 /***********************************************************************
@@ -358,7 +359,7 @@ flora_insert_rule(InsOp,Id,Head,Body,OrigBody,Meta,DefeatCond,BridgeRule) :-
         ;
             flora_record_rule_signature(Id,FLDYNZPREFIX,Module,InstHeadB,OrigBody,Meta,DefeatCond,[NewRule1],BridgeRule)
         ),
-	assert(NewRule,CONSERVE_REGISTERS,INDEXED_ARG),
+	adaptive_assert(NewRule),
 	flora_abolish_table_call(InstHead),
 	(BaseWrap==WRAP_OBJEQL ->
 	    ( flloadtrailer([FLOBJEQLDEF],Module), ! ; flora_abort)
@@ -481,7 +482,7 @@ flora_retract_rulelist(','(RL1,RL2)) :-
         flora_retract_rulelist(RL2).
 flora_retract_rulelist([]) :- !.
 flora_retract_rulelist([H|L]) :-
-        retract(H),
+        adaptive_retract(H),
         flora_retract_rulelist(L).
 
 /***********************************************************************
@@ -671,3 +672,11 @@ show_warnings([H|L]) :-
         flora_warning_line(H),
         show_warnings(L).
 
+
+%% We need to make these adaptive depending on whether the rule is
+%% in an incremental module or not
+adaptive_assert(Rule) :-
+	assert(Rule,CONSERVE_REGISTERS,INDEXED_ARG).
+
+adaptive_retract(Rule) :-
+	retract(Rule).

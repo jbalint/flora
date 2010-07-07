@@ -229,8 +229,7 @@ flloadtrailer(TrailerOptions,Workspace) :-
 	    ;
 	      telling(PreOutFile),
 	      tell(UserTrailerPFile),
-	      flora_current_out_line(':- compiler_options([xpp_on]).'),
-	      include_trailer_control_definitions(['LOADABLETRAILER'|SortedNewTrailerOptions]),
+	      include_xpp_control_variables(['LOADABLETRAILER'|SortedNewTrailerOptions]),
 	      flora_include_file([FLTRAILER],_FileStatus),
 	      /*
 	          Must include FLHEADER2, which has static tabling definitions
@@ -314,7 +313,7 @@ flloadpatch(Workspace) :-
 	    tell(UserPatchPFile),
 	    %% Creating .xsb/flora/patch.P
 	    flora_include_file([FLHEADER,FLDEFINITION,FLHEADER2,FLPATCH,
-				FLDYNALIB, FLDYNZLIB,
+				FLDYNDECLARE, FLDYNALIB, FLDYNZLIB,
 				FLOPPOSESBASELIB,
 				FLPREDDEF,FLREFRESHTABLE],_FileStatus),
 	    told,
@@ -1253,7 +1252,7 @@ flora_generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactLi
 	;
 	    findall((Arity,Pos),member(FLINDEX(Arity,Pos),FileOptionList),IndexList),
 	    write_index_directives(IndexList),
-	    include_trailer_control_definitions(TrailerOptions),
+	    include_xpp_control_variables(TrailerOptions),
             flora_include_file(OptList,HeaderStatus),
 	    ( HeaderStatus == FLORA_FAILURE -> FileStatus=FLORA_FAILURE
 	    ;
@@ -1406,17 +1405,25 @@ flora_generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,D
 	findall(ModOption,member(FLSYSMOD(ModOption),FileOptionList),SysModOptionList),
 	append(SysLibOptionList,SysModOptionList,OptList),
 	( member(XSB_SPECREPR,FileOptionList) -> true
-	; flora_current_out_line(':- compiler_options([spec_off]).')),
+	; flora_current_out_line(':- compiler_options([spec_off]).')
+	),
+	/*
+	  include_xpp_control_variables/1 should be before FLHEADER2
+	  so that the definitions of
+	  FLORA_SUBSUMPTIVE_TABLING, FLORA_INCREMENTAL_TABLING
+	  will affect the tabling definitions included from FLHEADER2
+	*/
+	include_xpp_control_variables(TrailerOptions),
 	flora_include_file([FLHEADER,FLHEADER2],FLHeaderStatus),
 	( FLHeaderStatus == FLORA_FAILURE -> FileStatus=FLORA_FAILURE
 	;
 	    findall((Arity,Pos),member(FLINDEX(Arity,Pos),FileOptionList),IndexList),
 	    write_index_directives(IndexList),
-	    include_trailer_control_definitions(TrailerOptions),
 	    flora_include_file([FLDEFINITION,FLTRAILERREGISTRY,
 				FLREFRESHTABLE,FLLIBIMPORTEDCALLS,
 				FLINDEX_P,FLPATCH,
 				FLOPPOSESBASELIB,
+				FLDYNDECLARE,
 				FLDYNALIB|OptList],
 			       HeaderStatus),
 	    ( HeaderStatus == FLORA_FAILURE -> FileStatus=FLORA_FAILURE
@@ -2996,9 +3003,10 @@ encode_pathList_as_filenameList([Char|Rest],[Char|Rest1]) :-
 
 
 %% Include #define statements according to TrailerOptions
-include_trailer_control_definitions(TrailerOptions) :-
+include_xpp_control_variables(TrailerOptions) :-
 	flora_current_out_nl,
-	flora_current_out_line('/********** Trailer Control Variables ************/'),
+	flora_current_out_line(':- compiler_options([xpp_on]).~n'),
+	flora_current_out_line('/********** Tabling and Trailer Control Variables ************/'),
 	flora_current_out_nl,
 	(member('LOADABLETRAILER',TrailerOptions)
 	-> flora_current_out_line('#define LOADABLETRAILER')
@@ -3021,9 +3029,18 @@ include_trailer_control_definitions(TrailerOptions) :-
 	    flora_current_out_string('#define CUSTOMTRAILER ~w~n', [CusFile])
 	),
 	flora_current_out_nl,
+	(subsumptive_tabling_requested(TrailerOptions)
+	-> flora_current_out_line('#define FLORA_SUBSUMPTIVE_TABLING ')
+	;  true
+	),
+	(incremental_tabling_requested(TrailerOptions)
+	-> flora_current_out_line('#define FLORA_INCREMENTAL_TABLING ')
+	;  true
+	),
+	flora_current_out_nl,
 	!.
-include_trailer_control_definitions(TrailerOptions) :- 
-	flora_error_line('Bug in include_trailer_control_definitions. Options: ~w', [TrailerOptions]),
+include_xpp_control_variables(TrailerOptions) :- 
+	flora_error_line('Bug in include_xpp_control_variables/1. Options: ~w', [TrailerOptions]),
 	fail.
 
 
