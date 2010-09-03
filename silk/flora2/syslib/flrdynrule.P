@@ -256,19 +256,20 @@ flora_expand_and_ins_rules(Id,InsOp,HeadList,Body,Meta,DefeatCond) :-
                 )
 	    )
         ),
+	%% check if a module name is valid during an update
 	flora_storage_check_module_name(MName),
-	new_dynpredicate(NewF),
+	new_dynpredicate(NewPredName),
 	collect_vars(Body,BodyVars),
 	sort(BodyVars,SortedBodyVars),
-	append(SortedBodyVars,[Caller],NewF_Arguments),
-	flora_module_predicate(NewF,NewF_Arguments,MName,NewPred),
-	BridgeRule =.. [FL_IMPLYOP,NewPred,Body],
+	append(SortedBodyVars,[Caller],NewP_Arguments),
+	flora_module_predicate(NewPredName,NewP_Arguments,MName,NewPredAtom),
+	BridgeRule =.. [FL_IMPLYOP,NewPredAtom,Body],
 	%% This copy-term speeds up unification with rule signatures for
 	%% multi-headed rules. This is because the variables in Head/Body
 	%% would be different from the variables in the head/bridge rules.
 	copy_term(BridgeRule,BridgeRule1),
 	adaptive_assert(BridgeRule),
-	flora_insert_multiheaded_rule(InsOp,Id,HeadList,NewPred,Body,Meta,DefeatCond,[BridgeRule1]).
+	flora_insert_multiheaded_rule(InsOp,Id,HeadList,NewPredAtom,Body,Meta,DefeatCond,[BridgeRule1]).
 
 /***********************************************************************
  flora_insert_multiheaded_rule(+Op,+Id,+HeadList,+Body,+OrigBody,+Meta,+DefeatCond,+BridgeRules)
@@ -319,6 +320,7 @@ flora_insert_rule(InsOp,Id,Head,Body,OrigBody,Meta,DefeatCond,BridgeRule) :-
             ;
                 true
             ),
+	    %% check if a module name is valid during an update
 	    flora_storage_check_module_name(MName)
 	;
 	    InstHead=Head
@@ -340,6 +342,7 @@ flora_insert_rule(InsOp,Id,Head,Body,OrigBody,Meta,DefeatCond,BridgeRule) :-
         ;
             flora_abort(['Internal error: invalid head in a dynamically inserted rule, ', InstHead, ' :- ', Body])
         ),
+	%% check if a module name is valid during an update
 	flora_storage_check_module_name(Module),
 	%% flora_record_rule_signature will bind DefeatCond, if it isn't NULL
 	(DefeatCond == NULL
@@ -535,13 +538,13 @@ inst_list([H|L],[NH|NL]) :-
 	inst_list(L,NL).
 
 /***********************************************************************
- new_predicate(-NewPred)
+ new_predicate(-NewPredName)
 ************************************************************************/ 
-new_dynpredicate(NewPred) :-
+new_dynpredicate(NewPredName) :-
 	conget(flora_global_dynnewpredicate, N),
 	M is N+1,
 	conset(flora_global_dynnewpredicate, M),
-	flora_concat_items([dyn_newpredicate,N], NewPred).
+	flora_concat_items([dyn_newpredicate,N], NewPredName).
 
 /***********************************************************************
  collect_vars(+Term,-Vars)
@@ -676,7 +679,30 @@ show_warnings([H|L]) :-
 %% We need to make these adaptive depending on whether the rule is
 %% in an incremental module or not
 adaptive_assert(Rule) :-
-	assert(Rule,CONSERVE_REGISTERS,INDEXED_ARG).
+	Rule = (H:- _),
+	(curr_sym:predicate_property(H,opaque)
+	->
+	    assert(Rule,CONSERVE_REGISTERS,INDEXED_ARG)
+	; curr_sym:predicate_property(H,incremental)
+	->
+	    incr_assert(Rule,CONSERVE_REGISTERS,INDEXED_ARG)
+	;
+	    functor(H,F,A),
+	    %% Inserting new predicate as opaque.
+	    %% Incremental updates seem to go through opaque dynamic preds.
+	    (dynamic F/A as opaque),
+	    assert(Rule,CONSERVE_REGISTERS,INDEXED_ARG)
+	).
 
 adaptive_retract(Rule) :-
-	retract(Rule).
+	Rule = (H:- _),
+	(curr_sym:predicate_property(H,opaque)
+	->
+	    retract(Rule)
+	; curr_sym:predicate_property(H,incremental)
+	->
+	    incr_retract(Rule)
+	;
+	    flora_abort(['Internal error: deletion of rule whose head is not opaque or dynamic: ',
+			 Rule])
+	).
