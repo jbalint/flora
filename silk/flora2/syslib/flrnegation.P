@@ -21,6 +21,8 @@
 #include "flora_porting.flh"
 #include "flora_prefix.flh"
 
+#include "flora_tabling_methods.flh"
+
 #define MAX_NEGATION_NESTING_DEPTH 10000
 
 
@@ -46,16 +48,21 @@
 
 
 :- export
-	flora_cleanup_negation/0,  % unused
+	flora_cleanup_negation/0,
+	flora_cleanup_negation/1, 
+	tabled_unnumber_call/1,
 	FLORA_TNOT_PREDICATE/1.
 
-:- table tabled_unnumber_call/1.
-:- use_variant_tabling tabled_unnumber_call(_).
+%% This is also executably tabled in flrtrailer.flh
+:- table tabled_unnumber_call/1 as MOLECULE_TABLING_TYPE.
 
 FLORA_TNOT_PREDICATE(Goal) :-
 	copy_term(Goal,Goal1),
-	numbervars(Goal1,0,_), % Goal1 is now ground, so no checks are necessary
-	flora_cleanup_negation(Goal1),
+	numbervars(Goal1,0,_),
+	%% deleting tables for tabled_unnumber_call/1 is dangerous here
+	%% due to possible loops through negation.
+	%%flora_cleanup_negation(Goal1),
+	%% Goal1 is now ground, so no checks are necessary in 't not'
 	't not'(tabled_unnumber_call(Goal1)).
 
 tabled_unnumber_call(GGoal) :-
@@ -66,7 +73,17 @@ tabled_unnumber_call(GGoal) :-
 flora_cleanup_negation :-
 	%% tabled_unnumber_call is ot incrementally tabled, so
 	%% flora_abolish_table_predicate is ok here
-	flora_abolish_table_predicate(tabled_unnumber_call(_)), !.
+	(curr_sym:predicate_property(tabled_unnumber_call(_),incremental)
+	-> true
+	;
+	    flora_abolish_table_predicate(tabled_unnumber_call(_))
+	),
+	!.
 flora_cleanup_negation(Call) :-
-	flora_abolish_table_call(tabled_unnumber_call(Call)), !.
+	(curr_sym:predicate_property(tabled_unnumber_call(_),incremental)
+	-> true
+	;
+	    flora_abolish_table_call(tabled_unnumber_call(Call))
+	),
+	!.
 
