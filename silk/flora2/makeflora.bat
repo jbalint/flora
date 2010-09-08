@@ -14,13 +14,13 @@ REM  NOTE: DOS batch language is very brittle. For instance, replacing
 REM        %1 with %ARG%, where set ARG=%1 will not work if
 REM        full-path-to-prolog has a file extension, e.g., \xsb\bin\wxsb.bat
 
-set current_tabling=flrincludes\.flora_current_tabling
-echo. > %current_tabling%
-if "%1" == "-S" echo #define FLORA_SUBSUMPTIVE_TABLING > %current_tabling%
+set default_tabling=flrincludes\.flora_default_tabling
+echo. > %default_tabling%
+if "%1" == "-S" echo #define FLORA_SUBSUMPTIVE_TABLING > %default_tabling%
 if "%1" == "-S" shift
-if "%1" == "-I" echo #define FLORA_INCREMENTAL_TABLING > %current_tabling%
+if "%1" == "-I" echo #define FLORA_INCREMENTAL_TABLING > %default_tabling%
 if "%1" == "-I" shift
-if "%1" == "-S" echo #define FLORA_SUBSUMPTIVE_TABLING > %current_tabling%
+if "%1" == "-S" echo #define FLORA_SUBSUMPTIVE_TABLING > %default_tabling%
 if "%1" == "-S" shift
 
 if "%1" == "" echo Usage:  makeflora [-c] full-path-to-prolog

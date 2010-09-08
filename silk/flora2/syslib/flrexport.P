@@ -37,8 +37,6 @@
 	flora_error_invalid_export/1
    from flrundefined.
 
-:- import flora_abolish_table_call/1 from flrtables.
-   
 :- import 
 	convert_to_body_literal/2, 
 	convert_to_signature/3,
@@ -48,9 +46,7 @@
 
 :- import flora_export_registry/4 from flrregistry.
 
-%% saves a bit of time
-:- table flora_no_predicates_exported/1.
-
+:- dynamic no_predicates_exported_module_cache/2.
 
 %% to extract the individual terms from FLEXPORT code.
 is_flexport(FLEXPORT(UpdTag, ExportingModule, ListOfModulesExportedTo, Term),UpdTag, ExportingModule, ListOfModulesExportedTo, Term).
@@ -62,7 +58,7 @@ is_fllibmodlit(FLLIBMODLIT(_,_,_,_)).
   flora_reset_export_registries(+ModuleName)
 ****************************************************************************/
 flora_reset_export_registries(Module) :-
-	flora_abolish_table_call(flora_no_predicates_exported(_)),
+	retractall(no_predicates_exported_module_cache(_,_)),
 	retractall(flora_export_registry(Module,_,_,_)).
 
 
@@ -85,7 +81,7 @@ FLLIBEXPORT([H|T]) :-
 	FLLIBEXPORT(T).
 
 FLLIBEXPORT([]) :-
-	flora_abolish_table_call(flora_no_predicates_exported(_)),
+	retractall(no_predicates_exported_module_cache(_,_)),
 	!.
 
 
@@ -190,12 +186,24 @@ flora_check_export_registry_internal(CallerMod,ModBeingCalled,Term,UpdateTag) :-
   If any predicates are exported it will fail, else it will succeed.
 ****************************************************************************/
 flora_no_predicates_exported(Module) :-
+	nonvar(Module),
+	no_predicates_exported_module_cache(Module,true),
+	!.
+flora_no_predicates_exported(Module) :-
+	nonvar(Module),
+	no_predicates_exported_module_cache(Module,false),
+	!,
+	fail.
+flora_no_predicates_exported(Module) :-
 	flora_export_registry(Module,_ExtMod,_UpdTag,_Term),
 	!,
+	assert(no_predicates_exported_module_cache(Module,false)),
 	fail.
 
 %% no predicate exported, hence succeeds.
-flora_no_predicates_exported(_Module).
+flora_no_predicates_exported(Module) :-
+	!,
+	assert(no_predicates_exported_module_cache(Module,true)).
 
 
 /****************************************************************************

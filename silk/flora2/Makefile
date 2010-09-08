@@ -54,6 +54,8 @@ FLORA_CHAR_DEFS = $(FLORADIR)/flrincludes/flora_characters.flh
 FLORA_INCLUDES_DIR = flrincludes
 
 FLORA_TERMS = $(FLORA_INCLUDES_DIR)/flora_terms.flh
+FLORA_TABLING_METHODS = $(FLORA_INCLUDES_DIR)/flora_tabling_methods.flh
+FLORA_DEFAULT_TABLING = $(FLORA_INCLUDES_DIR)/.flora_default_tabling
 FLORA_ERRORS = $(FLORA_INCLUDES_DIR)/flora_errors.flh
 FLORA_PORTING = $(FLORA_INCLUDES_DIR)/flora_porting.flh
 FLORA_EXTENSIONS = $(FLORA_INCLUDES_DIR)/flora_extensions.flh
@@ -114,12 +116,15 @@ misc:
 	-cd docs && $(MAKE) PROLOG=$(PROLOG)
 
 
+${FLORA_TABLING_METHODS} : ${FLORA_DEFAULT_TABLING}
+	./touch.sh  $(FLORA_TABLING_METHODS)
+
+
 %$(OBJEXT) : %$(PROLOGEXT) $(FLORA_TERMS) $(FLORA_PORTING) $(FLORA_EXTENSIONS) $(FLORA_WRAP)
 	@echo 'mc($*,$(OPTION)).' >> cmd...
 
 %$(PROLOGEXT) : %$(PROLOGHEADEREXT)
 	./touch.sh $@
-
 
 flrversion${OBJEXT}: flrversion${PROLOGEXT} version.flh
 	@echo 'mc(flrversion,$(OPTION)).' >> cmd...
@@ -144,7 +149,7 @@ flrcoder${OBJEXT} : flrcoder${PROLOGEXT} flrcoder.H $(FLORA_CHAR_DEFS) $(FLORA_T
 	@echo 'mc(flrcoder,$(OPTION)).' >> cmd...
 
 
-flrutils${OBJEXT} : flrutils${PROLOGEXT} flrutils.H $(FLORA_CHAR_DEFS) $(FLORA_TERMS)  $(FLORA_PORTING)
+flrutils${OBJEXT} : flrutils${PROLOGEXT} flrutils.H $(FLORA_CHAR_DEFS) $(FLORA_TERMS) ${FLORA_TABLING_METHODS}  $(FLORA_PORTING)
 	@echo 'mc(flrutils,$(OPTION)).' >> cmd...
 
 

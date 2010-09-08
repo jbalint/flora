@@ -23,12 +23,26 @@
 
 #include "flora_characters.flh"
 #include "flora_terms.flh"
+#include "flora_tabling_methods.flh"
 #include "flora_errors.flh"
 #include "flora_porting.flh"
 #include "flora_extensions.flh"
 #include "flora_exceptions.flh"
 #include "flora_status_codes.flh"
 
+#if defined(FLORA_SUBSUMPTIVE_TABLING)
+#define DEFAULT_SUBSUMPTIVE_SEMANTICS  FL_SUBSUMPTIVE
+#else
+#define DEFAULT_SUBSUMPTIVE_SEMANTICS  FL_VARIANT
+#endif
+
+#if defined(FLORA_INCREMENTAL_TABLING)
+#define DEFAULT_INCREMENTAL_SEMANTICS  FL_INCREMENTAL
+#else
+#define DEFAULT_INCREMENTAL_SEMANTICS  FL_NONINCREMENTAL
+#endif
+
+#define FLORA_DEFAULT_SEMANTICS   [FL_EQUALITY(NONE),FL_INHERITANCE(FLOGIC),FL_CUSTOM(NONE),FL_TABLING(DEFAULT_SUBSUMPTIVE_SEMANTICS),FL_TABLING(DEFAULT_INCREMENTAL_SEMANTICS)]
 
 
 ?- bootstrap_flora.
@@ -197,7 +211,7 @@ flora_load_module_internal(OrigInFile) :-
   Maintains trailer registry.
   Won't load trailer if the workspace has a trailer with identical semantics.
 **********************************************************************/
-flloadtrailer(TrailerOptions,Workspace) :-
+flloadtrailer1(TrailerOptions,Workspace) :-
 	valid_flora_module_name(Workspace),
 	%% Check trailer options
 	get_trailer_options(Workspace,CurrentTrailerOptions),
@@ -262,7 +276,8 @@ flloadtrailer(TrailerOptions,Workspace) :-
 		flora_clear_xpp_options
 	    ),
 	    %% abolish tables after loading the trailer
-	    catch(abolish_all_tables,_,flora_warning_line(WARN_TABLED_FLLOAD,[setsemantics])),
+	    %%catch(abolish_all_tables,Ball,(flora_warning_line(WARN_TABLED_FLLOAD,[FL_SETSEMANTICS]), flora_warning_line('~w',[Ball]))),
+	    catch(abolish_all_tables,_,flora_warning_line(WARN_TABLED_FLLOAD,[FL_SETSEMANTICS])),
 	    consult(UserTrailerWSOFile)
 	),
 	!,
@@ -276,6 +291,9 @@ flloadtrailer(TrailerOptions,Workspace) :-
 	    flloadpatch(Workspace)
 	),
 	!.
+flloadtrailer(TrailerOptions,Workspace) :-
+	call_cleanup(flloadtrailer1(TrailerOptions,Workspace),fail).
+flloadtrailer(_,_).
 
 
 %% Unify TrailerOptions with the module semantics

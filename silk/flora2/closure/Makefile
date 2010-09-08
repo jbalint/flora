@@ -31,6 +31,11 @@ ALLOBJS = flrcommon.flh \
 	flrimportaxioms.flh \
 	flrprednoeql.flh
 
+FLORA_INCLUDES_DIR = ../flrincludes
+
+FLORA_TERMS = $(FLORA_INCLUDES_DIR)/flora_terms.flh
+FLORA_TABLING_METHODS = $(FLORA_INCLUDES_DIR)/flora_tabling_methods.flh
+
 PROLOG = none
 
 PROLOG_COMMAND = $(PROLOG) -s -m 60000 -c 10000 -e 'segfault_handler(warn).'
@@ -53,7 +58,7 @@ all: clean init $(ALLOBJS) finish
 	@cat $(SVFILE)
 
 
-%.flh: %.fli $(FLORA_PRED_DEF)
+%.flh: %.fli $(FLORA_PRED_DEF)  $(FLORA_TERMS) $(FLORA_TABLING_METHODS)
 	@echo 'flWrapAround($*).' >> cmd...
 
 
