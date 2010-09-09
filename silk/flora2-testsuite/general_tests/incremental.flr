@@ -1,0 +1,70 @@
+
+:- setsemantics{tabling(variant,incremental)}.
+
+q(a,b).
+q(aa,bb).
+b[foo->c].
+bb[foo->cc].
+bb1[foo->cc1].
+bb2[foo->cc2].
+r(aa1,bb1).
+r(aa2,bb2).
+
+p(?X) :- bar[?X->?].
+p(?X) :- q(?X,?).
+?X[f(?Y)->?Z] :- q(?X,?Y), ?Y[foo->?Z].
+
+collect(?L1,?L2) :-
+	?L1=setof{?X|p(?X)}, ?L2=setof{?R|?X[f(?Y)->?Z],?R=(?X,?Y,?Z)}.
+
+%tst1 :- write('tst1: ')@_plg,
+	collect(?L1,?L2),
+	write(L1 = ?L1)@_plg,
+	write(' ')@_plg,
+	writeln(L2 = ?L2)@_plg.
+
+// this should return more
+%tst2 :- write('tst2: ')@_plg,
+	insert{q(aaa,bbb), bbb[foo->ccc]},
+	collect(?L1,?L2),
+	write(L1 = ?L1)@_plg,
+	write(' ')@_plg,
+	writeln(L2 = ?L2)@_plg.
+
+// test for rule addition
+%tst3 :- write('tst3: ')@_plg,
+	insertrule{q(?X,?Y) :- r(?X,?Y)},
+	insertrule{bar[?X->?X] :- r(?,?X)},
+	collect(?L1,?L2),
+	write(L1 = ?L1)@_plg,
+	write(' ')@_plg,
+	writeln(L2 = ?L2)@_plg.
+
+// test for rule deletion
+%tst4 :- write('tst4: ')@_plg,
+	deleterule{q(?X,?Y) :- r(?X,?Y)},
+	deleterule{bar[?X->?X] :- r(?,?X)},
+	collect(?L1,?L2),
+	write(L1 = ?L1)@_plg,
+	write(' ')@_plg,
+	writeln(L2 = ?L2)@_plg.
+
+// this should return more
+%tst5 :- write('tst5: ')@_plg,
+	delete{q(aaa,bbb), bbb[foo->ccc]},
+	collect(?L1,?L2),
+	write(L1 = ?L1)@_plg,
+	write(' ')@_plg,
+	writeln(L2 = ?L2)@_plg.
+
+
+
+%pretest :- %tst1, %tst2, %tst3, %tst4, %tst5.
+
+
+%test :- tell(temp)@_plg(),
+	Method[%mustDefine(on)]@_sys,
+	%pretest,
+	Method[%mustDefine(off)]@_sys,
+	%pretest,
+	told@_prolog.

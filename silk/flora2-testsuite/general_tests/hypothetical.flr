@@ -1,3 +1,4 @@
+:- setsemantics{tabling(variant,incremental)}.
 
 p(a,f(b)).
 p(c,f(d)).
@@ -5,48 +6,77 @@ p(e,f(g)).
 
 r(?X,?Y) :- p(?Z,f(?X)), ?Z[foo -> ?Y].
 
-%tst1(?X,?Y,?Z) :-
+// mixed hypothetical/non-hypothetical test
+%tst1 :-
 	// stuff before a hypothetical
 	p(?X,f(?Y)),
 	// a hypothetical possibility query
 	<> (t_insert{c[foo->g(y)], a[foo->bar]}, r(?Y,?Z)),
 	// some stuff after
-	t_insert{cde[efg->k]},
+	insert{cde[efg->k]},
 	p(a,?),
 	// print results
 	write('\ntst1: X'=?X)@_plg,
 	write('  Y'=?Y)@_plg,
-	write('  Z'=?Z)@_plg.
+	write('  Z'=?Z)@_plg,
+	fail.
+%tst1 :- true.
 
-%tst4(?X,?Y,?Z) :-
-	// stuff before a hypothetical
-	p(?X,f(?Y)),
-	// a hypothetical IMpossibility query
-	~<> (t_insert{c[foo->g(y)], a[foo->bar]}, r(e,?Z)),
-	// some stuff after
-	t_insert{cde[efg->k]},
-	p(a,?),
-	// print results
-	write('\ntst4: X'=?X)@_plg,
-	write('  Y'=?Y)@_plg,
-	write('  Z'=?Z)@_plg.
-
-// print the results from the mixed hypothetical/non-hypothetical query
-?- %tst1(?X,?Y,?Z).
-
-// c[foo->g(y)] was inserted hypothetically, so it goes
-?- write('\ntst2: ')@_plg,
+// c[foo->g(y)] was inserted hypothetically, so it should be false
+%tst2 :- write('\ntst2: ')@_plg,
 	if c[foo->g(y)] then
            writeln(failed)@_plg
 	else
            writeln(succeded)@_plg.
 
+// r(?Y,?Z) was true after a hypotheticalinsert, so it should be false now
+%tst3 :- write('\ntst3: ')@_plg,
+	if r(?,?) then
+           writeln(failed)@_plg
+	else
+           writeln(succeded)@_plg.
+
 // cde[efg->k] was not inserted hypotheticaly, so it stays
-?- write('tst3: ')@_plg,
+%tst4 :- write('tst4: ')@_plg,
 	if ?[efg->?] then
            writeln(succeded)@_plg
 	else
            writeln(failed)@_plg.
 
 // an impossibility query
-?- %tst4(?X,?Y,?Z).
+%tst5 :-
+	// stuff before a hypothetical
+	p(?X,f(?Y)),
+	// a hypothetical IMpossibility query
+	~<> (t_insert{c[foo->g(y)], a[foo->bar]}, r(e,?)),
+	// some stuff after
+	insert{cde[efg->k]},
+	p(a,?),
+	// print results
+	write('\ntst5: X'=?X)@_plg,
+	write('  Y'=?Y)@_plg,
+	fail.
+%tst5 :- true.
+
+
+// delete test
+%tst6 :- insert{c[foo->g(y)]},
+	 <>(t_delete{p(c,?)}, not r(?,?)),
+	 r(?X,?Y),
+	 p(c,?),
+	// print results
+	write('\ntst6: X'=?X)@_plg,
+	write('  Y'=?Y)@_plg.
+
+%cleanup :- t_delete{c[foo->g(y)],cde[efg->k]}.
+
+
+%pretest :- %tst1, %tst2, %tst3, %tst4, %tst5, %tst6, %cleanup.
+
+
+%test :- tell(temp)@_plg(),
+	Method[%mustDefine(on)]@_sys,
+	%pretest,
+	Method[%mustDefine(off)]@_sys,
+	%pretest,
+	told@_prolog.
