@@ -34,6 +34,9 @@
 FLNEGPREFIX(WRAP_SUB)(X,Y,CallerInfo) :-
 	FLNEGTRAILERPREFIX(WRAP_SUB)(X,Y,CallerInfo).
 
+FLNEGPREFIX(WRAP_SUB)(X,Y,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_SUB)(Y,X,CallerInfo).
+
 FLNEGPREFIX(WRAP_SUB)(Z,Y,CallerInfo) :-
 	silent_sub(X,Z,CallerInfo),
 	FLNEGTRAILERPREFIX(WRAP_SUB)(X,Y,CallerInfo).
@@ -158,12 +161,3 @@ FLNEGPREFIX(WRAP_IBOOLSIG)(S,M,CallerInfo) :-
 FLNEGPREFIX(WRAP_EXISTS)(X,CallerInfo) :-
 	FLNEGTRAILERPREFIX(WRAP_EXISTS)(X,CallerInfo).
 
-
-/*****************************************************************************
-  equality maintenance
-  Here we just treat :=: as an ordinary relation.
-*****************************************************************************/
-%% Means X,Y are equal, but not identical
-FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(X,Y,CallerInfo),
-	X \= Y.

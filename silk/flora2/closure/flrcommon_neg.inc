@@ -74,5 +74,22 @@ FLNEGTRAILERPREFIX(WRAP_EXISTS)(X,CallerInfo) :-
 	checkCallerInfo(WRAP_EXISTS(X),'FLORA_THIS_MODULE_NAME',CallerInfo),
 	FLNEGHEADPREFIX(WRAP_EXISTS)(X,CallerInfo).
 
+
+/*****************************************************************************
+  equality maintenance
+  Here we just treat neg :=: as an ordinary symmetric relation.
+*****************************************************************************/
+%% WRAP_DIFFOBJEQL means X,Y are equal, but not identical
 FLNEGPREFIX(WRAP_OBJEQL)(X,Y,CallerInfo) :-
         FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo).
+
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
+	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(X,Y,CallerInfo),
+	X \= Y.
+
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
+	FLNEGPREFIX(WRAP_OBJEQL)(Y,X,CallerInfo),
+	X \= Y.
+
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
+	FLTRAILERPREFIX(WRAP_SUB)(X,Y,CallerInfo).

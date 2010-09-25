@@ -462,12 +462,9 @@ FLNEGPREFIX(WRAP_EXISTS)(X,CallerInfo) :-
 
 /*****************************************************************************
   basic equality maintenance
+  symmetry, transitivity are treated in flrcommon_neg.inc
 *****************************************************************************/
-%% Means X,Y are unequal and not identical
-FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(Y,X,CallerInfo),
-	X \= Y.
-
+%% WRAP_DIFFOBJEQL means X,Y are unequal and not identical
 FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
 	WRAP_DIFFOBJEQL(X,V,CallerInfo),
 	WRAP_DIFFOBJEQL(Y,W,CallerInfo),
