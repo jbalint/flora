@@ -139,9 +139,7 @@ if test ! -x "$FLORADIR/runflora"; then
     echo "Can't execute $FLORADIR/runflora" >$MSG_FILE
     HOSTNAME=`hostname`
     echo "Aborted testsuite on $HOSTNAME..." >> $MSG_FILE
-    # Mail does not work on the HP
-    #	Mail -s "Testsuite aborted" $USER@cs.sunysb.edu < $MSG_FILE
-    mail $USER < $MSG_FILE
+    #mail $USER < $MSG_FILE
     rm -f $MSG_FILE
     exit
 fi
@@ -268,7 +266,7 @@ if test -s $RES_FILE; then
 	echo "    Summary of the problems:" >> $MSG_FILE
 	echo "" >> $MSG_FILE
 	cat $RES_FILE >> $MSG_FILE
-	mail $USER < $MSG_FILE
+	#mail $USER < $MSG_FILE
 	rm -f $MSG_FILE
 else
 	echo "PASSED testsuite for $FLORADIR/runflora on $HOSTNAME"
