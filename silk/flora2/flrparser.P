@@ -830,6 +830,7 @@ is_obj_ascii_string_struct(OBJECT(ASCII_STRING(_Str),_Index)) :- !.
 is_obj_identifier_struct(OBJECT(IDENTIFIER(Str),Index), Str, Index) :- !.
 is_obj_quoted_atom_struct(OBJECT(QUOTED_ATOM(Str),Index), Str, Index) :- !.
 is_obj_ascii_string_struct(OBJECT(ASCII_STRING(Str),Index), Str, Index) :- !.
+is_obj_builtin_identifier_struct(OBJECT(BUILTIN_IDENTIFIER(Str),Index), Str, Index) :- !.
 
 flmethspec_struct(Method,FLMETHSPEC(Method)).
 
@@ -2119,7 +2120,7 @@ flora_prefixdef_parse_term(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),[Code],
 	          flprefixdef_struct(NameCode,BodyCode,Code)
 
 	    ; get_index(PrefixBody,Index_Body),
-	      parsing_error(Index_Body,ERROR_PREFIX_BODY,Status) % need to change the error message
+	      parsing_error(Index_Body,ERROR_PREFIX_BODY,Status)
 	    )
 
 	; get_index(PrefixHead,Index_Head),
@@ -4415,17 +4416,21 @@ flora_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_HF,DWS,Code,Status)
 	Args=[Prefix,Localname],
 	( is_obj_identifier_struct(Prefix)
 	-> %% prefix (the part before '#') should be an atom
-	    ( (is_obj_ascii_string_struct(Localname)
-	      ; is_obj_identifier_struct(Localname)
-	      ; is_obj_quoted_atom_struct(Localname)
+	    ( (is_obj_ascii_string_struct(Localname), Localname1 = Localname
+	      ; is_obj_identifier_struct(Localname), Localname1 = Localname
+	      ; is_obj_quoted_atom_struct(Localname), Localname1 = Localname
+	      ; is_obj_builtin_identifier_struct(Localname,Str,Index),
+		  %% convert to regular identifier
+		  is_obj_identifier_struct(Localname1,Str,Index)
 	      )
 	    -> %% localname (part after '#') must be string/quotedAtm/identifier
-		flora_pathexplist(Args,DWS,ArgsCode,Status),
+		Args1 = [Prefix,Localname1],
+		flora_pathexplist(Args1,DWS,ArgsCode,Status),
 		ArgsCode=[PrefixCode,LocalnameCode],
 	        flurisq_struct(PrefixCode,LocalnameCode,Code)
 
 	    ; get_index(Localname,Index_Localname),
-	      parsing_error(Index_Localname,ERROR_SQNAME_LOCAL,Status) % need to change the error message
+	      parsing_error(Index_Localname,ERROR_SQNAME_LOCAL,Status)
 	    )
 
 	; get_index(Prefix,Index_Prefix),
@@ -5063,13 +5068,17 @@ flora_head_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),HF,DWS,Code,Stat
 	    Args=[Prefix,Localname],
 	    ( is_obj_identifier_struct(Prefix)
 	    -> % make sure that prefix (the part before '#') is an atom
-		((is_obj_ascii_string_struct(Localname)
-		 ; is_obj_identifier_struct(Localname)
-		 ; is_obj_quoted_atom_struct(Localname)
-		 )
+		( (is_obj_ascii_string_struct(Localname), Localname1 = Localname
+		  ; is_obj_identifier_struct(Localname), Localname1 = Localname
+		  ; is_obj_quoted_atom_struct(Localname), Localname1 = Localname
+		  ; is_obj_builtin_identifier_struct(Localname,Str,Index),
+		      %% convert to regular identifier
+		      is_obj_identifier_struct(Localname1,Str,Index)
+		  )
 		-> %% localname (the part following '#')
 		    %% should be a string or quoted atom or an identifier
-		    flora_head_pathexplist(Args,DWS,ArgsCode,Status),
+		    Args1 = [Prefix,Localname1],
+		    flora_head_pathexplist(Args1,DWS,ArgsCode,Status),
 		    ArgsCode=[PrefixCode,LocalnameCode],
 		    flurisq_struct(PrefixCode,LocalnameCode,Code)
 
@@ -5802,14 +5811,18 @@ flora_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_HF,DWS,Code
 	Args=[Prefix,Localname],
 	( is_obj_identifier_struct(Prefix)
 	-> %% prefix (the part before '#') should be an identifier
-	    ( (is_obj_ascii_string_struct(Localname)
-	       ; is_obj_identifier_struct(Localname)
-	       ; is_obj_quoted_atom_struct(Localname)
+	    ( (is_obj_ascii_string_struct(Localname), Localname1 = Localname
+	      ; is_obj_identifier_struct(Localname), Localname1 = Localname
+	      ; is_obj_quoted_atom_struct(Localname), Localname1 = Localname
+	      ; is_obj_builtin_identifier_struct(Localname,Str,Index),
+		  %% convert to regular identifier
+		  is_obj_identifier_struct(Localname1,Str,Index)
 	      )
 	    ->
 		%% localname (the part following '#') should be a string
 		%% or a quoted atom or an identifier
-		flora_db_pathexplist(Mode,Args,DWS,ArgsCode,Status),
+		Args1 = [Prefix,Localname1],
+		flora_db_pathexplist(Mode,Args1,DWS,ArgsCode,Status),
 		ArgsCode=[PrefixCode,LocalnameCode],
 	        flurisq_struct(PrefixCode,LocalnameCode,Code)
 

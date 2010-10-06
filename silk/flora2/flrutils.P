@@ -1152,10 +1152,7 @@ flora_compile_file_add(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 			   'Compile time '
 			   ),
 	%% Wait, to not leave zombies.
-	process_control(XPP_process,wait(ExitStatus)),
-	(ExitStatus==0, !
-	; flora_error_line('Error while preprocessing ~w', [InputFile])
-	),
+	flora_check_xpp_process_status(InputFile,XPP_process),
 	%% Release the file descriptor used to read from cpp.
 	%%close(IOportFromProc),
 	seen,
@@ -1319,10 +1316,7 @@ flora_compile_file(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 			   'Compile time: '
 			   ),
 	%% Wait, to not leave zombies.
-	process_control(XPP_process,wait(ExitStatus)),
-	(ExitStatus==0, !
-	; flora_error_line('Error while preprocessing ~w', [InputFile])
-	),
+	flora_check_xpp_process_status(InputFile,XPP_process),
 	%% Release the file descriptor used to read from cpp.
 	%%close(IOportFromProc),
 	seen,
@@ -1583,10 +1577,7 @@ flora_loaddyn_data(OrigInFile,ModuleName,Ext) :-
 	    ),
 	    flora_read_canonical_and_insert(StorageName),
 	    %% Wait, not to leave zombies.
-	    process_control(XPP_process,wait(ExitStatus)),
-	    (ExitStatus==0, !
-	    ; flora_error_line('Error while preprocessing ~w', [File])
-	    ),
+	    flora_check_xpp_process_status(File,XPP_process),
 	    %% Release the file descriptor used to read from xpp.
 	    %%close(IOportFromProc),
 	    seen,
@@ -2879,10 +2870,7 @@ flora_gpp_dumpfile(FileName,DumpFileName,Workspace) :-
 	%% do prettyprinting; gpp output is now piped through
 	%% this predicate to the dumpfile
 	prettyprint_stdin,
-	process_control(XPP_process,wait(ExitStatus)),
-	(ExitStatus==0, !
-	; flora_error_line('Error while preprocessing ~w', [FileName])
-	),
+	flora_check_xpp_process_status(FileName,XPP_process),
 	flora_clear_xpp_options,
 	%%close(IOportFromGPP),
 	%%close(DumpPort),
@@ -2904,8 +2892,8 @@ flora_gpp_dumpfile(FileName,_DumpFileName,_Workspace) :-
 
    Input and Output are either bound to file names or are unbound variables.
    GPP_OptionsList is a list of options to pass to the preprocessor.
-               Each option is an atom. The atoms in the list are concatenated
-	       and passed to gpp.
+   Each option is an atom. The atoms in the list are concatenated
+   and passed to gpp.
 *****************************************************************************/
 flora_copy_and_preprocess(Input,Output,GPP_OptionsList) :-
 	flora_concat_atoms(GPP_OptionsList, XPP_Options),
@@ -2915,10 +2903,7 @@ flora_copy_and_preprocess(Input,Output,GPP_OptionsList) :-
 	seeing(StdIn),
 	telling(StdOut),
 	flora_copy_input(IOportFromGPP,Output),
-	process_control(XPP_process,wait(ExitStatus)),
-	(ExitStatus==0, !
-	; flora_error_line('Error while preprocessing ~w', [Input])
-	),
+	flora_check_xpp_process_status(Input,XPP_process),
 	flora_clear_xpp_options,
 	seen,
 	%% Restore the old stdin and stdout
@@ -3442,3 +3427,13 @@ seen_source(IOPort,OldStdin) :-
 	seen,
 	see(OldStdin),
 	close(IOPort).
+
+flora_check_xpp_process_status(File,Process) :-
+	process_control(Process,wait(ExitStatus)),
+	(ExitStatus==0 -> true
+	;
+	    (var(File) -> Message = 'input stream'
+	    ; Message = File
+	    ),
+	    flora_error_line('Error while preprocessing ~w', [Message])
+	).
