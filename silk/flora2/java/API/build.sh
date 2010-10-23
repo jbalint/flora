@@ -22,5 +22,5 @@
 rm -f javaAPI/util/*.class
 rm -f javaAPI/src/*.class
 
-${JAVA_BIN}/javac -deprecation -Xlint:unchecked -Xlint -classpath ..:../interprolog.jar javaAPI/util/*.java javaAPI/src/*.java  
+${JAVA_BIN}/javac -1.5 -deprecation -Xlint:unchecked -Xlint -classpath ..:../interprolog.jar javaAPI/util/*.java javaAPI/src/*.java  
 

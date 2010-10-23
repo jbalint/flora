@@ -122,7 +122,7 @@ public class FloraClassLoader
 		+ javaFile.getCanonicalPath();
 	}
 	catch(Exception e) {
-	    System.out.println("j2flora2: Class load failed to construct compile string");
+	    System.out.println("\n*** Java-FLORA-2 interface: Class load failed to construct compile string"+"\n");
 	    return null;
 	}
 			
@@ -175,7 +175,7 @@ public class FloraClassLoader
 	    floraClass = Class.forName(ClassName);
 	}
 	catch(Exception e) {
-	    throw(new ClassNotFoundException("j2flora2: Loading failed for class "+ClassName));
+	    throw(new ClassNotFoundException("\n*** Java-FLORA-2 interface: Loading failed for class "+ClassName+"\n"));
     	}
     	return floraClass;
     }

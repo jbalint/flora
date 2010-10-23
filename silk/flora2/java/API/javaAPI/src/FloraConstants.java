@@ -68,14 +68,14 @@ public class FloraConstants
 	if (type == VALUE) return "value";
 	else if (type == BOOLEAN) return "boolean";
 	else if (type == PROCEDURAL) return "procedural";
-	else throw new FlrException("j2flora2: Invalid method type, " + type);
+	else throw new FlrException("\n*** Java-FLORA-2 interface: Invalid method type, " + type + "\n");
     }
 
     public static void checkMethodType(int type) {
 	if (type != VALUE &&
 	    type != BOOLEAN &&
 	    type != PROCEDURAL)
-	    throw new FlrException("j2flora2: Invalid method type, " + type);
+	    throw new FlrException("\n*** Java-FLORA-2 interface: Invalid method type, " + type + "\n");
     }
 
     public static String printableInheritability(boolean inherit) {

@@ -31,7 +31,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Vector;
 
-import javaAPI.util.FlrException;
+//import javaAPI.util.FlrException;
 
 import com.declarativa.interprolog.PrologEngine;
 import com.declarativa.interprolog.TermModel;
@@ -66,8 +66,10 @@ public class FloraSession extends FloraConstants
 		System.out.println("ExecuteCommand: "+command);
 	}
 	catch (Exception e) {
-	    e.printStackTrace();
-	    throw new FlrException("j2flora2: Command " + command + " failed");
+	    //e.printStackTrace();
+	    System.err.println(e.getMessage());
+	    // This is thrown in FloraCommand
+	    //throw new FlrException("\n*** Java-FLORA-2 interface: Command " + command + " failed\n");
 	}
 	return result;
     }
@@ -85,7 +87,14 @@ public class FloraSession extends FloraConstants
 	Object[] bindings = null;
 		
 	try {
+	    if (debug) {
+		System.out.println("FindAllMatches, before FloraCommand. Query = " + query);
+		System.out.println("FindAllMatches, before FloraCommand. Vars = " + vars);
+	    }
 	    bindings = flora.FloraCommand(query,vars);
+	    if (debug) {
+		System.out.println("FindAllMatches, after FloraCommand: " + bindings);
+	    }
 	 
 	    for (int i=0; i<bindings.length; i++) {
 				
@@ -107,9 +116,10 @@ public class FloraSession extends FloraConstants
 	    }
 	}
 	catch (Exception e) {
-	    e.printStackTrace();
-	    System.err.println();
-	    throw new FlrException("j2flora2: Error in query "+query);
+	    //e.printStackTrace();
+	    System.err.println(e.getMessage());
+	    // This is thrown in FloraCommand
+	    //throw new FlrException("\n*** Java-FLORA-2 interface: Error in query "+query+"\n");
 	}
 
 	Iterator<HashMap<String, FloraObject>> iter = retBindings.iterator();
@@ -205,8 +215,10 @@ public class FloraSession extends FloraConstants
 	    }
 	}
 	catch(Exception e) {
-	    e.printStackTrace();
-	    throw new FlrException("j2flora2: Error in query "+query);
+	    //e.printStackTrace();
+	    System.err.println(e.getMessage());
+	    // This is thrown in FloraCommand
+	    //throw new FlrException("\n*** Java-FLORA-2 interface: Error in query "+query+"\n");
 	}
 	Iterator<FloraObject> iter = retBindings.iterator();
 	return iter;
