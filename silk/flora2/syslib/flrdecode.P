@@ -480,13 +480,16 @@ decode_prolog_call([F,Args,_Arity],Code,Depth) :-
 	).
 
 decode_builtin(F,0,_,[EscF],_Depth) :- escape(F,EscF), !.
-%% This would have to be expanded to deal with unary ops 
-%% (i.e., print them as op arg)
-decode_builtin(F,1,[Arg],[EscF,'(',ArgCode,')'],Depth) :-
+decode_builtin(F,1,[Arg],Code,Depth) :-
 	!,
 	Depth1 is Depth+1,
         escape(F,EscF),
-	decode_literal_internal(Arg,ArgCode,1,Depth1).
+	decode_literal_internal(Arg,ArgCode,1,Depth1),
+	((flora_opdef(_,fx,F); flora_opdef(_,fy,F))
+	%% This deals with unary ops and prints them as op arg
+	-> Code = [EscF,' ',ArgCode]
+	; Code = [EscF,'(',ArgCode,')', '@_prolog']
+	).
 %% This deals with binary ops
 decode_builtin(F,2,[Arg1,Arg2],Code,Depth) :-
 	!,
@@ -498,7 +501,7 @@ decode_builtin(F,2,[Arg1,Arg2],Code,Depth) :-
 	->  Code = [Arg1Code, ' ', EscF, ' ', Arg2Code]
 	;   Code = [EscF,'(',Arg1Code,',',Arg2Code,')']
 	).
-decode_builtin(F,_,Args,[EscF,'(',ArgsCode,')'],Depth) :-
+decode_builtin(F,_,Args,[EscF,'(',ArgsCode,')', '@_prolog'],Depth) :-
 	Depth1 is Depth+1,
         escape(F,EscF),
 	decode_list_add_separator(Args,ArgsCode,decode_literal_internal(_,_,1,Depth1),',').
