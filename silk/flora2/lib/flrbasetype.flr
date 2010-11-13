@@ -27,10 +27,16 @@
         ?[_isTypeOf(?)],
         ?[_lessThan(?)],
         ?[_add(?) -> ?],
+	// strict convert to type
         ?[_toType(?)->?],                   // all types
         ?[_toType(?,?,?,?,?,?)->?],         // _time/6 
         ?[_toType(?,?,?,?,?,?,?)->?],       // _date/7, _uri/7, _duration/7
         ?[_toType(?,?,?,?,?,?,?,?,?,?)->?], // _dateTime/10
+	// nonstrict convert to type: fail if arg not convertible to data type
+        ?[_toTypeNochk(?)->?],                   // all types
+        ?[_toTypeNochk(?,?,?,?,?,?)->?],         // _time/6 
+        ?[_toTypeNochk(?,?,?,?,?,?,?)->?],       // _date/7, _uri/7, _duration/7
+        ?[_toTypeNochk(?,?,?,?,?,?,?,?,?,?)->?], // _dateTime/10
 	?[_hour->?],
 	?[_minute->?],
 	?[_second->?],
@@ -114,6 +120,10 @@
 
 // numbers
 ?N[_lessThan(?N2)] :- number(?N), number(?N2), ?N < ?N2.
+?N[_lessThan(?N2)] :-
+	?N[_rawValue->?V],
+	?N2[_rawValue->?V2],
+	number(?V), number(?V2), ?V < ?V2.
 
 // strings
 ?N[_lessThan(?N2)] :- ?N:_string, ?N2:_string, ?N._rawValue @< ?N2._rawValue.
@@ -141,6 +151,14 @@
 ?T[_toType(?,?,?,?,?,?,?,?,?,?)->?] :-                                // 10 args
 	class_type_error(?T,'_toType(?) -> ?').
 
+?T[_toTypeNochk(?)->?] :- class_type_error(?T,'_toTypeNochk(?) -> ?').
+?T[_toTypeNochk(?,?,?,?,?,?)->?] :-                                   // 6 args
+	class_type_error(?T,'_toTypeNochk(?) -> ?').
+?T[_toTypeNochk(?,?,?,?,?,?,?)->?] :-                                 // 7 args
+	class_type_error(?T,'_toTypeNochk(?) -> ?').
+?T[_toTypeNochk(?,?,?,?,?,?,?,?,?,?)->?] :-                           // 10 args
+	class_type_error(?T,'_toTypeNochk(?) -> ?').
+
 /*
 ?T[_toType(?V)->?] :- 
 	?V[_typeName->?TN],
@@ -155,20 +173,30 @@
 //      FL_LONG, FL_DOUBLE, FL_STRING, FL_CHARLIST, FL_BOOL
 // Also for FL_DATE, FL_TIME, FL_URI, and FL_DATETIME, but we need to implement
 // this in flrdatatype_parse.P
+// The Nochk versions skip fail if argument is not convertible to data type
 ?T[_toType(?A)->?Obj] :-
 	flora_make_datatype(?T,(?A),?Obj)@_prolog(flrdatatype_parse).
+?T[_toTypeNochk(?A)->?Obj] :-
+	flora_make_datatype(?T,(?A),?Obj,nochk)@_prolog(flrdatatype_parse).
 
 // the 6-arg is for FL_TIME
 ?T[_toType(?A1,?A2,?A3,?A4,?A5,?A6)->?Obj] :-
 	flora_make_datatype(?T,(?A1,?A2,?A3,?A4,?A5,?A6),?Obj)@_prolog(flrdatatype_parse).
+?T[_toTypeNochk(?A1,?A2,?A3,?A4,?A5,?A6)->?Obj] :-
+	flora_make_datatype(?T,(?A1,?A2,?A3,?A4,?A5,?A6),?Obj,nochk)@_prolog(flrdatatype_parse).
 // the 7-arg is for FL_DATE, FL_TIME, FL_URI, FL_DURATION
 ?T[_toType(?A1,?A2,?A3,?A4,?A5,?A6,?A7)->?Obj] :-
 	flora_make_datatype(?T,(?A1,?A2,?A3,?A4,?A5,?A6,?A7),?Obj)@_prolog(flrdatatype_parse).
+?T[_toTypeNochk(?A1,?A2,?A3,?A4,?A5,?A6,?A7)->?Obj] :-
+	flora_make_datatype(?T,(?A1,?A2,?A3,?A4,?A5,?A6,?A7),?Obj,nochk)@_prolog(flrdatatype_parse).
 // this 10-argument version is for FL_DATETIME
 ?T[_toType(?A1,?A2,?A3,?A4,?A5,?A6,?A7,?A8,?A9,?A10)->?Obj] :-
 	flora_make_datatype(?T,(?A1,?A2,?A3,?A4,?A5,?A6,?A7,?A8,?A9,?A10),?Obj)@_prolog(flrdatatype_parse).
+?T[_toTypeNochk(?A1,?A2,?A3,?A4,?A5,?A6,?A7,?A8,?A9,?A10)->?Obj] :-
+	flora_make_datatype(?T,(?A1,?A2,?A3,?A4,?A5,?A6,?A7,?A8,?A9,?A10),?Obj,nochk)@_prolog(flrdatatype_parse).
 
 // this is supposed to fail, if everything is right
+// Type must be a string data type or an atom?
 class_type_error(?Typ,?Meth) :-
 	flora_builtin_datatype(?BI)@_prolog(flrdatatype),
 	if (Method[%mustDefine(?Mode)]@_sys, ?Mode==on)

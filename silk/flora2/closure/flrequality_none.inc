@@ -64,3 +64,38 @@ FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
 
 FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
 	FLTRAILERPREFIX(WRAP_SUB)(X,Y,CallerInfo).
+
+/* neg WRAP_DIFFOBJEQL  */
+%% WRAP_DIFFOBJEQL means X,Y are unequal and not identical
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
+	WRAP_DIFFOBJEQL(X,V,CallerInfo),
+	WRAP_DIFFOBJEQL(Y,W,CallerInfo),
+	X \= Y,
+	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(V,W,CallerInfo).
+
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
+	WRAP_DIFFOBJEQL(X,V,CallerInfo),
+	WRAP_DIFFOBJEQL(Y,W,CallerInfo),
+	X \= Y,
+	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(W,V,CallerInfo).
+
+
+/*
+   WRAP_DIFFOBJEQL_AUX/3 rule must be loaded exactly once. This is why we
+   are checking clause(WRAP_DIFFOBJEQL_AUX(_,_,_),_). Reloading this rule
+   is not possible when equality is on, since WRAP_DIFFOBJEQL_AUX/3 is
+   essentially in the body of every rule (it unfolded).
+*/
+?-  (
+      clause(WRAP_DIFFOBJEQL_AUX(_,_,_),_) -> true
+    ;
+      assert((
+	      WRAP_DIFFOBJEQL_AUX(X,Y,Caller) :-
+	        (
+	        %% when((nonvar(X); nonvar(Y)), X = Y)
+	           X = Y
+	        %% ;  when((nonvar(X); nonvar(Y)), WRAP_DIFFOBJEQL(X,Y,_Caller))
+	        ;  WRAP_DIFFOBJEQL(X,Y,Caller)
+	        )
+            ))
+    ).

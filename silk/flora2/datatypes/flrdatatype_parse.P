@@ -54,6 +54,7 @@
 
 :- export
 	flora_parse_datatype/4,
+	flora_make_datatype/4,
 	flora_make_datatype/3.
 
 
@@ -464,20 +465,23 @@ parse_list(_LitChars,Idx,_Value,Status) :-
 
 
 /******************************************************************************
-       flora_make_datatype(+TypeName,+Args,-TypeObject)
+       flora_make_datatype(+TypeName,+Args,-TypeObject,+AbortFlag)
 
        The difference between this and make_datatype is that the arguments
        here have the type that the user uses, not charlists produced by parsing.
        Since user parameters might be incorrect, we need to check them.
+       AbortType: if true then bark on invalid argument. Otherwise just fail.
 ******************************************************************************/
 
 flora_make_datatype(TypeName,Args,TypeObject) :-
+	flora_make_datatype(TypeName,Args,TypeObject,true).
+flora_make_datatype(TypeName,Args,TypeObject,AbortFlag) :-
 	flora_canonical_type_name(TypeName,CanTypeName),
 	convert_dt_arguments_if_necessary(CanTypeName,Args,ArgsNew),
-	check_and_make_datatype(CanTypeName,ArgsNew,TypePreObject),
+	check_and_make_datatype(CanTypeName,ArgsNew,TypePreObject,AbortFlag),
 	TypeObject = FL_DATATYPE(TypePreObject,TypeName).
 
-check_and_make_datatype(FL_DATE,Args,TypeObject) :-
+check_and_make_datatype(FL_DATE,Args,TypeObject,AbortFlag) :-
 	!,
 	( Args = (DSign,Yr,Mo,D,ZSign,ZH,ZM),
 	    (DSign == 1 ; DSign == -1),
@@ -489,12 +493,12 @@ check_and_make_datatype(FL_DATE,Args,TypeObject) :-
 	->  make_datatype(FL_DATE,Args,TypeObject)
 	;  (atom(Args)->atom_codes(Args,ArgsChars) ; ArgsChars=Args)
 	-> flora_parse_datatype(DATATYPE(FL_DATE,ArgsChars),NO_INDEX,TypeObject,Status),
-	    (Status == [], ! ; Status = [error(_,Msg)|_], flora_abort(Msg))
+	    abort_or_fail_on_status(Status,AbortFlag)
 	;
-	    flora_abort([FL_DATE,'[toType(...) -> ...]: invalid parameters to method'])
+	    abort_or_fail_on_invalid_argument(FL_DATE,AbortFlag)
 	).
 
-check_and_make_datatype(FL_TIME,Args,TypeObject) :-
+check_and_make_datatype(FL_TIME,Args,TypeObject,AbortFlag) :-
 	!,
 	( Args = (Hr,Min,SecAtm,ZSign,ZH,ZM),
 	    0=<Hr, Hr<24, 0=<Min, Min<60,
@@ -504,12 +508,12 @@ check_and_make_datatype(FL_TIME,Args,TypeObject) :-
 	-> make_datatype(FL_TIME,Args,TypeObject)
 	; (atom(Args)->atom_codes(Args,ArgsChars) ; ArgsChars=Args)
 	-> flora_parse_datatype(DATATYPE(FL_TIME,ArgsChars),NO_INDEX,TypeObject,Status),
-	    (Status == [], ! ; Status = [error(_,Msg)|_], flora_abort(Msg))
+	    abort_or_fail_on_status(Status,AbortFlag)
 	;
-	    flora_abort([FL_TIME,'[toType(...) -> ...]: invalid parameters to method'])
+	    abort_or_fail_on_invalid_argument(FL_TIME,AbortFlag)
 	).
 
-check_and_make_datatype(FL_DATETIME,Args,TypeObject) :-
+check_and_make_datatype(FL_DATETIME,Args,TypeObject,AbortFlag) :-
 	!,
 	( Args = (DSign,Yr,Mo,D,Hr,Min,SecAtm,ZSign,ZH,ZM),
 	    (DSign == 1 ; DSign == -1),
@@ -523,12 +527,12 @@ check_and_make_datatype(FL_DATETIME,Args,TypeObject) :-
 	-> make_datatype(FL_DATETIME,Args,TypeObject)
 	;  (atom(Args)->atom_codes(Args,ArgsChars) ; ArgsChars=Args)
 	-> flora_parse_datatype(DATATYPE(FL_DATETIME,ArgsChars),NO_INDEX,TypeObject,Status),
-	    (Status == [], ! ; Status = [error(_,Msg)|_], flora_abort(Msg))
+	    abort_or_fail_on_status(Status,AbortFlag)
 	;
-	    flora_abort([FL_DATETIME,'[toType(...) -> ...]: invalid parameters to method'])
+	    abort_or_fail_on_invalid_argument(FL_DATETIME,AbortFlag)
 	).
 
-check_and_make_datatype(FL_DURATION,Args,TypeObject) :-
+check_and_make_datatype(FL_DURATION,Args,TypeObject,AbortFlag) :-
 	!,
 	( Args = (DSign,Yr,Mo,D,Hr,Min,SecAtm),
 	    (DSign == 1 ; DSign == -1),
@@ -539,12 +543,12 @@ check_and_make_datatype(FL_DURATION,Args,TypeObject) :-
 	-> make_datatype(FL_DURATION,Args,TypeObject)
 	;  (atom(Args)->atom_codes(Args,ArgsChars) ; ArgsChars=Args)
 	-> flora_parse_datatype(DATATYPE(FL_DURATION,ArgsChars),NO_INDEX,TypeObject,Status),
-	    (Status == [], ! ; Status = [error(_,Msg)|_], flora_abort(Msg))
+	    abort_or_fail_on_status(Status,AbortFlag)
 	;
-	    flora_abort([FL_DURATION,'[toType(...) -> ...]: invalid parameters to method'])
+	    abort_or_fail_on_invalid_argument(FL_DURATION,AbortFlag)
 	).
 
-check_and_make_datatype(FL_IRI,Args,TypeObject) :-
+check_and_make_datatype(FL_IRI,Args,TypeObject,AbortFlag) :-
 	!,
 	( Args = (Scheme,User,Host,Port,Path,Query,Fragm),
 	    OutArgs = (Scheme,':',User,Host,Port,Path,Query,Fragm),
@@ -553,75 +557,75 @@ check_and_make_datatype(FL_IRI,Args,TypeObject) :-
 	-> make_datatype(FL_IRI,OutArgs,TypeObject)
 	;  (atom(Args)->atom_codes(Args,ArgsChars) ; ArgsChars=Args)
 	-> flora_parse_datatype(DATATYPE(FL_IRI,ArgsChars),NO_INDEX,TypeObject,Status),
-	    (Status == [], ! ; Status = [error(_,Msg)|_], flora_abort(Msg))
+	    abort_or_fail_on_status(Status,AbortFlag)
 	;
-	    flora_abort([FL_IRI,'[toType(...) -> ...]: invalid parameters to method'])
+	    abort_or_fail_on_invalid_argument(FL_IRI,AbortFlag)
 	).
 
-check_and_make_datatype(FL_LONG,(Value),TypeObject) :-
+check_and_make_datatype(FL_LONG,(Value),TypeObject,AbortFlag) :-
 	!,
 	( integer(Value)
 	-> make_datatype(FL_LONG,(Value),TypeObject)
 	;
-	    flora_abort([FL_LONG,'[toType(...) -> ...]: invalid parameters to method'])
+	    abort_or_fail_on_invalid_argument(FL_LONG,AbortFlag)
 	).
 
 
-check_and_make_datatype(FL_DOUBLE,(Value),TypeObject) :-
+check_and_make_datatype(FL_DOUBLE,(Value),TypeObject,AbortFlag) :-
 	!,
 	( float(Value)
 	-> make_datatype(FL_DOUBLE,(Value),TypeObject)
 	;
-	    flora_abort([FL_DOUBLE,'[toType(...) -> ...]: invalid parameters to method'])
+	    abort_or_fail_on_invalid_argument(FL_DOUBLE,AbortFlag)
 	).
 
-check_and_make_datatype(FL_STRING,(Value),TypeObject) :-
+check_and_make_datatype(FL_STRING,(Value),TypeObject,AbortFlag) :-
 	!,
 	( atom(Value)
 	-> make_datatype(FL_STRING,(Value),TypeObject)
 	;
-	    flora_abort([FL_STRING,'[toType(...) -> ...]: invalid parameters to method'])
+	    abort_or_fail_on_invalid_argument(FL_STRING,AbortFlag)
 	).
 
-check_and_make_datatype(FL_CHARLIST,(Value),TypeObject) :-
+check_and_make_datatype(FL_CHARLIST,(Value),TypeObject,AbortFlag) :-
 	!,
 	( is_charlist(Value)
 	-> make_datatype(FL_CHARLIST,(Value),TypeObject)
 	;
-	    flora_abort([FL_CHARLIST,'[toType(...) -> ...]: invalid parameters to method'])
+	    abort_or_fail_on_invalid_argument(FL_CHARLIST,AbortFlag)
 	).
 
-check_and_make_datatype(FL_BOOL,(Value),TypeObject) :-
+check_and_make_datatype(FL_BOOL,(Value),TypeObject,AbortFlag) :-
 	!,
 	( (Value == FL_TRUECONST; Value == FL_FALSECONST)
 	-> make_datatype(FL_BOOL,(Value),TypeObject)
 	;
-	    flora_abort([FL_BOOL,'[toType(...) -> ...]: invalid parameters to method'])
+	    abort_or_fail_on_invalid_argument(FL_BOOL,AbortFlag)
 	).
 
-check_and_make_datatype(FL_LISTTYPE,(Value),TypeObject) :-
+check_and_make_datatype(FL_LISTTYPE,(Value),TypeObject,AbortFlag) :-
 	!,
 	( is_list(Value)
 	-> make_datatype(FL_LISTTYPE,(Value),TypeObject)
 	;
-	    flora_abort([FL_LISTTYPE,'[toType(...) -> ...]: invalid parameters to method'])
+	    abort_or_fail_on_invalid_argument(FL_LISTTYPE,AbortFlag)
 	).
 
-check_and_make_datatype(Type,Args,TypeObject) :-
+check_and_make_datatype(Type,Args,TypeObject,_AbortFlag) :-
 	flora_canonical_type_name(Type,CanTypeName),
 	Type \= CanTypeName,
 	!,
 	make_datatype(CanTypeName,Args,TypeObject).
 
 %% Rest: foo"bar"^^foo represented as _datatype(_datatype(foo,[98,97,114]),foo)
-check_and_make_datatype(Type,Args,TypeObject) :-
+check_and_make_datatype(Type,Args,TypeObject,_AbortFlag) :-
 	Args = (Arg),
 	atomic(Arg),
 	!,
 	make_datatype(Type,Args,TypeObject).
 
 %% error: if the number of args is > 1 and type is unknown
-check_and_make_datatype(Type,_Args,_TypeObject) :-
+check_and_make_datatype(Type,_Args,_TypeObject,_AbortFlag) :-
 	flora_abort([Type,'[toType(...) -> ...]: for the ', Type, ' datatype, toType(...) takes only 1 argument']).
 
 
@@ -779,3 +783,15 @@ convert_dt_arguments_if_necessary(_Type,Args,Args).
 
 datatype_litlist_value(LitListDT,FL_DATATYPELIST(LitList)) :-
 	flora_datatypelitlist(LitListDT,LitList).
+
+
+abort_or_fail_on_invalid_argument(DType,AbortFlag) :-
+	AbortFlag == true
+	-> flora_abort([DType,'[toType(...) -> ...]: invalid parameter(s)']).
+
+abort_or_fail_on_status(Status,AbortFlag) :-
+	    (  Status == [], !
+	    ;  AbortFlag == true
+	    ->  Status = [error(_,Msg)|_],
+		flora_abort(Msg)
+	    ).
