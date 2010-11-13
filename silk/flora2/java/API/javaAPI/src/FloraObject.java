@@ -914,15 +914,13 @@ public class FloraObject extends FloraConstants
 	    HashMap<String,FloraObject> firstmatch;
 	    while (methodMatches.hasNext()) {	
 		firstmatch = methodMatches.next();
-		FloraObject methodObj = (FloraObject)firstmatch.get("?Method");
+		FloraObject methodObj = firstmatch.get("?Method");
 
-		FloraObject returnTypeObj =
-		    // unbound, if ?Value isn't used for procedural/bool
-		    (FloraObject)firstmatch.get("?Value");
+		// unbound, if ?Value isn't used for procedural/bool
+		FloraObject returnTypeObj = firstmatch.get("?Value");
 		if (returnTypeObj.floraOID.isVar()) returnTypeObj = null;
 
-		TermModel methodArgs =
-		    ((FloraObject)firstmatch.get("?Arguments")).floraOID;
+		TermModel methodArgs = firstmatch.get("?Arguments").floraOID;
 				
 		Vector<FloraObject> methodPars = new Vector<FloraObject>();
 		while (!methodArgs.isLeaf()) {

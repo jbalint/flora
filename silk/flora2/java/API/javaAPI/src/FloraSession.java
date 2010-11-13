@@ -61,7 +61,7 @@ public class FloraSession extends FloraConstants
     {
 	boolean result = false;
 	try {
-	    result = flora.simpleFloraCommand(command);
+	    result = flora.simpleFloraCommand(doubleEachQuote(command));
 	    if (debug)
 		System.out.println("ExecuteCommand: "+command);
 	}
@@ -91,7 +91,7 @@ public class FloraSession extends FloraConstants
 		System.out.println("FindAllMatches, before FloraCommand. Query = " + query);
 		System.out.println("FindAllMatches, before FloraCommand. Vars = " + vars);
 	    }
-	    bindings = flora.FloraCommand(query,vars);
+	    bindings = flora.FloraCommand(doubleEachQuote(query),vars);
 	    if (debug) {
 		System.out.println("FindAllMatches, after FloraCommand: " + bindings);
 	    }
@@ -201,7 +201,7 @@ public class FloraSession extends FloraConstants
 	Vector<String> vars = new Vector<String>();
 	vars.add("?");
 	try {
-	    bindings = flora.FloraCommand(query,vars);
+	    bindings = flora.FloraCommand(doubleEachQuote(query),vars);
 			
 	    for (int i=0; i<bindings.length; i++) {
 		TermModel tm = (TermModel)bindings[i];
@@ -227,5 +227,20 @@ public class FloraSession extends FloraConstants
     public PrologEngine getEngine()
     {
     	return flora.engine;
+    }
+
+    /* Utility to double each quote */
+    private String doubleEachQuote(String str)
+    {
+	String outstr = new String("");
+
+	for (int i=0; i<str.length(); i++) {
+	    char ch = str.charAt(i);
+	    if (ch == '\'')
+		outstr += "''";
+	    else
+		outstr += String.valueOf(ch);
+	}
+	return outstr;
     }
 }
