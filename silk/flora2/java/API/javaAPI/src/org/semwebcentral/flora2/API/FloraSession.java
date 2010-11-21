@@ -25,7 +25,7 @@
 ** 
 */
 
-package javaAPI.src;
+package org.semwebcentral.flora2.API;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -41,7 +41,7 @@ import com.declarativa.interprolog.TermModel;
 */
 public class FloraSession extends FloraConstants
 {
-    PrologFlora flora;
+    public PrologFlora flora;
 
     /* Constructor function. */
     public FloraSession()

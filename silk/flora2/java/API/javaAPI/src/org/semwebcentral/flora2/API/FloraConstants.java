@@ -25,8 +25,8 @@
 ** 
 */
 
-package javaAPI.src;
-import javaAPI.util.FlrException;
+package org.semwebcentral.flora2.API;
+import org.semwebcentral.flora2.API.util.FlrException;
 
 
 /**

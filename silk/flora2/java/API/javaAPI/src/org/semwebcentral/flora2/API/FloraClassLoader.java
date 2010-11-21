@@ -25,7 +25,7 @@
 ** 
 */
 
-package javaAPI.src;
+package org.semwebcentral.flora2.API;
  
 
 /* Class to load the java classes corresponding to flora classes

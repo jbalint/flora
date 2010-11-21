@@ -24,12 +24,12 @@
 */
 
 
-package javaAPI.src;
+package org.semwebcentral.flora2.API;
 
 import java.io.File;
 import java.util.Vector;
 
-import javaAPI.util.FlrException;
+import org.semwebcentral.flora2.API.util.FlrException;
 
 import com.declarativa.interprolog.PrologEngine;
 import com.declarativa.interprolog.TermModel;
@@ -204,7 +204,7 @@ public class PrologFlora extends FloraConstants
 	    return solutions;
 	}
 	catch(Exception e) {
-	    //e.printStackTrace();
+	    e.printStackTrace();
 	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in query "+cmd+"\n");
 	    //return null;
 	}
@@ -232,7 +232,7 @@ public class PrologFlora extends FloraConstants
 	    return engine.deterministicGoal(sb.toString());
 	}
 	catch(IPException e) {
-	    // e.printStackTrace();
+	    e.printStackTrace();
 	    throw new FlrException("\n*** Java-FLORA-2 interface: Command " + cmd + " failed\n");
 	}
     }
@@ -301,17 +301,19 @@ public class PrologFlora extends FloraConstants
 	engineType = engineType.toUpperCase();
 	if (engineType.equals("NATIVE")) {
 	    try {
-		engine = new NativeEngine(PrologRootDir);
+		engine = new NativeEngine(systemSpecificFilePath(PrologRootDir));
 		isNative = true;
 	    }
 	    catch(Throwable e) {
+	    	e.printStackTrace();
 		throw new FlrException("\n*** Java-FLORA-2 interface: InterProlog failed to start its Native Engine\n");
 	    }
 	} else {
 	    try {
-		engine = new XSBSubprocessEngine(PrologBinDir);
+		engine = new XSBSubprocessEngine(systemSpecificFilePath(PrologBinDir),debug);
 	    }
 	    catch(Exception e2) {
+	    	e2.printStackTrace();
 		throw new FlrException("\n*** Java-FLORA-2 interface: InterProlog failed start its SubProcess Engine\n");
 	    }
 	}
@@ -340,4 +342,24 @@ public class PrologFlora extends FloraConstants
 	    engine.shutdown();
 	}
     }
+    
+    public String systemSpecificFilePath(String p){
+    	char nonSeparatorChar = 'a';
+    	if (File.separator.equals("\\"))
+    		nonSeparatorChar = '/';
+    	else
+    		nonSeparatorChar = '\\';
+    			
+    	StringBuffer newPath = new
+    	StringBuffer(p.length()+10);
+    	for(int c=0;c<p.length();c++){
+    		char ch = p.charAt(c);
+    		if (ch==nonSeparatorChar)
+    			newPath.append(File.separatorChar); 
+    		//backslashes to forward
+    		else newPath.append(ch);
+    	}
+    	return newPath.toString();
+}
+    
 }
