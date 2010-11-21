@@ -91,11 +91,15 @@ FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
     ;
       assert((
 	      WRAP_DIFFOBJEQL_AUX(X,Y,Caller) :-
+		/*
 	        (
 	        %% when((nonvar(X); nonvar(Y)), X = Y)
 	           X = Y
 	        %% ;  when((nonvar(X); nonvar(Y)), WRAP_DIFFOBJEQL(X,Y,_Caller))
 	        ;  WRAP_DIFFOBJEQL(X,Y,Caller)
 	        )
+		*/
+		WRAP_OBJEQL(X,Y,Caller)
+		%%when((nonvar(X); nonvar(Y)),WRAP_OBJEQL(X,Y,Caller))
             ))
     ).

@@ -619,7 +619,7 @@ flora_fladd(FlrFile,Workspace) :-
 	  )
 	),
 	!,
-	flora_loader_message('Adding ~w into module ~w',[FlrFile,Workspace]),
+	flora_loader_message('Adding ~w in module ~w',[FlrFile,Workspace]),
 	( flora_file_newerthan(WSOFile,APFile)
 	->
 	    true
@@ -679,7 +679,7 @@ flora_flload(FlrFile,Workspace) :-
 	  )
 	),
 	!,
-	flora_loader_message('Loading ~w into module ~w',[FlrFile,Workspace]),
+	flora_loader_message('Loading ~w to module ~w',[FlrFile,Workspace]),
 	( flora_file_newerthan(WSOFile,MPFile)
 	->
 	    true
@@ -1047,8 +1047,9 @@ flora_insert_code_for_loaddyn_data(FileName) :-
 	( Ext == FLORA_FDB_EXT, DataCat='FDB'
 	; Ext == FLORA_FLD_EXT, DataCat='FLD'
 	),
-	%% The if-then-else play of FLORA_FDB_FILENAME and FLORA_FLD_FILENAME,
-	%% controls whether flora_loaddyn_data/3 is used to load dynamic data
+	%% The above choice of FLORA_FDB_FILENAME and FLORA_FLD_FILENAME,
+	%% controls whether FLD or FDB is used.
+	%% flora_loaddyn_data/3 is used to load dynamic data
 	%% or directly flora_read_canonical_and_insert/2
 	%% Normally FLORA_FDB_FILENAME/FLORA_FLD_FILENAME are not defined,
 	%% so data is loaded using flora_loaddyn_data/3.
@@ -1143,7 +1144,7 @@ flora_reset_modules_for_shell :-
 flora_compile_file_add(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	flora_maxerr(MaxErrNum),
 	flora_stdmsg_nl,
-	flora_loader_message('Compiling ~w for adding into module',[InputFile]),
+	flora_loader_message('Compiling ~w for adding to module',[InputFile]),
 	flora_cputime(T0),
 	seeing(PreInFile),
 	%% Disable the compilation for FLORA template include file.
@@ -1218,9 +1219,9 @@ flora_generate_code_add(CompiledRuleList,FileOptionList,TrailerOptions,PFile,DBF
 	sort(FileOptionList,FileOptions),
 	flora_measure_time(
 			   flora_generate_Pfile_add(PFile,
-						FileOptions,TrailerOptions,
-						RuleList,FactList,
-						DBFile,FLDFile,PFileStatus),
+						    FileOptions,TrailerOptions,
+						    RuleList,FactList,
+						    DBFile,FLDFile,PFileStatus),
 			   '[Coder] Generating P file'
 			   ),
 	( PFileStatus == FLORA_FAILURE ->
@@ -1565,29 +1566,42 @@ flora_loaddyn_data(OrigInFile,ModuleName,Ext) :-
 	;
 	  InFileAbs=InFile
 	),
+	parse_filename(InFileAbs,InDir,InBase,InExt),
+	flora_concat_atoms([InDir,InBase,'_',ModuleName,'.',InExt],PostGppFile),
 	!,
 	( flora_locate_file(InFileAbs,File) ->
 	    flora_loader_message('Dynamically loading ~w into module ~w',
 				 [File,ModuleName]),
-	    flora_cputime(T0),
-	    seeing(PreInFile),
-	    flora_set_xpp_options_for_read(ModuleName),
-	    %% Don't issue irrelevant warnings
-	    flora_add_xpp_options('-warninglevel 1 '),
-	    xpp_process_file(File,XPP_process,IOportFromProc),
-	    see(IOportFromProc),
 	    ( Ext==FLORA_FDB_EXT,
 		flora_fdb_storage_name(ModuleName,StorageName)
 	    ; Ext==FLORA_FLD_EXT,
 		flora_fld_storage_name(ModuleName,StorageName)
 	    ),
-	    flora_read_canonical_and_insert(StorageName),
-	    %% Wait, not to leave zombies.
-	    flora_check_xpp_process_status(File,XPP_process),
-	    %% Release the file descriptor used to read from xpp.
-	    %%close(IOportFromProc),
-	    seen,
-	    flora_clear_xpp_options,
+	    flora_cputime(T0),
+	    seeing(PreInFile),
+	    (flora_file_newerthan(PostGppFile,File) ->
+		see(PostGppFile),
+		flora_read_canonical_and_insert(StorageName),
+		seen
+	    ;
+		flora_set_xpp_options_for_read(ModuleName),
+		%% Don't issue irrelevant warnings
+		flora_add_xpp_options('-warninglevel 1 '),
+		xpp_process_file(File,XPP_process,IOportFromProc),
+		%% copy the preprocessed result to file
+		file_io:file_open(PostGppFile,w,PostGppPort),
+		file_io:copyIOport(IOportFromProc,PostGppPort),
+		close(PostGppPort),
+		%% Release the file descriptor used to read from xpp.
+		close(IOportFromProc),
+		%% Now insert data to trie
+		see(PostGppFile),
+		flora_read_canonical_and_insert(StorageName),
+		%% Wait, not to leave zombies.
+		flora_check_xpp_process_status(File,XPP_process),
+		seen,
+		flora_clear_xpp_options
+	    ),
 	    see(PreInFile),
 	    flora_cputime(T1),
 	    T is T1-T0,
@@ -1666,7 +1680,7 @@ flora_save_module_internal(File) :-
 *************************************************************************/
 
 flora_save_module_to_file(ModuleName,FlrFile) :-
-	flora_loader_message('Saving module ~w into file ~w',
+	flora_loader_message('Saving module ~w in file ~w',
 			     [ModuleName, FlrFile]),
 	(   flora_cputime(T0),
 	    telling(PreInFile),
