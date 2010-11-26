@@ -268,6 +268,7 @@
 	flora_patch_full_filename/1,
 
 	incremental_tabling_in_effect/1,
+	flora_read_from_source/2,
 
 	flora_warnings_level/1,
         flora_coder_error/1.

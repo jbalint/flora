@@ -67,7 +67,7 @@ flora_parse_datatype(DATATYPE(FL_TIME,LitChars),Idx,ParsedDT,Status) :-
 		       Hr,Min,Sec,ZSign,ZH,ZM,Status),
 	    (Status==[]
 	    -> make_datatype(FL_TIME,(Hr,Min,Sec,ZSign,ZH,ZM),ParsedDT)
-	    ; true
+	    ;  true
 	    )
 	;  parsing_error(Idx,ERROR_TIME_LITERAL,Status)
 	).
@@ -81,7 +81,7 @@ flora_parse_datatype(DATATYPE(FL_DATE,LitChars),Idx,ParsedDT,Status) :-
 		       DSign,Yr,Mo,D,ZSign,ZH,ZM,Status),
 	    (Status==[]
 	    -> make_datatype(FL_DATE,(DSign,Yr,Mo,D,ZSign,ZH,ZM),ParsedDT)
-	    ; true
+	    ;  true
 	    )
 	;  parsing_error(Idx,ERROR_DATE_LITERAL,Status)
 	).
@@ -139,7 +139,7 @@ flora_parse_datatype(DATATYPE(FL_LONG,LitChars),Idx,ParsedDT,Status) :-
 	    parse_long(LitChars,Idx,Value,Status),
 	    (Status==[]
 	    -> make_datatype(FL_LONG,(Value),ParsedDT)
-	    ; true
+	    ;  true
 	    )
 	).
 
@@ -151,7 +151,7 @@ flora_parse_datatype(DATATYPE(FL_DOUBLE,LitChars),Idx,ParsedDT,Status) :-
 	    parse_double(LitChars,Idx,Value,Status),
 	    (Status==[]
 	    -> make_datatype(FL_DOUBLE,(Value),ParsedDT)
-	    ; true
+	    ;  true
 	    )
 	).
 
@@ -163,7 +163,7 @@ flora_parse_datatype(DATATYPE(FL_STRING,LitChars),Idx,ParsedDT,Status) :-
 	    parse_string(LitChars,Idx,Value,Status),
 	    (Status==[]
 	    -> make_datatype(FL_STRING,(Value),ParsedDT)
-	    ; true
+	    ;  true
 	    )
 	).
 
@@ -175,7 +175,7 @@ flora_parse_datatype(DATATYPE(FL_CHARLIST,LitChars),Idx,ParsedDT,Status) :-
 	    parse_charlist(LitChars,Idx,Value,Status),
 	    (Status==[]
 	    -> make_datatype(FL_CHARLIST,(Value),ParsedDT)
-	    ; true
+	    ;  true
 	    )
 	).
 
@@ -188,7 +188,7 @@ flora_parse_datatype(DATATYPE(FL_LISTTYPE,LitChars),Idx,ParsedDT,Status) :-
 	    parse_list(LitChars,Idx,Value,Status),
 	    (Status==[]
 	    -> make_datatype(FL_LISTTYPE,(Value),ParsedDT)
-	    ; true
+	    ;  true
 	    )
 	).
 
@@ -200,7 +200,7 @@ flora_parse_datatype(DATATYPE(FL_BOOL,LitChars),Idx,ParsedDT,Status) :-
 	    parse_bool(LitChars,Idx,Value,Status),
 	    (Status==[]
 	    -> make_datatype(FL_BOOL,(Value),ParsedDT)
-	    ; true
+	    ;  true
 	    )
 	).
 
@@ -474,7 +474,7 @@ parse_list(_LitChars,Idx,_Value,Status) :-
 ******************************************************************************/
 
 flora_make_datatype(TypeName,Args,TypeObject) :-
-	flora_make_datatype(TypeName,Args,TypeObject,true).
+	flora_make_datatype(TypeName,Args,TypeObject,fail).
 flora_make_datatype(TypeName,Args,TypeObject,AbortFlag) :-
 	flora_canonical_type_name(TypeName,CanTypeName),
 	convert_dt_arguments_if_necessary(CanTypeName,Args,ArgsNew),
@@ -566,6 +566,11 @@ check_and_make_datatype(FL_LONG,(Value),TypeObject,AbortFlag) :-
 	!,
 	( integer(Value)
 	-> make_datatype(FL_LONG,(Value),TypeObject)
+	; atom(Value),
+	    flrporting:flora_concat_atoms([Value,' .'],Val1),
+	    flrutils:flora_read_from_source(atom(Val1),TermVal),
+	    integer(TermVal)
+	-> make_datatype(FL_LONG,(TermVal),TypeObject)
 	;
 	    abort_or_fail_on_invalid_argument(FL_LONG,AbortFlag)
 	).
@@ -575,16 +580,23 @@ check_and_make_datatype(FL_DOUBLE,(Value),TypeObject,AbortFlag) :-
 	!,
 	( float(Value)
 	-> make_datatype(FL_DOUBLE,(Value),TypeObject)
+	; atom(Value),
+	    flrporting:flora_concat_atoms([Value,' .'],Val1),
+	    flrutils:flora_read_from_source(atom(Val1),TermVal),
+	    (float(TermVal) ; integer(TermVal))
+	-> make_datatype(FL_DOUBLE,(TermVal),TypeObject)
 	;
 	    abort_or_fail_on_invalid_argument(FL_DOUBLE,AbortFlag)
 	).
 
-check_and_make_datatype(FL_STRING,(Value),TypeObject,AbortFlag) :-
+check_and_make_datatype(FL_STRING,(Value),TypeObject,_AbortFlag) :-
 	!,
-	( atom(Value)
-	-> make_datatype(FL_STRING,(Value),TypeObject)
+	( atom(Value) -> make_datatype(FL_STRING,(Value),TypeObject)
 	;
-	    abort_or_fail_on_invalid_argument(FL_STRING,AbortFlag)
+	    flrdecode:flora_decode_oid_as_atom(Value,ValAtm),
+	    make_datatype(FL_STRING,(ValAtm),TypeObject)
+	%%;
+	    %%abort_or_fail_on_invalid_argument(FL_STRING,AbortFlag)
 	).
 
 check_and_make_datatype(FL_CHARLIST,(Value),TypeObject,AbortFlag) :-
