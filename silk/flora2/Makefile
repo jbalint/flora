@@ -191,7 +191,7 @@ clean: cleantemp
 	/bin/rm -f flrincludes/*~ flrincludes/.*~
 
 cleantemp:
-	/bin/rm -f "$(HOME)"/.xsb/flora/*${PROLOGEXT} "$(HOME)"/.xsb/flora/*${OBJEXT}
+	/bin/rm -f "$(HOME)"/.xsb/flora*/*${PROLOGEXT} "$(HOME)"/.xsb/flora*/*${OBJEXT}
 
 veryclean: clean
 	cd docs && $(MAKE)  veryclean

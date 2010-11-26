@@ -547,6 +547,13 @@ get_transactionalatom(OBJECT(TRANSACTIONAL_QUOTED_ATOM(Atom),_I),Atom)   :- !.
 get_transactionalatom(OBJECT(TRANSACTIONAL_SYMBOL_TOKEN(Atom),_I),Atom)   :- !.
 get_transactionalatom(OBJECT(TRANSACTIONAL_BUILTIN(Atom),_I),Atom)   :- !.
 
+transactional_to_regular(OBJECT(TRANSACTIONAL_IDENTIFIER(Atom),I),OBJECT(IDENTIFIER(Atom),I))   :- !.
+transactional_to_regular(OBJECT(TRANSACTIONAL_QUOTED_ATOM(Atom),I),OBJECT(QUOTED_ATOM(Atom),I))   :- !.
+transactional_to_regular(OBJECT(TRANSACTIONAL_SYMBOL_TOKEN(Atom),I),OBJECT(SYMBOL_TOKEN(Atom),I))   :- !.
+transactional_to_regular(OBJECT(TRANSACTIONAL_BUILTIN(Atom),I),OBJECT(BUILTIN_IDENTIFIER(Atom),I))   :- !.
+transactional_to_regular(OBJECT(TRANSACTIONAL_ASCII_STRING(Str),I),OBJECT(ASCII_STRING(Str),I)) :- !.
+transactional_to_regular(OBJECT(TRANSACTIONAL_NUMBER(N),I),OBJECT(NUMBER(N),I)) :- !.
+
 get_integer(OBJECT(NUMBER(N),_I),N) :- integer(N).
 get_transactionalinteger(OBJECT(TRANSACTIONAL_NUMBER(N),_I),N) :- integer(N).
 
@@ -725,6 +732,8 @@ fltransactionalobject_struct(OBJECT(TRANSACTIONAL_QUOTED_ATOM(Atom),I),FLTRANSAC
 fltransactionalobject_struct(OBJECT(TRANSACTIONAL_SYMBOL_TOKEN(Atom),I),FLTRANSACTIONALATOM(Atom,I))   :- !.
 fltransactionalobject_struct(OBJECT(TRANSACTIONAL_VARIABLE(Name),I),FLTRANSACTIONALVAR(Name,I))      :- !.
 fltransactionalobject_struct(OBJECT(TRANSACTIONAL_ASCII_STRING(Str),I),FLTRANSACTIONALSTRING(Str,I))   :- !.
+
+fltransactionalqname_struct(QN,FLTRANSACTIONALQNAME(QN)).
 
 %% transactional numbers are used only in :- index %arity-argument
 fltransactionalnumber_struct(OBJECT(TRANSACTIONAL_NUMBER(Num),I),FLTRANSACTIONALNUMBER(Num,I))  :- !.
@@ -1567,7 +1576,8 @@ flora_export_check_error(Atom,_Status) :-
         get_name(Atom,_Name),!.	
 
 flora_export_check_error(Atom,_Status) :-
-        get_transactionalatom(Atom,_Name),!.	
+        get_transactionalatom(Atom,_Name),
+	!.	
 
 %% hilog predicate case, p(_,_) or %p(_,_)
 flora_export_check_error(CANOTERM(MethodName,_N,FL_PARENTHESIS,ArgList,_If,_Ip),Status) :-
@@ -4409,7 +4419,7 @@ flora_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_HF,DWS,Code,Status)
         ).
 
 %% To handle URI SQname structure like prefix#suffix
-flora_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_HF,DWS,Code,Status) :-
+flora_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),HF,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_urisqop(F),
 	!,
@@ -4432,6 +4442,15 @@ flora_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_HF,DWS,Code,Status)
 	    ; get_index(Localname,Index_Localname),
 	      parsing_error(Index_Localname,ERROR_SQNAME_LOCAL,Status)
 	    )
+	; get_transactionalatom(Prefix,_),
+	    transactional_to_regular(Prefix,PrefixRegular),
+	    HF == ALLOW_TRANS
+	->
+	    flora_head_pathexp(PrefixRegular,DISALLOW_TRANS,DWS,PrefixCode,Status1),
+	    flora_head_pathexp(Localname,DISALLOW_TRANS,DWS,LocalnameCode,Status2),
+	    flurisq_struct(PrefixCode,LocalnameCode,Code1),
+	    fltransactionalqname_struct(Code1,Code),
+	    merge_status(Status1,Status2,Status)
 
 	; get_index(Prefix,Index_Prefix),
 	  parsing_error(Index_Prefix,ERROR_SQNAME_PREFIX,Status)
@@ -5083,8 +5102,17 @@ flora_head_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),HF,DWS,Code,Stat
 		    flurisq_struct(PrefixCode,LocalnameCode,Code)
 
 		; get_index(Localname,Index_Localname),
-		  parsing_error(Index_Localname,ERROR_SQNAME_LOCAL,Status)
+		    parsing_error(Index_Localname,ERROR_SQNAME_LOCAL,Status)
 		)
+	    ; get_transactionalatom(Prefix,_),
+		transactional_to_regular(Prefix,PrefixRegular),
+		HF == ALLOW_TRANS
+	    ->
+		flora_head_pathexp(PrefixRegular,DISALLOW_TRANS,DWS,PrefixCode,Status1),
+		flora_head_pathexp(Localname,DISALLOW_TRANS,DWS,LocalnameCode,Status2),
+		flurisq_struct(PrefixCode,LocalnameCode,Code1),
+		fltransactionalqname_struct(Code1,Code),
+		merge_status(Status1,Status2,Status)
 
 	    ; get_index(Prefix,Index_Prefix),
 	      parsing_error(Index_Prefix,ERROR_SQNAME_PREFIX,Status)
@@ -5108,6 +5136,7 @@ flora_head_pathexp(CANOLIST(L,T,_N,I,_Ib),_HF,DWS,Code,Status) :-
 	!,
 	flora_head_list(L,T,I,DWS,Code,Status).
 
+%% If ObjectTerm is non-transactional
 flora_head_pathexp(ObjectTerm,_HF,_DWS,Code,[]) :-
 	flobject_struct(ObjectTerm,Code),
 	!.
@@ -5804,7 +5833,7 @@ flora_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_HF,DWS,Code
          (Status == [] -> flobjref_struct(LCode,F,RCode,Code); true).
 
 %% To handle URI SQname structure like prefix#suffix
-flora_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_HF,DWS,Code,Status) :-
+flora_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),HF,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_urisqop(F),
 	!,
@@ -5829,6 +5858,15 @@ flora_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_HF,DWS,Code
 	    ; get_index(Localname,Index_Localname),
 	      parsing_error(Index_Localname,ERROR_SQNAME_LOCAL,Status)
 	    )
+	; get_transactionalatom(Prefix,_),
+	    transactional_to_regular(Prefix,PrefixRegular),
+	    HF == ALLOW_TRANS
+	->
+	    flora_head_pathexp(PrefixRegular,DISALLOW_TRANS,DWS,PrefixCode,Status1),
+	    flora_head_pathexp(Localname,DISALLOW_TRANS,DWS,LocalnameCode,Status2),
+	    flurisq_struct(PrefixCode,LocalnameCode,Code1),
+	    fltransactionalqname_struct(Code1,Code),
+	    merge_status(Status1,Status2,Status)
 
 	; get_index(Prefix,Index_Prefix),
 	  parsing_error(Index_Prefix,ERROR_SQNAME_PREFIX,Status)
@@ -6486,3 +6524,7 @@ flora_parse_datatype(Args,If,DWS,Code,Status) :-
 	    )
 	; Status = Status1
 	).
+
+merge_status([],[],[]) :- !.
+merge_status([],S,S) :- !.
+merge_status(S,[],S) :- !.

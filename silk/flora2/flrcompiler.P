@@ -141,8 +141,9 @@ is_flcontrolconstruct(FLDOUNTIL(Cond,Action),FLLIBDOUNTIL,Cond,Action).
 is_flcontrolconstruct(FLLOOPUNTIL(Cond,Action),FLLIBLOOPUNTIL,Cond,Action).
 is_flcontrolconstruct(FLUNLESSDO(Cond,Action),FLLIBUNLESSDO,Cond,Action).
 
-is_flterm(FLTERM(Funct,Arity,Args),Funct,Arity,Args).
-is_fltransactionalterm(FLTRANSACTIONALTERM(Funct,Arity,Args),Funct,Arity,Args).
+is_flterm(FLTERM(Funct,Arity,Args),Funct,Arity,Args) :- Funct \= FLTRANSACTIONALQNAME(_).
+is_fltransactionalterm(FLTRANSACTIONALTERM(Funct,Arity,Args),Funct,Arity,Args) :- !.
+is_fltransactionalterm(FLTERM(FLTRANSACTIONALQNAME(Funct),Arity,Args),Funct,Arity,Args).
 is_flinsert(FLINSERT(Op,List,Cond),Op,List,Cond).
 is_flinsert(FLINSERT(Op,List),Op,List).
 is_fldelete(FLDELETE(Op,List,Cond),Op,List,Cond).
@@ -1845,8 +1846,7 @@ compile_labeled_construct_add(Label,Contents,CodeList-ListTail,Status) :-
 flora_compile(NULL,X-X,[],[]) :- !.
 
 flora_compile(ParserTerm,CodeDiffList,OptionList,Status) :-
-	compile_internal(ParserTerm,(NULL,NULL),
-			 CodeDiffList,OptionList,Status).
+	compile_internal(ParserTerm,(NULL,NULL),CodeDiffList,OptionList,Status).
 	
 %% This rule is for debugging.
 flora_compile(_ParserTerm,[],[],[error(UNKNOWN_ERROR)]).
@@ -2585,11 +2585,11 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    H2BCodeTail=NULL,
             Status=[]
 
-	; is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_head_fltermlit(Funct,N,Args,Code,H2BCodeHead,H2BCodeTail,Status)
-
         ; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
             compile_head_fltransactionaltermlit(Funct,N,Args,Code,H2BCodeHead,H2BCodeTail,Status)
+
+	; is_flterm(ParserTerm,Funct,N,Args) ->
+	    compile_head_fltermlit(Funct,N,Args,Code,H2BCodeHead,H2BCodeTail,Status)
 
 	; is_flbirelate(ParserTerm,OT1,RelType,OT2) ->
 	    compile_head_flbirelate(OT1,RelType,OT2,_Obj,Code,H2BCodeHead,H2BCodeTail,Status)
@@ -2721,11 +2721,11 @@ compile_body_literal(ParserTerm,Code,Status) :-
 	    Status=[]
 	*/
 
-        ; is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_fltermlit(Funct,N,Args,OidCode,SpecCode,Status)
-
         ; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_fltransactionaltermlit(Funct,N,Args,OidCode,SpecCode,Status)
+
+        ; is_flterm(ParserTerm,Funct,N,Args) ->
+	    compile_fltermlit(Funct,N,Args,OidCode,SpecCode,Status)
 
 	; is_flbirelate(ParserTerm,ObjTerm1,RelType,ObjTerm2) ->
 	    compile_flbirelate(ObjTerm1,RelType,ObjTerm2,_Obj,OidCode,SpecCode,Status)
@@ -3072,10 +3072,10 @@ compile_pathexp(ParserTerm,Object,NULL,NULL,Status) :-
 	!.
 
 compile_pathexp(ParserTerm,Object,OidCode,Code,Status) :-
-	( is_flterm(ParserTerm,Funct,N,Args) ->
+	( is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_fltermobj(Funct,N,Args,Object,OidCode,Code,Status)
 
-	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
+	; is_flterm(ParserTerm,Funct,N,Args) ->
 	    compile_fltermobj(Funct,N,Args,Object,OidCode,Code,Status)
 
 	; is_flbirelate(ParserTerm,ObjTerm1,RelType,ObjTerm2) ->
@@ -3111,9 +3111,9 @@ compile_pathexp(ParserTerm,Object,OidCode,Code,Status) :-
 	
 	; is_flfloralib(ParserTerm,P,Module) ->
 	    compile_floralibobj(P,Module,Object,OidCode,Code,Status)
-	;
-	  is_flworkspace(ParserTerm,P,WS),
-	  compile_wspathexp(P,WS,Object,OidCode,Code,Status)
+
+	; is_flworkspace(ParserTerm,P,WS),
+	    compile_wspathexp(P,WS,Object,OidCode,Code,Status)
 	).
 
 
@@ -3947,12 +3947,12 @@ compile_head_pathexp(ParserTerm,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    H2BCodeHead = NULL,
 	    H2BCodeTail = NULL
 
-	; is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,Status)
-        
         ; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,Status)
 
+	; is_flterm(ParserTerm,Funct,N,Args) ->
+	    compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+        
 	; is_fllist(ParserTerm,L,T,I) ->
 	    compile_head_fllist(L,T,I,Object,Code,H2BCodeHead,H2BCodeTail,Status)
 	;
@@ -4331,11 +4331,11 @@ compile_floraliblit(ParserTerm,WS,OidCode,Code,Status) :-
   compile_wsliteral(+ParserTerm,+Workspace,-OidCode,-Code,-Status)
 ****************************************************************************/
 compile_wsliteral(ParserTerm,WS,OidCode,WSCode,Status) :-
-	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_wstermlit(Funct,N,Args,WS,OidCode,WSCode,Status)
-
-	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
+	( is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_wstransactionaltermlit(Funct,N,Args,WS,OidCode,WSCode,Status)
+
+	; is_flterm(ParserTerm,Funct,N,Args) ->
+	    compile_wstermlit(Funct,N,Args,WS,OidCode,WSCode,Status)
 
 	; is_flvar(ParserTerm,VarName,Index) ->
 	    %% Is this possible? Should be taken care by the libmodlit code
@@ -4408,13 +4408,13 @@ compile_wspathexp(ParserTerm,WS,Object,OidCode,Code,Status) :-
 	    Code=NULL,
 	    Status=[]
 
-	; is_flterm(ParserTerm,Funct,N,Args) ->
-	    %%abort('Compiler - DEPRECATED!!! unreified predicate in obj pos'),
-	    compile_wstermobj(Funct,N,Args,WS,Object,OidCode,Code,Status)
-
 	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    %%abort('Compiler - DEPRECATED!!! unreified predicate in obj pos'),
 	    compile_wstransactionaltermobj(Funct,N,Args,WS,Object,OidCode,Code,Status)
+
+	; is_flterm(ParserTerm,Funct,N,Args) ->
+	    %%abort('Compiler - DEPRECATED!!! unreified predicate in obj pos'),
+	    compile_wstermobj(Funct,N,Args,WS,Object,OidCode,Code,Status)
 
 	; is_flbirelate(ParserTerm,ObjTerm1,RelType,ObjTerm2) ->
 	    %%abort('Compiler - DEPRECATED!!! unreified ISA in obj pos'),
@@ -4482,10 +4482,10 @@ compile_wsflpathexp(ParserTerm,WS,Object,OidCode,Code,Status) :-
 	; is_flbirelate(ParserTerm,ObjTerm1,RelType,ObjTerm2) ->
 	    compile_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,Object,OidCode,Code,Status)
 
-	; is_flterm(ParserTerm,Funct,N,Args) ->
+	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_wsfltermobj(Funct,N,Args,WS,Object,OidCode,Code,Status)
 
-	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
+	; is_flterm(ParserTerm,Funct,N,Args) ->
 	    compile_wsfltermobj(Funct,N,Args,WS,Object,OidCode,Code,Status)
 
 	; is_fllist(ParserTerm,L,T,I) ->
@@ -5341,11 +5341,11 @@ compile_head_wspathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
 	    H2BCodeTail=NULL,
 	    Status=[]
 
-	; is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_head_wstermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
-
 	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_head_wstransactionaltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+
+	; is_flterm(ParserTerm,Funct,N,Args) ->
+	    compile_head_wstermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
 
 	; is_flbirelate(ParserTerm,ObjTerm1,RelType,ObjTerm2) ->
 	    compile_head_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
@@ -5391,11 +5391,11 @@ compile_head_floraliblit(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
                 appended to the code of the body
 ****************************************************************************/
 compile_head_wsliteral(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_head_wstermlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,Status)
-
-	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
+	( is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_head_wstransactionaltermlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,Status)
+
+	; is_flterm(ParserTerm,Funct,N,Args) ->
+	    compile_head_wstermlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,Status)
 
 	; is_flbirelate(ParserTerm,ObjTerm1,RelType,ObjTerm2) ->
 	    compile_head_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,_Obj,Code,H2BCodeHead,H2BCodeTail,Status)

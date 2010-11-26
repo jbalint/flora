@@ -99,8 +99,8 @@ CLEAN : CLEANTEMP
 	cd ..
 
 CLEANTEMP :
-	-@erase "%HOME%\.xsb\flora\*$(OBJEXT)
-	-@erase "%HOME%\.xsb\flora\*$(PROLOGEXT)
+	-@erase "%HOME%\.xsb\flora*\*$(OBJEXT)
+	-@erase "%HOME%\.xsb\flora*\*$(PROLOGEXT)
 
 
 $(PROLOGEXT)$(OBJEXT):
