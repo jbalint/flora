@@ -50,9 +50,8 @@
 #include "flora_errors.flh"
 #include "flora_terms.flh"
 
-#define PARSER_CONTEXT	        parsecontext
+#define PARSER_CONTEXT	        FLORA_SYMBOL('parsecontext')
 
-:- dynamic FLORA_SYMBOL('parser_flag')(_).
 :- dynamic PARSER_CONTEXT(_).
 
 initialize_work :-
@@ -932,6 +931,14 @@ is_ruleupdateop(FL_DELETERULE_A) :- !.
 is_ruleupdateop(FL_DELETERULE_Z) :- !.
 is_ruleupdateop(FL_DELETERULE) :- !.
 
+is_nonlogical_updateop(FL_INSERT) :- !.
+is_nonlogical_updateop(FL_INSERTALL) :- !.
+is_nonlogical_updateop(FL_DELETE) :- !.
+is_nonlogical_updateop(FL_DELETEALL) :- !.
+is_nonlogical_updateop(FL_ERASE) :- !.
+is_nonlogical_updateop(FL_ERASEALL) :- !.
+is_nonlogical_updateop(Op) :- is_ruleupdateop(Op).
+
 is_clauseop(FL_CLAUSE) :- !.
 
 is_reifyop(FL_REIFYOP) :- !.
@@ -1021,7 +1028,7 @@ get_control_construct_definition(FLUNLESSDO,FL_UNLESS,FL_DO).
 
 %% Management of global parser context
 clear_context(X) :- retractall(PARSER_CONTEXT(X)).
-report_context(X) :- assert(PARSER_CONTEXT(X)).
+set_context(X) :- assert(PARSER_CONTEXT(X)).
 
 
 /****************************************************************************
@@ -2165,7 +2172,7 @@ flora_parse_fact(CanoniTerm,NULL,Status) :-
 	!.
 
 flora_parse_fact(CanoniTerm,Code,Status) :-
-	report_context(parsing_fact),
+	set_context(parsing_fact),
 	flora_head(CanoniTerm,CodeList,Status),
 	clear_context(parsing_fact),
 	flfact_struct(CodeList,Code).
@@ -2183,7 +2190,7 @@ flora_parse_query(CanoniTerm,Code,Status) :-
   flora_parse_rule(+Head,+Body,-Code,-Status)
 ****************************************************************************/
 flora_parse_rule(Head,Body,Code,Status) :-
-        report_context(parsing_rulehead),
+        set_context(parsing_rulehead),
 	flora_head(Head,HeadCodeList,S),
         clear_context(parsing_rulehead),
 	( S == [] ->
@@ -2529,7 +2536,9 @@ flora_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	(N > 1 -> flora_list_to_conjunct(Args, HypoBody, If, Ip)
 	; Args = [HypoBody]
 	),
+	set_context(parsing_hypothetical),
 	flora_body(HypoBody, WS, DWS,HypoBodyCode,Status),
+	clear_context(parsing_hypothetical),
 	( Status == [] -> flhypothetical_struct(F,HypoBodyCode,If,Code)
 	;
 	    true
@@ -2573,7 +2582,7 @@ flora_body(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),WS,DWS,Code,Status) :-
 %% Literal is a rule and we are inside reification
 flora_body(CANOTERM(Funct,2,FL_PARENTHESIS,[Head,Body],If,Ip),WS,WS,Code,Status) :-
 	get_name(Funct,FL_IMPLYOP),
-	if_reifying,
+	PARSER_CONTEXT(reifying),
 	!,
         ( PARSER_CONTEXT(parsing_reify) ->
             PrevContext = parsing_reify,
@@ -2583,7 +2592,7 @@ flora_body(CANOTERM(Funct,2,FL_PARENTHESIS,[Head,Body],If,Ip),WS,WS,Code,Status)
         ),
 	flora_dynrule(CANOTERM(Funct,2,FL_PARENTHESIS,[Head,Body],If,Ip),
 		      WS,Code,Status),
-        ( var(PrevContext) -> true; report_context(parsing_reify)).
+        ( var(PrevContext) -> true; set_context(parsing_reify)).
 
 %% At this point, CanoniTerm is not a logical formula.
 flora_body(CANOTERM(Funct,1,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
@@ -2718,7 +2727,7 @@ flora_body(CanoniTerm,FloraModSpec,FloraModSpec,Code,Status) :-
 
 flora_body(CanoniTerm,WS,_DWS,Code,Status) :-
 	is_labeled_construct(CanoniTerm,_Label,Construct),
-	if_reifying,
+	PARSER_CONTEXT(reifying),
 	is_rule(Construct,_,_),
 	!,
 	flora_dynrule(CanoniTerm,WS,Code,Status).
@@ -3262,8 +3271,10 @@ flora_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
 	!,
 	( N == 0 ->
 	    parsing_error(Ip,EXP_ARGS,Status)
-	;
-	    flobject_struct(Funct,FCode),
+	; PARSER_CONTEXT(parsing_hypothetical), is_nonlogical_updateop(Atom) ->
+	    parsing_error(Ip,DISALLOWED_UPDATE_IN_HYPOTHETICAL,Status)
+
+	; flobject_struct(Funct,FCode),
 	    flora_dbinsert(FCode,N,Args,DWS,Code,Status)
         ).
 
@@ -3274,8 +3285,10 @@ flora_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
 	!,
 	( N == 0 ->
 	    parsing_error(Ip,EXP_ARGS,Status)
-	;
-	    flobject_struct(Funct,FCode),
+	; PARSER_CONTEXT(parsing_hypothetical), is_nonlogical_updateop(Atom) ->
+	    parsing_error(Ip,DISALLOWED_UPDATE_IN_HYPOTHETICAL,Status)
+
+	; flobject_struct(Funct,FCode),
 	    flora_dbdelete(FCode,N,Args,DWS,Code,Status)
         ).
 
@@ -3347,7 +3360,7 @@ flora_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	is_clauseop(Atom),
 	DWS==NULL,
 	!,
-	report_context(clause_construct),
+	set_context(clause_construct),
 	(Args = [Arg], is_labeled_construct(Arg,Label,Construct) ->
 	    flora_parse_label(Label,true,LabCode,S1),
 	    (S1 == []
@@ -4543,7 +4556,7 @@ flora_pathexp(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),_HF,DWS,Code,Status) :-
 flora_pathexp(ObjectTerm,_HF,_DWS,_Code,Status) :-
 	%% New oid directive is only allowed in rule heads or reified formulas.
 	get_spectoken(ObjectTerm,FL_NEWOID),
-	if_not_reifying,
+	\+ PARSER_CONTEXT(reifying),
 	!,
 	parsing_error(ObjectTerm,ERROR_NEWOID,Status).
 
@@ -5521,7 +5534,7 @@ flora_dbliteral(Mode,CanoniTerm,DWS,[Code],Status) :-
 	Handle reification, ${...}
 ****************************************************************************/
 flora_reify(Arg,DWS,Code,Status) :-
-        report_context(parsing_reify),
+        set_context(parsing_reify),
 	protect_reification(flora_body(Arg,DWS,DWS,ArgCode,Status)),
         clear_context(parsing_reify),
 	(Status == [] -> flreify_struct(ArgCode,Code); true).
@@ -6433,15 +6446,9 @@ valid_semantics_direct_option(FL_CUSTOM,X) :- atom(X).
 
 %%% Misc
 protect_reification(Call) :-
-	assert(FLORA_SYMBOL('parser_flag')(reifying)),
+	set_context(reifying),
 	call(Call),
-	(retract(FLORA_SYMBOL('parser_flag')(reifying))
-	; true).
-
-if_reifying :-
-	FLORA_SYMBOL('parser_flag')(reifying).
-if_not_reifying :-
-	\+ FLORA_SYMBOL('parser_flag')(reifying).
+	clear_context(reifying).
 
 
 %% Used for reading FLORA terms (incl. reified formulas) from within
@@ -6454,7 +6461,7 @@ flora_parse_term_external(ComposerTerm,ParsedTerm,Status) :-
 
 %% Parse the annotation construct
 flora_parse_label(CANOTERM(_Funct,_N,FL_BRACE,Args,If,_Ip),VarsOK,Code,Status) :-
-	report_context(parsing_label),
+	set_context(parsing_label),
 	( Args = [First|Rest],
 	    ((is_obj_identifier_struct(First) ; get_spectoken(First,FL_NEWOID))
 	    %% First element in list is Id const
