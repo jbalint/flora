@@ -141,9 +141,11 @@ is_flcontrolconstruct(FLDOUNTIL(Cond,Action),FLLIBDOUNTIL,Cond,Action).
 is_flcontrolconstruct(FLLOOPUNTIL(Cond,Action),FLLIBLOOPUNTIL,Cond,Action).
 is_flcontrolconstruct(FLUNLESSDO(Cond,Action),FLLIBUNLESSDO,Cond,Action).
 
-is_flterm(FLTERM(Funct,Arity,Args),Funct,Arity,Args) :- Funct \= FLTRANSACTIONALQNAME(_).
-is_fltransactionalterm(FLTRANSACTIONALTERM(Funct,Arity,Args),Funct,Arity,Args) :- !.
-is_fltransactionalterm(FLTERM(FLTRANSACTIONALQNAME(Funct),Arity,Args),Funct,Arity,Args).
+is_flterm(FLTERM(Funct,Arity,Args),Funct,Arity,Args) :-
+	\+is_fltransactionalqname(Funct,_).
+is_fltransactionalterm(FLTRANSACTIONALTERM(Func,N,Args),Func,N,Args) :- !.
+is_fltransactionalterm(FLTERM(Term,Arity,Args),Funct,Arity,Args) :-
+	is_fltransactionalqname(Term,Funct).
 is_flinsert(FLINSERT(Op,List,Cond),Op,List,Cond).
 is_flinsert(FLINSERT(Op,List),Op,List).
 is_fldelete(FLDELETE(Op,List,Cond),Op,List,Cond).
@@ -193,9 +195,17 @@ is_flboolsig(FLBOOLSIG(Att,RefType),Att,RefType).
 is_fliboolsig(FLIBOOLSIG(Att,RefType),Att,RefType).
 is_fltransig(FLTRANSIG(Att,RefType),Att,RefType).
 is_flitransig(FLITRANSIG(Att,RefType),Att,RefType).
-is_flmethspec(FLMETHSPEC(Meth),Meth).
-is_flimethspec(FLIMETHSPEC(IMeth),IMeth).
+
+is_fltranspec(FLTRANSPEC(QN),Tran) :- 
+	is_fltransactionalqname(QN,Tran),
+	!.
 is_fltranspec(FLTRANSPEC(Tran),Tran).
+
+is_fltranspec(FLMETHSPEC(Meth),Tran) :- is_fltransactionalqname(Meth,Tran).
+is_flmethspec(FLMETHSPEC(Meth),Meth) :- \+is_fltransactionalqname(Meth,_).
+is_flimethspec(FLIMETHSPEC(IMeth),IMeth).
+
+is_fltransactionalqname(FLTRANSACTIONALQNAME(QN),QN).
 
 is_flobjeql(FLOBJEQL(O1,O2),O1,O2).
 is_flcut(FLCUT(I),I).
@@ -4493,6 +4503,11 @@ compile_wsflpathexp(ParserTerm,WS,Object,OidCode,Code,Status) :-
 
 	; is_flworkspace(ParserTerm,P,NestedWS) ->
 	    compile_wspathexp(P,NestedWS,Object,OidCode,Code,Status)
+
+	/*
+	; is_flurisq(ParserTerm,_P,_L) ->
+	    %% this case is not needed. It causes errors in the coder
+	*/
 	;
 	  %% workspace not distributive over nested aggregates
 	  compile_pathexp(ParserTerm,Object,OidCode,Code,Status)
