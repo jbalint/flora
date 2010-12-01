@@ -29,12 +29,17 @@ package org.semwebcentral.flora2.API;
 import java.io.File;
 import java.util.Vector;
 
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
 import org.semwebcentral.flora2.API.util.FlrException;
 
 import com.declarativa.interprolog.PrologEngine;
+import com.declarativa.interprolog.PrologOutputListener;
 import com.declarativa.interprolog.TermModel;
 import com.declarativa.interprolog.XSBSubprocessEngine;
 import com.declarativa.interprolog.util.IPException;
+import com.declarativa.interprolog.util.OutputListener;
 import com.xsb.interprolog.NativeEngine;
 
 /** This class is used to call FLORA-2 commands 
@@ -45,6 +50,8 @@ public class PrologFlora extends FloraConstants
     PrologEngine engine;
     boolean isNative = false;
     String commands[];
+
+    private static Logger logger = Logger.getLogger(PrologFlora.class);
 
     
     /* Function for setting Initialization commands */
@@ -310,7 +317,43 @@ public class PrologFlora extends FloraConstants
 	    }
 	} else {
 	    try {
-		engine = new XSBSubprocessEngine(systemSpecificFilePath(PrologBinDir),debug);
+		String args = "";
+		if (! logger.isInfoEnabled())
+		    args += " --quietload";
+
+		engine = new XSBSubprocessEngine(systemSpecificFilePath(PrologBinDir) + args, debug);
+
+		if (logger.isEnabledFor(Level.WARN)) // no logger.isWarnEnabled
+		    {
+			if (logger.isDebugEnabled())
+			    {
+				// forward all output
+				((XSBSubprocessEngine) engine).addPrologOutputListener(new PrologOutputListener()
+				    {
+					public void print(String s)
+					{
+					    System.err.print(s);
+					    System.err.flush();
+					}
+				    });
+			    }
+			else
+			    {
+				// forward stderr
+				((XSBSubprocessEngine) engine).addPrologStderrListener(new OutputListener()
+				    {
+					public void analyseBytes(byte[] buffer, int nbytes)
+					{
+					    System.err.write(buffer, 0, nbytes);
+					    System.err.flush();
+					}
+					
+					public void streamEnded()
+					{
+					}
+				    });
+			    }
+		    }
 	    }
 	    catch(Exception e2) {
 	    	e2.printStackTrace();
