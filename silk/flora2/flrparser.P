@@ -446,8 +446,11 @@ arrange_arguments([A|L],S,Index,Left,Right,_Iright,CanoniTerm) :-
 %% We rectify the associativity here.
 arrange_arguments([A|L],S,Index,Left,Right,_Iright,CanoniTerm) :-
 	is_datatypeop(S),
-	A = ARGUMENT(FL_PARENTHESIS,Arg,I1,_I2),
-	comma_separated_list(Arg,ArgList,N),
+	(A = ARGUMENT(FL_PARENTHESIS,Arg,I1,_I2) ->
+	    comma_separated_list(Arg,ArgList,N)
+	; A = ARGUMENT(FL_PARENTHESIS,I1,_I2) ->
+	    ArgList = [], N=0
+	),
 	!,
 	Funct=OBJECT(QUOTED_ATOM(S),Index),
 	FunctTerm=CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],Index,NO_INDEX),
@@ -717,6 +720,7 @@ flobject_struct(OBJECT(SYMBOL_TOKEN(Atom),I),FLATOM(Atom,I)) :- !.
 flobject_struct(OBJECT(VARIABLE(Name),I),FLVAR(Name,I)) :- !.
 flobject_struct(OBJECT(NUMBER(Num),I),FLNUMBER(Num,I)) :- !.
 flobject_struct(OBJECT(ASCII_STRING(Str),I),FLSTRING(Str,I)) :- !.
+flobject_struct(OBJECT(TRANSACTIONAL_ASCII_STRING(Str),I),FLTRANSACTIONALSTRING(Str,I)) :- !.
 flobject_struct(OBJECT(SPECIAL_TOKEN(Atom),I),FLTOKEN(Atom,I)) :- !.
 %%  support for numbered anon oids
 flobject_struct(OBJECT(SPECIAL_TOKEN(Atom,Num),I),FLTOKEN(Atom,Num,I)) :- !.
@@ -732,8 +736,8 @@ fltransactionalobject_struct(OBJECT(TRANSACTIONAL_SYMBOL_TOKEN(Atom),I),FLTRANSA
 fltransactionalobject_struct(OBJECT(TRANSACTIONAL_VARIABLE(Name),I),FLTRANSACTIONALVAR(Name,I))      :- !.
 fltransactionalobject_struct(OBJECT(TRANSACTIONAL_ASCII_STRING(Str),I),FLTRANSACTIONALSTRING(Str,I))   :- !.
 
-fltransactionalqname_struct(QN,FLTRANSACTIONALQNAME(QN)).
-is_fltransactionalqname_struct(FLTRANSACTIONALQNAME(_QN)).
+fltransactionalqname_struct(QN,FLTRANSACTIONALPREDSPEC(QN)).
+is_fltransactionalpredspec_struct(FLTRANSACTIONALPREDSPEC(_QN)).
 
 %% transactional numbers are used only in :- index %arity-argument
 fltransactionalnumber_struct(OBJECT(TRANSACTIONAL_NUMBER(Num),I),FLTRANSACTIONALNUMBER(Num,I))  :- !.
@@ -745,6 +749,9 @@ is_flatom_struct(FLATOM(Atom,_I),Atom).
 is_flnumber_struct(FLNUMBER(_Num,_I)).
 is_flstring_struct(FLSTRING(_Str,_I)).
 is_flstring_struct(FLSTRING(Str,I),Str,I).
+
+%%is_fltransactionalstring_struct(FLTRANSACTIONALSTRING(_Str,_I)).
+is_fltransactionalstring_struct(FLTRANSACTIONALSTRING(Str,I),Str,I).
 
 %%is_flbuiltin_identifier_struct(FLBUILTIN_IDENTIFIER(_BuiltinName,_I)).
 
@@ -809,7 +816,8 @@ flobjref_struct(Object,M,Attribute,FLOBJREF(Object,M,Attribute)).
 flterm_struct(Funct,Arity,Args,FLTERM(Funct,Arity,Args)).
 fltransactionalterm_struct(Funct,Arity,Args,FLTRANSACTIONALTERM(Funct,Arity,Args)).
 is_fltransactionalterm_struct(FLTRANSACTIONALTERM(_Funct,_Arity,_Args)) :- !.
-is_fltransactionalterm_struct(FLTERM(FLTRANSACTIONALQNAME(_Funct),_Arity,_Args)).
+is_fltransactionalterm_struct(FLTERM(FuncSpec,_Arity,_Args)) :-
+	is_fltransactionalpredspec_struct(FuncSpec).
 
 flaggregt_struct(Op,Var,GroupVars,Conds,FLAGGREGATE(Op,Var,GroupVars,Conds)).
 is_flaggregt_struct(FLAGGREGATE(_Op,_Var,_GroupVars,_Conds)).
@@ -2391,6 +2399,12 @@ flora_head_literal(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),_DWS,_Code,Status
 	is_negop(F),
 	!,
 	parsing_error(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),NEG_NEGATE_HEAD,Status).
+
+flora_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),DWS,Code,Status) :-
+	get_atom(Funct,F),
+	is_datatypeop(F),
+	!,
+	flora_parse_datatype(Args,If,DWS,Code,Status).
 
 flora_head_literal(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
 	!,
@@ -4794,7 +4808,7 @@ flora_attmethspec(CanoniTerm,_DWS,Code,[]) :-
 %% Transactional method spec. Possibly with a prefix macro.
 flora_attmethspec(CanoniTerm,DWS,Code,Status) :-
 	flora_pathexp(CanoniTerm,ALLOW_TRANS,DWS,C,Status),
-	(is_fltransactionalterm_struct(C) ; is_fltransactionalqname_struct(C)),
+	(is_fltransactionalterm_struct(C) ; is_fltransactionalpredspec_struct(C)),
 	!,
 	(Status == [] -> fltranspec_struct(C,Code)
         ;
@@ -5520,6 +5534,13 @@ flora_dbliteral(_Mode,CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),_DWS,_Code,Sta
 	!,
 	parsing_error(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),NEG_NEGATE_DB,Status).
 	
+flora_dbliteral(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),DWS,Code,Status) :-
+	get_atom(Funct,F),
+	is_datatypeop(F),
+	!,
+	flora_parse_datatype(Args,If,DWS,Code1,Status),
+	Code = [Code1].
+
 
 flora_dbliteral(Mode,CanoniTerm,DWS,[Code],Status) :-
 	%% now the literal is stripped of commas and workspaces - do
@@ -6520,6 +6541,10 @@ flora_parse_datatype(Args,If,DWS,Code,Status) :-
 	    ArgsCode=[LiteralCode,SortCode],
 	    (is_flstring_struct(LiteralCode,Literal,Idx)
 	    ->  fldatatype_struct(SortCode,Literal,Idx,Code),
+		Status = []
+	    ; is_fltransactionalstring_struct(LiteralCode,Literal,Idx)
+	    ->  fldatatype_struct(SortCode,Literal,Idx,Code1),
+		fltransactionalqname_struct(Code1,Code),
 		Status = []
 	    ; is_flvar_struct(LiteralCode,_,Idx)
 	    ->  fldatatype_struct(SortCode,LiteralCode,Idx,Code),

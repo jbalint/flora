@@ -142,10 +142,10 @@ is_flcontrolconstruct(FLLOOPUNTIL(Cond,Action),FLLIBLOOPUNTIL,Cond,Action).
 is_flcontrolconstruct(FLUNLESSDO(Cond,Action),FLLIBUNLESSDO,Cond,Action).
 
 is_flterm(FLTERM(Funct,Arity,Args),Funct,Arity,Args) :-
-	\+is_fltransactionalqname(Funct,_).
+	\+is_fltransactionalpredspec(Funct,_).
 is_fltransactionalterm(FLTRANSACTIONALTERM(Func,N,Args),Func,N,Args) :- !.
 is_fltransactionalterm(FLTERM(Term,Arity,Args),Funct,Arity,Args) :-
-	is_fltransactionalqname(Term,Funct).
+	is_fltransactionalpredspec(Term,Funct).
 is_flinsert(FLINSERT(Op,List,Cond),Op,List,Cond).
 is_flinsert(FLINSERT(Op,List),Op,List).
 is_fldelete(FLDELETE(Op,List,Cond),Op,List,Cond).
@@ -197,15 +197,15 @@ is_fltransig(FLTRANSIG(Att,RefType),Att,RefType).
 is_flitransig(FLITRANSIG(Att,RefType),Att,RefType).
 
 is_fltranspec(FLTRANSPEC(QN),Tran) :- 
-	is_fltransactionalqname(QN,Tran),
+	is_fltransactionalpredspec(QN,Tran),
 	!.
 is_fltranspec(FLTRANSPEC(Tran),Tran).
 
-is_fltranspec(FLMETHSPEC(Meth),Tran) :- is_fltransactionalqname(Meth,Tran).
-is_flmethspec(FLMETHSPEC(Meth),Meth) :- \+is_fltransactionalqname(Meth,_).
+is_fltranspec(FLMETHSPEC(Meth),Tran) :- is_fltransactionalpredspec(Meth,Tran).
+is_flmethspec(FLMETHSPEC(Meth),Meth) :- \+is_fltransactionalpredspec(Meth,_).
 is_flimethspec(FLIMETHSPEC(IMeth),IMeth).
 
-is_fltransactionalqname(FLTRANSACTIONALQNAME(QN),QN).
+is_fltransactionalpredspec(FLTRANSACTIONALPREDSPEC(QN),QN).
 
 is_flobjeql(FLOBJEQL(O1,O2),O1,O2).
 is_flcut(FLCUT(I),I).
@@ -215,8 +215,13 @@ is_flcut(FLCUT(I),I).
 is_flpassthru(FLPASSTRU(O),O).
 
 %% basic building blocks
-is_flatom(FLATOM(Atom,_I),Atom).
-is_flatom(FLATOM(Atom,Index),Atom,Index).
+is_flatom(FLATOM(Atom,_I),Atom) :- 
+	\+ is_fltransactionalatom(Atom,_),
+	!.
+is_flatom(FLATOM(Atom,Index),Atom,Index) :- 
+	\+ is_fltransactionalatom(Atom,_),
+	!.
+
 is_fltransactionalatom(FLTRANSACTIONALATOM(Atom,_I),Atom).
 is_flnumber(FLNUMBER(Number,_I),Number).
 %% transactional numbers are used only in :- index %arity-argument
@@ -228,6 +233,7 @@ is_fltoken(FLTOKEN(Token,Num,I),Token,Num,I).
 is_flurisq(FLURISQ(Prefix,Localname),Prefix,Localname).
 
 is_fldatatype(FLDATATYPE(Sort,Literal,Index),Sort,Literal,Index).
+is_fltransactionaldatatype(FLTRANSACTIONALPREDSPEC(FLDATATYPE(Sort,Literal,Index)),Sort,Literal,Index).
 
 is_flbuiltin_identifier(FLBUILTIN_IDENTIFIER(Builtin,_I),Builtin).
 is_flbuiltin_identifier(FLBUILTIN_IDENTIFIER(Builtin,I),Builtin,I).
@@ -477,11 +483,22 @@ atomlit_struct(_Context,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
 	builtin_identifier_struct(FLBUILTIN_IDENTIFIER(Atom,I),AtomCode),
 	prologterm_struct(AtomCode,0,[],Code).
 atomlit_struct(Context,FLATOM(Atom,I),PRATOMLIT([Atom,Caller],I)) :-
+	!,
 	determine_caller_info(Context,Caller).
 atomlit_struct(Context,FLBUILTIN_IDENTIFIER(Atom,I),PRATOMLIT([Atom,Caller],I)) :-
+	!,
+	determine_caller_info(Context,Caller).
+%% This is for the cases of an atomic literal like "aaaa"^^foo
+atomlit_struct(Context,Atomspec,PRATOMLIT([Atomspec,Caller],Idx)) :-
+	is_prdatatype(Atomspec,_,_,Idx),
 	determine_caller_info(Context,Caller).
 
 transactionalatomlit_struct(Context,FLTRANSACTIONALATOM(Atom,I),PRTRANSACTIONALATOMLIT([Atom,Caller],I)) :-
+	!,
+	determine_caller_info(Context,Caller).
+%% This is for the case of an atomic literal like %"aaaa"^^foo
+transactionalatomlit_struct(Context,Atomspec,PRTRANSACTIONALATOMLIT([Atomspec,Caller],Idx)) :-
+	is_prdatatype(Atomspec,_,_,Idx),
 	determine_caller_info(Context,Caller).
 
 numobj_struct(FLNUMBER(Number,I),PRNUMBER(Number,I)).
@@ -501,6 +518,7 @@ transactionalstrobj_struct(FLTRANSACTIONALSTRING(String,I),PRSTRING(String,I)).
 datatypeobj_struct(FLDATATYPE(Sort,Lit,Idx),
 		   PRDATATYPE(SortCode,LitCode,OutIdx),
 		   Status) :-
+	!,
 	compile_pathexp(Sort,SortCode,_,_,_),
 	(is_flvar(Lit,VarName,VarIdx)
 	->  add_underscore(VarName,InDataTypeVarName),
@@ -513,6 +531,9 @@ datatypeobj_struct(FLDATATYPE(Sort,Lit,Idx),
 	;
 	    LitCode = Lit, OutIdx=Idx, Status = []
 	).
+datatypeobj_struct(FLTRANSACTIONALPREDSPEC(DTspec),Code,Status) :-
+	!,
+	datatypeobj_struct(DTspec,Code,Status).
 
 
 builtin_identifier_struct(FLBUILTIN_IDENTIFIER(Builtin,I),
@@ -2618,15 +2639,27 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 
 	; is_flfloralib(ParserTerm,P,Module) ->
 	    compile_head_floraliblit(P,Module,Code,H2BCodeHead,H2BCodeTail,Status)
+	; is_fldatatype(ParserTerm,_Sort,_Lit,_Index) ->
+	    datatypeobj_struct(ParserTerm,Code1,Status),
+	    atomlit_struct(HEADLITERAL,Code1,Code),
+	    H2BCodeHead=NULL,
+	    H2BCodeTail=NULL
 
-	;
+	; is_fltransactionaldatatype(ParserTerm,_Sort,_Lit,_Index) ->
+	    datatypeobj_struct(ParserTerm,Code1,Status),
+	    transactionalatomlit_struct(HEADLITERAL,Code1,Code),
+	    H2BCodeHead=NULL,
+	    H2BCodeTail=NULL
+
+	; is_flatom(ParserTerm,_) ->
 	    %% atom (0-ary predicate)
 	    atomlit_struct(HEADLITERAL,ParserTerm,Code),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL,
 	    Status=[]
 
-        ;   transactionalatomlit_struct(HEADLITERAL,ParserTerm,Code),
+        ;
+	    transactionalatomlit_struct(HEADLITERAL,ParserTerm,Code),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL,
             Status=[]
@@ -2916,6 +2949,16 @@ compile_body_literal(ParserTerm,Code,Status) :-
 	    transactionalatomlit_struct(BODYLITERAL,ParserTerm,SpecCode) ->
 	    OidCode=NULL,
 	    Status=[]
+
+	; is_fldatatype(ParserTerm,_Sort,_Lit,_Index) ->
+	    datatypeobj_struct(ParserTerm,Code1,Status),
+	    atomlit_struct(BODYLITERAL,Code1,Code),
+	    OidCode=NULL
+
+	; is_fltransactionaldatatype(ParserTerm,_Sort,_Lit,_Index) ->
+	    datatypeobj_struct(ParserTerm,Code1,Status),
+	    transactionalatomlit_struct(BODYLITERAL,Code1,Code),
+	    OidCode=NULL
 
 	; is_flobjeql(ParserTerm,O1,O2) ->
 	    compile_flobjeql(O1,O2,OidCode,SpecCode,Status)
@@ -3942,7 +3985,8 @@ compile_head_pathexp(ParserTerm,Object,NULL,NULL,NULL,Status) :-
 	!.
 
 compile_head_pathexp(ParserTerm,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	( is_flbirelate(ParserTerm,OT1,RelType,OT2) ->
+	( 
+	  is_flbirelate(ParserTerm,OT1,RelType,OT2) ->
 	    compile_head_flbirelate(OT1,RelType,OT2,Object,Code,H2BCodeHead,H2BCodeTail,Status)
 
 	; is_flobjspec(ParserTerm,ObjTerm,Spec) ->
@@ -4405,20 +4449,8 @@ compile_floralibobj(ParserTerm,WS,Object,OidCode,Code,Status) :-
   compile_wspathexp(+ParserTerm,+Workspace,-Object,-OidCode,-Code,-Status)
 ****************************************************************************/
 compile_wspathexp(ParserTerm,WS,Object,OidCode,Code,Status) :-
-	(   %% pred(Term@...)
-	    %% Note: We have to create code to compute X@.... We put this
-	    %% code in OidCode so that it would precede the code for pred(...)
-	    atomlit_struct(BODYLITERAL,ParserTerm,A) ->
-	    workspaceobj_struct(A,WS,Object,OidCode),
-	    Code=NULL,
-	    Status=[]
-
-	; transactionalatomlit_struct(BODYLITERAL,ParserTerm,A) ->
-	    workspaceobj_struct(A,WS,Object,OidCode),
-	    Code=NULL,
-	    Status=[]
-
-	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
+	(
+	  is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    %%abort('Compiler - DEPRECATED!!! unreified predicate in obj pos'),
 	    compile_wstransactionaltermobj(Funct,N,Args,WS,Object,OidCode,Code,Status)
 
@@ -4452,7 +4484,21 @@ compile_wspathexp(ParserTerm,WS,Object,OidCode,Code,Status) :-
 	    workspaceobj_struct(UrisqCode,WS,Object,OidCode),
 	    Code=NULL,
 	    Status = []
+	/*
+	  %%UNREACHABLE!!! These two are not exercised by the testsuite
+	; %% pred(Term@...) 
+	  %% Note: We have to create code to compute X@.... We put this
+	  %% code in OidCode so that it would precede the code for pred(...)
+	  atomlit_struct(BODYLITERAL,ParserTerm,A) ->
+	  workspaceobj_struct(A,WS,Object,OidCode),
+	  Code=NULL,
+	  Status=[]
 
+	; transactionalatomlit_struct(BODYLITERAL,ParserTerm,A) ->
+	    workspaceobj_struct(A,WS,Object,OidCode),
+	    Code=NULL,
+	    Status=[]
+	*/
 	).
 
 
@@ -5344,19 +5390,8 @@ generate_convert_from_prolog_code([AObjH|AObjT],[VarH|VarT],Code) :-
   compile_head_wsflpathexp/7 when a workspace is explicitly specified.
 ****************************************************************************/
 compile_head_wspathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :- 
-	( atomlit_struct(HEADLITERAL,ParserTerm,A) ->
-	    workspaceobj_struct(A,WS,Object,Code),
-	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL,
-	    Status=[]
-
-	; transactionalatomlit_struct(HEADLITERAL,ParserTerm,A) ->
-	    workspaceobj_struct(A,WS,Object,Code),
-	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL,
-	    Status=[]
-
-	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
+	(
+	  is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_head_wstransactionaltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
 
 	; is_flterm(ParserTerm,Funct,N,Args) ->
@@ -5377,7 +5412,18 @@ compile_head_wspathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL,
 	    Status = []
- 	
+
+	 ; atomlit_struct(HEADLITERAL,ParserTerm,A) ->
+	    workspaceobj_struct(A,WS,Object,Code),
+	    H2BCodeHead=NULL,
+	    H2BCodeTail=NULL,
+	    Status=[]
+
+	; transactionalatomlit_struct(HEADLITERAL,ParserTerm,A) ->
+	    workspaceobj_struct(A,WS,Object,Code),
+	    H2BCodeHead=NULL,
+	    H2BCodeTail=NULL,
+	    Status=[]
 	).
 
 
