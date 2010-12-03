@@ -19,13 +19,14 @@
 
 :- compiler_options([xpp_on]).
 #include "standard.h"
+#include "flag_defs_xsb.h"
 
 #include "flrheader.flh"
 #include "flora_terms.flh"
 
 
 
-:- import debug_display_call_hook/1, flora_switch/1 from usermod.
+:- import debug_display_call_hook/1 from usermod.
 :- import flora_configuration/2 from flrregistry.
 :- import process_control/2 from shell.
 :- import xpp_process_file/3 from parse.
@@ -47,10 +48,6 @@
 
 :- import flora_write_goal/2 from flrdecode.
 
-
-:- import flora_handle_trace/0,
-	flora_handle_notrace/0
-   from usermod.
 %% This is a trick: the debugger wants the hook to be in usermod, 
 %% but we want to work in a module
 :- import flora_write_debugger_hook/1 from usermod.
@@ -85,10 +82,26 @@
 	flora_trace_this_print/1
     from usermod.
 
-:- export flora_read_debugger_data/1,
+
+:- import
+	stat_flag/2
+   from machine.
+
+:- export
+	flora_switch/1,
+	flora_read_debugger_data/1,
 	flora_load_dyndata_for_user_modules/1,
 	FLORA_SYMBOL('debugger_loaded'),
+	flora_set_switch/1,
+	flora_clear_switch/1,
+	flora_handle_trace/0,
+	flora_handle_notrace/0,
 	flora_trace/0,
+	flora_trace/1,
+	flora_tracelow/0,
+	flora_tracelow/1,
+	flora_traceverylow/0,
+	flora_traceverylow/1,
 	flora_notrace/0.
 
 
@@ -123,9 +136,66 @@ flora_write_dbg_item(Item) :-
 flora_trace :-
 	assert(flora_switch(trace)),
 	flora_handle_trace.
+flora_trace(File) :-
+	dump_trace_to_file(File),
+	flora_trace.
+
+%% Enables low-level Prolog debugging
+flora_tracelow :-
+	flora_trace,
+	flora_set_switch(low_level_trace).
+flora_tracelow(File) :-
+	flora_trace(File),
+	flora_set_switch(low_level_trace).
+flora_traceverylow :-
+	flora_trace,
+	flora_set_switch(low_level_trace),
+	flora_set_switch(verylow_level_trace).
+flora_traceverylow(File) :-
+	flora_trace(File),
+	flora_set_switch(low_level_trace),
+	flora_set_switch(verylow_level_trace).
+
 flora_notrace :-
-	retractall(flora_switch(trace)),
+	make_trace_interactive,
+	flora_clear_switch(trace),
+	flora_clear_switch(verylow_level_trace),
+	flora_clear_switch(low_level_trace),
 	flora_handle_notrace.
+
+dump_trace_to_file(File) :-
+	debug_ctl(prompt,off),
+	debug_ctl(profile,on),
+	debug_ctl(redirect,File).
+make_trace_interactive :-
+	debug_ctl(prompt,on),
+	debug_ctl(profile,off),
+	debug_ctl(redirect,tty).
+
+flora_handle_trace :-
+	( flora_switch(trace)
+	->  (stat_flag(TRACE,Trace), Trace == 0 -> trace
+	    ; true
+	    )
+	; true
+	).
+flora_handle_notrace :-
+	( stat_flag(TRACE,Trace), Trace > 0 -> notrace
+	; true
+	).
+	
+
+/*********************************************************************/
+%% This is needed so we could designate this predicate as unprintable 
+%% by the debugger and avoid traicing inside 
+%% assert(flora_switch(low_level_trace))
+flora_set_switch(Switch) :-
+	assert(flora_switch(Switch)).
+flora_clear_switch(Switch) :-
+	retractall(flora_switch(Switch)).
+
+
+
 /*********************************************************************/
 
 flora_debug_dyndata_file(Filename) :-

@@ -106,8 +106,17 @@
 
 :- import flora_good_command/1 from flrcallflora.
 
-:- import flora_trace/0,
-	flora_notrace/0
+:- import
+	flora_switch/1,
+	flora_trace/0,
+	flora_trace/1,
+	flora_tracelow/0,
+	flora_tracelow/1,
+	flora_traceverylow/0,
+	flora_traceverylow/1,
+	flora_notrace/0,
+	flora_set_switch/1,
+	flora_clear_switch/1
    from flrdebugger.
 
 :- dynamic flora_warnings_level(_).
