@@ -636,16 +636,25 @@ negate_predicate(Pred,NPred) :-
 	flora_module_predicate(NWrap,ArgL,ModName,NPred).
 
 
+%% flora_change_module(+InPred,-OutPred,+NewModule,+RealNewMod,+ErrorMessage)
 %% Replaces the module in InPred with NewModule and return as OutPred
 %% Assumes InPred is a reified predicate or molecule
-%% change_module(+InPred,-OutPred,+NewModule,+ErrorMessage)
 %% Error message is a list or an atom
-flora_change_module(InPred,_OutPred,_NewModule,ErrorMessage) :-
+%% If NewModuleSpec = (M,NewM) and M is NOT the module of InPred
+%% then don't change InPred to a new module.
+%% Otherwise, change InPred ro module NewM
+%% RealNewMod is the actual module of OutPred (can be the old one or NewM
+flora_change_module(InPred,_OutPred,_NewModule,_RealNewModule,ErrorMessage) :-
 	var(InPred),
 	!,
 	flora_abort(ErrorMessage).
 
-flora_change_module(InPred,OutPred,NewModule,_ErrorMessage) :-
-	flora_decode_predicate(InPred,_PredType,_WS,FullWrapper,_Prefix,_BaseWrap,Args),
-	flora_module_predicate(FullWrapper,Args,NewModule,OutPred1),
+flora_change_module(InPred,OutPred,NewModuleSpec,RealNewMod,_ErrorMessage) :-
+	flora_decode_predicate(InPred,_PredType,WS,FullWrapper,_Prefix,_BaseWrap,Args),
+	NewModuleSpec = (ModToChange,NewModule),
+	(ModToChange \= WS -> OutPred1 = InPred, RealNewMod = WS
+	;
+	    flora_module_predicate(FullWrapper,Args,NewModule,OutPred1),
+	    RealNewMod = NewModule
+	),
 	flrtrim:flora_generalize_last(OutPred1,OutPred).
