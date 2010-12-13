@@ -5,8 +5,8 @@
 ** Contact:   kifer@cs.stonybrook.edu
 **
 ** Copyright (C) by
-**      The Research Foundation of the State University of New York, 1999-2010;
-**      and Vulcan, Inc., 2008 - 2010.
+**      The Research Foundation of the State University of New York, 1999-2011;
+**      and Vulcan, Inc., 2008 - 2011.
 **
 ** All rights reserved.
 **
@@ -653,6 +653,11 @@ is_aggregtop(FL_COLLECTBAG) :- !.
 is_aggregtop(FL_SET) :- !.
 is_aggregtop(FL_BAG) :- !.
 
+is_sortable_aggregop(FL_COLLECTSET) :- !.
+is_sortable_aggregop(FL_COLLECTBAG) :- !.
+is_sortable_aggregop(FL_SET) :- !.
+is_sortable_aggregop(FL_BAG) :- !.
+
 is_negop(FL_NEG)	:- !.
 is_nafop(FL_NAF)	:- !.
 is_notop(FL_TNOT)	:- !.
@@ -758,6 +763,7 @@ is_fltransactionalstring_struct(FLTRANSACTIONALSTRING(Str,I),Str,I).
 is_fldatatype_struct(FLDATATYPE(_Sort,_Lit,_I)).
 
 flatom_struct(Atom,Index, FLATOM(Atom,Index)).
+flnumber_struct(Atom,Index, FLNUMBER(Atom,Index)).
 
 get_flvar_struct(OBJECT(VARIABLE(Name),I),FLVAR(Name,I)).
 get_fltransactionalvar_struct(OBJECT(TRANSACTIONAL_VARIABLE(Name),I),FLTRANSACTIONALVAR(Name,I)).
@@ -819,8 +825,8 @@ is_fltransactionalterm_struct(FLTRANSACTIONALTERM(_Funct,_Arity,_Args)) :- !.
 is_fltransactionalterm_struct(FLTERM(FuncSpec,_Arity,_Args)) :-
 	is_fltransactionalpredspec_struct(FuncSpec).
 
-flaggregt_struct(Op,Var,GroupVars,Conds,FLAGGREGATE(Op,Var,GroupVars,Conds)).
-is_flaggregt_struct(FLAGGREGATE(_Op,_Var,_GroupVars,_Conds)).
+flaggregt_struct(Op,Var,GroupVars,SortSpec,Conds,FLAGGREGATE(Op,Var,GroupVars,SortSpec,Conds)).
+is_flaggregt_struct(FLAGGREGATE(_Op,_Var,_GroupVars,_SortSpec,_Conds)).
 
 flobjspec_struct(Object,Spec,FLOBJSPEC(Object,Spec)).
 
@@ -4901,29 +4907,31 @@ valid_lower_sigconstr(LowerCode):-
   aggregt_vars(+CanoniTerm,-Var,-GroupVars,-Status)
   var_list(+List,-GroupVars,-Status)
 ****************************************************************************/
-flora_aggregt(Funct,N,Args,If,Ip,DWS,Code,Status) :-
-	( get_name(Funct,FAtom), is_aggregtop(FAtom)
+flora_aggregt(Funct,N,Args,If,_Ip,DWS,Code,Status) :-
+	( get_name(Funct,FAtom),
+	    is_aggregtop(FAtom)
 	->
 	    flobject_struct(Funct,F),
 	    (N == 1,
 		Args=[CANOTERM(Bar,2,FL_PARENTHESIS,[L,R],_Il,_Ir)],
 		get_atom(Bar,FL_BAR)
 	    ->
-	        aggregt_vars(L,Var,GroupVars,S1),
-		( S1 == []
+	        aggr_vars_and_sortspec(L,Var,GroupVars,SortSpec,S1),
+		( S1 == [], (is_sortable_aggregop(FAtom) ; SortSpec == NULL)
 		->
 		    flora_body(R,DWS,DWS,Conds,Status),
 		    ( Status == []
 		    ->
-			flaggregt_struct(F,Var,GroupVars,Conds,Code)
+			flaggregt_struct(F,Var,GroupVars,SortSpec,Conds,Code)
 		    ;
 			true
 		    )
 		;
-		    Status=S1
+		    parsing_error(If,UNEXP_SORTSPEC,S2),
+		    merge_status(S1,S2,Status)
 	        )
 	    ;
-		parsing_error(Ip,ERROR_AGGREGT,Status)
+		parsing_error(If,ERROR_AGGREGT,Status)
 	    )
 
 	; get_name(Funct,FAtom),
@@ -4934,11 +4942,50 @@ flora_aggregt(Funct,N,Args,If,Ip,DWS,Code,Status) :-
 	    parsing_error(If,UNKNOWN_BRACE_BUILTIN,Status)
         ).
 
+%% case of no grouping vars
+aggr_vars_and_sortspec(CANOTERM(AggVarGrpTerm,1,FL_PARENTHESIS,[ResultSortSpec],_If,_Ip),Var,[],SortCode,Status) :-
+	aggregt_vars(AggVarGrpTerm,Var,[],Status1),
+	parse_sort_spec(ResultSortSpec,ResSortCode,Status2),
+	flatom_struct(FL_COMMA,NO_INDEX,Comma),
+	flterm_struct(Comma,2,[ResSortCode,ResSortCode],SortCode),
+	merge_status(Status1,Status2,Status),
+	!.
+%% Case of grouping vars with only one sort spec: asc or desc
+aggr_vars_and_sortspec(CANOTERM(AggVarGrpTerm,1,FL_PARENTHESIS,[ResultSortSpec],_If,_Ip),Var,GroupVars,SortCode,Status) :-
+	aggregt_vars(AggVarGrpTerm,Var,GroupVars,Status1),
+	get_name(ResultSortSpec,Name),
+	(Name == asc ; Name = desc),
+	parse_sort_spec(ResultSortSpec,ResSortCode,ResStat),
+	flatom_struct(FL_COMMA,NO_INDEX,Comma),
+	flterm_struct(Comma,2,[ResSortCode,ResSortCode],SortCode),
+	merge_status(Status1,ResStat,Status),
+	!.
+%% case of grouping vars with separate specs for result and grouping
+aggr_vars_and_sortspec(CANOTERM(AggVarGrpTerm,2,FL_PARENTHESIS,[ResultSortSpec,GrpSortSpec],_If,_Ip),Var,GroupVars,SortCode,Status) :-
+	aggregt_vars(AggVarGrpTerm,Var,GroupVars,Status1),
+	( GroupVars == []
+	-> parsing_error(GrpSortSpec,EXP_AGGRRESSORT,Status2)
+	;
+	    parse_sort_spec(ResultSortSpec,ResSortCode,ResStat),
+	    parse_sort_spec(GrpSortSpec,GrpSortCode,GrpStat),
+	    flatom_struct(FL_COMMA,NO_INDEX,Comma),
+	    flterm_struct(Comma,2,[ResSortCode,GrpSortCode],SortCode),
+	    merge_status(ResStat,GrpStat,Status2)
+	),
+	merge_status(Status1,Status2,Status),
+	!.
+%% Case without any sort specs
+aggr_vars_and_sortspec(Term,Var,GroupVars,NULL,Status) :-
+	aggregt_vars(Term,Var,GroupVars,Status),
+	!.
+aggr_vars_and_sortspec(CanoniTerm,_V,_GV,_SortSpec,Status) :-
+	!,
+	parsing_error(CanoniTerm,EXP_AGGRSORTSPC,Status).
+
 
 aggregt_vars(Term,Var,[],[]) :-
 	get_flvar_struct(Term,Var),
 	!.
-
 aggregt_vars(CANOTERM(Funct,N,FL_BRACKET,L,If,_Ip),Var,GroupVars,Status) :-
 	!,
 	( get_flvar_struct(Funct,Var) ->
@@ -4952,7 +4999,6 @@ aggregt_vars(CANOTERM(Funct,N,FL_BRACKET,L,If,_Ip),Var,GroupVars,Status) :-
 	;
 	  parsing_error(If,EXP_AGGREGVAR,Status)
         ).
-
 aggregt_vars(CanoniTerm,_V,_GV,Status) :-
 	parsing_error(CanoniTerm,EXP_AGGRGRPVAR,Status).
 
@@ -4980,6 +5026,40 @@ var_list(CanoniTerm,[Var],Status) :-
 	;
 	  parsing_error(CanoniTerm,EXP_VARIABLE,Status)
         ).
+
+parse_sort_spec(SortSpec,SortCode,[]) :-
+	get_name(SortSpec,Name),
+	(Name == asc ; Name = desc),
+	!,
+	flobject_struct(SortSpec,SortCode).
+parse_sort_spec(CANOLIST(L,_T,_N,I,_Ib),SortCode,Status) :-
+	parse_sort_spec_list(L,SortCodeList,Status),
+	fllist_struct(SortCodeList,[],I,SortCode).
+
+parse_sort_spec_list([],[],[]) :- !.
+parse_sort_spec_list([Speclet|Rest],[SpecletCode|RestCode],Status) :-
+	parse_one_sort_speclet(Speclet,SpecletCode,Status1),
+	(Status1 == [] -> parse_sort_spec_list(Rest,RestCode,Status)
+	; Status = Status1
+	).
+
+parse_one_sort_speclet(CANOTERM(Funct,1,FL_PARENTHESIS,[Arg],_If,_Ip),SortCode,[]) :-
+	get_name(Funct,Name),
+	(Name == asc ; Name = desc),
+	get_integer(Arg,Val),
+	Val>0,
+	!,
+	flobject_struct(Funct,F),
+	get_index(Arg,Idx),
+	flnumber_struct(Val,Idx,A),
+	flterm_struct(F,1,[A],SortCode1),
+	flplib_struct(SortCode1,SortCode).
+parse_one_sort_speclet(CanoniTerm,_,Status) :-
+	!,
+	parsing_error(CanoniTerm,EXP_AGGRSORTSPC,Status).
+
+
+
 
 
 /****************************************************************************
@@ -6563,4 +6643,4 @@ flora_parse_datatype(Args,If,DWS,Code,Status) :-
 
 merge_status([],[],[]) :- !.
 merge_status([],S,S) :- !.
-merge_status(S,[],S) :- !.
+merge_status(S,_,S) :- !.

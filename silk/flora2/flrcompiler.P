@@ -176,7 +176,7 @@ is_flnewmodule(FLNEWMODULE(Op,Module),Op,Module).
 is_flerasemodule(FLERASEMODULE(Op,Module),Op,Module).
 is_flupdaterule(FLUPDATERULE(Op,RuleList),Op,RuleList).
 
-is_flaggregate(FLAGGREGATE(Op,V,GV,Goal),Op,V,GV,Goal).
+is_flaggregate(FLAGGREGATE(Op,V,GV,Sort,Goal),Op,V,GV,Sort,Goal).
 
 %% Binary relationship, like : or ::
 is_flbirelate(FLBIRELATE(Obj1,RelType,Obj2),Obj1,RelType,Obj2).
@@ -960,6 +960,19 @@ aggregate_struct(Op,V,GV,B,Object,Code) :-
 	  florasyslib_struct(Index,Lib,4,[V,GV,B,Object],Code)
         ),
 	!.
+aggregate_struct(Op,V,GV,SortCode,B,Object,Code) :-
+	%% Index denotes the textual information for the aggregate
+	%% operator and represents the textual information for the
+	%% entire aggregate statement.
+	is_flatom(Op,OpAtom,Index),
+	aggregate_syslib_sorted(OpAtom,Lib),
+	flora_new_varobj(Index,Object),
+	( GV == [] ->
+	    florasyslib_struct(Index,Lib,4,[V,SortCode,B,Object],Code)
+	;
+	  florasyslib_struct(Index,Lib,5,[V,GV,SortCode,B,Object],Code)
+        ),
+	!.
 
 aggregate_syslib(FL_MIN,FLLIBMIN) :- !.
 aggregate_syslib(FL_MAX,FLLIBMAX) :- !.
@@ -970,6 +983,11 @@ aggregate_syslib(FL_COLLECTSET,FLLIBCOLLECTSET) :- !.
 aggregate_syslib(FL_COLLECTBAG,FLLIBCOLLECTBAG) :- !.
 aggregate_syslib(FL_SET,FLLIBCOLLECTSET) :- !.
 aggregate_syslib(FL_BAG,FLLIBCOLLECTBAG) :- !.
+
+aggregate_syslib_sorted(FL_COLLECTSET,FLLIBSETSORTBY) :- !.
+aggregate_syslib_sorted(FL_COLLECTBAG,FLLIBBAGSORTBY) :- !.
+aggregate_syslib_sorted(FL_SET,FLLIBSETSORTBY) :- !.
+aggregate_syslib_sorted(FL_BAG,FLLIBBAGSORTBY) :- !.
 
 hypothetical_struct(Op,Goal,Index,Code) :-
 	hypothetical_syslib(Op,Lib), %% Op is a plain atom, not flatom
@@ -3159,10 +3177,10 @@ compile_pathexp(ParserTerm,Object,OidCode,Code,Status) :-
 	; is_fllist(ParserTerm,L,T,I) ->
 	    compile_fllist(L,T,I,Object,OidCode,Code,Status)
 
-	; is_flaggregate(ParserTerm,Op,V,GV,B) ->
+	; is_flaggregate(ParserTerm,Op,V,GV,SortSpec,B) ->
 	    %% Aggregates are treated as OID, so its code would come
 	    %% ahead of the code of the literal it occurs in
-	    compile_flaggregate(Op,V,GV,B,Object,OidCode,Status)
+	    compile_flaggregate(Op,V,GV,SortSpec,B,Object,OidCode,Status)
 
 	; is_reifyop(ParserTerm,Formula) ->
 	    compile_reifyop(Formula,Object,OidCode,Status),
@@ -3739,23 +3757,34 @@ compile_mvdattspec(Object,AttObj,RefType,[T|L],OidCode,Code,Status) :-
 
 
 /****************************************************************************
-  compile_flaggregate(+Op,+Var,+GVars,+BodyTerm,-Object,-Code,-Status)
+  compile_flaggregate(+Op,+Var,+GVars,+SortSpec,+BodyTerm,-Object,-Code,-Status)
 ****************************************************************************/
-compile_flaggregate(Op,Var,GVars,BodyTerm,Object,Code,Status) :-
+compile_flaggregate(Op,Var,GVars,SortSpec,BodyTerm,Object,Code,Status) :-
 	compile_body(BodyTerm,BCode,S),
 	( S == [] ->
             (has_compilation_context(compile_with_var_module),
 		\+ has_compilation_context(goal_reification) ->
-                Status =[]
+                S1 =[]
             ;
-	        check_aggregate(Var,GVars,BodyTerm,Status)
+	        check_aggregate(Var,GVars,BodyTerm,S1)
             ),
-	    ( Status == [] ->
+	    ( S1 == [] ->
 		compile_pathexplist([Var|GVars],[VarCode|GVarsCode],NULL,NULL,[]),
 		list_struct(GVarsCode,[],GVarsListCode),
-		aggregate_struct(Op,VarCode,GVarsListCode,BCode,Object,Code)
+		(SortSpec==NULL
+		-> aggregate_struct(Op,VarCode,GVarsListCode,BCode,Object,Code),
+		    Status = []
+		;
+		    is_flterm(SortSpec,Funct,N,Args),
+		    compile_fltermobj(Funct,N,Args,SpecCode,_,_,Status),
+		    (Status == []
+		    -> 
+			aggregate_struct(Op,VarCode,GVarsListCode,SpecCode,BCode,Object,Code)
+		    ;   true
+		    )
+		)
 	    ;
-	      true
+	      Status = S1
 	    )
 	;
 	  Status=S
@@ -3766,6 +3795,7 @@ compile_flaggregate(Op,Var,GVars,BodyTerm,Object,Code,Status) :-
   check_aggregate(+Var,+GroupVars,+BodyTerm,-Status)
   check_repeatedvar(+Vars,-Status,-TailStatus)
   allgvar_notin(+SortedVars,-Status,-TailStatus)
+  Checks for any abnormalities with grouping and aggregate variables.
 ****************************************************************************/
 check_aggregate(Var,GVars,BodyTerm,Status) :-
 	is_flvar(Var,VarName,VarIndex),
