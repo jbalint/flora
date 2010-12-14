@@ -690,7 +690,7 @@ flexport_struct(Term,Modules,Updtag,FLEXPORT(Term,Modules,FLATOM(Updtag,_I))).
 flexport_struct(DynamicModule,Term,Modules,Updtag,FLEXPORT(DynamicModule,Term,Modules,FLATOM(Updtag,_I))).
 flexport_struct_list(TermList,FLEXPORT_LIST(TermList)).
 
-flprefixdef_struct(PrefixName,PrefixStr,FLPREFIXDEF(PrefixName,PrefixStr)).
+flprefixdef_struct(Prefixname,Prefixstr,FLPREFIXDEF(Prefixname,Prefixstr)).
 
 fldynrule_struct(Head,Body,Label,FLDYNRULE(Head,Body,Label)).
 
@@ -815,7 +815,7 @@ is_passthru_struct(FLPASSTRU(_Struct)).
 
 flbirelate_struct(Subject,R,Object,FLBIRELATE(Subject,R,Object)).
 
-flurisq_struct(PrefixName,LocalName,FLURISQ(PrefixName,LocalName)).
+flurisq_struct(Prefixname,Localname,FLURISQ(Prefixname,Localname)).
 
 %% object specified using a path expression
 flobjref_struct(Object,M,Attribute,FLOBJREF(Object,M,Attribute)).
@@ -4464,13 +4464,7 @@ flora_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),HF,DWS,Code,Status) 
 	Args=[Prefix,Localname],
 	( is_obj_identifier_struct(Prefix)
 	-> %% prefix (the part before '#') should be an atom
-	    ( (is_obj_ascii_string_struct(Localname), Localname1 = Localname
-	      ; is_obj_identifier_struct(Localname), Localname1 = Localname
-	      ; is_obj_quoted_atom_struct(Localname), Localname1 = Localname
-	      ; is_obj_builtin_identifier_struct(Localname,Str,Index),
-		  %% convert to regular identifier
-		  is_obj_identifier_struct(Localname1,Str,Index)
-	      )
+	    ( fixup_iri_localname(Localname,Localname1)
 	    -> %% localname (part after '#') must be string/quotedAtm/identifier
 		Args1 = [Prefix,Localname1],
 		flora_pathexplist(Args1,DWS,ArgsCode,Status),
@@ -4482,10 +4476,11 @@ flora_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),HF,DWS,Code,Status) 
 	    )
 	; get_transactionalatom(Prefix,_),
 	    transactional_to_regular(Prefix,PrefixRegular),
+	    fixup_iri_localname(Localname,Localname1),
 	    HF == ALLOW_TRANS
 	->
 	    flora_pathexp(PrefixRegular,DISALLOW_TRANS,DWS,PrefixCode,Status1),
-	    flora_pathexp(Localname,DISALLOW_TRANS,DWS,LocalnameCode,Status2),
+	    flora_pathexp(Localname1,DISALLOW_TRANS,DWS,LocalnameCode,Status2),
 	    flurisq_struct(PrefixCode,LocalnameCode,Code1),
 	    fltransactionalqname_struct(Code1,Code),
 	    merge_status(Status1,Status2,Status)
@@ -5201,13 +5196,7 @@ flora_head_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),HF,DWS,Code,Stat
 	    Args=[Prefix,Localname],
 	    ( is_obj_identifier_struct(Prefix)
 	    -> % make sure that prefix (the part before '#') is an atom
-		( (is_obj_ascii_string_struct(Localname), Localname1 = Localname
-		  ; is_obj_identifier_struct(Localname), Localname1 = Localname
-		  ; is_obj_quoted_atom_struct(Localname), Localname1 = Localname
-		  ; is_obj_builtin_identifier_struct(Localname,Str,Index),
-		      %% convert to regular identifier
-		      is_obj_identifier_struct(Localname1,Str,Index)
-		  )
+		( fixup_iri_localname(Localname,Localname1)
 		-> %% localname (the part following '#')
 		    %% should be a string or quoted atom or an identifier
 		    Args1 = [Prefix,Localname1],
@@ -5220,10 +5209,11 @@ flora_head_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),HF,DWS,Code,Stat
 		)
 	    ; get_transactionalatom(Prefix,_),
 		transactional_to_regular(Prefix,PrefixRegular),
+		fixup_iri_localname(Localname,Localname1),
 		HF == ALLOW_TRANS
 	    ->
 		flora_head_pathexp(PrefixRegular,DISALLOW_TRANS,DWS,PrefixCode,Status1),
-		flora_head_pathexp(Localname,DISALLOW_TRANS,DWS,LocalnameCode,Status2),
+		flora_head_pathexp(Localname1,DISALLOW_TRANS,DWS,LocalnameCode,Status2),
 		flurisq_struct(PrefixCode,LocalnameCode,Code1),
 		fltransactionalqname_struct(Code1,Code),
 		merge_status(Status1,Status2,Status)
@@ -5961,13 +5951,7 @@ flora_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),HF,DWS,Code,
 	Args=[Prefix,Localname],
 	( is_obj_identifier_struct(Prefix)
 	-> %% prefix (the part before '#') should be an identifier
-	    ( (is_obj_ascii_string_struct(Localname), Localname1 = Localname
-	      ; is_obj_identifier_struct(Localname), Localname1 = Localname
-	      ; is_obj_quoted_atom_struct(Localname), Localname1 = Localname
-	      ; is_obj_builtin_identifier_struct(Localname,Str,Index),
-		  %% convert to regular identifier
-		  is_obj_identifier_struct(Localname1,Str,Index)
-	      )
+	    ( fixup_iri_localname(Localname,Localname1)
 	    ->
 		%% localname (the part following '#') should be a string
 		%% or a quoted atom or an identifier
@@ -5981,10 +5965,11 @@ flora_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),HF,DWS,Code,
 	    )
 	; get_transactionalatom(Prefix,_),
 	    transactional_to_regular(Prefix,PrefixRegular),
+	    fixup_iri_localname(Localname,Localname1),
 	    HF == ALLOW_TRANS
 	->
 	    flora_db_pathexp(Mode,PrefixRegular,DISALLOW_TRANS,DWS,PrefixCode,Status1),
-	    flora_db_pathexp(Mode,Localname,DISALLOW_TRANS,DWS,LocalnameCode,Status2),
+	    flora_db_pathexp(Mode,Localname1,DISALLOW_TRANS,DWS,LocalnameCode,Status2),
 	    flurisq_struct(PrefixCode,LocalnameCode,Code1),
 	    fltransactionalqname_struct(Code1,Code),
 	    merge_status(Status1,Status2,Status)
@@ -6647,3 +6632,14 @@ flora_parse_datatype(Args,If,DWS,Code,Status) :-
 merge_status([],[],[]) :- !.
 merge_status([],S,S) :- !.
 merge_status(S,_,S) :- !.
+
+%% Serves to remove special cases out of the local name
+%% Currently converts builtin identifiers into regular ones
+fixup_iri_localname(Localname,Regularized) :-
+	(is_obj_ascii_string_struct(Localname) -> Regularized = Localname
+	; is_obj_identifier_struct(Localname) -> Regularized = Localname
+	; is_obj_quoted_atom_struct(Localname) -> Regularized = Localname
+	; is_obj_builtin_identifier_struct(Localname,Str,Index)
+	-> %% convert to regular identifier
+	    is_obj_identifier_struct(Regularized,Str,Index)
+	).
