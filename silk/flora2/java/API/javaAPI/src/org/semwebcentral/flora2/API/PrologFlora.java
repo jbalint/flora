@@ -65,7 +65,8 @@ public class PrologFlora extends FloraConstants
 		"consult(flrimportedcalls)",
 		"import ('_load')/1, ('_add')/1 from flora2",
 		"import flora_query/4 from flora2",
-		"import flora_decode_oid_as_atom/2 from flrdecode"
+		"import flora_decode_oid_as_atom/2 from flrdecode",
+		"import 	flora_handle_trace/0 from flrdebugger"
 	    });
     }
     
@@ -193,11 +194,13 @@ public class PrologFlora extends FloraConstants
 	}
 	varsString = "[" + varsString + "]";
 
-	String listString = "L_rnd=" + varsString + ",";
-	String queryString = "S_rnd='" + cmd + "',";
-	String floraQueryString =
-	    "findall(TM_rnd,(flora_query(S_rnd,L_rnd,_St,_Ex),buildTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
-   
+String listString = "L_rnd=" + varsString + ",";
+String queryString = "S_rnd='" + cmd + "',";
+String floraQueryString =
+    "findall(TM_rnd,(flora_handle_trace, flora_query(S_rnd,L_rnd,_St,_Ex),buildTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
+
+
+	
 	sb.append(queryString);
 	sb.append(listString);
 	sb.append(floraQueryString);
@@ -362,6 +365,9 @@ public class PrologFlora extends FloraConstants
 	}
 	initCommandStrings(FloraRootDir);
 	executeInitCommands();
+	//load configuration file containing debugger config
+	File file = new File(CmdFloraRootDir+"/java/API/javaAPI/initFloraAPI.p");
+	engine.load_dynAbsolute(file);
     }
 
 
