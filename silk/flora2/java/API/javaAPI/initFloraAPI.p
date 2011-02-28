@@ -82,6 +82,6 @@ hide_this_hide(flora_abolish_table_call,_) .
 %hide_this_hide(assert0,1) .
 %hide_this_hide(assert0,4) .
 
-flora_hide_this_hide(flora_insert_rule/8).
+%flora_hide_this_hide(flora_insert_rule/8).
 %flora_hide_this_hide(FLLIBINSRULESIG/7).
 %hide_this_hide(flora_record_rule_signature/9).
