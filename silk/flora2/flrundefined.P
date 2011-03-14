@@ -75,12 +75,6 @@ flora_build_debug_inter_code(Term,Code) :-
 	flora_build_debug_skeleton(Head,Code),
         !.
 
-%% some directives also need to be taken into account. Like PREFIXDEF
-flora_build_debug_inter_code(Term,_Code) :-
-	is_prdirective(Term,Directive),
-	is_prprefixdef(Directive,PrefixName,PrefixBody),
-	flora_record_prefix_definition(PrefixName,PrefixBody).
-
 flora_build_debug_inter_code(_Term,_Code).
 
 /*********************************************************************
@@ -394,6 +388,10 @@ pr_generalize_last_strip_idx1(Term,PRATOM(Atom,NO_INDEX)) :-
 	is_pratom(Term,Atom,_Index),
 	!.
 
+pr_generalize_last_strip_idx1(Term,PRBUILTIN_IDENTIFIER(Atom,NO_INDEX)) :-
+	is_prbuiltin_identifier(Term,Atom,_Index),
+	!.
+
 pr_generalize_last_strip_idx1(Term,PRVARIABLE(Name,NO_INDEX)) :-
 	is_prvariable(Term,Name,_Index),
 	!.
@@ -461,15 +459,23 @@ pr_generalize_last_strip_idx1(Term,NewTerm) :-
         pr_generalize_ans_strip_index_in_list(Term,NewTerm).
 
 pr_generalize_last_strip_idx1(Term,NewTerm) :-
+	compound(Term),
+	!,
 	Term =.. [Func|L],
 	pr_generalize_last_strip_idx1(L,NL),
 	NewTerm =.. [Func|NL].
+
+pr_generalize_last_strip_idx1(Term,NewTerm) :-
+	atomic(Term),
+	!,
+	NewTerm = Term.
 
 pr_generalize_ans_strip_index_in_list([],[]) :- !.
 
 pr_generalize_ans_strip_index_in_list([H|L],[NH|NL]) :-
 	pr_generalize_last_strip_idx1(H,NH),
 	pr_generalize_ans_strip_index_in_list(L,NL).
+
 
 /*********************************************************************
   generate_patches
@@ -955,11 +961,11 @@ flora_error_undefined(Predicate) :-
 	    ( PType==flogic,
 		is_class_hierarchy_wrapper(Wrapper),
 	        predicate_msg(Wrapper, AList, PMsg),
-		TypeMsg = 'Undefined class'
+		TypeMsg = 'undefined class'
 	    ; PType==flogic
 	    ->
 	        predicate_msg(Wrapper, AList, PMsg),
-	 	TypeMsg = 'Undefined method'
+	 	TypeMsg = 'undefined method'
 	    ;
 	        hilog_predicate_msg(AList, PMsg1),
                 ( Wrapper == WRAP_NONTABLED_HILOG ->
@@ -968,7 +974,7 @@ flora_error_undefined(Predicate) :-
                 ;
                     PMsg=PMsg1
                 ),
-		TypeMsg = 'Undefined predicate'
+		TypeMsg = 'undefined predicate'
 	    ),
 	    flora_concat_items([TypeMsg,' ',PMsg,' in module ',MName],ErrMsg)
 	),

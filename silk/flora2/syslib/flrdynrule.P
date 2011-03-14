@@ -37,10 +37,7 @@
    from basics.
 :- import assert/3 from assert.
 :- import incr_assert/3, incr_retract/1 from increval.
-:- import put_attr/3,
-          get_attr/3,
-          install_verify_attribute_handler/5
-    from machine.
+:- import get_attr/3 from machine.
 
 :- import
 	flora_module_registry/1
@@ -104,24 +101,6 @@
 :- import flora_delete_all_hooks/1 from flrhooks.
 
 
-
-/***********************************************************************
- attributed variable handler
- ***********************************************************************/
-:- install_verify_attribute_handler(usermod,AttrValue,Target,usermod_handler(AttrValue,Target),no_warnings).
-
-usermod_handler(Da,Target) :-
-        ( var(Target) ->
-            ( get_attr(Target,usermod,Db) ->
-                append(Da,Db,Dc),
-                put_attr(Target,usermod,Dc)
-            ;
-                put_attr(Target,usermod,Da)
-            )
-        ;
-            true
-        ).
-
 /***********************************************************************
  FLLIBNEWMODULE(+ThisModuleName,+Module)
  Create new module Module.
@@ -133,7 +112,7 @@ usermod_handler(Da,Target) :-
 FLLIBNEWMODULE(_ThisModuleName,Module) :-
 	var(Module),
 	!,
-	flora_abort('newmodule{?modname}: uninstantiated module name').
+	flora_abort('newmodule{?modname}: uninstantiated module name in newmodule{...}').
 
 FLLIBNEWMODULE(_ThisModuleName,Module) :-
 	flora_module_registry(Module),
@@ -155,7 +134,7 @@ FLLIBNEWMODULE(_ThisModuleName,Module) :-
 FLLIBERASEMODULE(_ThisModuleName,Module) :-
 	var(Module),
 	!,
-	flora_abort('erasemodule{?modname}: uninstantiated module name').
+	flora_abort('erasemodule{?modname}: uninstantiated module name in erasemodule{...}').
 
 FLLIBERASEMODULE(_ThisModuleName,Module) :-
 	\+ flora_module_registry(Module),
@@ -190,12 +169,13 @@ flora_insert_rules(_InsOp,[]) :- !.
 flora_insert_rules(_InsOp,[H|_Tail]) :-
 	var(H),
 	!,
-	flora_abort('uninstantiated element in the rule list of insertrule{...}').
-flora_insert_rules(InsOp,[FLSYSRULEUPDATE(Id,HeadList,Body,HV,BV,Meta,DefeatCond)|L]) :-
+	flora_abort('uninstantiated member in the rule list of insertrule{...}').
+flora_insert_rules(InsOp,[FLSYSRULEUPDATE(Id,HeadList,Body,HV,BV,DelayChecker,Meta,DefeatCond)|L]) :-
 	!,
 	inst_body(Body,InstBody),
-        (get_attr(HV,usermod,HVars),
-	    get_attr(BV,usermod,BVars)
+	%% flrunify_handlers.P defines the unify handler for FLDYNRULEVARCHECK
+        (get_attr(HV,FLDYNRULEVARCHECK,HVars),
+	    get_attr(BV,FLDYNRULEVARCHECK,BVars)
 	->
 	    check_vars(HeadList,Body,HVars,BVars,Warns),
 	    sort(Warns,SortedWarns),
@@ -203,7 +183,7 @@ flora_insert_rules(InsOp,[FLSYSRULEUPDATE(Id,HeadList,Body,HV,BV,Meta,DefeatCond
 	; true
 	),
 	fixup_rule_id(Id,NewId),
-	flora_expand_and_ins_rules(NewId,InsOp,HeadList,InstBody,Meta,DefeatCond),
+	flora_expand_and_ins_rules(NewId,InsOp,HeadList,InstBody,DelayChecker,Meta,DefeatCond),
 	flora_insert_rules(InsOp,L).
 
 %% conjunct of rules - convert to list
@@ -226,20 +206,23 @@ fixup_rule_id(Id,NewId) :-
 	).
 
 /***********************************************************************
- flora_expand_and_ins_rules(+RuleId,+InsOp,+HeadList,+Body,+Meta,+DefeatCond)
+ flora_expand_and_ins_rules(+RuleId,+InsOp,+HeadList,+Body,+DelayChecker,+Meta,+DefeatCond)
 
  If the rule is multiheaded (length(HeadList)>1), create a new 
  predicate with all vars in the body as the arguments, and assert
  a rule with the new predicate as the head and Body as the body
+ (DelayChecker and Defeat condition are attached to Body)
 ************************************************************************/ 
-flora_expand_and_ins_rules(_Id,_InsOp,[],_Body,_Meta,_DefeatCond) :- !.
-flora_expand_and_ins_rules(Id,InsOp,[Head],Body,Meta,DefeatCond) :-
+flora_expand_and_ins_rules(_Id,_InsOp,[],_Body,_DelayChecker,_Meta,_DefeatCond) :- !.
+flora_expand_and_ins_rules(Id,InsOp,[Head],Body,DelayChecker,Meta,DefeatCond) :-
 	!,
-	flora_insert_rule(InsOp,Id,Head,Body,Body,Meta,DefeatCond,[]).
-flora_expand_and_ins_rules(Id,InsOp,HeadList,Body,Meta,DefeatCond) :-
+	%% attach delay checker to body to be asserted,
+	%% but not to body in signature (the second body-argument
+	flora_insert_rule(InsOp,Id,Head,(Body,DelayChecker),Body,Meta,DefeatCond,[]).
+flora_expand_and_ins_rules(Id,InsOp,HeadList,Body,DelayChecker,Meta,DefeatCond) :-
 	HeadList=[H|_L],
         ( var(H) ->
-            flora_abort(['Uninstantiated head in dynamically inserted rule, ',
+            flora_abort(['uninstantiated head in dynamically inserted rule, ',
 			H, ' :- ', Body])
         ;
 	    ( H=FLLIBMODLIT(_F,_Args1,MName,Caller) ->
@@ -247,34 +230,42 @@ flora_expand_and_ins_rules(Id,InsOp,HeadList,Body,Meta,DefeatCond) :-
 	    ;
 	        flora_decode_predicate(H,Type,MName,_Prefix,_Wrap,Args),
                 ( (Type == (hilog) ; Type == flogic
-		  ; Type == neg_hilog ; Type == neg_flogic)
+		  ; Type == neg_hilog ; Type == neg_flogic
+		  )
 		->
 		    %% FIXME: Should be also checking dynamic rule heads
                     reverse(Args,[Caller|_])
                 ;
-                    flora_abort(['Internal error: invalid head in dynamically inserted rule, ', H, ' :- ', Body])
+                    flora_abort(['internal error: invalid head in dynamically inserted rule, ', H, ' :- ', Body])
                 )
 	    )
         ),
 	%% check if a module name is valid during an update
 	flora_storage_check_module_name(MName),
-	new_dynpredicate(NewPredName),
+	new_dynpredicate(IntermediatePredicateName),
 	collect_vars(Body,BodyVars),
 	sort(BodyVars,SortedBodyVars),
 	append(SortedBodyVars,[Caller],NewP_Arguments),
-	flora_module_predicate(NewPredName,NewP_Arguments,MName,NewPredAtom),
-	BridgeRule =.. [FL_IMPLYOP,NewPredAtom,Body],
+	flora_module_predicate(IntermediatePredicateName,NewP_Arguments,MName,IntermediatePredicate),
+	%% here we attach the delay checker to the body of the bridge rule
+	BridgeRule =.. [FL_IMPLYOP,IntermediatePredicate,(Body,DelayChecker)],
 	%% This copy-term speeds up unification with rule signatures for
 	%% multi-headed rules. This is because the variables in Head/Body
 	%% would be different from the variables in the head/bridge rules.
 	copy_term(BridgeRule,BridgeRule1),
 	adaptive_assert(BridgeRule),
-	flora_insert_multiheaded_rule(InsOp,Id,HeadList,NewPredAtom,Body,Meta,DefeatCond,[BridgeRule1]).
+	flora_insert_multiheaded_rule(InsOp,Id,HeadList,IntermediatePredicate,Body,DelayChecker,Meta,DefeatCond,[BridgeRule1]).
 
 /***********************************************************************
- flora_insert_multiheaded_rule(+Op,+Id,+HeadList,+Body,+OrigBody,+Meta,+DefeatCond,+BridgeRules)
+ flora_insert_multiheaded_rule(+Op,+Id,+HeadList,+IntermediatePredicate,+OrigBody,+DelayChecker,+Meta,+DefeatCond,+BridgeRules)
 
- For each element E in the HeadList, call flora_insert_rule(Op,E,Body)
+ For each element H in the HeadList, call
+     flora_insert_rule(Op,E,IntermedPred,BodyForSignature,Meta,DefeatCond,[Bridge])
+
+ OrigBody - the original body of the multiheaded rule
+ IntermediatePredicate - the new atom that represents the original body for each of
+        the multiple heads.
+        In the example below, OrigBody is r; IntermediatePredicate is newpredicateXYZ
 
  BridgeRules:
  A multiheaded rule like  p,q :- r is represented as
@@ -283,18 +274,28 @@ flora_expand_and_ins_rules(Id,InsOp,HeadList,Body,Meta,DefeatCond) :-
          newpredicateXYZ :- r.
  The last rule is called the bridge rule.
 ************************************************************************/ 
-flora_insert_multiheaded_rule(_InsOp,_Id,[],_Body,_OrigBody,_Meta,_DefeatCond,_BridgeRule) :- !.
-flora_insert_multiheaded_rule(InsOp,Id,[H|L],Body,OrigBody,Meta,DefeatCond,BridgeRule) :-
+flora_insert_multiheaded_rule(_InsOp,_Id,[],_IntermediatePredicate,_OrigBody,_DelayChecker,_Meta,_DefeatCond,_BridgeRule) :- !.
+flora_insert_multiheaded_rule(InsOp,Id,[H|L],IntermediatePredicate,OrigBody,DelayChecker,Meta,DefeatCond,BridgeRule) :-
 	%% flora_insert_rule binds DefeatCond, so we copy it here first
 	copy_term(DefeatCond,DefeatCond1),
-	flora_insert_rule(InsOp,Id,H,Body,OrigBody,Meta,DefeatCond1,BridgeRule),
-	flora_insert_multiheaded_rule(InsOp,Id,L,Body,OrigBody,Meta,DefeatCond,BridgeRule).
+	flora_insert_rule(InsOp,Id,H,IntermediatePredicate,OrigBody,Meta,DefeatCond1,BridgeRule),
+	flora_insert_multiheaded_rule(InsOp,Id,L,IntermediatePredicate,OrigBody,DelayChecker,Meta,DefeatCond,BridgeRule).
 
 /***********************************************************************
  flora_insert_rule(+InsOp,+RuleId,+Head,+Body,+OrigBody,+MetaInfo,+DefeatCond,+BridgeRules)
 
  Assert a rule with the given Head and Body, refresh tables, and define
  the head for undefinedness checking.
+
+ If this came from a multi-headed rule (called by flora_insert_multiheaded_rule)
+ then Body and OrigBody are not the same.
+ Body will be the intermediate predicate used in multiheaded rules
+ (newpredicateXYZ below) and OrigBody is the original body of the multiheaded
+ rule. OrigBody is used here only to set up the rule signature.
+
+ If this came from a single-headed rule then Body is the real body and OrigBody
+ is the body without the delay checker. It is used only in the rule signature.
+
  InsOp is FLLIBINSERTRULE_A or FLLIBINSERTRULE_Z
  Head is NOT prefixed with HEADPREFIX or DYNAPREFIX or DYNZPREFIX.
  Prefixes DYNA or DYNZ prefix is added depending on the type of InsOp.
@@ -309,14 +310,14 @@ flora_insert_multiheaded_rule(InsOp,Id,[H|L],Body,OrigBody,Meta,DefeatCond,Bridg
 flora_insert_rule(_InsOp,_Id,Head,_Body,_OrigBody,_Meta,_DefeatCond,_BridgeRule) :-
         var(Head),
         !,
-        flora_abort('uninstantiated rule head').
+        flora_abort('uninstantiated rule head in insertrule{...}').
 
 flora_insert_rule(InsOp,Id,Head,Body,OrigBody,Meta,DefeatCond,BridgeRule) :-
         ( Head=FLLIBMODLIT(_F,_A1,PossibleMName,_Caller) ->
             get_canonical_form(Head,FLCANON(_Wrap,_A2,MName,InstHead,_)),
 	    (var(MName) -> MName = PossibleMName ; true),
             ( var(InstHead) ->
-                flora_abort('uninstantiated rule head')
+                flora_abort('uninstantiated rule head in insertrule{...}')
             ;
                 true
             ),
@@ -327,20 +328,18 @@ flora_insert_rule(InsOp,Id,Head,Body,OrigBody,Meta,DefeatCond,BridgeRule) :-
 	),
 	flora_decode_predicate(InstHead,Type,Module,_WPrefix,BaseWrap,Args),
         (\+ is_invalid_flogic_head(BaseWrap),
-	    (InsOp==FLLIBINSERTRULE_A, (Type == (hilog) ; Type == flogic)
+	    ((InsOp==FLLIBINSERTRULE_A ; InsOp==FLLIBINSERTRULE_Z),
+		(Type == (hilog) ; Type == flogic)
 	    -> RealPrefix = FLDYNAPREFIX
-	    ; InsOp==FLLIBINSERTRULE_A, (Type == neg_hilog ; Type == neg_flogic)
-	    -> RealPrefix = FLNEGDYNAPREFIX
-	    ; InsOp==FLLIBINSERTRULE_Z, (Type == (hilog) ; Type == flogic)
-	    -> RealPrefix = FLDYNAPREFIX
-	    ; InsOp==FLLIBINSERTRULE_Z, (Type == neg_hilog ; Type == neg_flogic)
+	    ; (InsOp==FLLIBINSERTRULE_A ; InsOp==FLLIBINSERTRULE_Z),
+		(Type == neg_hilog ; Type == neg_flogic)
 	    -> RealPrefix = FLNEGDYNAPREFIX
 	    )
 	->
 	    flora_concat_atoms([RealPrefix,BaseWrap],Wrapper),
             flora_module_predicate(Wrapper,Args,Module,NewHead)
         ;
-            flora_abort(['Internal error: invalid head in a dynamically inserted rule, ', InstHead, ' :- ', Body])
+            flora_abort(['internal error: invalid head in a dynamically inserted rule, ', InstHead, ' :- ', Body])
         ),
 	%% check if a module name is valid during an update
 	flora_storage_check_module_name(Module),
@@ -414,7 +413,7 @@ flora_refresh_rulehead(Head) :-
  check if the rule exists and return matching rule signatures
 ************************************************************************/ 
 flora_check_rules(_DelOp,[],[],[]) :- !.
-flora_check_rules(DelOp,[FLSYSRULEUPDATE(_Id,HeadList,Body,_HV,_BV,_Meta,_DefeatCond)|L],SigList,HL) :-
+flora_check_rules(DelOp,[FLSYSRULEUPDATE(_Id,HeadList,Body,_HV,_BV,_DelayCheck,_Meta,_DefeatCond)|L],SigList,HL) :-
 	!,
 	flora_check_multiheaded_rule(DelOp,HeadList,Body,HSigList,HHL),
 	flora_check_rules(DelOp,L,LSigList,LHL),

@@ -18,7 +18,6 @@
 
 
 
-
 #include "standard.h"
 #include "flora_exceptions.flh"
 #include "flora_terms.flh"
@@ -39,7 +38,7 @@
 
 Libpath[%add(?Path)] :-
 	flora_file_op(expand,?Path,?ExpandedPath)@_prolog(flrporting),
-	( flora_module_path_get(?ExpandedPath)@_prolog(flrporting) -> true
+	( flora_module_path_get(?ExpandedPath)@_prolog(flrporting), !
          ; flora_module_path_add(?ExpandedPath)@_prolog(flrporting)
         ).
 
@@ -57,7 +56,7 @@ Libpath[%query(?Path)] :-
 	!,
 	flora_module_path_get(?Path)@_prolog(flrporting).
 Libpath[%query(?_Path)] :-
-	%abort('Libpath[%query(Path)]@_sys: Argument must be atom or variable')@_sys.
+	%abort('Libpath[%query(Path)]@_sys: Argument must be atom or variable').
 
 
 Tables[%abolish] :- abolish_all_tables@_prolog.
@@ -97,24 +96,25 @@ Method[%mustDefine(on)] :-
 	( flora_in_debug_mode(?)@_prolog(flrregistry), !
 	;
 	    assert(flora_in_debug_mode(1)@_prolog(flrregistry))@_prolog,
-	    ?ML = collectset{?M|(flora_module_registry(?M),
-		     \+ flora_debug_module_registry(?M))@_prolog(flrregistry)},
+	    ?ML = setof{?M|(flora_module_registry(?M),
+			    \+ flora_debug_module_registry(?M)
+			   )@_prolog(flrregistry)},
 	    %turn_on_debug_all(?ML)
 	).
 	
 Method[%mustDefine(off)] :-
 	!,
 	retractall(flora_in_debug_mode(?)@_prolog(flrregistry))@_prolog,
-        ?ML = collectset{?M|flora_debug_module_registry(?M)@_prolog(flrregistry)},
+        ?ML = setof{?M|flora_debug_module_registry(?M)@_prolog(flrregistry)},
 	%turn_off_debug_all(?ML).
 
 
 Method[%mustDefine(?Flag(?Module))] :-
 	( var(?Module)@_prolog,
 	    %abort(['Invalid module name in Method[%mustDefine(',?Flag,'(',?Module,'))]@_system'])
-	; \+  flora_is_system_module_name(?Module)@_prolog(flrwrapper),
-	    \+ flora_module_registry(?Module)@_prolog(flrregistry),
-	    %abort(['Unloaded module name in Method[%mustDefine(',?Flag,'(',?Module,'))]@_system'])
+	; \+ flora_is_system_module_name(?Module)@_prolog(flrwrapper),
+	  \+ flora_module_registry(?Module)@_prolog(flrregistry),
+	  %abort(['Unloaded module name in Method[%mustDefine(',?Flag,'(',?Module,'))]@_system'])
 	).
 
 Method[%mustDefine(?Flag(?Module))] :-
@@ -198,30 +198,37 @@ Method[%mustDefine(off,?Pred)] :-
 	%abort(['Invalid second argument (not atomic formula) in Method[%mustDefine(off,', ?Pred, ')]@_system']).
 
 Method[%mustDefine(off,?Pred)] :-
-        get_canonical_form(?Pred, FLCANON(?Wrap,?Args,?Mod,?Callable,?TFlag)@_prolog)@_prolog(flrcanon),
-        if (var(?Mod))
-        then (
-            flora_module_registry(?Mod)@_prolog(flrregistry),
-            get_canonical_form(?Pred, FLCANON(?Wrap,?Args,?Mod,?Callable,?TFlag)@_prolog)@_prolog(flrcanon)
-        ),
-        if (var(?Callable))
-        then (
-	    flora_decode_goal_as_atom(?Pred,?PredString)@_prolog(flrdecode),
-            %abort(['Invalid argument in Method[%mustDefine(off,', ?PredString, ')]@_system'])
+        get_canonical_form(?Pred, FLCANON(?,?,?Mod,?Callable,?)@_prolog)@_prolog(flrcanon),
+	%turn_debug_off_for_call(?Pred,?Mod,?Callable).
+
+%turn_debug_off_for_call(?Pred,?,?Callable) :-
+        var(?Callable),
+	!,
+	flora_decode_goal_as_atom(?Pred,?PredString)@_prolog(flrdecode),
+	%abort(['Invalid argument in Method[%mustDefine(off,', ?PredString, ')]@_system']).
+
+%turn_debug_off_for_call(?Pred,?Mod,?Callable) :-
+        (var(?Mod), !,
+	  flora_module_registry(?Mod)@_prolog(flrregistry)
+        ;
+	  true
         ),
 	( flora_is_system_module_name(?Mod)@_prolog(flrwrapper),
-	  unless flora_module_registry(?Mod)@_prolog(flrregistry)
-          do flora_load_system_module_internal(?Mod)@_prolog(flrutils)
-        ; \+ flora_is_system_module_name(?Mod)@_prolog(flrwrapper)
+	  (flora_module_registry(?Mod)@_prolog(flrregistry), !
+	  ;
+            flora_load_system_module_internal(?Mod)@_prolog(flrutils)
+	  )
+        ;
+	  \+ flora_is_system_module_name(?Mod)@_prolog(flrwrapper)
         ),
-	if flora_module_registry(?Mod)@_prolog(flrregistry)
-        then(  
-	    flora_module_predicate(FLORA_IGNORE_UNDEFCHECK,[?Callable],
-				   ?Mod,?Entry)@_prolog(flrwrapper),
-	    assert(?Entry)@_prolog
-	) else (
-	    flora_decode_goal_as_atom(?Pred,?PredString)@_prolog(flrdecode),
-	    %abort(['Invalid argument in Method[%mustDefine(off,', ?PredString, ')]@_system : Module ', ?Mod,' is unloaded'])
+	( flora_module_registry(?Mod)@_prolog(flrregistry), !,
+	  flora_module_predicate(FLORA_IGNORE_UNDEFCHECK,
+	                         [?Callable],
+				 ?Mod,?Entry)@_prolog(flrwrapper),
+	  assert(?Entry)@_prolog
+	;
+	  flora_decode_goal_as_atom(?Pred,?PredString)@_prolog(flrdecode),
+	  %abort(['Invalid argument in Method[%mustDefine(off,', ?PredString, ')]@_system : Module ', ?Mod,' is not loaded'])
 	).
 
 

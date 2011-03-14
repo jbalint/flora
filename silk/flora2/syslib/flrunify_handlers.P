@@ -1,0 +1,84 @@
+/* File:      flrunify_handlers.P
+**
+** Author(s): Michael Kifer
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 1999-2011;
+**      and Vulcan, Inc., 2011.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+
+:- compiler_options([xpp_on]).
+#include "flora_terms.flh"
+
+:- import flora_load_library/1 from flrlibman.
+:- import
+	get_attr/3,
+	put_attr/3,
+	install_attribute_portray_hook/3,
+	install_verify_attribute_handler/5
+   from machine.
+:- import
+	append/3
+   from basics.
+
+:- import
+	flora_write_oid/1,
+	flora_write_goal/1
+   from flrdecode.
+
+
+?- flora_load_library(FLLIBMETAOPS).
+
+/***************** Commands to install the unify handlers ***************/
+
+/***********************************************************************
+ Set attributed variable handler for FLDYNRULEVARCHECK.
+  Used in syslib/flrdynrule.P
+ Here we accummulate variables in inserted rules in order to be able to
+ issue warnings about unsafe and singleton variables.
+ ***********************************************************************/
+:- install_verify_attribute_handler(
+	FLDYNRULEVARCHECK,AttrValue,VarBinding,
+	flora_dynrule_check_handler(AttrValue,VarBinding),
+	no_warnings
+    ).
+:- install_attribute_portray_hook(FLDYNRULEVARCHECK,Attr,flora_write_oid(Attr)).
+
+:- install_verify_attribute_handler(
+	FLSEMANTICUNIFICATION,AttrValue,VarBinding,
+	flora_semantic_unification_handler(AttrValue,VarBinding),
+	no_warnings
+    ).
+:- install_attribute_portray_hook(FLSEMANTICUNIFICATION,Attr,flora_write_goal(Attr)).
+
+/****************** The actual handlers **************************************/
+
+%% attributed var handler for FLDYNRULEVARCHECK (used in syslib/flrdynrule).
+flora_dynrule_check_handler(AttributeValue,VariableBinding) :-
+        ( var(VariableBinding) ->
+            ( get_attr(VariableBinding,FLDYNRULEVARCHECK,DynruleCheckVars) ->
+                append(AttributeValue,DynruleCheckVars,NewDynruleCheckVars),
+                put_attr(VariableBinding,FLDYNRULEVARCHECK,NewDynruleCheckVars)
+            ;
+                put_attr(VariableBinding,FLDYNRULEVARCHECK,AttributeValue)
+            )
+        ;
+            true
+        ).
+
+
+%% attributed var handler for FLSEMANTICUNIFICATION.
+%% Handles variables that have reification and other stuff attached
+%% to them as attributes.
+flora_semantic_unification_handler(AttributeValue,VariableBinding) :-
+	FLLIBUNIVEQFORM(AttributeValue,VariableBinding).

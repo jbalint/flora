@@ -211,16 +211,15 @@
 	flora_set_maxerrors/1,
 	checkCallerInfo/3,
 
-	flora_compile_internal/1,
-	flora_compile_internal/2,
+	flora_compile_util/1,
+	flora_compile_util/2,
 	flora_compile_system_module/1,
-	flora_load_module_internal/1,
-	flora_load_module_internal/2,
-        flora_save_module_internal/1,
-        flora_save_module_internal/2,
+	flora_load_module_util/1,
+	flora_load_module_util/2,
+        flora_save_module_util/1,
+        flora_save_module_util/2,
 	FL_DUMP/1,
 	flora_locate_file/3,
-	flora_FLH_filename/2,
 	flloadtrailer/2,
 	fltrailersemantics/2,
 	flora_end_of_input/1,
@@ -248,7 +247,7 @@
 	flora_compiler_environment/2,
 
 	flora_read_canonical_and_insert/2,
-	flora_load_system_module_internal/1,
+	flora_load_system_module_util/1,
 	flora_measure_time/2,
 	
 	flora_add_module_dyn/1,
@@ -269,6 +268,8 @@
 
 	incremental_tabling_in_effect/1,
 	flora_read_from_source/2,
+
+	flora_token_index_to_line/2,
 
 	flora_warnings_level/1,
         flora_coder_error/1.

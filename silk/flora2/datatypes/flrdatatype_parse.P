@@ -20,6 +20,7 @@
 #include "flora_characters.flh"
 #include "flora_terms.flh"
 #include "flora_errors.flh"
+#include "flora_exceptions.flh"
 
 :- import
 	%% is_digit/1,
@@ -27,8 +28,13 @@
    from flrlexer.
 
 :- import
+	is_prdatatypelist/2,
+	is_prdatatypelist/1
+   from flrcoder.
+
+:- import
 	flora_read_parse_compile_build_term/4,
-	flora_abort/1
+	flora_abort/2
    from flrutils.
 
 :- import
@@ -37,8 +43,6 @@
    from flrdatatype_utils.
 
 :- import
-	is_flora_datatypelitlist/1,
-	flora_datatypelitlist/2,
 	flora_canonical_type_name/2
    from flrdatatype.
 
@@ -50,15 +54,28 @@
 
 :- import flora_concat_strings/2 from flrporting.
 
-:- import parsing_error/3 from flrparser.
+:- import
+	parsing_error/3
+   from flrparser.
 
 :- export
 	flora_parse_datatype/4,
 	flora_make_datatype/4,
 	flora_make_datatype/3.
 
+:- dynamic FLORA_DATATYPE_CACHE/2, FLORA_DATATYPE_CACHE/3.
+:- index(FLORA_DATATYPE_CACHE/2,trie).
+:- index(FLORA_DATATYPE_CACHE/3,trie).
 
-flora_parse_datatype(DATATYPE(FL_TIME,LitChars),Idx,ParsedDT,Status) :-
+
+flora_parse_datatype(DT,_Idx,ParsedDT,[]) :-
+	nonvar(DT),
+	FLORA_DATATYPE_CACHE(DT,ParsedDT),
+	!.
+flora_parse_datatype(DT,Idx,ParsedDT,Status) :-
+	flora_parse_datatype_internal(DT,Idx,ParsedDT,Status).
+
+flora_parse_datatype_internal(DATATYPE(FL_TIME,LitChars),Idx,ParsedDT,Status) :-
 	!,
 	(LitChars=VARIABLE(VarName)
 	-> ParsedDT = FL_TIME(FLVAR(VarName,Idx)), Status=[]
@@ -72,7 +89,7 @@ flora_parse_datatype(DATATYPE(FL_TIME,LitChars),Idx,ParsedDT,Status) :-
 	;  parsing_error(Idx,ERROR_TIME_LITERAL,Status)
 	).
 
-flora_parse_datatype(DATATYPE(FL_DATE,LitChars),Idx,ParsedDT,Status) :-
+flora_parse_datatype_internal(DATATYPE(FL_DATE,LitChars),Idx,ParsedDT,Status) :-
 	!,
 	(LitChars=VARIABLE(VarName)
 	-> ParsedDT = FL_DATE(FLVAR(VarName,Idx)), Status=[]
@@ -86,7 +103,7 @@ flora_parse_datatype(DATATYPE(FL_DATE,LitChars),Idx,ParsedDT,Status) :-
 	;  parsing_error(Idx,ERROR_DATE_LITERAL,Status)
 	).
 
-flora_parse_datatype(DATATYPE(FL_DATETIME,LitChars),Idx,ParsedDT,Status) :-
+flora_parse_datatype_internal(DATATYPE(FL_DATETIME,LitChars),Idx,ParsedDT,Status) :-
 	!,
 	(LitChars=VARIABLE(VarName)
 	-> ParsedDT = FL_DATETIME(FLVAR(VarName,Idx)), Status=[]
@@ -101,7 +118,7 @@ flora_parse_datatype(DATATYPE(FL_DATETIME,LitChars),Idx,ParsedDT,Status) :-
 	).
 
 
-flora_parse_datatype(DATATYPE(FL_DURATION,LitChars),Idx,ParsedDT,Status) :-
+flora_parse_datatype_internal(DATATYPE(FL_DURATION,LitChars),Idx,ParsedDT,Status) :-
 	!,
 	(LitChars=VARIABLE(VarName)
 	-> ParsedDT = FL_DURATION(FLVAR(VarName,Idx)), Status=[]
@@ -117,7 +134,7 @@ flora_parse_datatype(DATATYPE(FL_DURATION,LitChars),Idx,ParsedDT,Status) :-
 
 
 %% Add prefix, localName
-flora_parse_datatype(DATATYPE(FL_IRI,LitChars),Idx,ParsedDT,Status) :-
+flora_parse_datatype_internal(DATATYPE(FL_IRI,LitChars),Idx,ParsedDT,Status) :-
 	!,
 	(LitChars=VARIABLE(VarName)
 	-> ParsedDT = FL_IRI(FLVAR(VarName,Idx)), Status=[]
@@ -131,7 +148,7 @@ flora_parse_datatype(DATATYPE(FL_IRI,LitChars),Idx,ParsedDT,Status) :-
 	    )
 	).
 
-flora_parse_datatype(DATATYPE(FL_LONG,LitChars),Idx,ParsedDT,Status) :-
+flora_parse_datatype_internal(DATATYPE(FL_LONG,LitChars),Idx,ParsedDT,Status) :-
 	!,
 	(LitChars=VARIABLE(VarName)
 	-> ParsedDT = FL_LONG(FLVAR(VarName,Idx)), Status=[]
@@ -143,7 +160,7 @@ flora_parse_datatype(DATATYPE(FL_LONG,LitChars),Idx,ParsedDT,Status) :-
 	    )
 	).
 
-flora_parse_datatype(DATATYPE(FL_DOUBLE,LitChars),Idx,ParsedDT,Status) :-
+flora_parse_datatype_internal(DATATYPE(FL_DOUBLE,LitChars),Idx,ParsedDT,Status) :-
 	!,
 	(LitChars=VARIABLE(VarName)
 	-> ParsedDT = FL_DOUBLE(FLVAR(VarName,Idx)), Status=[]
@@ -155,7 +172,7 @@ flora_parse_datatype(DATATYPE(FL_DOUBLE,LitChars),Idx,ParsedDT,Status) :-
 	    )
 	).
 
-flora_parse_datatype(DATATYPE(FL_STRING,LitChars),Idx,ParsedDT,Status) :-
+flora_parse_datatype_internal(DATATYPE(FL_STRING,LitChars),Idx,ParsedDT,Status) :-
 	!,
 	(LitChars=VARIABLE(VarName)
 	-> ParsedDT = FL_STRING(FLVAR(VarName,Idx)), Status=[]
@@ -167,7 +184,7 @@ flora_parse_datatype(DATATYPE(FL_STRING,LitChars),Idx,ParsedDT,Status) :-
 	    )
 	).
 
-flora_parse_datatype(DATATYPE(FL_CHARLIST,LitChars),Idx,ParsedDT,Status) :-
+flora_parse_datatype_internal(DATATYPE(FL_CHARLIST,LitChars),Idx,ParsedDT,Status) :-
 	!,
 	(LitChars=VARIABLE(VarName)
 	-> ParsedDT = FL_CHARLIST(FLVAR(VarName,Idx)), Status=[]
@@ -180,7 +197,7 @@ flora_parse_datatype(DATATYPE(FL_CHARLIST,LitChars),Idx,ParsedDT,Status) :-
 	).
 
 
-flora_parse_datatype(DATATYPE(FL_LISTTYPE,LitChars),Idx,ParsedDT,Status) :-
+flora_parse_datatype_internal(DATATYPE(FL_LISTTYPE,LitChars),Idx,ParsedDT,Status) :-
 	!,
 	(LitChars=VARIABLE(VarName)
 	-> ParsedDT = FL_LISTTYPE(FLVAR(VarName,Idx)), Status=[]
@@ -192,7 +209,7 @@ flora_parse_datatype(DATATYPE(FL_LISTTYPE,LitChars),Idx,ParsedDT,Status) :-
 	    )
 	).
 
-flora_parse_datatype(DATATYPE(FL_BOOL,LitChars),Idx,ParsedDT,Status) :-
+flora_parse_datatype_internal(DATATYPE(FL_BOOL,LitChars),Idx,ParsedDT,Status) :-
 	!,
 	(LitChars=VARIABLE(VarName)
 	-> ParsedDT = FL_BOOL(FLVAR(VarName,Idx)), Status=[]
@@ -205,7 +222,7 @@ flora_parse_datatype(DATATYPE(FL_BOOL,LitChars),Idx,ParsedDT,Status) :-
 	).
 
 %% Catchall
-flora_parse_datatype(DATATYPE(TypeName,DTLiteral),Idx,ParsedDT,Status) :-
+flora_parse_datatype_internal(DATATYPE(TypeName,DTLiteral),Idx,ParsedDT,Status) :-
 	(DTLiteral=VARIABLE(VarName)
 	-> ParsedDT = FL_DATATYPE(TypeName, FLVAR(VarName,Idx)),
 	    Status = []
@@ -213,7 +230,7 @@ flora_parse_datatype(DATATYPE(TypeName,DTLiteral),Idx,ParsedDT,Status) :-
 	->
 	    make_datatype(TypeName,(DTLiteral),ParsedDT),
 	    Status = []
-	; is_flora_datatypelitlist(DTLiteral)
+	; is_prdatatypelist(DTLiteral)
 	->
 	    datatype_litlist_value(DTLiteral,LitListVal),
 	    make_datatype(TypeName,LitListVal,ParsedDT),
@@ -475,11 +492,17 @@ parse_list(_LitChars,Idx,_Value,Status) :-
 
 flora_make_datatype(TypeName,Args,TypeObject) :-
 	flora_make_datatype(TypeName,Args,TypeObject,fail).
+flora_make_datatype(TypeName,Args,TypeObject,_AbortFlag) :-
+	nonvar(TypeName),
+	nonvar(Args),
+	FLORA_DATATYPE_CACHE(TypeName,Args,TypeObject),
+	!.
 flora_make_datatype(TypeName,Args,TypeObject,AbortFlag) :-
 	flora_canonical_type_name(TypeName,CanTypeName),
 	convert_dt_arguments_if_necessary(CanTypeName,Args,ArgsNew),
 	check_and_make_datatype(CanTypeName,ArgsNew,TypePreObject,AbortFlag),
-	TypeObject = FL_DATATYPE(TypePreObject,TypeName).
+	TypeObject = FL_DATATYPE(TypePreObject,TypeName),
+	assert(FLORA_DATATYPE_CACHE(TypeName,Args,TypeObject)).
 
 check_and_make_datatype(FL_DATE,Args,TypeObject,AbortFlag) :-
 	!,
@@ -556,7 +579,7 @@ check_and_make_datatype(FL_IRI,Args,TypeObject,AbortFlag) :-
 	    atom(Port), atom(Path), atom(Query), atom(Fragm)
 	-> make_datatype(FL_IRI,OutArgs,TypeObject)
 	;  (atom(Args)->atom_codes(Args,ArgsChars) ; ArgsChars=Args)
-	-> flora_parse_datatype(DATATYPE(FL_IRI,ArgsChars),NO_INDEX,TypeObject,Status),
+	-> flora_parse_datatype_internal(DATATYPE(FL_IRI,ArgsChars),NO_INDEX,TypeObject,Status),
 	    abort_or_fail_on_status(Status,AbortFlag)
 	;
 	    abort_or_fail_on_invalid_argument(FL_IRI,AbortFlag)
@@ -623,22 +646,31 @@ check_and_make_datatype(FL_LISTTYPE,(Value),TypeObject,AbortFlag) :-
 	    abort_or_fail_on_invalid_argument(FL_LISTTYPE,AbortFlag)
 	).
 
+%% catchall case for non-standard data types
 check_and_make_datatype(Type,Args,TypeObject,_AbortFlag) :-
 	flora_canonical_type_name(Type,CanTypeName),
-	Type \= CanTypeName,
+	%% MK: Unclear why the next statement is here - check
+	%%Type \= CanTypeName,
+	(is_charlist(Args) -> ArgChars = Args
+	; atom(Args) -> atom_codes(Args,ArgChars)
+	; number(Args) -> number_codes(Args,ArgChars)
+	),
 	!,
-	make_datatype(CanTypeName,Args,TypeObject).
+	make_datatype(CanTypeName,ArgChars,TypeObject).
 
+/*
+%% MK: this case seems fishy
 %% Rest: foo"bar"^^foo represented as _datatype(_datatype(foo,[98,97,114]),foo)
 check_and_make_datatype(Type,Args,TypeObject,_AbortFlag) :-
 	Args = (Arg),
 	atomic(Arg),
 	!,
 	make_datatype(Type,Args,TypeObject).
+*/
 
 %% error: if the number of args is > 1 and type is unknown
-check_and_make_datatype(Type,_Args,_TypeObject,_AbortFlag) :-
-	flora_abort([Type,'[toType(...) -> ...]: for the ', Type, ' datatype, toType(...) takes only 1 argument']).
+check_and_make_datatype(Type,Args,_TypeObject,_AbortFlag) :-
+	flora_abort(['In ',Type,'[_toType(',Args,') -> ...]: invalid argument, ', Args],FLORA_ABORT_NOTRACE).
 
 
 %%%%%%%%%%%%%%%%%%%% Utils
@@ -794,16 +826,16 @@ convert_dt_arguments_if_necessary(_Type,Args,Args).
 
 
 datatype_litlist_value(LitListDT,FL_DATATYPELIST(LitList)) :-
-	flora_datatypelitlist(LitListDT,LitList).
+	is_prdatatypelist(LitListDT,LitList).
 
 
 abort_or_fail_on_invalid_argument(DType,AbortFlag) :-
 	AbortFlag == true
-	-> flora_abort([DType,'[toType(...) -> ...]: invalid parameter(s)']).
+	-> flora_abort([DType,'[toType(...) -> ...]: invalid parameter(s)'],FLORA_ABORT_NOTRACE).
 
 abort_or_fail_on_status(Status,AbortFlag) :-
 	    (  Status == [], !
 	    ;  AbortFlag == true
 	    ->  Status = [error(_,Msg)|_],
-		flora_abort(Msg)
+		flora_abort(Msg,FLORA_ABORT_NOTRACE)
 	    ).

@@ -47,17 +47,8 @@
 
 :- import flora_parse_datatype/4 from flrdatatype_parse.
 :- import
-	flora_canonical_type_name/2,
-	flora_datatypelitlist/2,
-	is_flora_datatypelitlist/1
+	flora_canonical_type_name/2
    from flrdatatype.
-
-:- import
-	flora_runtime_uriprefix_expansion/3,
-	flora_compiletime_uriprefix_expansion/2,
-	flora_clear_compiletime_uriprefixes/0,
-	FLLIBPREFIXDEF/2
-   from flrprefixdef.
 
 :- export
 	flora_divide_program/3,
@@ -75,16 +66,21 @@
         is_prignoredep/2,
 	is_prthismodule/1,
 	is_prthisfdbstorage/1,
+	is_pratom/2,
 	is_pratom/3,
+	is_prnumber/1,
 	is_prnumber/3,
 	is_prtransactionalnumber/3,
+	is_prvariable/1,
 	is_prvariable/3,
 	is_prtransactionalvariable/3,
+	is_prstring/1,
 	is_prstring/3,
+	is_prbuiltin_identifier/2,
 	is_prbuiltin_identifier/3,
 	is_prdatatype/4,
-	is_pruri/3,
-	is_prurisq/3,
+	is_prdatatypelist/1,
+	is_prdatatypelist/2,
 	is_prlist/4,
 	is_prfdbstorage/3,
 	is_prterm/4,
@@ -98,6 +94,7 @@
 	is_prworkspace/3,
 	is_florasyslib/5,
 	is_prologterm/4,
+	is_prologterm/5,
 	is_prologliblit/4,
 	is_prnewpred/4,
 	is_prnewoid/3,

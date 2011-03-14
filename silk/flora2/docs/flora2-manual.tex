@@ -663,7 +663,8 @@ these tries are successful, an error is reported.
   Control the types of warnings to be shown to the user.
   {\tt all} - show all warnings; {\tt off} - do not show warnings; {\tt
     compiler} - show only compiler warnings; {\tt dependency} - show only
-  dependency checker warnings.    
+  dependency checker warnings. Note that {\tt \_warnings(compiler)}
+  turns off dependency checking completely.
 \item {\tt \_end}:
     Say Ciao to \FLORA, stay in Prolog.
 \item {\tt \_halt}:
@@ -1425,7 +1426,7 @@ is equivalent to the following formula:
 \end{qrules}
 
 
-\subsection{Arithmetic Expressions}
+\subsection{Arithmetic (and related) Expressions}
 
 
 \index{arithmetic expression}
@@ -1436,24 +1437,58 @@ Prolog, the arithmetic operators such as {\tt +}, {\tt -}, {\tt /}, and
 expression, \FLORA provides another operator, {\tt is}.  For example, {\tt
   ?X is 3+4} will bind {\tt ?X} to the value {\tt 7}.
 
+\index{logical operator}
+\index{operator!logical}
+%%
 When dealing with arithmetic expressions, the order of literals is
-important.  In particular, all variables appearing in an arithmetic
-expression must be instantiated at the time of evaluation. Otherwise, a
-runtime error will occur. For instance, 
+\emph{sometimes} important.
+The comparison and evaluation operators for which the order is unimportant
+(the \emph{logical} operators)  are:
+%% 
+\begin{itemize}
+\item  $>$, $<$, $=<$, $>=$
+\item  $!=$, $!==$, $=:=$, $=\backslash=$
+\item $is$
+\item $~$, $\backslash~$, $!~$
+\end{itemize}
+%% 
+\index{non-logical operator}
+\index{operator!non-logical}
+The operators for which the order is important (the \emph{non-logical}
+operators) are:
+%% 
+\begin{itemize}
+\item  $==$
+\item  $\backslash=$, $\backslash==$, $?=$
+\item  $@<$, $@>$
+\end{itemize}
+%% 
+Logical operators commute among themselves, but non-logical ones, in
+general, do not commute among themselves or with logical operators, and
+difference orders of these operators in an expression  may produce different
+results. For instance, if $\tt ?X$ is not bound then $\tt ?X == abc, ?X=abc$ will
+fail, while  $\tt ?X=abc, ?X == abc$ will succeed with $\tt ?X = abc$.
+The reason for this is, of course the non-logical operator $\tt ==$.
+
+Arithmetic expression must be instantiated at the time of
+evaluation. Otherwise, a runtime error will occur.
+However, \FLORA tries to delay the evaluation of arithmetic expressions
+until the variables become bound and it will issue a runtime error only if
+it determines that some variable will never get bound.
+For instance,
 %%
 \begin{qrules}
   \tt
 ?- ?X > 1, ?X is 1+1.
 \end{qrules}
 %%
-will produce an error, while
+will \emph{not}  produce an error, while the following query will:
 %%
 \begin{qrules}
   \tt
-?- ?X is 1+1, ?X > 1.
+?-  ?X > 1.
 \end{qrules}
 %%
-will evaluate to true.
 
 As in Prolog, the operands of an arithmetic expression can be any variable
 or a constant. However, in \FLORA, an operand can also be a \emph{path
@@ -1623,14 +1658,14 @@ pi & 0 & the PI number\\
 \label{sec-class-expr}
 
 \FLORA defines a number of set-theoretic
-operations on classes. For instance, $(a,b)$ is the
-intersection class, $(a;b)$ is the union class, and $(a-b)$ is
-the difference class. More precisely, $(a,b)$ is the \emph{maximal}
-subclass of $a$ and $b$ in the class hierarchy, and its extension is
-precisely the intersection of the extensions of $a$ and $b$. The class
-$(a;b)$ is the smallest superclass of $a$ and $b$. The class $(a-b)$ is the
-maximal subclass of $a$ with extension that contains all the elements of
-$a$ that are not in the extension of $b$.
+operations on classes. For instance, $\tt (a,b)$ is the
+intersection class, $\tt (a;b)$ is the union class, and $\tt (a-b)$ is
+the difference class. More precisely, $\tt (a,b)$ is the \emph{maximal}
+subclass of $\tt a$ and $\tt b$ in the class hierarchy, and its extension is
+precisely the intersection of the extensions of $\tt a$ and $\tt b$. The class
+$\tt (a;b)$ is the smallest superclass of $\tt a$ and $\tt b$. The class $\tt (a-b)$ is the
+maximal subclass of $\tt a$ with extension that contains all the elements of
+$\tt a$ that are not in the extension of $\tt b$.
 Suppose
 the following information is given:
 %%
@@ -2035,22 +2070,27 @@ For instance,
 %% 
 
 
-\section{Anonymous and Generated Oids, Skolem Terms}\label{sec-anon-gen-oids}
+\section{Skolem Constants and Terms}\label{sec-anon-gen-oids}
 
 
 \index{Skolem!constant}
 \index{Skolem!function}
 \index{Skolem!term}
-\index{anonymous oid}
-\index{oid!anonymous}
+\index{Skolem constant}
+\index{constant!Skolem}
 %
 For applications where oids are not important, \FLORA provides the
 compiler directive \verb|_#| to automatically generate a new
-oid. \verb|_#| can be used wherever an Id-term is allowed, \emph{except in the
-rule body}, where such oids make no sense. Like the
-anonymous variable \verb|?_|, each occurrence of \verb|_#| represents
-an \emph{anonymous oid}. The difference is that such an oid is not only
-unique in each rule, but in the source program as well.
+\emph{Skolem constant}. \verb|_#| can be used wherever an Id-term is allowed, \emph{except in the
+rule body}, where Skolem constants make no sense.\footnote{
+  Because of the uniqueness, a Skolem constant is unlikely to match
+  anything that appears elsewhere in the knowledge base, so a subgoal that
+  contains such a constant is likely to always be false.
+}
+%%
+Each occurrence of \verb|_#| represents
+a new constant, which is unique throughout
+the source program.
 
 Of course, uniqueness is achieved through the use of special ``weird'' naming
 schema for such oids, which internally prefixes them with several {\tt
@@ -2072,15 +2112,15 @@ the compiler will generate unique oids for each occurrence of {\tt \_\#}.
 Note that, in the second clause, only one oid is generated and it serves as
 a method name.
 
-\index{numbered anonymous oid}
-\index{oid!anonymous!numbered}
+\index{numbered Skolem constant}
+\index{constant!Skolem!numbered}
 %%
 In some situations, it is necessary to be able to create a new oid and use it
 within the same rule head or a fact. Since such an oid 
 needs to be referenced inside the same program clause, it is no longer
 possible to use \verb|_#|, because each occurrence of \verb|_#| causes the
 compiler to generate a new oid. To solve this problem, \FLORA allows 
-\emph{numbered anonymous oids}, which are of the form \verb|_#132|, {\it
+\emph{numbered Skolem constants}, which are of the form \verb|_#132|, {\it
   i.e.}, \verb|_#| with a number attached to it. For instance, 
 %%
 \begin{quote}
@@ -2101,9 +2141,10 @@ clauses above refer to different objects.
 \index{generated oid}
 \index{newoid{...}}
 \index{oid!generated}
-Anonymous oids are generated at compile time without regard for the oids
+Normally,
+Skolem constants are generated at compile time without regard for the oids
 that might exist at run time. Sometimes it is necessary to generate a
-completely new oid at \emph{run time}. This can be accomplished with the
+Skolem constant at \emph{run time}. This can be accomplished with the
 {\tt newoid\{...\}} built-in. For instance, 
 %%
 \begin{verbatim}
@@ -2117,11 +2158,11 @@ Yes
 \end{verbatim}
 %%
 
-\paragraph{Skolems.}
-A purely logical way to look at the anonymous and generated oids is to view
-them as Skolem symbols. When such a symbol is a constant, it is called a
-Skolem constant. If it plays the role of a function, it is then called a
-Skolem function (e.g., {\tt \_\#(a,b)}). Since \FLORA terms are actually HiLog terms, we can also
+\paragraph{More on Skolems.}
+A Skolem constant can also be used as a function symbol and even a
+predicate symbol.
+For instance,
+{\tt \_\#(a,b)}. Since \FLORA terms are actually HiLog terms, we can also
 have higher-order Skolem functions, as in these terms:
 %% 
 \begin{verbatim}
@@ -6298,6 +6339,7 @@ directive {\tt ignore\_depchk} is provided to exempt certain predicates
 and methods from such dependency checks.
 
 \index{ignore\_depchk}
+\index{dependency checking!ignore\_depchk}
 %%
 The example below shows the usage of the {\tt ignore\_depchk} directive.
 %%
@@ -6332,6 +6374,15 @@ two literals such as {\tt insert\{a,b|c,d,e\}}. And
 %%    
 \noindent ignores dependencies on unconditional insertions which insert
 exactly one literal such as {\tt insert\{p(a)\}} but not {\tt insert\{p(a),p(b)\}}. 
+
+\index{dependency checking!\_warnings(compiler)}
+%%
+We should also mention here that executing the command
+\texttt{\_warnings(compiler)} in the FLORA-2 shell will turn the dependency
+checking off globally. In some cases, this can drastically
+reduce the compilation time.
+
+
 
 \subsection{Updates and Meta-programming}
 
@@ -7301,65 +7352,212 @@ rule (or query), simply include it inside curly braces.
 Here is a 2-minute introduction to CLPR. Try the following program:
 %%
 \begin{verbatim}
- ?- insert{p(1.0),p(2.0),p(3.0)}.
- ?- ?X>0, ?X<5, p(?X).
+ ?- insert{p(1),p(2),p(3)}.
+ ?- ?X>1, ?X<5, p(?X).
 \end{verbatim}
 %%
-Intuitively, one would expect 2.0 and 3.0 as answers. However, if you
-actually try to run this
-program, you will be disappointed --- an error message will be
-reported:
-%%
-\begin{quote}
- ++Error[XSB]: [Runtime/P] Type Error: Uninstantiated Arithmetic Expression \\
- Aborting...
-\end{quote}
-%%
-This happens because ordinarily Prolog views {\tt >/2} and {\tt </2} as
-predicates with an infinite number of facts. Since there are an infinite number
-of values for {\tt ?X} that make {\tt ?X > 0} true, it reasons, the query
-does not make sense.
-
-Constraint logic programming takes a different view: it considers {\tt ?X>0,
-  ?X<5} to be a \emph{constraint} on the set of solutions of the query {\tt
-  p(?X)}. This approach allows Prolog to return meaningful solutions to the
-above query. However, the user must explicitly tell the system which view
-  to take --- the ``dumb'' view that treats arithmetic built-ins as
-  infinite predicates or a ``smart'' view, which treats them as constraints.
-  The smart view is indicated by enclosing constraints in curly
+Traditional logic programming languages, like Prolog, would give an error
+in response to this query. \FLORA is actually pretty good in this respect,
+as it will delay the inequalities until they can be solved. So, it will
+return two answers: 2 and 3. But what if we ask \FLORA to solve an equation:
+%% 
+\begin{verbatim}
+   ?- insert{p(1),p(2),p(3),p(9)}.
+   ?- ?X=?Y*?Z, ?Y>1, ?Z>2, p(?X), p(?Y).
+\end{verbatim}
+%% 
+That \FLORA cannot do without the help of 
+\emph{Constraint Logic Programming}.
+Constraint logic programming takes the view that
+\texttt{?X=?Y*?Z, ?Y>1, ?Z>2} is a  
+a \emph{constraint} on the set of solutions of the query {\tt
+  p(?X)}. This approach allows Prolog to return meaningful answers to the
+above query by solving this constraint.
+However, the user must explicitly tell \FLORA which view
+  to take: the traditional view that treats arithmetic built-ins as
+  infinite predicates or the one that treats them as constraints.
+  This latter view is indicated by enclosing constraints in curly
   braces. Thus, the above program becomes:
 %%
 \begin{verbatim}
- ?- [clpr].       % must be loaded prior to use of the constraint solver
- ?- insert{p(1.0),p(2.0),p(3.0)}.
- ?- {?X>0, ?X<5}, p(?X).
+   ?- insert{p(1),p(2),p(3),p(9)}.
+   ?- {?X=?Y*?Z, ?Y>1, ?Z>2}, p(?X), p(?Y).
   
-  ?X = 2.000000e+00
+   ?X = 9
+   ?Y = 2
+   ?Z = 4.5000
 
-  ?X = 3.000000e+00
-
-  2 solution(s) in 0.0000 seconds
+   ?X = 9
+   ?Y = 3
+   ?Z = 3.0000
 \end{verbatim}
 %%
-Note that the package {\tt clpr} must be loaded in advance.
 
-It should be kept in mind that the constraint solver is very picky about
-the type of values it is willing to work with. It insists on floats and
-will refuse to convert integers to floats. For instance, if the insert
-statement were as follows:
+\section{Low-level Predicates}
+
+Sometimes it is useful to define predicates that are handled
+\emph{directly} by the underlying Prolog engine. Such predicates would be
+represented as Prolog, not HiLog predicates. They will not be visible to
+HiLog queries, they will not be tabled automatically,
+and they will be indexed as any other Prolog predicate.
+One use of such predicates, as \emph{sensors}, is described in
+Section~\ref{sec-sensor}.
+To support this feature, \FLORA provides two directives:
 %%
+\index{prolog directive}
+\index{table directive}
+\index{directive!prolog}
+\index{directive!table}
+%% 
 \begin{verbatim}
-        ?- insert{p(1),p(2),p(3)}.  
+   :- prolog predname/arity.
+   :- table  predname/arity.
+\end{verbatim}
+%% 
+The first directive defines a predicate of a certain arity as a Prolog
+predicate to be handled directly by Prolog. If this predicate is defined
+recursively, it might need to be tabled to help with termination or to
+reduce computational complexity. This is accomplished with the help of the
+second directive.
+
+As mentioned above, predicates declared with the \texttt{prolog} directive
+are not visible to HiLog queries. For instance, in
+%% 
+\begin{verbatim}
+   :- prolog foo/2.
+   ?- ?X(?,?).
+\end{verbatim}
+%% 
+the variable \texttt{?X} will \emph{not} be bound to \texttt{foo}.  
+
+
+\section{Predicates with Restricted Invocation Patterns}\label{sec-sensor}
+
+\index{sensor}
+%%
+Sometimes it is useful to define predicates that have fixed
+invocation patterns: requirements that certain arguments must be
+bound (non-variable) or be ground.
+\FLORA provides special support for this kind of predicates, which are
+called \textbf{\emph{sensors}}. Namely, if a predicate is registered as a sensor,
+\FLORA will monitor the binding pattern of that predicate and, if the
+predicate is called before the binding conditions are fulfilled, it will
+delay the predicate until the conditions
+are fulfilled. If  at some point \FLORA determines that
+the binding condition \emph{cannot} be satisfied, \FLORA will call the sensor
+anyway. The sensor's implementation
+can then examine the state of the argument bindings and
+issue an error, if appropriate.
+
+\FLORA supports \emph{only} those sensors that are represented as
+\emph{Prolog} (not HiLog) predicates. However, sensors can be defined
+either using \FLORA rules in a \texttt{.flr} file or Prolog rules in a
+\texttt{.P} file.  A sensor must be declared with a \texttt{sensor/2} or
+\texttt{sensor/3} directive as follows:
+%% 
+\begin{verbatim}
+:- sensor(sens1(?,?,?Y,?X), sensorfoo, (nonvar(?X),ground(?Y))).
+:- sensor(sens2(?,?,?Y,?X), (ground(?X),ground(?Y))).
+\end{verbatim}
+%% 
+The \texttt{sensor/2} directive is used for sensors defined in \FLORA and
+\texttt{sensor/3} is used for sensors defined in \texttt{Prolog}.  In the
+above, \texttt{sens1/4} and \texttt{sens2/4} are declared as sensors: the
+first in a Prolog file and the second in a \FLORA file.
+
+The first argument of the \texttt{sensor} directive is the invocation call for the sensor
+being declared.
+In an invocation call, the first argument is \emph{always} bound (by
+\FLORA) to the
+file name in which that particular instance of the sensor resides (in some
+rule or a query); the
+second argument is always bound to the line number where the call
+resides. This is useful in case the sensor needs to issue an error
+message, since the user will be able to quickly locate the offending call. 
+This is why the first two arguments in any sensor must be represented by
+don't-care variables and their implementation should expect them to be bound
+by \FLORA.
+The remaining arguments are under user's control.
+
+The last argument is a \emph{guard}: a Boolean expression consisting of
+\texttt{nonvar/1} and \texttt{ground/1} predicates applied to the input
+variables of the sensor. The sensor will be \emph{delayed} by the \FLORA engine until the
+guard is satisfied (or until the engine determines that the guard cannot be
+satisfied).
+
+In the \texttt{sensor/3} directive, the middle argument is the name of the
+Prolog module in which the Prolog sensor is defined. 
+In our case, \texttt{sens1/4} is declared as a sensor defined by 
+rules in a Prolog module, \texttt{sensorfoo}. In that case, \FLORA
+will expect those rules to be in a file named \texttt{sensorfoo.P}. The
+definition could look like this:
+%% 
+\begin{verbatim}
+   :- export sens1/4.
+   sens1(F,L,X,Y) :-
+        (var(X)       // X must be nonvar
+        ->  abort(['In file ', F, ', line ', L, ': ',
+                   'Instantiation error in arg 3 in in sens1/4'])
+        ; \+ground(Y) // Y must be ground
+        ->  abort(['In file ', F, ', line ', L, ': ',
+                    'Instantiation error in arg 4 in sens1/4'])
+        ),
+        Z is X+Y,
+        writeln(z=Z).
+\end{verbatim}
+%% 
+The sensor \texttt{sens2/4} is, on the other hand, defined using a
+two-argument sensor-directive, so its definition is expected to be in a
+\texttt{.flr} file. However, as noted before, all sensors are required to
+be Prolog predicates, so \FLORA requires a \texttt{prolog} declaration for sens2/4:
+%% 
+\index{prolog directive}
+%% 
+\begin{verbatim}
+   :- prolog sens2/4.
+\end{verbatim}
+%% 
+Both the sensor declaration and the Prolog declaration must appear in the
+the \FLORA module where the sensor is actually defined by rules.
+For sens2/4, a definition could look like this:
+%% 
+\begin{verbatim}
+   sens2(?F,?L,?X,?Y) :-
+        if \+ground(?X) // only ?X must be ground
+        then
+           abort(['In file ', ?F, ', line ', ?L, ': ',
+                  'Instantiation error in arg 3 in sens2'])@_sys,
+        ?Y is ?X/2,
+        writeln(Y=?Y).
 \end{verbatim}
 %%
-then the user would have been rewarded with the following obscure message:
+Note that since \texttt{sens1/4} and \texttt{sens2/4} are
+Prolog predicates, they will not be
+visible to HiLog queries. For instance,
+%% 
+\begin{verbatim}
+   ?- ?X(?,?,?,?).
+\end{verbatim}
+%% 
+will bind \texttt{?X}  neither to \texttt{sens1} nor to \texttt{sens2}.
+The other important thing to keep in mind is that since sensors are Prolog
+predicates, they are \emph{not} automatically tabled. So, if they happen to
+be recursive they might need to be tabled explicitly.
+For \texttt{sens1/4},  which is defined in a Prolog file, tabling can be
+done using the regular Prolog \texttt{table} directive. If a
+\texttt{sens2}-like sensor, defined in a \texttt{.flr} file, needs
+to be tabled,
+\FLORA provides its own tabling directive with the same
+syntax as in Prolog:
 %%
-\begin{quote}
-  type\_error(\_h5356 = 3,2,a real number,3)
-\end{quote}
-%%
-It is trying to tell the user that a floating number is expected and the
-integer 3 will not do.
+\index{table directive}
+%% 
+\begin{verbatim}
+   :- table sens2/4.
+\end{verbatim}
+%% 
+
+  
 
 
 \section{Rule Labels and Meta-information.}
@@ -7398,7 +7596,7 @@ As we have just mentioned, a rule tag can have variables. For instance,
 %% 
 
 
-Instead of a ``normal'' term, a rule tag can be an anonymous oid
+Instead of a ``normal'' term, a rule tag can be a Skolem
 constant, {\tt \_\#}.  This is useful when the user wants the compiler to
 generate a new unique rule tag automatically. For instance,
 %% 
@@ -7406,7 +7604,7 @@ generate a new unique rule tag automatically. For instance,
    @{_#} foo(?X) :- bar(?X).
 \end{verbatim}
 %% 
-Numbered anonymous oids, e.g., {\tt \_\#1} or {\tt
+Numbered Skolem constants, e.g., {\tt \_\#1} or {\tt
   \_\#2}, can also be used;
 they allow ``capturing'' the newly generated
 rule labels by the rules. For instance,
@@ -7599,7 +7797,7 @@ be described in a later version of this manual. Meanwhile, one can
 construct such theories by analogy with GCL---see {\tt lib/flrgcl.flr}.  
 
 Note that argumentation theories affect only those rules that have explicit
-user-specified labels---just metadata will not do (anonymous labels of the
+user-specified labels---just metadata will not do (Skolem labels of the
 form {\tt \_\#} or {\tt \_\#1} \emph{are} considered user labels). Facts
 that have explicitly specified labels or meta-info are treated as rules
 that have {\tt true} as the only literal in their bodies.
@@ -7935,7 +8133,7 @@ following at the top:
     ?- [ogclp>>ogcl].
 \end{verbatim}
 %% 
-The original argumentation theory is then avaolable in the module {\tt ogcl}.
+The original argumentation theory is then available in the module {\tt ogcl}.
 (Of course, the user can choose a different module name.
 
 \subsubsection{Courteous Logic with Exclusion Constraints}
@@ -8044,7 +8242,7 @@ The list of methods follows:
     id/head pairs that rebut the rule(s) represented by the {\tt ?I/?H} pair
     will be returned.
   \item {\tt disqualified}: This is returned if the rule is
-    disqualified. (Recall that in the defauls {\tt \_gcl} theory a rule is
+    disqualified. (Recall that in the default {\tt \_gcl} theory a rule is
     disqualified if it transitively refutes/rebuts itself or if it is
     canceled.)
     In this case, an auxiliary method, {\tt howDisqualified}, can provide
@@ -8316,38 +8514,44 @@ Likewise,
 binds {\tt ?Y} to {\tt \_"http://www.AAA.com/ab\%20"}. 
 
 Note that prefix definitions are local to the module where they are
-defined. If we define the following prefixes in module {\tt foo}:
+defined. If we define the following in module {\tt foo}:
 %% 
 \begin{verbatim}
-  ?- iriprefix W3="http://www.w3.org/", W4="w4/".
+  :- iriprefix W3="http://w3.org/".
+  C[a->_"http://w3.org/abc"].
 \end{verbatim}
 %% 
 and then load the following file into module {\tt main} 
 %% 
 \begin{verbatim}
-  :- iriprefix W3 = "http://w3.org/".
-  C[a->_"http://www.w3.org/abc"].
-  D[a->_"http://w3.org/cde"].
-  r(?X):-?X[a->(W3#abc)@foo].
+  r(?X):-?X[a->W3#abc]@foo.
   s(?X):-?X[a->W3#cde].
 \end{verbatim}
 %% 
-then  the different occurrences of {\tt W3} will have different expansions,
-depending on the module.
+then  {\tt W3} will have an expansions for calls to \texttt{foo}, but not
+to the current module. 
 Thus, the answer to
 %% 
 \begin{verbatim}
   ?- r(?X).
 \end{verbatim}
 %% 
-will be {\tt C} and the answer to
+will be {\tt C} but
 %% 
 \begin{verbatim}
   ?- s(?X).
 \end{verbatim}
 %% 
-will be {\tt D}.  Note that a reference to {\tt W3\#...} in a module
-where the prefix {\tt W3} is not defined will result in an error.
+will get an error saying that the prefix W3 is not defined.
+If the same prefix is defined both in the file and in a module being
+referenced by a query then the prefix definition in the current file takes
+precedence.
+For instance, if in the above example the module main had another
+declaration for the IRI prefix \texttt{W3} then \texttt{?X[a->W3\#abc]@foo}
+will use that definition rather than the one in module
+\texttt{foo}.\footnote{
+  The rationale here is the theory of the ``least surprise.''
+}
 
 The prefix macro-expansion works also for transactional predicate and
 method names. For instance,
@@ -9386,7 +9590,7 @@ variable in the module position:
 %%
 However, this must \emph{not} be an anonymous variable like {\tt ?}, {\tt
   ?\_}, or a don't care variable like {\tt ?\_Something}.  If one uses an
-anonymous or a don't care variable then undefinedness checks will be ignored
+anonymous or a don't-care variable then undefinedness checks will be ignored
 only in some randomly picked module.
 
 A pair of parentheses is needed when multiple

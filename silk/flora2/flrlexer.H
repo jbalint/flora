@@ -5,7 +5,7 @@
 ** Contact:   kifer@cs.stonybrook.edu
 **
 ** Copyright (C) by
-**      The Research Foundation of the State University of New York, 1999-2008.
+**      The Research Foundation of the State University of New York, 1999-2011.
 **
 ** All rights reserved.
 **
@@ -49,6 +49,8 @@
 	flora_tokens/2,
 	flora_token_text/6,
 	flora_symbol_token_struct/6,
+	flora_transactional_symbol_token_struct/6,
+	flora_special_token_struct/6,
 	flora_rule_delimeter_struct/6,
 	flora_blank_line/1,
 	flora_begin_file/1,

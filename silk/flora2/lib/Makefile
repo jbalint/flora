@@ -26,8 +26,7 @@ ALL = 	flrio${PROLOGEXT} \
 	flrbasetype${PROLOGEXT} \
 	flrparse${PROLOGEXT} \
 	flrtypeconstraint${PROLOGEXT} \
-	flrgclp${PROLOGEXT} \
-        flreval${PROLOGEXT}
+	flrgclp${PROLOGEXT}
 
 Option = [optimize]
 

@@ -98,7 +98,7 @@
 	flloadtrailer/2,
 	fltrailersemantics/2,
 	flora_shell_command_line/3,
-	flora_load_module_internal/1,
+	flora_load_module_util/1,
 	flora_end_of_input/1,
 	flora_check_filename/2,
 	flora_warnings_level/1

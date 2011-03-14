@@ -27,6 +27,7 @@
 
 
 :- import
+	length/2,
 	flatten/2
    from basics.
 
@@ -38,10 +39,11 @@
     from flrwrapper.
 :- import flora_prlgdef/2 from flrprolog.
 :- import flora_opdef/3 from flroperator.
+:- import flora_delayed_literal/2 from FLDELAYSUPPORTMOD.
 
 :- import
 	flora_printable_type_representation/2,
-	parsed_flora_datatypelist/2
+	flora_parsed_datatypelist/2
    from flrdatatype.
 
 :- import
@@ -50,6 +52,9 @@
 	flora_get_substring/4,
 	flora_match_substring/5
    from flrporting.
+
+:- import flora_unwrap_truthvalued_call/2 from usermod.
+:- import flora_unwrap_negation/2 from flrnegation.
 
 %%:- import flora_warning_line/2 from flrprint.
 
@@ -71,7 +76,7 @@
 	flora_write_rule_head/1,
 	flora_write_rule_head/2,
 	flora_write_rule_body/1,
-	flora_write_rule_body/2.	
+	flora_write_rule_body/2.
 
 
 
@@ -451,10 +456,31 @@ decode_hilog_term(HiLogPred,Args,Code,Level,Depth) :-
 
 %% flora prolog-style builtin: declared as flora_prlg in flrprolog.P
 decode_prolog_call([F,Args,Arity],Code,Depth) :-
-	flora_prlgdef(F,Arity),
+	(flora_prlgdef(F,Arity) ; flora_delayed_literal(F,Arity)),
 	!,
 	Depth1 is Depth+1,
 	decode_builtin(F,Arity,Args,Code,Depth1).
+decode_prolog_call([FLLIBDELAYEDLITERAL,[FL_DEFLTNEG,_,_,[Call|_]],4],Code,Depth) :-
+	!,
+	Depth1 is Depth+1,
+	decode_literal_internal(Call,Code,1,Depth1).
+decode_prolog_call([FLLIBDELAYEDLITERAL,[F,_,_,Args],4],Code,Depth) :-
+	length(Args,2),
+	!,
+	Depth1 is Depth+1,
+	decode_builtin(F,2,Args,Code,Depth1).
+decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],Code,Depth) :-
+	Term =.. [FLLIBDELAYEDLITERAL|Args],
+	Args = [FL_DEFLTNEG,_,_,[Call|_]],
+	!,
+	Depth1 is Depth+1,
+	decode_literal_internal(Call,Code,1,Depth1).
+decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],Code,Depth) :-
+	Term =.. [FLLIBDELAYEDLITERAL|Args],
+	!,
+	Args = [F,_,_,Args1],
+	Depth1 is Depth+1,
+	decode_builtin(F,2,Args1,Code,Depth1).
 %% prolog call mod:p(args) 
 decode_prolog_call([':',[Module,Term],2],Code,Depth) :-
 	!,
@@ -585,7 +611,7 @@ decode_update_literals([FLSYSDBUPDATE(Lit,_Storage,_Module)|T],[LitCode,Comma|TC
 	decode_literal_internal(Lit,LitCode,0,0),
 	(T == [] -> Comma = '' ; Comma = ', '),
 	decode_update_literals(T,TCode).
-decode_update_literals([FLSYSRULEUPDATE(Id,Head,Body,_,_,Meta,_DefeatCond)|T],
+decode_update_literals([FLSYSRULEUPDATE(Id,Head,Body,_,_,_DelayCheck,Meta,_DefeatCond)|T],
 		       [[LabelCode, HeadCode,' :- ', BodyCode],Comma|TCode])
       :-
 	!,
@@ -855,7 +881,7 @@ decode_literal_internal(FL_DATATYPE(Term,Type), Code, Level,Depth) :-
 	(var(Term) -> Code = ['?', Term, FL_DATATYPE_CONNECTOR, Type]
 	;
 	    flora_printable_type_representation(Term,[TypeName,TypeLit]),
-	    (parsed_flora_datatypelist(TypeLit,LitList)
+	    (flora_parsed_datatypelist(TypeLit,LitList)
 	    ->
 		decode_literal_internal(LitList,TypeLitDecoded,Level,Depth),
 		Code = [TypeLitDecoded,FL_DATATYPE_CONNECTOR,TypeName]
@@ -1075,37 +1101,37 @@ decode_literal_internal(P2H_PREDICATE(Prolog,Hilog,_,_),Code,Level,Depth) :-
 	decode_literal_internal(Hilog,HilogCode,0,Depth1),
 	decode_primitive(FL_P2H,[PrologCode,',',HilogCode],Code,Level).
 
-decode_literal_internal(FLLIBIFTHENELSE(Cond,Then,Else),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
+decode_literal_internal(FLLIBIFTHENELSE(_Mod,Cond,Then,Else),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
 	!,
 	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	decode_if_statement([Cond,Then,Else],Code).
 
-decode_literal_internal(FLLIBIFTHEN(Cond,Then),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
+decode_literal_internal(FLLIBIFTHEN(_Mod,Cond,Then),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
 	!,
 	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	decode_if_statement([Cond,Then],Code).
 
-decode_literal_internal(FLLIBUNLESSDO(Cond,Action),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
+decode_literal_internal(FLLIBUNLESSDO(_Mod,Cond,Action),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
 	!,
 	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	decode_unless(Cond,Action,Code).
 
-decode_literal_internal(FLLIBWHILEDO(Cond,Action),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
+decode_literal_internal(FLLIBWHILEDO(_Mod,Cond,Action),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
 	!,
 	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	decode_while('do',Cond,Action,Code).
 
-decode_literal_internal(FLLIBWHILELOOP(Cond,Action),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
+decode_literal_internal(FLLIBWHILELOOP(_Mod,Cond,Action),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
 	!,
 	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	decode_while('loop',Cond,Action,Code).
 
-decode_literal_internal(FLLIBDOUNTIL(Action,Cond),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
+decode_literal_internal(FLLIBDOUNTIL(_Mod,Action,Cond),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
 	!,
 	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	decode_until('do',Action,Cond,Code).
 
-decode_literal_internal(FLLIBLOOPUNTIL(Action,Cond),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
+decode_literal_internal(FLLIBLOOPUNTIL(_Mod,Action,Cond),[ReifyStart,Code,ReifyEnd],Level,_Depth) :-
 	!,
 	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	decode_until('loop',Action,Cond,Code).
@@ -1119,7 +1145,8 @@ decode_literal_internal(FLLIBTRUTHVALUE(Call,Truth),[ReifyStart,TruthCode,'{',Ca
 	!,
 	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	Depth1 is Depth+1,
-	decode_literal_internal(Call,CallCode,0,Depth1),
+	flora_unwrap_truthvalued_call(Call,Unwrapped),
+	decode_literal_internal(Unwrapped,CallCode,0,Depth1),
 	Truth=TruthCode.
 
 %% _load(...) in the form of [...]
@@ -1218,13 +1245,15 @@ decode_literal_internal(FLORA_TNOT_PREDICATE(Subcall),[ReifyStart,'(','not ',Sub
 	!,
 	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	Depth1 is Depth+1,
-	flora_decode_goal(Subcall,SubcallCode,Depth1).
+	flora_unwrap_negation(Subcall,Unwrapped),
+	flora_decode_goal(Unwrapped,SubcallCode,Depth1).
 decode_literal_internal(tnot(Subcall),[ReifyStart,'not ',SubcallCode,ReifyEnd],_Level,Depth) :-
 	!,
 	%%(Level==0 -> ReifyStart='',ReifyEnd=''; ReifyStart='${',ReifyEnd='}'),
 	ReifyStart='', ReifyEnd='',
 	Depth1 is Depth+1,
-	flora_decode_goal(Subcall,SubcallCode,Depth1).
+	flora_unwrap_negation(Subcall,Unwrapped),
+	flora_decode_goal(Unwrapped,SubcallCode,Depth1).
 decode_literal_internal(not(Subcall),[ReifyStart,'not ',SubcallCode,ReifyEnd],_Level,Depth) :-
 	!,
 	%%(Level==0 -> ReifyStart='',ReifyEnd=''; ReifyStart='${',ReifyEnd='}'),
@@ -1250,7 +1279,7 @@ decode_literal_internal(call(Subcall),[ReifyStart,'call(',SubcallCode,')',ReifyE
 	Depth1 is Depth+1,
 	flora_decode_goal(Subcall,SubcallCode,Depth1).
 
-decode_literal_internal(FLSYSRULEUPDATE(Id,Head,Body,_,_,Meta,_DefeatCond),
+decode_literal_internal(FLSYSRULEUPDATE(Id,Head,Body,_,_,_DelayCheck,Meta,_DefeatCond),
 			[ReifyStart,LabelCode,HeadCode, ' :- ', BodyCode, ReifyEnd],
 			Level, Depth) :-
 	!,

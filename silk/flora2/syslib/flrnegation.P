@@ -18,6 +18,7 @@
 
 
 :- compiler_options([xpp_on]).
+#include "flora_terms.flh"
 #include "flora_porting.flh"
 #include "flora_prefix.flh"
 
@@ -32,59 +33,59 @@
 %% Variables temporarily changed to ground and tnot 
 %% call is made.  Should give existential semantics to nonground negative
 %% calls.  That is
-%%	...:- FLORA_TNOT(p(X)),...
+%%	...:- FLORA_TNOT_PREDICATE(p(X)),...
 %% is like
 %%	... :- tnot(pp),...
 %%	pp :- p(X).
 %% where pp is a new proposition.
 
-:- import numbervars/3, unnumbervars/2 from num_vars.
+:- import numbervars/4 from num_vars.
 :- import copy_term/2 from basics.
 :- import 't not'/1 from tables.
 :- import
-	flora_abolish_table_predicate/1,
 	flora_abolish_table_call/1
    from flrtables.
+:- import flora_match_substring/3 from flrporting.
+:- import
+	flora_module_predicate/4
+   from flrwrapper.
 
 
 :- export
-	flora_cleanup_negation/0,
+	flora_unwrap_negation/2,
 	flora_cleanup_negation/1, 
-	tabled_unnumber_call/1,
+	flora_apply_negation_wrapper/3,
 	FLORA_TNOT_PREDICATE/1.
 
-%% This is also executably tabled in flrtrailer.flh
-:- table tabled_unnumber_call/1 as MOLECULE_TABLING_TYPE.
 
 FLORA_TNOT_PREDICATE(Goal) :-
 	copy_term(Goal,Goal1),
-	numbervars(Goal1,0,_),
-	%% deleting tables for tabled_unnumber_call/1 is dangerous here
-	%% due to possible loops through negation.
-	%%flora_cleanup_negation(Goal1), %% DO NOT
+	numbervars(Goal1,0,_,[attvar(bind)]),
+	%% deleting tables for FLORA_THIS_WORKSPACE(tabled_unnumber_call)/1
+	%% is dangerous here due to possible loops through negation.
+	%% But we are checking for incomplete tables!? Should be safe?
+	flora_cleanup_negation(Goal1),
 	%% Goal1 is now ground, so no checks are necessary in 't not'
-	't not'(tabled_unnumber_call(Goal1)).
-
-tabled_unnumber_call(GGoal) :-
-	unnumbervars(GGoal,VGoal),
-	call(VGoal).
-
-%% Clean up tables introduced for the intermediate resuts in computing negation
-flora_cleanup_negation :-
-	%% tabled_unnumber_call is not incrementally tabled, so
-	%% flora_abolish_table_predicate is ok here
-	(curr_sym:predicate_property(tabled_unnumber_call(_),incremental)
-	-> true
-	;
-	    flora_abolish_table_predicate(tabled_unnumber_call(_))
-	),
-	!.
+	't not'(Goal1).
+	
+	
+%% Delete tables for FLORA_THIS_WORKSPACE(tabled_unnumber_call)/1, which
+%% defined in closure/flrcommon.fli
+%% Do nothing for incremental tabling
 flora_cleanup_negation(Call) :-
-	(curr_sym:predicate_property(tabled_unnumber_call(_),incremental)
-	-> true
+	(curr_sym:predicate_property(Call,incremental) -> true
 	;
 	    flrcanon:convert_to_body_literal(Call,Call1),
-	    flora_abolish_table_call(tabled_unnumber_call(Call1))
+	    flora_abolish_table_call(Call1)
 	),
 	!.
 
+%% unwrap Call = FLORA_THIS_WORKSPACE(FL_TABLED_UNNUMBER_CALL)(Unwrapped)
+flora_unwrap_negation(Call,Unwrapped) :-
+	functor(Call,F,1),
+	flora_match_substring(FL_TABLED_UNNUMBER_CALL,F,_),
+	arg(1,Call,Unwrapped).
+
+
+flora_apply_negation_wrapper(Goal,Workspace,GoalWrapped) :-
+	flora_module_predicate(FL_TABLED_UNNUMBER_CALL,[Goal],Workspace,GoalWrapped).

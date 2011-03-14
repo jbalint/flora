@@ -1,0 +1,442 @@
+/* File:      flrdelaysupport.P
+**
+** Author(s): Michael Kifer
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 2011;
+**      and Vulcan, Inc., 2011.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+:- compiler_options([xpp_on]).
+
+
+#include "flora_terms.flh"
+#include "flora_porting.flh"
+#include "flora_exceptions.flh"
+
+:- import
+	term_variables/2,
+	when/2
+   from constraintLib.
+:- import
+	flora_abort/1,
+	flora_abort/2
+   from flrutils.
+:- import length/2 from basics.
+%%:- import flora_decode_goal_as_atom/2 from flrdecode.
+:- import
+	get_attr/3,
+	del_attr/2
+   from machine.
+
+:- import
+	flora_trim_last/2,
+	flora_ground/1
+   from flrtrim.
+:- import
+	flora_decode_predicate/6
+   from flrwrapper.
+
+:- dynamic delay_spec_to_predicate/6.
+:- index(delay_spec_to_predicate/6,[1,5]).
+:- dynamic delayed_sensor/2.
+:- index(delayed_sensor/2,trie).
+
+:- export
+	flora_execute_delayed_literals/3,
+	FLORA_DELAY_CHECKER/2,
+	FLLIBDELAYEDLITERAL/4.
+
+:- export
+	flora_default_negation_wrapper/5,
+	flora_defeat_condition_wrapper/6,
+
+	flora_unequal_builtin/4,
+	flora_greaterthan_builtin/4,
+	flora_greaterequal_builtin/4,
+	flora_lessthan_builtin/4,
+	flora_lessequal_builtin/4,
+	
+	flora_mathequal_builtin/4,
+	flora_mathnotequal_builtin/4,
+	flora_arith_is_builtin/4,
+
+	flora_register_sensor/2.
+
+:- export flora_delayed_literal/2.
+
+
+/*******    Wrappers for builtins    ********/
+FLLIBDELAYEDLITERAL(Builtin,FileN,Line,Args) :-
+	delay_spec_to_predicate(Builtin,FileN,Line,Args,Call,Condition_pre),
+	%% sometimes statically created delay conditions need postprocessing
+	make_delay_condition(Builtin,Condition_pre,Condition),
+	when(Condition,Call).
+
+/********************** Wrappers for NAF ***********************************/
+%% \+ or WFS not
+%% Note: \+ is delayed, but no errors are issued
+/*
+flora_default_negation_wrapper(File,Line,NafCall,FreeVarList,FreeVarnameList) :-
+	(functor(NafCall,FLORA_TNOT_PREDICATE,_), \+ground(FreeVarList) ->
+	    flora_abort(['in file ', File, ' on line ', Line, ': ',
+			 'one of the free variables ',
+			 FreeVarnameList,
+			 ' is not grounded in a default negation subgoal ',
+			 'naf(...)'],
+			FLORA_ABORT_NOTRACE
+		       )
+	;
+	    NafCall
+	).
+*/
+flora_default_negation_wrapper(_File,_Line,NafCall,_FreeVarList,_FreeVarnameList) :-
+	NafCall.
+
+/********************** Wrapper for undefeated *******************************
+flora_defeat_condition_wrapper(+File,+Line,+DefeatCond,+VarList,+VarnameList,+DynHead)
+          VarList, VarnameList - vars in the head collected at compile time
+	  DynHead - the dynamically created head.
+          If VarList, VarnameList are non-nil, then DynHead = NULL
+	  If DynHead != NULL, then VarList and VarnameList are vars
+	  in the static head.
+*****************************************************************************/
+flora_defeat_condition_wrapper(File,Line,DefeatCond,VarList,VarnameList,DynHead) :-
+	check_variables_for_groundedness(File,Line,VarList,VarnameList),
+	check_dynamic_rule_head_for_groundedness(File,Line,DynHead),
+	DefeatCond.
+
+check_variables_for_groundedness(_,_,[],[]) :- !.
+check_variables_for_groundedness(File,Line,[Var|VarList],[VarName|VarnameList]) :-
+	(ground(Var) -> check_variables_for_groundedness(File,Line,VarList,VarnameList)
+	; flora_abort(['in file ', File, ' on line ', Line, ': ',
+		       'argument ', VarName,
+		       ' is not ground during invocation of defeasible rule'],
+		      FLORA_ABORT_NOTRACE
+		     )
+	).
+
+check_dynamic_rule_head_for_groundedness(File,Line,DynHead) :-
+	(flora_ground(DynHead) -> true
+	; flora_abort(['in file ', File, ' on line ', Line, ': rule head ',
+		       'is not ground during invocation of defeasible rule, ',
+		       DynHead],
+		      FLORA_ABORT_NOTRACE
+		     )
+	).
+
+
+/******************** Actual definitions of builtins ***********************/
+%% !=
+flora_unequal_builtin(File,Line,X,Y) :-
+	(var(X) -> builtin_instantiation_error(File,Line,1,FL_C_UNEQUAL,unbound,X,Y)
+	; var(Y) -> builtin_instantiation_error(File,Line,2,FL_C_UNEQUAL,unbound,X,Y)
+	; X \= Y
+	).
+
+/*
+%% Not delaying that one: too dangerous to delay non-logical builtin,
+%% as it violates natural causality in if-statements
+%% ==, i.e., FL_EQ. Causes no errors
+flora_identical_builtin(_File,_Line,X,Y) :- X == Y.
+*/
+
+%% !==: FL_C_NOTSAME. Causes no errors
+flora_notidentical_builtin(_File,_Line,X,Y) :- X \== Y.
+
+%% >
+flora_greaterthan_builtin(File,Line,X,Y) :-
+	(\+ground(X) -> builtin_instantiation_error(File,Line,1,FL_GT,'non-ground',X,Y)
+	; \+ground(Y) -> builtin_instantiation_error(File,Line,2,FL_GT,'non-ground',X,Y)
+	; catch(X > Y,_,builtin_instantiation_error(File,Line,FL_GT,'non-numeric value',X,Y))
+	).
+
+%% >=
+flora_greaterequal_builtin(File,Line,X,Y) :-
+	(\+ground(X) -> builtin_instantiation_error(File,Line,1,FL_EQGT,'non-ground',X,Y)
+	; \+ground(Y) -> builtin_instantiation_error(File,Line,2,FL_EQGT,'non-ground',X,Y)
+	; catch(X >= Y,_,builtin_instantiation_error(File,Line,FL_EQGT,'non-numeric value',X,Y))
+	).
+
+%% <
+flora_lessthan_builtin(File,Line,X,Y) :-
+	(\+ground(X) -> builtin_instantiation_error(File,Line,1,FL_LT,'non-ground',X,Y)
+	; \+ground(Y) -> builtin_instantiation_error(File,Line,2,FL_LT,'non-ground',X,Y)
+	; catch(X < Y,_,builtin_instantiation_error(File,Line,FL_LT,'non-numeric value',X,Y))
+	).
+
+%% =<
+flora_lessequal_builtin(File,Line,X,Y) :-
+	(\+ground(X) -> builtin_instantiation_error(File,Line,1,FL_EQLT,'non-ground',X,Y)
+	; \+ground(Y) -> builtin_instantiation_error(File,Line,2,FL_EQLT,'non-ground',X,Y)
+	; catch(X =< Y,_,builtin_instantiation_error(File,Line,FL_EQLT,'non-numeric value',X,Y))
+	).
+
+%% =:=
+flora_mathequal_builtin(File,Line,X,Y) :-
+	(\+ground(X) -> builtin_instantiation_error(File,Line,1,FL_MATHEQ,'non-ground',X,Y)
+	; \+ground(Y) -> builtin_instantiation_error(File,Line,2,FL_MATHEQ,'non-ground',X,Y)
+	; catch(X =:= Y,_,builtin_instantiation_error(File,Line,FL_MATHEQ,'non-numeric value',X,Y))
+	).
+
+%% =\=
+flora_mathnotequal_builtin(File,Line,X,Y) :-
+	(\+ground(X) -> builtin_instantiation_error(File,Line,1,FL_MATHNOTEQ,'non-ground',X,Y)
+	; \+ground(Y) -> builtin_instantiation_error(File,Line,2,FL_MATHNOTEQ,'non-ground',X,Y)
+	; catch(X =\= Y,_,builtin_instantiation_error(File,Line,FL_MATHNOTEQ,'non-numeric value',X,Y))
+	).
+
+%% is/2
+flora_arith_is_builtin(File,Line,X,Y) :-
+	(
+	  \+ground(Y) -> builtin_instantiation_error(File,Line,2,FL_IS,'non-ground',X,Y)
+	; catch(X is Y,_,builtin_instantiation_error(File,Line,FL_IS,'non-numeric value',X,Y))
+	).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+FLORA_DELAY_CHECKER(BodyVars,HeadVars) :-
+	flora_execute_delayed_literals(BodyVars,HeadVars,delayed_pred_template(_)).
+
+%% Template makes sure that we call only those subgoals
+%% in the attr list of a variable that we intend to.
+%% like those satisfying delayed_pred_template/1.
+flora_execute_delayed_literals([],_HeadVars,_Template) :- !.
+flora_execute_delayed_literals([Term|Rest],HeadVars,Template) :-
+	((ground(Term) ; aliased_to_head(Term,HeadVars))
+	-> true
+	; var(Term)
+	->  ( %% do execution
+	      get_trigger_list(Term,Triggers) ->
+	      call_trigger_list(Triggers,Template)
+	    ; true
+	    )
+	;  flora_term_variables(Term,Vars)
+	-> flora_execute_delayed_literals(Vars,HeadVars,Template)
+	; 
+	    flora_abort(['bug: unexpected term in delay list, ',Term])
+	),
+	flora_execute_delayed_literals(Rest,HeadVars,Template).
+
+aliased_to_head(V,[H|_HV]):- V == H.
+aliased_to_head(V,[_|H]):- aliased_to_head(H,V).
+
+call_trigger_list([],_) :- true.
+call_trigger_list([Trigger|Rest],Template) :-
+	%% a trigger has the form trigger_NAME(VarList,Goal)
+	get_trigger_goal(Trigger,Goal),
+	%% check that call is an intended one (satisfying Template)
+	arg(1,Template,Goal),
+	Template,
+	%% remove attrs to avoid sensor calling itself repeatedly
+	%% during its own work (eg, if it instantiates a when-variable)
+	remove_attributes(Goal),
+	call(Goal),
+	call_trigger_list(Rest,Template).
+
+
+%% the next two should eventually go into constraintLib.P
+get_trigger_list(Var,Triggers) :-
+	      get_attr(Var,when,Triggers).
+
+get_trigger_goal(Trigger,Goal) :-
+	functor(Trigger,Fun,2),
+	(Fun==trigger; Fun==trigger_nonvar; Fun==trigger_ground),
+	!,
+	arg(2,Trigger,T),
+	get_trigger_goal(T,Goal).
+get_trigger_goal(Trigger,Goal) :- Trigger = Goal.
+
+
+builtin_instantiation_error(File,Line,ArgNo,Builtin,Message,Arg1,Arg2) :-
+	fmt_write_string(S, '%S %S %S', args(Arg1,Builtin,Arg2)),
+	flora_abort(['in file ',File,' on line ',Line,': ',
+		     'instantiation error in builtin: ', S,
+		     '; ', Message, ' argument ', ArgNo],
+		    FLORA_ABORT_NOTRACE
+		   ).
+builtin_instantiation_error(File,Line,Builtin,Message,Arg1,Arg2) :-
+	fmt_write_string(Str, '%S %S %S', args(Arg1,Builtin,Arg2)),
+	flora_abort(['in file ',File,' on line ',Line,': ',
+		     'instantiation error in builtin: ', Str,
+		     '; ', Message, ' in one of the arguments'],
+		    FLORA_ABORT_NOTRACE
+		   ).
+
+
+
+delayed_pred_template(Template) :- delay_spec_to_predicate(_,_,_,_,Template,_).
+
+%% The first two args in sensor declaration are file name and line number
+flora_register_sensor(SensorCall,DelayCondition) :-
+	decompose_sensor_call(SensorCall,SensorSymbol,Module,FileName,Line,AllArgs),
+	flora_register_delay(sensor,Module:SensorSymbol,FileName,Line,AllArgs,SensorCall,DelayCondition).
+
+%% register builtin
+flora_register_delay(builtin,BuiltinSymbol,FileName,Line,ArgList,Call,DelayCondition) :-
+	!,
+	(\+delay_spec_to_predicate(BuiltinSymbol,FileName,Line,ArgList,Call,DelayCondition)
+	-> assert(delay_spec_to_predicate(BuiltinSymbol,FileName,Line,ArgList,Call,DelayCondition))
+	; true  %% silently ignore, if duplicate
+	).
+
+%% register sensor
+flora_register_delay(sensor,SensorSymbol,FileName,Line,ArgList,Call,DelayCondition) :-
+	!,
+	strip_usermod(SensorSymbol,Stripped),
+	(\+delay_spec_to_predicate(Stripped,FileName,Line,ArgList,Call,DelayCondition)
+	-> assert(delay_spec_to_predicate(Stripped,FileName,Line,ArgList,Call,DelayCondition)),
+	    length(ArgList,Arity),
+	    record_delayed_sensor(Stripped,Arity)
+	; true %% silently ignore, if duplicate
+	).
+
+
+flora_register_delay(SensorType,_,_,_,_,_,_) :-
+	    flora_abort(['flora_register_delay: unknown sensor type, ',SensorType]).
+
+
+?-
+   %% default negation
+   flora_register_delay(builtin,FL_DEFLTNEG,F,L,
+			[NafCall,FreeVarList,FreeVarnameList],
+			flora_default_negation_wrapper(F,L,NafCall,
+						       FreeVarList,
+						       FreeVarnameList),
+		       ground(FreeVarList)),
+   flora_register_delay(builtin,FL_UNDEFEATED,F,L,
+			[DefeatCond,VarList,VarnameList,DynHead],
+			flora_defeat_condition_wrapper(F,L,DefeatCond,
+						       VarList,
+						       VarnameList,
+						       DynHead),
+			%% this will be postprocessed by make_delay_condition/3
+			%%(ground(VarList),ground(DynHead))),
+			(VarList,DynHead)),
+
+   %% builtins
+   flora_register_delay(builtin,FL_C_UNEQUAL,F,L,[X,Y],
+			flora_unequal_builtin(F,L,X,Y),
+			(nonvar(X),nonvar(Y))), 
+   flora_register_delay(builtin,FL_GT,F,L,[X,Y],
+			flora_greaterthan_builtin(F,L,X,Y),
+			(ground(X),ground(Y))),
+   /*
+   %% too dangerous to delay non-logical builtins
+   flora_register_delay(builtin,FL_EQ,F,L,[X,Y],
+			flora_identical_builtin(F,L,X,Y),
+			(ground(X),ground(Y))),
+   */
+   flora_register_delay(builtin,FL_C_NOTSAME,F,L,[X,Y],
+			flora_notidentical_builtin(F,L,X,Y),
+			(ground(X),ground(Y))),
+   flora_register_delay(builtin,FL_EQGT,F,L,[X,Y],
+			flora_greaterequal_builtin(F,L,X,Y),
+			(ground(X),ground(Y))),
+   flora_register_delay(builtin,FL_LT,F,L,[X,Y],
+			flora_lessthan_builtin(F,L,X,Y),
+			(ground(X),ground(Y))),
+   flora_register_delay(builtin,FL_EQLT,F,L,[X,Y],
+			flora_lessequal_builtin(F,L,X,Y),
+			(ground(X),ground(Y))), 
+   flora_register_delay(builtin,FL_MATHEQ,F,L,[X,Y],
+			flora_mathequal_builtin(F,L,X,Y),
+			(ground(X),ground(Y))), 
+   flora_register_delay(builtin,FL_MATHNOTEQ,F,L,[X,Y],
+			flora_mathnotequal_builtin(F,L,X,Y),
+			(ground(X),ground(Y))),
+   flora_register_delay(builtin,FL_IS,F,L,[X,Y],
+			flora_arith_is_builtin(F,L,X,Y),
+			(ground(Y))),
+   %% Add more builtins here
+   true.
+
+
+make_delay_condition(FL_UNDEFEATED,CondIn,CondOut) :-
+	!,
+	CondIn = (CompiletimeCond,RuntimeCond),
+	%% using flora_term_variables/2 instead of term_variables/2 is
+	%% important here. Otherwise FL_UNDEFEATED in dynamically inserted
+	%% rules will be delayed incorrectly due to caller variables.
+	flora_term_variables(RuntimeCond,RuntimeCondVars),
+	CondOut = (ground(CompiletimeCond),ground(RuntimeCondVars)).
+%% catchall
+make_delay_condition(_,Cond,Cond).
+
+
+
+%% We do not add delayed builtin for NAF and NOT:
+%% they are treated specially in the compiler
+delayed_builtin(FL_C_UNEQUAL,2) :- !.
+%%delayed_builtin(FL_EQ,2)        :- !.
+delayed_builtin(FL_C_NOTSAME,2) :- !.
+delayed_builtin(FL_GT,2)        :- !.
+delayed_builtin(FL_EQGT,2)      :- !.
+delayed_builtin(FL_LT,2)        :- !.
+delayed_builtin(FL_EQLT,2)      :- !.
+delayed_builtin(FL_MATHEQ,2)    :- !.
+delayed_builtin(FL_MATHNOTEQ,2) :- !.
+delayed_builtin(FL_IS,2)        :- !.
+
+flora_delayed_literal(X,Y) :- delayed_builtin(X,Y), !.
+flora_delayed_literal(X,Y) :- delayed_sensor(X,Y).
+
+%% For sensors we use all arguments in delay_spec_to_predicate/6
+decompose_sensor_call(SensorCall,SensorSymbol,Module,FileName,Line,[FileName,Line|RestArgs]) :-
+	(SensorCall = ':'(Module,ModulelessCall) ->
+	    ModulelessCall =.. [SensorSymbol,FileName,Line|RestArgs]
+	; SensorCall =.. [SensorSymbol,FileName,Line|RestArgs],
+	    Module = usermod
+	).
+
+record_delayed_sensor(SensorSymbol,Arity) :-
+	strip_usermod(SensorSymbol,Stripped),
+	assert(delayed_sensor(Stripped,Arity)).
+
+strip_usermod(SensorSymbol,Stripped) :-
+	SensorSymbol = usermod:Stripped -> true
+	; Stripped = SensorSymbol.
+
+
+%% this is needed because otherwise sensors will call themselves multiple times
+%% if their variables get bound
+:- export remove_attributes/1.
+remove_attributes(Goal) :-
+	term_variables(Goal,Vars),
+	remove_attributes_aux(Vars).
+
+remove_attributes_aux([]) :- !.
+remove_attributes_aux([X|Vars]) :-
+	del_attr(X,when),
+	remove_attributes_aux(Vars).
+
+
+
+flora_term_variables(Term, Vars) :-
+	non_caller_vars(Term, Vars, []).
+
+non_caller_vars(Term, Vh, Vt) :-
+	(var(Term)
+	 ->	Vh = [Term | Vt]
+	 ;
+	    flora_decode_predicate(Term,CallType,_,_,_,Args),
+	    (CallType == prolog ->
+		TrueArgs = Args
+	    ;
+		flora_trim_last(Args,TrueArgs)
+	    ),
+	    non_caller_vars_aux(TrueArgs, Vh, Vt)
+	).
+non_caller_vars_aux([], V, V).
+non_caller_vars_aux([T|Ts], Vh, Vt) :-
+	non_caller_vars(T, Vh, Vm),
+	non_caller_vars_aux(Ts, Vm, Vt).

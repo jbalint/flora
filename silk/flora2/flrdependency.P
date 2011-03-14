@@ -34,18 +34,24 @@
 
 #define MAXDEPTH	4
 #define STARTPOINT	1
+/* maximum number of warnings to display */
+#define MAXWARNSHOW	20
+
 /*
-   DEFAULT_WORKSPACE (actually _@) is used as a module name everywhere.
+   DUMMY_WORKSPACE (actually _@ == FL_THISMODULE) is used as a module name
+   everywhere.
    This simplifies tracking dependency checks. We do not need to know the
    module during dependency checking -- only if tabled depends on non-tabled.
+   FL_THISMODULE is used because _@ will be eventually replaced with the actual
+   workspace in flora_decode_goal_as_atom/2.
 */
-#define DEFAULT_WORKSPACE   FL_THISMODULE
+#define DUMMY_WORKSPACE    FL_THISMODULE
 
 #mode save
 #mode nostring "\!#'"
-#define PREFIXING(X)            PREFIXINGWS(#1,DEFAULT_WORKSPACE)
+#define PREFIXING(X)            PREFIXINGWS(#1,DUMMY_WORKSPACE)
 #define PREFIXINGWS(X,Y)        FLORA_MODULE_PREFIX#2'#1'
-#define PREFIXINGNEG(X)         PREFIXINGNEGWS(#1,DEFAULT_WORKSPACE)
+#define PREFIXINGNEG(X)         PREFIXINGNEGWS(#1,DUMMY_WORKSPACE)
 #define PREFIXINGNEGWS(X,Y)     FLORA_MODULE_PREFIX#2'neg_#1'
 #mode restore
 
@@ -416,16 +422,16 @@ depend(Sk1,Sk2) :-
 	    list_to_targets(Sk2)
 	;
             get_canonical_form(Sk2,FLCANON(Wrap,Args,Mod,_Callable,_TF)),
-	    assert(target(Wrap,Args,Mod))
+	    asserta(target(Wrap,Args,Mod))
 	),
 	findall((RuleHead),match_rule(Sk1,RuleHead,_,_),HeadList),
 	remove_dup(HeadList,NewHeadList),
-	depend_list(NewHeadList).
+	depend_list(NewHeadList,MAXWARNSHOW).
 
 list_to_targets([]) :- !.
 list_to_targets([H|T]) :-
         get_canonical_form(H,FLCANON(Wrap,Args,Mod,_Callable,_TF)),
-	assert(target(Wrap,Args,Mod)),
+	asserta(target(Wrap,Args,Mod)),
 	list_to_targets(T).
 	
 	
@@ -438,24 +444,26 @@ remove_dup([H|T],NewList) :-
 	    NewList = [H|InterList]
 	).
 
-depend_list([]) :- !.
-depend_list([(H)|T]) :-
+depend_list([],_) :- !.
+depend_list(_,0) :- !.
+depend_list([(H)|T],Max) :-
     H = (HC,_HI),
     retractall(dependency(_,_,_,_)),
     get_canonical_form(HC,FLCANON(Wrap,Args,Mod,_Callable,_TF)),
     ( ignored(W1,A1,M1), subsumes(ignored(W1,A1,M1),ignored(Wrap,Args,Mod)) ->
         true
     ;
-        (
-            depend_detail(H,dep(Body,anu(A,N,U),Template)),
-            assert(dependency(H,Body,anu(A,N,U),Template)),
+        ( depend_detail(H,dep(Body,anu(A,N,U),Template)),
+	    \+ dependency(H,_,_,_), %% do not overwhelm with all the warnings
+            asserta(dependency(H,Body,anu(A,N,U),Template)),
             fail
         ;
             true
         ),
         aggregate_warnings
     ),
-    depend_list(T).
+    Max1 is Max-1,
+    depend_list(T,Max1).
 
 depend_detail((_Sk1,IndSk1),dep(S,anu(A,N,U),Templ)) :-
     same_rule(IndSk1,_RuleHead,(B,BI),anu(A,N,U)),
@@ -463,7 +471,10 @@ depend_detail((_Sk1,IndSk1),dep(S,anu(A,N,U),Templ)) :-
     ( ignored(W1,A1,M1), subsumes(ignored(W1,A1,M1),ignored(Wrap,Args,Mod)) ->
         fail
     ;
-        ( var(Wrap),S = (B,BI); nonvar(Wrap),target(Wrap,Args,Mod),S = (B,BI); copy_term(B,CP),rec_depend(CP,S,A,N,U,Templ))
+        ( var(Wrap), S = (B,BI)
+	; nonvar(Wrap), target(Wrap,Args,Mod), S = (B,BI)
+	; copy_term(B,CP), rec_depend(CP,S,A,N,U,Templ)
+	)
     ).
 
 
@@ -480,14 +491,17 @@ rec_depend(H,S,A,N,U,T) :-
     ( ignored(W1,A1,M1), subsumes(ignored(W1,A1,M1),ignored(Wrap,Args,Mod)) ->
         fail
     ;
-        ( var(Wrap),S = (RB,RBI); nonvar(Wrap),target(Wrap,Args,Mod),S = (RB,RBI); 
-        ( too_deep(RB) ->
-            cut_off(RB,NRB),
-            T=t,
-            copy_term(NRB,CP), rec_depend(CP,S,A,N,U,T)
-        ;
-            copy_term(RB,CP), rec_depend(CP,S,A,N,U,T)
-        ))
+        ( var(Wrap), S = (RB,RBI)
+	; nonvar(Wrap), target(Wrap,Args,Mod), S = (RB,RBI)
+	; 
+	    ( too_deep(RB) ->
+		cut_off(RB,NRB),
+		T=t,
+		copy_term(NRB,CP), rec_depend(CP,S,A,N,U,T)
+	    ;
+		copy_term(RB,CP), rec_depend(CP,S,A,N,U,T)
+	    )
+	)
     ).
 
 
@@ -552,8 +566,8 @@ parse_code(Term) :-
 
 assert_ignoredlist([]) :- !.
 assert_ignoredlist([H|L]) :-
-	%% See note on why DEFAULT_WORKSPACE is used at top of file
-	flora_build_struct(H,DEFAULT_WORKSPACE,CODER_GENERIC_CONTEXT,_VarList,HC,_HCI,Status),
+	%% See note on why DUMMY_WORKSPACE is used at top of file
+	flora_build_struct(H,DUMMY_WORKSPACE,CODER_GENERIC_CONTEXT,_VarList,HC,_HCI,Status),
 	( Status == [] ->
 	    ( var(HC) ->
 		true    
@@ -577,22 +591,22 @@ assert_ignoredlist([H|L]) :-
 		),
 		get_canonical_form(NHC,FLCANON(Wrap,Args,Mod,_Callable,_TF))
 	    ),
-	    assert(ignored(Wrap,Args,Mod)),
+	    asserta(ignored(Wrap,Args,Mod)),
 	    assert_ignoredlist(L)
 	;
 	    true
 	).
 
 parse_rule(Head,Body) :-
-	%% See note on why DEFAULT_WORKSPACE is used at top of file
-	flora_build_struct(Head,DEFAULT_WORKSPACE,CODER_GENERIC_CONTEXT,VarList,HeadCode,HCI,Status_Head),
+	%% See note on why DUMMY_WORKSPACE is used at top of file
+	flora_build_struct(Head,DUMMY_WORKSPACE,CODER_GENERIC_CONTEXT,VarList,HeadCode,HCI,Status_Head),
 	( Status_Head == [] ->
 	    functor(HeadCode,F,N),
 	    ( default_tabled(F,N)
-	    -> assert(tabled_head((HeadCode,HCI)))
+	    -> asserta(tabled_head((HeadCode,HCI)))
 	    ;  true
 	    ),
-	    flora_build_struct(Body,DEFAULT_WORKSPACE,CODER_GENERIC_CONTEXT,VarList,BodyCode,BCI,Status_Body),
+	    flora_build_struct(Body,DUMMY_WORKSPACE,CODER_GENERIC_CONTEXT,VarList,BodyCode,BCI,Status_Body),
 	    ( Status_Body == [] ->
 		assert_rule((HeadCode,HCI),BodyCode,BCI,anu(_,_,_))
 	    ;
@@ -634,7 +648,7 @@ assert_rule(HeadCode,BodyCode,(BCI,Index),anu(A,N,U)) :-
 	is_upd(BodyCode,_,List,Cond),
 	!,
 	is_updIdxStruct(BCI,(ListI,_I),CondI),
-	assert(rule(HeadCode,(BodyCode,(BCI,Index)),anu(A,N,u))),
+	asserta(rule(HeadCode,(BodyCode,(BCI,Index)),anu(A,N,u))),
 	assert_rule(HeadCode,Cond,CondI,anu(A,N,U)),
 	assert_rules(HeadCode,List,ListI,anu(A,N,u)).
 
@@ -642,7 +656,7 @@ assert_rule(HeadCode,BodyCode,(BCI,Index),anu(A,N,U)) :-
 	is_updall(BodyCode,_,List,Cond),
 	!,
 	is_updallIdxStruct(BCI,(ListI,_I),CondI),
-	assert(rule(HeadCode,(BodyCode,(BCI,Index)),anu(a,N,u))),
+	asserta(rule(HeadCode,(BodyCode,(BCI,Index)),anu(a,N,u))),
 	assert_rule(HeadCode,Cond,CondI,anu(A,N,U)),
 	assert_rules(HeadCode,List,ListI,anu(A,N,u)).
 
@@ -650,7 +664,7 @@ assert_rule(HeadCode,BodyCode,(BCI,Index),anu(_,N,U)) :-
 	is_agg(BodyCode,_,_,_,Condition,_),
 	!,
 	is_agg(BCI,_,_,_,ConditionI,_),
-	assert(rule(HeadCode,(BodyCode,(BCI,Index)),anu(a,N,U))),
+	asserta(rule(HeadCode,(BodyCode,(BCI,Index)),anu(a,N,U))),
 	assert_rule(HeadCode,Condition,ConditionI,anu(a,N,U)).
 
 assert_rule(HeadCode,BodyCode,(BCI,_I),anu(A,N,U)) :-
@@ -666,7 +680,7 @@ assert_rule(HeadCode,BodyCode,(BCI,_I),anu(A,N,U)) :-
 	assert_rule(HeadCode,NewBody,NewBCI,anu(A,N,U)).
 
 assert_rule(HeadCode,BodyCode,BCwithIndex,anu(A,N,U)) :-
-	assert(rule(HeadCode,(BodyCode,BCwithIndex),anu(A,N,U))).
+	asserta(rule(HeadCode,(BodyCode,BCwithIndex),anu(A,N,U))).
 
 assert_rules(_,[],_,_) :- !.
 assert_rules(HeadCode,[H|T],[HI|TI],anu(A,N,U)) :-
@@ -689,7 +703,7 @@ check_for_dependencies(CodeList,WarnList) :-
 
 	generate_rules(CodeList),
         findall(Head,tabled_head(Head),TabledList),
-        depend_list(TabledList),
+        depend_list(TabledList,MAXWARNSHOW),
 	generate_warnings(WarnList),
 	!.
 
@@ -698,19 +712,19 @@ check_for_dependencies(_CodeList,[error(UNKNOWN_ERROR)]).
 assert_targets :- 
         procedural(F,A),
         length(Args,A),
-        assert(target(F,Args,_Mod)),
+        asserta(target(F,Args,_Mod)),
         fail.
 
 assert_targets :- 
         dboperation(F,A),
         length(Args,A),
-        assert(target(F,Args,_Mod)),
+        asserta(target(F,Args,_Mod)),
         fail.
 
 assert_targets :- 
         moduleloading(F,A),
         length(Args,A),
-        assert(target(F,Args,_Mod)),
+        asserta(target(F,Args,_Mod)),
         fail.
 
 assert_targets :- !.
@@ -760,10 +774,10 @@ aggregate_warnings([((T1,IT1),(T2,IT2),_,_)|T]) :-
 	        true
 	    ;
 	        retract(warning_seen(RuleID,HInd1,HInd2,BMinInd,_)),
-		assert(warning_seen(RuleID,HMinInd,HNMinInd,BMinInd,(WarnHead,WarnBody)))
+		asserta(warning_seen(RuleID,HMinInd,HNMinInd,BMinInd,(WarnHead,WarnBody)))
 	    )
 	;
-	    assert(warning_seen(RuleID,HMinInd,HNMinInd,BMinInd,(WarnHead,WarnBody)))
+	    asserta(warning_seen(RuleID,HMinInd,HNMinInd,BMinInd,(WarnHead,WarnBody)))
 	),
 	aggregate_warnings(T).
 

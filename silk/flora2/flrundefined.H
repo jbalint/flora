@@ -52,15 +52,13 @@
 	is_prfact/2,
 	is_pratom/3,
 	is_prvariable/3,
-	is_prdirective/2,
-	is_prprefixdef/3,
+	is_prbuiltin_identifier/3,
 	is_prtransactionalvariable/3,
 	is_prterm/4,
 	is_pratomlit/5,
 	is_prtransactionalatomlit/5,
         is_prtermlit/5,
         is_prtransactionaltermlit/5,
-	flora_record_prefix_definition/2,
         flora_write_struct/3
    from flrcoder.
 

@@ -99,7 +99,7 @@ flora_print_all(Gs,NVs) :-
 	NVs == [],
 	!,
 	cputime(T0),
-	( flora_call(Gs),
+	( flora_call(Gs,NVs),
 	    close_open_tables
 	->
 	    (
@@ -136,12 +136,12 @@ flora_print_all(Gs,NVs) :-
 	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,before,AroundHookLink),
 	catch(
 	      flora_findall((NVs,RegVal),
-		      (flora_call(Gs),
-			  (\+ QueryTemplate -> assert(QueryTemplate)),
-			  xwam_state(DELAY_REG,RegVal)
-		      ),
-		      TempL
-		     ),
+			    (flora_call(Gs,NVs),
+				(\+ QueryTemplate -> assert(QueryTemplate)),
+				xwam_state(DELAY_REG,RegVal)
+			    ),
+			    TempL
+			   ),
 	      Exception,
 	      flranswer_all_answers_query_handler(Exception,QueryTemplate,AroundHookLink)
 	     ),
@@ -170,7 +170,7 @@ flora_print_all(Gs,NVs) :-
 flora_print_one(Gs,NVs) :-
 	NVs == [],
 	!,
-	(flora_call(Gs)
+	(flora_call(Gs,NVs)
 	->
 	    xwam_state(DELAY_REG,RegVal),
 	    flora_write_Yes_or_Unknown(RegVal)
@@ -178,7 +178,7 @@ flora_print_one(Gs,NVs) :-
 	    flora_write_No
 	).
 flora_print_one(Gs,NVs) :-
-	    ( flora_call(Gs),
+	    ( flora_call(Gs,NVs),
 		xwam_state(DELAY_REG,RegVal),
 		flora_write_pairs(NVs,RegVal),
 		flora_fail_unless_return
@@ -222,13 +222,14 @@ flora_write_Yes_or_Unknown(DelayRegVal) :-
 %% Hookup to the Flora debugger
 %% flora_call is a wrapper around XSB call
 %% Used only in top-level queries
-flora_call(Goal) :- 
+flora_call(Goal,NVs) :- 
     	flora_handle_trace,
     	call(Goal),
+	FLDELAYSUPPORTMOD:FLORA_DELAY_CHECKER(NVs,[]),
 	flora_commit_storage,
 	flora_handle_end_of_call.
 
-flora_call(_Goal) :-
+flora_call(_Goal,_NVs) :-
 	flora_handle_notrace,
 	fail.
 

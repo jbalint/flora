@@ -52,6 +52,9 @@
 :- dynamic ignored(_,_,_).
 :- dynamic warning_seen(_,_,_,_,_).
 
+:- index(rule/3,trie).
+:- index(dependency/4,trie).
+
 :- export
 	is_control/3,
         depend/3,

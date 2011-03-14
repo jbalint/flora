@@ -43,7 +43,7 @@
 	flora_error_line/2
    from flrprint.
 
-:- import flora_load_system_module_internal/1 from flrutils.
+:- import flora_load_system_module_util/1 from flrutils.
 
 :- export
 	flora_load_library/1,

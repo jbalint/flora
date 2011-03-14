@@ -15,18 +15,31 @@
 **
 */
 
+
+:- compiler_options([xpp_on]).
+
+#include "flora_terms.flh"
+
 :- import
+	subset/2,
 	length/2,
 	append/3
    from basics.
 
 :- import
+	flora_concat_items/2,
 	flora_concat_atoms/2
    from flrporting.
+
+:- import
+	flora_compiletime_uriprefix_expansion/2,
+	flora_runtime_uriprefix_expansion/3
+   from flrprefixdef.
 
 :- import flora_error_line/2 from flrprint.
 
 :- import
+	%%flora_current_compile_filename/1,
 	flora_begin_file/1,
 	flora_end_file/1,
 	flora_reset_charpos/0
@@ -38,13 +51,24 @@
 
 :- import flora_nowsp/2 from flrnowsp.
 
-:- import flora_prlgdef/2 from flrprolog.
+:- import
+	flora_prlgdef/2
+   from flrprolog.
 
 :- import flora_argdef/4 from flrarguments.
+
+:- import flora_delayed_literal/2 from FLDELAYSUPPORTMOD.
 
 :- import flora_system_module/1 from flrlibman.
 
 :- import flora_special_builtin_synonym/2 from flrsynonym.
+
+:- import
+	flora_synonymous_type_names/2
+   from flrdatatype.
+:- import
+	flora_parse_datatype/4
+   from flrdatatype_parse.
 
 :- export
 	get_atomvar_name/2,

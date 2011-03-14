@@ -34,8 +34,7 @@
 
 :- export
           flora_reset_prolog/0,
-          %%flora_shreset_prolog/0,
-	  %%flora_shdefine_prolog/2,
+	  flora_define_prolog/1,
 	  flora_define_prolog/2,
 	  flora_prlgdef/2.
 

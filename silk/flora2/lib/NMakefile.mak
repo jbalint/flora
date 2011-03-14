@@ -23,8 +23,7 @@ ALLOBJS = flrio$(PROLOGEXT) \
 	  flrbasetype$(PROLOGEXT) \
 	  flrparse$(PROLOGEXT) \
 	  flrtypeconstraint$(PROLOGEXT) \
-	  flrgclp$(PROLOGEXT) \
-          flreval$(PROLOGEXT)
+	  flrgclp$(PROLOGEXT)
 
 !IF EXISTS (..\.prolog_path_wind) 
 !INCLUDE ..\.prolog_path_wind

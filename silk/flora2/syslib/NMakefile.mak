@@ -59,6 +59,8 @@ ALLOBJS =  flranswer$(OBJEXT) \
 	   flrcallflora$(OBJEXT) \
 	   flrcommon_definitions$(OBJEXT) \
 	   flrrulesigops$(OBJEXT) \
+	   flrdelaysupport$(OBJEXT) \
+	   flrunify_handlers$(OBJEXT) \
 	   flrprefixdef$(OBJEXT)
 
 OPTIONS = [optimize,ti_all]

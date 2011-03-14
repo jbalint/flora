@@ -24,6 +24,9 @@ ALL = 	flrxml_aux${PROLOGEXT} javaAPI${PROLOGEXT} \
 	ogclp${PROLOGEXT} \
 	gclpe${PROLOGEXT} \
 	ogclpe${PROLOGEXT} \
+	atck2${PROLOGEXT} \
+	atck3${PROLOGEXT} \
+	atck1alt${PROLOGEXT} \
         persistentmodules${PROLOGEXT} prettyprint${PROLOGEXT}
 
 Option = [optimize]
