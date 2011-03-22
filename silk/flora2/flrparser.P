@@ -440,6 +440,31 @@ arrange_arguments([A|L],S,Index,Left,Right,_Iright,CanoniTerm) :-
 	T=CANOTERM(FunctTerm,N,FL_BRACKET,ArgList,Index,I1),
 	arrange_arguments(L,T,Index,CanoniTerm).
 
+/**
+%% We do NOT want a.b(f,g) to be read as (a.b)(f,g)!
+%% This is a path expression in its own right and should not be parsed 
+%% as a formula
+arrange_arguments([A|L],S,Index,Left,Right,_Iright,CanoniTerm) :-
+	%% Note that a.b(f,g) should be read as (a.b)(f,g).
+	%% but this comes out as (a).(b(f,g)) from the composer.
+	%% So, rearrange like in the case of a.b[f->g].
+	is_objrefop(S), %% only do it for a.b(...) and a!b(...)
+	( A = ARGUMENT(FL_PARENTHESIS,Arg,I1,_I2) ->
+	    canonical_form(Arg,ArgTerm,_Ia),
+	    N=1,
+	    ArgList=[ArgTerm]
+	;
+	  A=ARGUMENT(FL_PARENTHESIS,I1,_I2),
+	  N=0,
+	  ArgList=[]
+        ),
+	!,
+	Funct=OBJECT(QUOTED_ATOM(S),Index),
+	FunctTerm=CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],Index,NO_INDEX),
+	T=CANOTERM(FunctTerm,N,FL_PARENTHESIS,ArgList,Index,I1),
+	arrange_arguments(L,T,Index,CanoniTerm).
+**/
+
 %% Datatype operator is not treated right by the composer when it appears
 %% in the predicate position:  "aaa"^^bbb(f,g)
 %% is composed as ^^("aaa",(bbb(f,g))) instead of ^^("aaa",bbb)(f,g).
@@ -623,10 +648,8 @@ is_curi_op(FL_CURIOP) :- !.
 
 is_datatypeop(FL_DATATYPE_CONNECTOR) :- !.
 
-is_objrefop(A) :- is_mvdobjrefop(A), !.
-
-is_mvdobjrefop(FL_MVD)	     :- !.
-is_mvdobjrefop(FL_INHERIMVD) :- !.
+is_objrefop(FL_MVD)	     :- !.
+is_objrefop(FL_INHERIMVD) :- !.
 
 %% Note: a[b=>{c,d}], a[b*=>{c,d}], are no longer legal.
 %% Use a[b=>(c,d)] instead.
@@ -2513,11 +2536,13 @@ parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status
             )
         ; true).
 
+%% Path expression without a []: a.c.b rather than a.b.c[].
+%% '.'(_,_), '!'(_,_),
 parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_DWS,_Code,Status) :-
 	get_atom(Funct,F),
 	is_objrefop(F),
 	!,
-	parsing_error(If,ERROR_HDLITERAL,Status).
+	parsing_error(If,ERROR_NONBOOLPATHEXP,Status).
 
 parse_head_literal(CANOTERM(Funct,N,FL_PARENTHESIS,_Args,If,_Ip),_DWS,_Code,Status) :-
 	get_atom(Funct,F),
@@ -3386,12 +3411,13 @@ parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status
             )
         ; true).
 
+%% Path expression without a []: a.c.b rather than a.b.c[].
 %% '.'(_,_), '!'(_,_),
 parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_DWS,_Code,Status) :-
 	get_atom(Funct,F),
 	is_objrefop(F),
 	!,
-	parsing_error(If,ERROR_BDLITERAL,Status).
+	parsing_error(If,ERROR_NONBOOLPATHEXP,Status).
 
 %% catch{...}
 parse_body_literal(CANOTERM(Funct,3,FL_BRACE,[Goal,Error,Handler],_If,_Ip),DWS,Code,Status) :-
@@ -5557,7 +5583,7 @@ parse_head_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),TransFlag,DWS,Co
 	      true
 	    )
 
-	; is_mvdobjrefop(F) -> 
+	; is_objrefop(F) -> 
 	    parse_head_pathexplist(Args,DWS,[LCode,RCode],Status),
 	    ( Status == [] ->
 		    flobjref_struct(LCode,F,RCode,Code)
@@ -6290,7 +6316,7 @@ parse_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_TransFlag,D
 
 parse_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_TransFlag,DWS,Code,Status) :- 	 
          get_atom(Funct,F), 	 
-         is_mvdobjrefop(F), 	 
+         is_objrefop(F), 	 
          !, 	 
          parse_db_pathexplist(Mode,Args,DWS,[LCode,RCode],Status), 	 
          (Status == [] -> flobjref_struct(LCode,F,RCode,Code); true).
