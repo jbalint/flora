@@ -99,8 +99,7 @@ CLEAN : CLEANTEMP
 	cd ..
 
 CLEANTEMP :
-	-@erase "%HOME%\.xsb\flora*\*$(OBJEXT)
-	-@erase "%HOME%\.xsb\flora*\*$(PROLOGEXT)
+	-@for /D %%i in (%USERPROFILE%\.xsb\"flora-*") do erase %%i\*$(OBJEXT) %%i\*$(PROLOGEXT)
 
 
 $(PROLOGEXT)$(OBJEXT):
