@@ -26,10 +26,14 @@
 
 
 
-:- import debug_display_call_hook/1 from usermod.
+:- import
+	debug_display_call_hook/1,
+	debug_tracelog_predicate/1
+   from usermod.
 :- import flora_configuration/2 from flrregistry.
 :- import process_control/2 from shell.
 :- import xpp_process_file/3 from parse.
+:- import file_flush/2 from file_io.
 
 :- import flora_decode_predicate/6,
 	flora_is_system_module_name/1,
@@ -83,10 +87,16 @@
     from usermod.
 
 :- import
-	debug_ctl/2
+	%%debug_ctl/2,
+	make_trace_interactive/0,
+	dump_trace_to_file/1,
+	nodebug/0,
+	set_debug_logging_queriable_trace/1,
+	debug_logging_queriable_trace/1
    from debugger.
 
 :- import
+	stat_set_flag/2,
 	stat_flag/2
    from machine.
 
@@ -101,19 +111,23 @@
 	flora_handle_notrace/0,
 	flora_trace/0,
 	flora_trace/1,
+	flora_trace/2,
 	flora_tracelow/0,
 	flora_tracelow/1,
+	flora_tracelow/2,
 	flora_traceverylow/0,
 	flora_traceverylow/1,
+	flora_traceverylow/2,
 	flora_notrace/0.
 
 
 %% Assert the debugger hook
-?- assert(debug_display_call_hook(flora_write_debugger_hook)).
+?- assert(debug_display_call_hook(flora_write_debugger_hook)),
+   assert(debug_tracelog_predicate(flora_tracelog)).
 ?- assert((
            flora_write_debugger_hook(X) :-
 	     (\+flora_switch(low_level_trace) -> flora_write_debug_call(X)
-	     ; flora_write_dbg_item(X)
+	     ; flora_write_debug_call_prolog(X)
 	     )
 	  )).
 
@@ -127,12 +141,31 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%% flora_write_debug_call %%%%%%%%%%%%%%%%%%%%%%%%%
 
 flora_write_debug_call(Call) :-
+	(debug_logging_queriable_trace(on) ->
+	    flora_write_dbg_item('${'),
+	    flora_write_debug_call_unreified(Call),
+	    flora_write_dbg_item('}')
+	; flora_write_debug_call_unreified(Call)
+	).
+
+
+flora_write_debug_call_unreified(Call) :-
 	flora_dbg_stream(Stream),
 	flora_write_goal(Stream,Call).
 
-flora_write_dbg_item(Item) :-
-	flora_dbg_stream(Stream), write(Stream,Item).
+flora_write_debug_call_prolog(Item) :-
+	flora_dbg_stream(Stream),
+	(debug_logging_queriable_trace(on) -> writeq(Stream,Item)
+	; write(Stream,Item)
+	).
 
+flora_write_dbg_item(Item) :-
+	flora_dbg_stream(Stream),
+	write(Stream,Item).
+
+flora_flush_dbg_stream :-
+	flora_dbg_stream(Stream),
+	file_flush(Stream, _).
 
 /*********************************************************************/
 
@@ -146,6 +179,9 @@ flora_trace :-
 flora_trace(File) :-
 	dump_trace_to_file(File),
 	flora_trace.
+flora_trace(File,log) :-
+	set_debug_logging_queriable_trace(on),
+	flora_trace(File).
 
 %% Enables low-level Prolog debugging
 flora_tracelow :-
@@ -153,6 +189,9 @@ flora_tracelow :-
 	flora_set_switch(low_level_trace).
 flora_tracelow(File) :-
 	flora_trace(File),
+	flora_set_switch(low_level_trace).
+flora_tracelow(File,log) :-
+	flora_trace(File,log),
 	flora_set_switch(low_level_trace).
 flora_traceverylow :-
 	flora_trace,
@@ -162,14 +201,22 @@ flora_traceverylow(File) :-
 	flora_trace(File),
 	flora_set_switch(low_level_trace),
 	flora_set_switch(verylow_level_trace).
+flora_traceverylow(File,log) :-
+	flora_trace(File,log),
+	flora_set_switch(low_level_trace),
+	flora_set_switch(verylow_level_trace).
 
 flora_notrace :-
 	flora_handle_notrace,
+	set_debug_logging_queriable_trace(off),
+	flora_flush_dbg_stream,
 	make_trace_interactive,
 	flora_clear_switch(trace),
 	flora_clear_switch(verylow_level_trace),
 	flora_clear_switch(low_level_trace).
 
+/*
+%% these are now in XSB
 dump_trace_to_file(File) :-
 	debug_ctl(prompt,off),
 	debug_ctl(profile,on),
@@ -178,6 +225,7 @@ make_trace_interactive :-
 	debug_ctl(prompt,on),
 	debug_ctl(profile,off),
 	debug_ctl(redirect,tty).
+*/
 
 flora_handle_trace :-
 	( flora_switch(trace)
@@ -187,7 +235,10 @@ flora_handle_trace :-
 	; true
 	).
 flora_handle_notrace :-
-	( stat_flag(TRACE,Trace), Trace > 0 -> notrace
+	( stat_flag(TRACE,Trace), Trace > 0
+	-> %% like debugger:notrace, but does not make tracing interactive
+	    stat_set_flag(TRACE,0), % trace = 0
+	    nodebug	
 	; true
 	).
 	

@@ -110,10 +110,13 @@
 	flora_switch/1,
 	flora_trace/0,
 	flora_trace/1,
+	flora_trace/2,
 	flora_tracelow/0,
 	flora_tracelow/1,
+	flora_tracelow/2,
 	flora_traceverylow/0,
 	flora_traceverylow/1,
+	flora_traceverylow/2,
 	flora_notrace/0,
 	flora_set_switch/1,
 	flora_clear_switch/1
