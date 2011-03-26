@@ -83,8 +83,12 @@
 	flora_hide_this_show/1,
 	flora_show_this_hide/1,
 	flora_trace_this_noprint/1,
-	flora_trace_this_print/1
+	flora_trace_this_print/1,
+	FLLIBCLAUSE/5
     from usermod.
+
+:- ensure_loaded('flrclause.P').
+
 
 :- import
 	%%debug_ctl/2,
@@ -139,12 +143,16 @@
    ).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%% flora_write_debug_call %%%%%%%%%%%%%%%%%%%%%%%%%
-
+%% write Call in Flora form + matching rules
 flora_write_debug_call(Call) :-
 	(debug_logging_queriable_trace(on) ->
 	    flora_write_dbg_item('${'),
 	    flora_write_debug_call_unreified(Call),
-	    flora_write_dbg_item('}')
+	    flora_write_dbg_item('}, ['),
+	    findall(':-'(Call,Body),
+		    FLLIBCLAUSE(_,_,_,[Call],Body),
+		    Rules),
+	    write_matching_rules(Rules,flora)
 	; flora_write_debug_call_unreified(Call)
 	).
 
@@ -153,19 +161,59 @@ flora_write_debug_call_unreified(Call) :-
 	flora_dbg_stream(Stream),
 	flora_write_goal(Stream,Call).
 
-flora_write_debug_call_prolog(Item) :-
-	flora_dbg_stream(Stream),
-	(debug_logging_queriable_trace(on) -> writeq(Stream,Item)
-	; write(Stream,Item)
+%% write Call in prolog form + matching rules
+flora_write_debug_call_prolog(Call) :-
+	(debug_logging_queriable_trace(on)
+	->
+	    flora_writeq_dbg_item(Call),
+	    flora_write_dbg_item(', ['),
+	    findall(':-'(Call,Body),
+		    FLLIBCLAUSE(_,_,_,[Call],Body),
+		    Rules),
+	    write_matching_rules(Rules,prolog)
+	; flora_write_dbg_item(Call)
 	).
 
 flora_write_dbg_item(Item) :-
 	flora_dbg_stream(Stream),
 	write(Stream,Item).
 
+flora_writeq_dbg_item(Item) :-
+	flora_dbg_stream(Stream),
+	writeq(Stream,Item).
+
 flora_flush_dbg_stream :-
 	flora_dbg_stream(Stream),
 	file_flush(Stream, _).
+
+%% write_matching_rules(+RuleList,+ReifyFlag)
+%% ReifyFlag=flora/prolog
+write_matching_rules([],_) :-
+	!,
+	flora_write_dbg_item(']').
+write_matching_rules([Rule|Rest],flora) :-
+	flora_write_dbg_item('${'),
+	write_rule(Rule,flora),
+	flora_write_dbg_item('}'),
+	(Rest==[], ! ; flora_write_dbg_item(', ')),
+	write_matching_rules(Rest,flora).
+write_matching_rules([Rule|Rest],prolog) :-
+	flora_write_dbg_item('('),
+	write_rule(Rule,prolog),
+	flora_write_dbg_item(')'),
+	(Rest==[], ! ; flora_write_dbg_item(', ')),
+	write_matching_rules(Rest,prolog).
+
+%% write_rule(Rule,Flag)
+%% Flag: flora/prolog
+write_rule((Head:-Body),flora) :-
+        flora_write_debug_call_unreified(Head),
+	flora_write_dbg_item(' :- '),
+        flora_write_debug_call_unreified(Body).
+write_rule((Head:-Body),prolog) :-
+        flora_writeq_dbg_item(Head),
+	flora_write_dbg_item(' :- '),
+        flora_writeq_dbg_item(Body).
 
 /*********************************************************************/
 
