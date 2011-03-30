@@ -572,7 +572,7 @@ neg_struct(Goal,_Idx,Code,[]) :-
 	; is_florasyslib_struct(Goal,Idx,FLNEGLIBMODLIT,N,Args)
 	-> florasyslib_struct(Idx,FLLIBMODLIT,N,Args,Code)
 	; is_prvariable(Goal,_VarName,Idx),
-	    has_compilation_context(goal_reification)
+	    has_context(goal_reification)
 	-> % When variable is negated under ~, as in ?X ~ neg ?Y.
 	    thismodule_struct(ThisModule),
 	    callerargsterm_struct(ThisModule,CallerInfo),
@@ -760,12 +760,12 @@ newpredicate_struct(Name,N,Args,PRNEWPRED(Name,N,Args)).
 thismodule_struct(PRTHISMODULE(PRTHISMODULE)).
 
 callerargsterm_struct(Caller,CallerInfo) :-
-	(has_compilation_context(literal_workspace(WS))
+	(has_context(literal_workspace(WS))
 	-> 
 	  compile_workspace_term(WS,ArgsCode)
-	; has_compilation_context(goal_reification)
+	; has_context(goal_reification)
 	-> thismodule_struct(ArgsCode)
-	; has_compilation_context(rule_reification)
+	; has_context(rule_reification)
 	-> ArgsCode = PRDYNCALLERARGSVAR(PRDYNCALLERARGSVAR)
 	; %% non-workspace literal in the body
 	  thismodule_struct(ArgsCode)
@@ -793,12 +793,12 @@ compile_workspace_term(WS, CompiledWS) :-
 %% For dynamic rules - workspace of the rule: (rule)@WS
 %% Otherwise - current module.
 context_module_struct(CallerInfo) :-
-	has_compilation_context(dynruleworkspace(WSTerm)),
+	has_context(dynruleworkspace(WSTerm)),
 	!,
 	callerargsterm_struct(WSTerm,CallerInfo).
 context_module_struct(CallerInfo) :-
-	has_compilation_context(goal_reification),
-	\+ has_compilation_context(rule_reification),
+	has_context(goal_reification),
+	\+ has_context(rule_reification),
 	!,
 	new_caller_prvariable(NO_INDEX,WSTerm),
 	%% with this reification in the head doesn't unify with the body
@@ -813,7 +813,7 @@ context_module_struct(CallerInfo) :-
 %% bound to the caller name 
 callermod_info_structure(Caller) :-
 	%% In the head of dynamic rules
-	has_compilation_context(compiling_dynrule),
+	has_context(compiling_dynrule),
 	!,
 	list_struct([PRDYNCALLERVAR(PRDYNCALLERVAR),
 		     PRDYNCALLERARGSVAR(PRDYNCALLERARGSVAR)],
@@ -825,7 +825,7 @@ callermod_info_structure(Caller) :-
 
 callermod_var_structure(PRDYNCALLERVAR(PRDYNCALLERVAR)) :-
 	%% In the head of dynamic rules
-	has_compilation_context(compiling_dynrule),
+	has_context(compiling_dynrule),
 	!.
 %% In the head of static rules
 callermod_var_structure(PRCALLERVAR(PRCALLERVAR)).
@@ -1977,11 +1977,11 @@ clear_permaoption(X) :- retractall(PERMAOPTION(X)).
 
 clear_context(X) :- retractall(COMPILATION_CONTEXT(X)).
 set_context(X) :-
-	(\+has_compilation_context(X)
+	(\+has_context(X)
 	-> assert(COMPILATION_CONTEXT(X))
 	; true
 	).
-has_compilation_context(X) :- COMPILATION_CONTEXT(X).
+has_context(X) :- COMPILATION_CONTEXT(X).
 
 clear_dynrule_varlist :- retractall(DYNRULE_VARLIST(_,_)).
 report_dynrule_varlist(AttrVar,Val) :- assert(DYNRULE_VARLIST(AttrVar,Val)).
@@ -3001,6 +3001,13 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    H2BCodeTail=NULL,
 	    Status=[]
 
+	
+	; is_flbuiltin_identifier(ParserTerm,_) ->
+	    atomlit_struct(HEADLITERAL,ParserTerm,Code) ->
+	    H2BCodeHead=NULL,
+	    H2BCodeTail=NULL,
+	    Status=[]
+
         ;
 	    transactionalatomlit_struct(HEADLITERAL,ParserTerm,Code),
 	    H2BCodeHead=NULL,
@@ -3064,7 +3071,7 @@ compile_body(ParserTerm,Code,Status) :-
 
 compile_body(ParserTerm,Code,Status) :-
 	is_flquantifier(ParserTerm,FL_EXISTS,QuantVarNames,Formula,Idx),
-	has_compilation_context(compiling_default_negation),
+	has_context(compiling_default_negation),
 	!,
 	%% no quantified don't care vars (?,?_) 
 	(member(FL_UNDERSCORE,QuantVarNames) ->
@@ -3117,9 +3124,9 @@ compile_body(ParserTerm,Code,Status) :-
 compile_body_literal(ParserTerm,Code,Status) :-
 	( is_flvariable(ParserTerm,VName,VIndex) ->
             compile_flvar(VName,VIndex,V),
-            ( (has_compilation_context(compile_with_var_module)
-	      ; has_compilation_context(goal_reification)
-	      ; has_compilation_context(compile_delete))
+            ( (has_context(compile_with_var_module)
+	      ; has_context(goal_reification)
+	      ; has_context(compile_delete))
 	    ->
                 SpecCode = V
             ;
@@ -3138,7 +3145,7 @@ compile_body_literal(ParserTerm,Code,Status) :-
 	%% This is not used for now. Transactional variables by
 	%% themselves are hard to translate into queries.
 	; is_fltransactionalvariable(ParserTerm,VName,VIndex) ->
-	    has_compilation_context(compile_with_var_module),
+	    has_context(compile_with_var_module),
 	    compile_fltransactionalvar(VName,VIndex,SpecCode),
 	    OidCode=NULL,
 	    Status=[]
@@ -3875,7 +3882,7 @@ compile_flspecbody(Object,SpecTerm,OidCode,Code,Status) :-
 %% Quantification under default negation
 compile_flspecbody(Object,SpecTerm,OidCode,Code,Status) :-
 	is_flquantifier(SpecTerm,FL_EXISTS,QuantVarNames,Formula,Idx),
-	has_compilation_context(compiling_default_negation),
+	has_context(compiling_default_negation),
 	!,
 	%% no quantified don't care vars (?,?_) 
 	(member(FL_UNDERSCORE,QuantVarNames) ->
@@ -4187,8 +4194,8 @@ compile_flaggregate(Op,Var,GVars,SortSpec,BodyTerm,Object,Code,Status) :-
 	delay_literals_checking_code([],BodyTerm,DelayCode),
 	conjunct_struct(BCodeSansDelay,DelayCode,BCode),
 	( S == [] ->
-            (has_compilation_context(compile_with_var_module),
-		\+ has_compilation_context(goal_reification) ->
+            (has_context(compile_with_var_module),
+		\+ has_context(goal_reification) ->
                 S1 =[]
             ;
 	        check_aggregate(Var,GVars,BodyTerm,S1)
@@ -5256,7 +5263,7 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,Status) :-
 %% Quantification under default negation
 compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,Status) :-
 	is_flquantifier(SpecTerm,FL_EXISTS,QuantVarNames,Formula,Idx),
-	has_compilation_context(compiling_default_negation),
+	has_context(compiling_default_negation),
 	!,
 	%% no quantified don't care vars (?,?_) 
 	(member(FL_UNDERSCORE,QuantVarNames) ->
@@ -5593,8 +5600,8 @@ compile_wsflobjeql(Obj1,Obj2,WS,OidCode,Code,Status) :-
 ****************************************************************************/
 /*
 compile_reifyop(Formula,Object,OidCode,Status) :-
-	has_compilation_context(compiling_body_pathexp),
-	\+has_compilation_context(compiling_update_literals),
+	has_context(compiling_body_pathexp),
+	\+has_context(compiling_update_literals),
 	!,
 	%% PrependedCode might come from LIBMODLIT or LIBMODOBJ
 	compute_reification_expr(Formula,AttrValCode,PrependedCode,Status),
@@ -7130,7 +7137,7 @@ is_body_neg_negatable_literal(X) :-
 	X = PRVARIABLE(_,_),
 	%% Allow variables to be negated so that
 	%% ?X = ${a[b->c]}, neg ?X would be possible.
-	%%has_compilation_context(goal_reification),
+	%%has_context(goal_reification),
 	!.
 
 /*
@@ -7141,7 +7148,7 @@ is_unimplemented_neg_negatable_literal(X) :-
 
 /*
 delay_literals_checking_code(_Head,_Body,Code) :-
-	has_compilation_context(goal_reification),
+	has_context(goal_reification),
 	!,
 	new_prvariable(NO_INDEX,Code).
 */
@@ -7150,8 +7157,8 @@ delay_literals_checking_code(Head,Body,Code) :-
 	collect_flvars(Body,BodyVars1),
 	remove_dupflvars(HeadVars1,HeadVars),
 	remove_dupflvars(BodyVars1,BodyVars),
-	(has_compilation_context(rule_reification),
-	    has_compilation_context(compiling_body_pathexp)
+	(has_context(rule_reification),
+	    has_context(compiling_body_pathexp)
 	-> %% use new flvariables
 	    is_flvariable(ParserHeadVars,FL_UNDERSCORE,NO_INDEX),
 	    is_flvariable(ParserBodyVars,FL_UNDERSCORE,NO_INDEX)

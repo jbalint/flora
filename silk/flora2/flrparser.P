@@ -1116,11 +1116,11 @@ convert_to_quoted_atomobj(OBJECT(BUILTIN_IDENTIFIER(Atm),I),OBJECT(QUOTED_ATOM(A
 %% Management of global parser context
 clear_context(X) :- retractall(PARSER_CONTEXT(X)).
 set_context(X) :-
-	(\+has_parser_context(X)
+	(\+has_context(X)
 	-> assert(PARSER_CONTEXT(X))
 	; true
 	).
-has_parser_context(X) :- PARSER_CONTEXT(X).
+has_context(X) :- PARSER_CONTEXT(X).
 
 
 /****************************************************************************
@@ -2373,8 +2373,10 @@ flora_parse_fact(CanoniTerm,Code,Status) :-
   flora_parse_query(+CanoniTerm,-Code,-Status)
 ****************************************************************************/
 flora_parse_query(CanoniTerm,Code,Status) :-
+        set_context(parsing_query),
 	parse_rule_body(CanoniTerm,Goal,Status),
-	flquery_struct(Goal,Code).
+	flquery_struct(Goal,Code),
+	clear_context(parsing_query).
 
 
 /****************************************************************************
@@ -2547,7 +2549,7 @@ parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_DWS,_Code,Stat
 parse_head_literal(CANOTERM(Funct,N,FL_PARENTHESIS,_Args,If,_Ip),_DWS,_Code,Status) :-
 	get_atom(Funct,F),
 	flora_nodefp(F,N),
-	\+ has_parser_context(parsing_label),
+	\+ has_context(parsing_label),
 	!,
 	parsing_error(If,NO_REDEFINITION,Status).
 
@@ -2744,7 +2746,7 @@ parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[G],If,_Ip),WS,DWS,Code,Status) 
 parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[QF],If,_Ip),WS,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_quantifier(F),
-	has_parser_context(parsing_default_negation),
+	has_context(parsing_default_negation),
 	!,
 	(\+is_existentialquant(F) -> parsing_error(If,ONLY_EXISTENTIALS,S1)
 	; S1 = []
@@ -2822,9 +2824,9 @@ parse_rule_body(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),WS,DWS,Code,Status) :-
 %% Literal is a rule and we are inside reification
 parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[Head,Body],If,Ip),WS,WS,Code,Status) :-
 	get_name(Funct,FL_IMPLYOP),
-	has_parser_context(reifying),
+	has_context(reifying),
 	!,
-        ( has_parser_context(parsing_reify) ->
+        ( has_context(parsing_reify) ->
             PrevContext = parsing_reify,
             clear_context(parsing_reify)
         ;
@@ -2845,7 +2847,7 @@ parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) 
 	    flora_delayed_literal(ModAtm:Atom,N)
 	; flora_delayed_literal(Atom,N)
 	),
-	\+ has_parser_context(parsing_CLP_constraint),
+	\+ has_context(parsing_CLP_constraint),
 	!,
 	flatom_struct(Atom,If,OpCode),
 	parse_body_pathexplist(Args,DWS,ACode,Status),
@@ -2976,7 +2978,7 @@ parse_rule_body(CanoniTerm,FloraModSpec,FloraModSpec,Code,Status) :-
 	get_module_from_spec(FloraModSpec,_ModuleType,Module),
 	!,
 	%% Flora user or system module
-	(has_parser_context(parsing_fact),
+	(has_context(parsing_fact),
 	    is_flvar_struct(Module)
 	-> 
 	    %% Variables are not allowed in the module specs in the
@@ -2989,7 +2991,7 @@ parse_rule_body(CanoniTerm,FloraModSpec,FloraModSpec,Code,Status) :-
 
 parse_rule_body(CanoniTerm,WS,_DWS,Code,Status) :-
 	is_labeled_construct(CanoniTerm,_Label,Construct),
-	has_parser_context(reifying),
+	has_context(reifying),
 	is_rule(Construct,_,_),
 	!,
 	parse_dynrule(CanoniTerm,WS,Code,Status).
@@ -3453,6 +3455,18 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[VarTerm],_If,Ip),_DWS,Code,Status)
 	    parsing_error(Ip,EXP_VARIABLE,Status)
 	).
 
+/*
+%% We'd like to restrict the use of true{...}, but top level is too much.
+%% Need some kind of stratification.
+%% true{...}, false{...}, unknown{...} - check that they are used at top level
+parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[_Arg],_If,Ip),_DWS,_Code,Status) :-
+	get_name(Funct,Atom),
+	is_truthvalue_op(Atom),
+	\+has_context(parsing_query),
+	!,
+	parsing_error(Ip,ERROR_TRUTHVALUED_OP,Status).
+*/
+
 %% true{...}, false{...}, unknown{...}
 parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
@@ -3534,7 +3548,7 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
 	!,
 	( N == 0 ->
 	    parsing_error(Ip,EXP_ARGS,Status)
-	; has_parser_context(parsing_hypothetical), is_nonlogical_updateop(Atom)
+	; has_context(parsing_hypothetical), is_nonlogical_updateop(Atom)
 	->
 	    parsing_error(Ip,DISALLOWED_UPDATE_IN_HYPOTHETICAL,Status)
 
@@ -3549,7 +3563,7 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
 	!,
 	( N == 0 ->
 	    parsing_error(Ip,EXP_ARGS,Status)
-	; has_parser_context(parsing_hypothetical), is_nonlogical_updateop(Atom)
+	; has_context(parsing_hypothetical), is_nonlogical_updateop(Atom)
 	->
 	    parsing_error(Ip,DISALLOWED_UPDATE_IN_HYPOTHETICAL,Status)
 
@@ -3787,13 +3801,13 @@ parse_body_literal(CanoniTerm,DWS,Code,[]) :-
 parse_body_literal(CanoniTerm,DWS,Code,Status) :-
 	get_flvar_struct(CanoniTerm,C),
         !,
-	( has_parser_context(parsing_reify), DWS==NULL
+	( has_context(parsing_reify), DWS==NULL
 	->
             parsing_error(CanoniTerm,NO_REIFY_VAR,Status)
 	/*
 	%% This happens when we have a predicate with a variable in an argument
 	%% declared as BODYLITERAL. Do not flag an error in this case.
-	; has_parser_context(parsing_fact) ->
+	; has_context(parsing_fact) ->
             parsing_error(CanoniTerm,NO_PRED_VAR,Status)
 	*/
         ;   Status=[],
@@ -3807,7 +3821,7 @@ parse_body_literal(CanoniTerm,DWS,Code,Status) :-
 parse_body_literal(CanoniTerm,DWS,Code,Status) :-
 	get_fltransactionalvar_struct(CanoniTerm,C),
         !,
-        (has_parser_context(clause_construct)
+        (has_context(clause_construct)
 	-> is_anonymous_flvar_struct(ModVar),
 	    Status = [],
 	    flmodule_struct(C,ModVar,FLORAUSERMOD,Code)
@@ -3816,7 +3830,7 @@ parse_body_literal(CanoniTerm,DWS,Code,Status) :-
 	/*
 	%% This happens when we have a predicate with a variable in an argument
 	%% declared as BODYLITERAL. Do not flag an error in this case.
-        ; has_parser_context(parsing_fact) ->
+        ; has_context(parsing_fact) ->
             parsing_error(CanoniTerm,NO_PRED_VAR,Status)
 	*/
         ; get_module_from_spec(DWS,ModuleType,Module),
@@ -4941,7 +4955,7 @@ parse_body_pathexp(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code,Sta
 parse_body_pathexp(ObjectTerm,_TransFlag,_DWS,_Code,Status) :-
 	%% New oid directive is only allowed in rule heads or reified formulas.
 	get_spectoken(ObjectTerm,FL_NEWOID),
-	\+ has_parser_context(reifying),
+	\+ has_context(reifying),
 	!,
 	parsing_error(ObjectTerm,ERROR_NEWOID,Status).
 
@@ -5047,7 +5061,7 @@ parse_body_objspec(CANOTERM(Funct,1,FL_PARENTHESIS,[G],If,_Ip),DWS,Code,Status) 
 parse_body_objspec(CANOTERM(Funct,1,FL_PARENTHESIS,[QF],If,_Ip),DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_quantifier(F),
-	has_parser_context(parsing_default_negation),
+	has_context(parsing_default_negation),
 	!,
 	(\+is_existentialquant(F) -> parsing_error(If,ONLY_EXISTENTIALS,S1)
 	; S1 = []
