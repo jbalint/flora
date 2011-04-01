@@ -2,7 +2,9 @@
 // Agent that can do Modus Ponens
 
 john[believes-> ${p(a)}].
-john[believes-> ${q(?X) :- p(?X)}].
+john[believes-> ${constr(?)}].
+john[believes-> ${q(?X) :- constr(?), p(?X)}].
+constr(?Y) :- ?Y > 2,?Y=3.
 
 john[believes-> ${bob[likes->?X] :- mary[likes->?X]}].
 john[believes-> ${mary[likes->sally]}].
@@ -13,19 +15,44 @@ john[believes-> ?A] :-
 	john[believes-> ${?A :- ?B}]
         and john[believes-> ?B].
 
+john[believes-> (?A,?B)] :-
+	john[believes-> ?A],
+	len(?A,?NA),
+	?NA < 2,  // allow only non-and answers
+        john[believes-> ?B],
+	len(?B,?NB),
+	?NB < 2,  // allow only non-and answers
+	?B != ?A,
+	true.
+
+// used to limit term depth
+len(?X,1) :- var(?X), !.
+len(?X,1)  :- nonvar(?X), ?X \= (?,?), !.
+len((?X,?Y),?N) :-
+	len(?X,?N1),
+	len(?Y,?N2),
+	?N is ?N1+?N2.
 
 %tst1 :-
-	john[believes->?X], write('test1: ')@_plg(),
-	numbervars(?X)@_plg(num_vars),
+	john[believes->?X],
+	?X \= (?,?),  // display only non-compound answers
+	write('test1: ')@_plg(),
+	numbervars(?X,0,?,[attvar(bind)@_plg])@_plg(num_vars),
 	flora_write_goal(?X)@_plg(flrdecode), nl@_plg(), fail.
 %tst1 :- true.
 
-%pretest :- %tst1.
+%tst2 :-
+	write('test2: ')@_plg(),
+	john[believes-> ?X], ?X = ${?_A :- ?_B}, insert{?X, p(a)}, q(?Z),
+	writeln(Z=?Z)@_plg.
+
+%pretest :- %tst1, %tst2.
 
 %test :- tell(temp)@_plg(),
 	Method[%mustDefine(on)]@_sys,
 	%pretest,
 	Method[%mustDefine(off)]@_sys,
+	!,
 	abolish_all_tables,
 	%pretest,
 	told@_plg.

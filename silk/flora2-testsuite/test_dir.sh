@@ -59,6 +59,7 @@ rm -f programs/*.P programs/*${OBJEXT} programs/*.fld programs/*.fdb
 rm -f gpmanager/*.P gpmanager/*${OBJEXT} gpmanager/*.fld gpmanager/*.fdb
 rm -f $basedir/datafiles/*.P    $basedir/datafiles/*${OBJEXT}  $basedir/datafiles/*.fld  $basedir/datafiles/*.fdb
 rm -f $basedir/exporttest/*.P    $basedir/exporttest/*${OBJEXT}  $basedir/exporttest/*.fld  $basedir/exporttest/*.fdb
+rm -f $basedir/general_tests/prolog/*${OBJEXT}
 
 
 # run the tests
