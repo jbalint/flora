@@ -31,7 +31,7 @@
 	flora_abolish_table_predicate/1,
 	flora_abolish_table_predicate/2,
 	flora_abolish_table_call/1,
-	flora_abolish_table_call/2,
+	flora_abolish_table_call_carefully/1,
 	flora_refresh_tables/1,
 	FLLIBREFRESH/2.
 :- import table_state/4, get_calls/3, abolish_table_pred/1  from tables.
@@ -103,9 +103,18 @@ abolish_table_pred_hook(Error) :-
 
 %% Safe way of abolishing a table for a call and the unifying calls
 flora_abolish_table_call(Call) :-
-        flora_abolish_table_call(Call,abolish_table_call_hook(_Error)).
+        flora_abolish_table_call(Call,
+				 incremental_also,
+				 abolish_table_call_hook(_Error)).
 
-flora_abolish_table_call(Call,Hook) :-
+%% Like flora_abolish_table_call/1 but noop for incrementally tabled predicates
+flora_abolish_table_call_carefully(Call) :-
+        flora_abolish_table_call(Call,
+				 nonincremental_only,
+				 abolish_table_call_hook(_Error)).
+
+
+flora_abolish_table_call(Call,IncrementalFlag,Hook) :-
 	predicate_property(Call,tabled), % if non-tabled then no-op
 	get_calls(Call,Handle,_Template),
 	table_state(Handle,_PredType,_CallType,AnsSetStatus),
@@ -122,11 +131,11 @@ flora_abolish_table_call(Call,Hook) :-
 	; nonincremental_predicate(Call)
 	->
 	    internal_abolish_table_call(Handle)
-	; incremental_predicate(Call) -> 
+	; incremental_predicate(Call), IncrementalFlag == incremental_also -> 
 	    incr_invalidate_call(Call)
 	),
 	fail.
-flora_abolish_table_call(_Call,_Hook).
+flora_abolish_table_call(_Call,_Flag,_Hook).
 
 abolish_table_call_hook(table_error(Type,Call)) :-
 	(Type == abolishing_incomplete_call
