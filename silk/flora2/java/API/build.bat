@@ -36,7 +36,7 @@ echo Compiling files ...
 echo ------------------------------
 
 set SILKLIB = ..\..\..\lib
-set LOG4J = %SILKLIB%\jena\*.jar
+set LOG4J = %SILKLIB%\jena\log4j-1.2.12.jar
 set INTERPROLOG = %SILKLIB%\interprolog.jar
 set LOG4J=""
 
