@@ -22,5 +22,9 @@
 rm -f javaAPI/util/*.class
 rm -f javaAPI/src/*.class
 
-${JAVA_BIN}/javac -source 1.6 -deprecation -Xlint:unchecked -Xlint -classpath ..:../interprolog.jar javaAPI/util/*.java javaAPI/src/*.java  
+SILKLIB=../../../lib
+LOG4J=${SILKLIB}/jena/*.jar
+INTERPROLOG=${SILKLIB}/interprolog.jar
+
+${JAVA_BIN}/javac -source 1.6 -deprecation -Xlint:unchecked -Xlint -classpath ${LOG4J}:..:${INTERPROLOG} javaAPI/util/org/semwebcentral/flora2/API/util/*.java javaAPI/src/org/semwebcentral/flora2/API/*.java  
 

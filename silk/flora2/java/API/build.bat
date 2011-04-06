@@ -35,7 +35,12 @@ echo ------------------------------
 echo Compiling files ...
 echo ------------------------------
 
-%JAVA_BIN%\javac -Xlint  -classpath ..;..\interprolog.jar javaAPI\util\*.java javaAPI\src\*.java 
+set SILKLIB = ..\..\..\lib
+set LOG4J = %SILKLIB%\jena\*.jar
+set INTERPROLOG = %SILKLIB%\interprolog.jar
+set LOG4J=""
+
+%JAVA_BIN%\javac -Xlint  -classpath %LOG4J%;..;%INTERPROLOG% javaAPI\util\org\semwebcentral\flora2\API\util\*.java javaAPI\src\org\semwebcentral\flora2\API\*.java 
 
 echo *** If you saw a warning "The system cannot find the path specified",
 echo *** change the variable JAVA_BIN in flora2\java\windowsVariables.bat
