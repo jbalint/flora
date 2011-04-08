@@ -9,8 +9,8 @@
 
 import java.util.*;
 import com.declarativa.interprolog.TermModel;
-import javaAPI.util.*;
-import javaAPI.src.*;
+import org.semwebcentral.flora2.API.util.*;
+import org.semwebcentral.flora2.API.*;
 public class foo extends FloraConstants {
 
     static TermModel floraClassName = new TermModel("foo");

@@ -150,7 +150,7 @@ public class FloraObject extends FloraConstants
     ** inherit: whether the method is inheritable or not
     ** parameters: parameters passed to the method
     */
-    public boolean getboolean(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters)
+    public boolean getboolean(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String paramList = makeParameterListString(parameters);
 	String methodmodifier = "";
@@ -187,7 +187,7 @@ public class FloraObject extends FloraConstants
     ** inherit     : whether the method is inheritable or not 
     ** parameters  : the parameters for the method
     */
-    public Iterator<HashMap<String, FloraObject>> getbooleanAll(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters)
+    public Iterator<HashMap<String, FloraObject>> getbooleanAll(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String floraQuery = "";
 	String paramList = makeParameterListString(parameters);
@@ -232,7 +232,7 @@ public class FloraObject extends FloraConstants
     ** inherit: whether the method is inheritable or not
     ** parameters: parameters passed to the method
     */
-    public boolean setboolean(String moduleName,Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters)
+    public boolean setboolean(String moduleName,Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String paramList = makeParameterListString(parameters);
 	String methodmodifier = "";
@@ -268,7 +268,7 @@ public class FloraObject extends FloraConstants
     ** inherit: whether the method is inheritable or not
     ** parameters: parameters passed to the method
     */
-    public boolean deleteboolean(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters)
+    public boolean deleteboolean(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String paramList = makeParameterListString(parameters);
 
@@ -306,7 +306,7 @@ public class FloraObject extends FloraConstants
     ** inherit: ignored - for future use
     ** parameters: parameters passed to the method
     */
-    public boolean getprocedural(String moduleName,Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters)
+    public boolean getprocedural(String moduleName,Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String paramList = makeParameterListString(parameters);
 
@@ -343,7 +343,7 @@ public class FloraObject extends FloraConstants
     ** inherit     : whether the method is inheritable or not 
     ** parameters  : the parameters for the method
     */
-    public Iterator<HashMap<String, FloraObject>> getproceduralAll(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters)
+    public Iterator<HashMap<String, FloraObject>> getproceduralAll(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String floraQuery = "";
 	String paramList = makeParameterListString(parameters);
@@ -388,7 +388,7 @@ public class FloraObject extends FloraConstants
     ** inherit: ignored - for future use
     ** parameters: parameters passed to the method
     */
-    public boolean setprocedural(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters)
+    public boolean setprocedural(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String paramList = makeParameterListString(parameters);
 
@@ -423,7 +423,7 @@ public class FloraObject extends FloraConstants
     ** inherit: ignored - for future use
     ** parameters: parameters passed to the method
     */
-    public boolean deleteprocedural(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters)
+    public boolean deleteprocedural(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String paramList = makeParameterListString(parameters);
 
@@ -458,7 +458,7 @@ public class FloraObject extends FloraConstants
     ** parameters : the parameters to the method
     ** value      : the value of the method to be deleted
     */
-    public boolean deletevalue(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters,Object value)
+    public boolean deletevalue(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters,Object value)
     {
 	String floraQuery= "";
 	String paramList = makeParameterListString(parameters);
@@ -494,7 +494,7 @@ public class FloraObject extends FloraConstants
     ** inherit     : whether the method is inheritable or not 
     ** parameters  : the parameters for the method
     */
-    public Iterator<HashMap<String, FloraObject>> getvalueAll(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters)
+    public Iterator<HashMap<String, FloraObject>> getvalueAll(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String floraQuery = "";
 	String paramList = makeParameterListString(parameters);
@@ -538,7 +538,7 @@ public class FloraObject extends FloraConstants
     ** inherit     : whether the method is inheritable or not 
     ** parameters  : the parameters for the method
     */
-    public Iterator<FloraObject> getvalue(String moduleName,Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters)
+    public Iterator<FloraObject> getvalue(String moduleName,Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String floraQuery = "";
 	String paramList = makeParameterListString(parameters);
@@ -577,7 +577,7 @@ public class FloraObject extends FloraConstants
     ** parameters : the parameters to the method 
     ** value      : the values of the method to be deleted
     */
-    public boolean deletevalue(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters,Vector<FloraObject> value)
+    public boolean deletevalue(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters,Vector<Object> value)
     {
 	String floraQuery= "";
 	String paramList = makeParameterListString(parameters);
@@ -612,7 +612,7 @@ public class FloraObject extends FloraConstants
     ** inherit    : whether the method is inheritable or not
     ** parameters : the parameters to the method
     */
-    public boolean deletevalue(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters)
+    public boolean deletevalue(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String floraQuery= "";
 	String paramList = makeParameterListString(parameters);
@@ -648,7 +648,7 @@ public class FloraObject extends FloraConstants
      ** parameters : parameters to the method
      ** value      : value to be set to 
      */
-    public boolean setvalue(String moduleName,Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters,Object value)
+    public boolean setvalue(String moduleName,Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters,Object value)
     {
 	String floraQuery= "";
 	String paramList = makeParameterListString(parameters);
@@ -683,7 +683,7 @@ public class FloraObject extends FloraConstants
     ** parameters   : parameters to the method 
     ** value        : vector of values to be set to
     */
-    public boolean setvalue(String moduleName,Object methodName,boolean inherit,boolean isDataAtom,Vector<FloraObject> parameters,Vector<FloraObject> value)
+    public boolean setvalue(String moduleName,Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters,Vector<Object> value)
     {
 	String floraQuery= "";
 	String paramList = makeParameterListString(parameters);
@@ -940,7 +940,7 @@ public class FloraObject extends FloraConstants
     }
 
 	
-    private String makeParameterListString(Vector<FloraObject> parameters)
+    private String makeParameterListString(Vector<Object> parameters)
     {
 	String paramList = "(";
 	int noOfPars = parameters.size();
@@ -955,7 +955,7 @@ public class FloraObject extends FloraConstants
     }
 
 
-    private String makeValueListString(Vector<FloraObject> value)
+    private String makeValueListString(Vector<Object> value)
     {
 	String valuelist = "{";
 	int noOfVals = value.size();

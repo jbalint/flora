@@ -23,8 +23,9 @@
      by the examples of the uses of high-level API.
 ***********************************************************************/
 
-import javaAPI.src.*;
 import java.util.*;
+import org.semwebcentral.flora2.API.*;
+import org.semwebcentral.flora2.API.util.*;
 
 public class flogicbasicsExample{
 	

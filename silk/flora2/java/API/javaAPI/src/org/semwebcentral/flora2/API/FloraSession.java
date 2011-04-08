@@ -31,7 +31,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Vector;
 
-//import javaAPI.util.FlrException;
+//import org.semwebcentral.flora2.API.util.FlrException;
 
 import com.declarativa.interprolog.PrologEngine;
 import com.declarativa.interprolog.TermModel;

@@ -26,7 +26,10 @@ CALL %1%\floraVariables.bat
 
 echo Executing code
 
-%JAVA_BIN%\java -DPROLOGDIR=%PROLOGDIR% -DFLORA_FILE=%FLORA_FILE% -DFLORADIR=%FLORADIR% -DXSB_BIN_DIRECTORY=%XSB_BIN_DIRECTORY% -Djava.library.path=%PROLOGDIR% -DENGINE=%ENGINE% -classpath %CLASSPATH%;..;..\..\interprolog.jar;fooExample;flogicbasicsExample %1%
+set SILKLIB = ..\..\..\..\lib
+set LOG4J = %SILKLIB%\jena\log4j-1.2.12.jar
+
+%JAVA_BIN%\java -DPROLOGDIR=%PROLOGDIR% -DFLORA_FILE=%FLORA_FILE% -DFLORADIR=%FLORADIR% -DXSB_BIN_DIRECTORY=%XSB_BIN_DIRECTORY% -Djava.library.path=%PROLOGDIR% -DENGINE=%ENGINE% -classpath %CLASSPATH%;%LOG4J%;..\javaAPI\src;..\javaAPI\util;..\..\interprolog.jar;fooExample;flogicbasicsExample %1%
 
 
 REM Local Variables:

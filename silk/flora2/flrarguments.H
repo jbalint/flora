@@ -18,8 +18,8 @@
 :- dynamic flora_arguments_spec_dyn/4.
 
 :- import
-	get_module_from_spec/3,
-	get_atomvar_name/2
+	flora_get_module_from_spec/3,
+	flora_get_flatomvar_name/2
    from flrparser.
 
 :- export
