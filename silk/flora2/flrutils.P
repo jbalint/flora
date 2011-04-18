@@ -324,10 +324,7 @@ unify_trailer_options([Opt|TrailerOptions],FixedTrailerOptions) :-
   rules clash and should never be loaded into the same workspace.
 **********************************************************************/
 flloadpatch(Workspace) :-
-	flora_slash(S),
-	%% Get file names in user dir.
-	util_user_flora_dir(UserFloraDir),
-	flora_concat_atoms([UserFloraDir,S,'patch.P'],UserPatchPFile),
+	user_patch_file(UserPatchPFile),
 	util_mainXWAM_filename(UserPatchPFile,UserPatchOFile),
 	util_WSXWAM_filename(UserPatchPFile,Workspace,UserPatchWSXWAMFile),
 	%% Copy the main file to user directory.
@@ -605,8 +602,10 @@ flora_fladd(FlrFile,Workspace) :-
 	util_addWSXWAM_filename(FlrFile,Workspace,WSXWAMFile),
 	!,
 	flora_set_xpp_options_for_compile(Workspace),
-        ( util_file_newerthan(AddPFile,FlrFile) ->
-	    flora_stdmsg_nl,
+        ( util_file_newerthan(AddPFile,FlrFile),
+	    user_patch_file(UsrPatchFile),
+	    util_file_newerthan(AddPFile,UsrPatchFile)
+	-> flora_stdmsg_nl,
 	    true
 	;
 	  util_compile_file_add(FlrFile,AddPFile,FDBFile,FLDFile,Status),
@@ -665,8 +664,10 @@ flora_flload(FlrFile,Workspace) :-
 	util_WSXWAM_filename(FlrFile,Workspace,WSXWAMFile),
 	!,
 	flora_set_xpp_options_for_compile(Workspace),
-        ( util_file_newerthan(MPFile,FlrFile) ->
-	    flora_stdmsg_nl,
+        ( util_file_newerthan(MPFile,FlrFile),
+	    user_patch_file(UsrPatchFile),
+	    util_file_newerthan(MPFile,UsrPatchFile)
+	-> flora_stdmsg_nl,
 	    true
 	;
 	  util_compile_file(FlrFile,MPFile,FDBFile,FLDFile,Status),
@@ -878,7 +879,9 @@ util_addFLD_filename(File,FLDFile) :-
 %% File name for the object file with module name attached
 util_addWSXWAM_filename(File,WS,WSXWAMFile) :-
 	parse_filename(File,Dir,Base,_),
-	flora_concat_atoms([Dir,Base,'_',WS,'#for_add.',PROLOG_OFILE_EXT],WSXWAMFile).
+	url_encode(WS,WS_enc),
+	flora_concat_atoms([Dir,Base,'_',WS_enc,'#for_add.',PROLOG_OFILE_EXT],
+			   WSXWAMFile).
 
 
 /*************************************************************************
@@ -915,7 +918,9 @@ util_FLH_filename(File,FLHFile) :-
 %% File name for the object file with module name attached
 util_WSXWAM_filename(File,WS,WSXWAMFile) :-
 	parse_filename(File,Dir,Base,_),
-	flora_concat_atoms([Dir,Base,'_',WS,'.',PROLOG_OFILE_EXT],WSXWAMFile).
+	url_encode(WS,WS_enc),
+	flora_concat_atoms([Dir,Base,'_',WS_enc,'.',PROLOG_OFILE_EXT],
+			   WSXWAMFile).
 
 util_dump_filename(File,DFile) :-
 	parse_filename(File,Dir,Base,Ext),
@@ -1574,7 +1579,9 @@ flora_loaddyn_data(OrigInFile,ModuleName,Ext) :-
 	  InFileAbs=InFile
 	),
 	parse_filename(InFileAbs,InDir,InBase,InExt),
-	flora_concat_atoms([InDir,InBase,'_',ModuleName,'.',InExt],PostGppFile),
+	url_encode(ModuleName,ModuleName_enc),
+	flora_concat_atoms([InDir,InBase,'_',ModuleName_enc,'.',InExt],
+			   PostGppFile),
 	!,
 	( flora_locate_file(InFileAbs,File) ->
 	    flora_loader_message('Dynamically loading ~w into module ~w',
@@ -3484,3 +3491,8 @@ flora_token_index_to_line(TokenIndex,Line) :-
 	flora_nth_token(TokenIndex,Tk),
 	flora_token_text(Tk,_TextStr,Line,_BCN,_ELN,_ECN).
 	
+user_patch_file(UserPatchPFile) :-
+	flora_slash(S),
+	%% Get file names in user dir.
+	util_user_flora_dir(UserFloraDir),
+	flora_concat_atoms([UserFloraDir,S,'patch.P'],UserPatchPFile).

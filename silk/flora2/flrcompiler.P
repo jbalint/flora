@@ -441,8 +441,12 @@ approx_prindex(PROBJEQL(Obj,_,_),I)           :- !, approx_prindex(Obj,I).
 
 approx_prindex([Obj|_],I)                     :- !, approx_prindex(Obj,I).
 
-approx_prindex(PRAND(First,_),I)              :- !, approx_prindex(First,I).
-approx_prindex(PROR(First,_),I)               :- !, approx_prindex(First,I).
+approx_prindex(PRAND(First,Second),I)         :-
+	(approx_prindex(First,I), I \= NO_INDEX, !
+	; approx_prindex(Second,I)).
+approx_prindex(PROR(First,Second),I)               :- 
+	(approx_prindex(First,I), I \= NO_INDEX, !
+	; approx_prindex(Second,I)).
 approx_prindex(PRRULE(Head,_),I)              :- !, approx_prindex(Head,I).
 approx_prindex(PRDYNRULE(Head,_,_,_,_,_),I)   :- !, approx_prindex(Head,I).
 approx_prindex(PRFACT(Head),I)                :- !, approx_prindex(Head,I).
@@ -528,7 +532,8 @@ is_prquantifier(PRQUANTIFIER(QuantifierType,FormCode,FreVarObjs),
 %% \+
 naf_struct(Goal,PRNAF(Goal)).
 %% not
-not_struct(Goal,PRNOT(WrappedGoal)) :-
+not_struct(Goal,PRNOT(WrappedGoal,Line,CurrFileName)) :-
+	code_line_and_file_by_prterm(Goal,Line,CurrFileName),
 	wsatom_struct(FL_TABLED_UNNUMBER_CALL,FunCode),
 	prologterm_struct(FunCode,1,[Goal],WrappedGoal).
 
@@ -1041,7 +1046,8 @@ truthvalue_struct(Formula,Opname,Code) :-
 	florasyslib_struct(FLLIBTRUTHVALUE,2,[WrappedFormula,Opname],Code).
 
 labelprimitive_struct(Label,Module,Code) :-
-	florasyslib_struct(FLLIBLABELPRIMITIVE,2,[Label,Module],Code).
+	approx_prindex(Label,Index),
+	florasyslib_struct(Index,FLLIBLABELPRIMITIVE,2,[Label,Module],Code).
 
 prefixprimitive_struct(Prefix,Expansion,Module,Code) :-
 	florasyslib_struct(FLLIBPREFIXPRIMITIVE,3,[Prefix,Expansion,Module],Code).
@@ -1390,17 +1396,20 @@ objeql_struct(Context,O1,O2,PROBJEQL(O1,O2,Caller)) :-
 
 
 ifthenelse_struct(Cond,Then,Else,Code) :-
+	code_line_and_file_by_prterm(Cond,Line,CurrFileName),
 	thismodule_struct(ThisMod),
-	florasyslib_struct(FLLIBIFTHENELSE,4,[ThisMod,Cond,Then,Else],Code).
+	florasyslib_struct(FLLIBIFTHENELSE,6,[ThisMod,Cond,Then,Else,Line,CurrFileName],Code).
 
 ifthen_struct(Cond,Then,Code) :-
+	code_line_and_file_by_prterm(Cond,Line,CurrFileName),
 	thismodule_struct(ThisMod),
-	florasyslib_struct(FLLIBIFTHEN,3,[ThisMod,Cond,Then],Code).
+	florasyslib_struct(FLLIBIFTHEN,5,[ThisMod,Cond,Then,Line,CurrFileName],Code).
 
 %% encoding of control constructs
 controlconstruct_struct(CondCode,ActionCode,Wrapper,Code) :-
+	code_line_and_file_by_prterm(CondCode,Line,CurrFileName),
 	thismodule_struct(ThisMod),
-	florasyslib_struct(Wrapper,3,[ThisMod,CondCode,ActionCode],Code).
+	florasyslib_struct(Wrapper,5,[ThisMod,CondCode,ActionCode,Line,CurrFileName],Code).
 
 univeqform_struct(Left,Right,Code) :-
 	florasyslib_struct(FLLIBUNIVEQFORM,2,[Left,Right],Code).
@@ -2853,8 +2862,7 @@ construct_defeasible_condition(Index,LblCode,DelayedDefeatCondCode) :-
 	    atomobj_struct(LibModule,LibModuleObj),
 	    workspace_struct(UnDefeatLitCode,LibModuleObj,DefeatCondCode),
 	    %% wrap up for delaying the defeasible condition
-	    flora_token_index_to_line(Index,Line),
-	    get_current_compile_file(CurrFileName),
+	    code_line_and_file_by_index(Index,Line,CurrFileName),
 	    list_struct([],[],EmptyListObj),
 	    list_struct([DefeatCondCode,EmptyListObj,EmptyListObj,DummyVarObj],[],DelayArgs),
 	    prologterm_struct(FLLIBDELAYEDLITERAL,4,
@@ -2881,8 +2889,7 @@ construct_defeasible_condition(Index,HeadCode,LblCode,DelayedDefeatCondCode) :-
 	    atomobj_struct(LibModule,LibModuleObj),
 	    workspace_struct(UnDefeatLitCode,LibModuleObj,DefeatCondCode),
 	    %% wrap up for delaying the defeasible condition
-	    flora_token_index_to_line(Index,Line),
-	    get_current_compile_file(CurrFileName),
+	    code_line_and_file_by_index(Index,Line,CurrFileName),
 	    collect_prvars(HeadCode,HeadCodeVars1),
 	    remove_caller_vars(HeadCodeVars1,HeadCodeVars),
 	    vars_to_var_names(HeadCodeVars,HeadCodeVarNames),
@@ -3216,8 +3223,7 @@ compile_body_literal(ParserTerm,Code,Status) :-
 
 	; is_fldelayedliteral(ParserTerm,Op,Args) ->
 	    is_flatom(Op,_,Index),
-	    flora_token_index_to_line(Index,Line),
-	    get_current_compile_file(CurrFileName),
+	    code_line_and_file_by_index(Index,Line,CurrFileName),
 	    is_flatom(CurrFileParserObj,CurrFileName,NO_INDEX),
 	    compile_prlgterm(FLLIBDELAYEDLITERAL,4,[Op,CurrFileParserObj,Line,Args],
 			     FLDELAYSUPPORTMOD,
@@ -3225,8 +3231,7 @@ compile_body_literal(ParserTerm,Code,Status) :-
 
 	; is_fldelayedliteral(ParserTerm,Op,Args,Mod) ->
 	    is_flatom(Op,_,Index),
-	    flora_token_index_to_line(Index,Line),
-	    get_current_compile_file(CurrFileName),
+	    code_line_and_file_by_index(Index,Line,CurrFileName),
 	    is_flatom(CurrFileParserObj,CurrFileName,NO_INDEX),
 	    is_flplib(OpModTerm,Op,Mod),
 	    compile_prlgterm(FLLIBDELAYEDLITERAL,4,[OpModTerm,CurrFileParserObj,Line,Args],
@@ -6913,6 +6918,7 @@ compile_flclause(Label,Mode,HeadList,Body,Code,Status) :-
 	    ;
 		compile_flatomvar(Mode,ModeCode)
 	    ),
+	    set_context(compiling_clause_primitive),
 	    set_context(compile_with_var_module),
 	    set_context(compiling_headliteral),
 	    compile_fldelete_list(HeadList,HLC,S),
@@ -6931,7 +6937,8 @@ compile_flclause(Label,Mode,HeadList,Body,Code,Status) :-
 	;
 	    Status = LabStatus
         ),
-        clear_context(compile_with_var_module).
+        clear_context(compile_with_var_module),
+	set_context(compiling_clause_primitive).
 
 
 /****************************************************************************
@@ -7278,3 +7285,28 @@ rename_one_prvariable_in_list(_,_,[],[]) :- !.
 rename_one_prvariable_in_list(VarName,NewVarObj,[T|Terms],[NewT|NewTerms]) :-
 	rename_one_prvariable(VarName,NewVarObj,T,NewT),
 	rename_one_prvariable_in_list(VarName,NewVarObj,Terms,NewTerms).
+
+
+%% Get the line number and file name of code represented by a PRTERM
+code_line_and_file_by_prterm(_CompiledTerm,Line,File) :-
+	%% in reified cases, do not put the line and file, since reified terms
+	%% are not used where they are compiled, so the line number
+	%% (and likely) file name are going to be wrong.
+	%% Also, explicit line number & file name will prevent unification.
+	(has_context(goal_reification) ;
+	    has_context(compiling_clause_primitive)
+	),
+	!,
+	new_prvariable(NO_INDEX,Line),
+	new_prvariable(NO_INDEX,File).
+code_line_and_file_by_prterm(CompiledTerm,Line,File) :-
+	(approx_prindex(CompiledTerm,Index), Index \= NO_INDEX
+	-> flora_token_index_to_line(Index,Line)
+	; Line = NULL
+	),
+	get_current_compile_file(File).
+
+%% Get the line number and file name of code represented by line/position index
+code_line_and_file_by_index(Index,Line,File) :-
+	flora_token_index_to_line(Index,Line),
+	get_current_compile_file(File).

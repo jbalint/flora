@@ -29,13 +29,13 @@
 /***************************************************************************
   if-then-else statement
 ***************************************************************************/
-FLLIBIFTHENELSE(_Mod,Cond,Then,_Else) :-
+FLLIBIFTHENELSE(_Mod,Cond,Then,_Else,_Line,_File) :-
 	call(Cond),
 	call(Then).
 
-FLLIBIFTHENELSE(Mod,Cond,_Then,Else) :-
+FLLIBIFTHENELSE(Mod,Cond,_Then,Else,Line,File) :-
 	flora_apply_negation_wrapper(Cond,Mod,CondWrapped),
-	FLORA_TNOT_PREDICATE(CondWrapped),
+	FLORA_TNOT_PREDICATE(CondWrapped,Line,File),
 	call(Else).
 
 
@@ -45,21 +45,21 @@ FLLIBIFTHENELSE(Mod,Cond,_Then,Else) :-
   The semantics is such that the entire statement succeeds when the
   condition part fails.
 ***************************************************************************/
-FLLIBIFTHEN(_Mod,Cond,Then) :-
+FLLIBIFTHEN(_Mod,Cond,Then,_Line,_File) :-
 	call(Cond),
 	call(Then).
 
-FLLIBIFTHEN(Mod,Cond,_Then) :-
+FLLIBIFTHEN(Mod,Cond,_Then,Line,File) :-
 	flora_apply_negation_wrapper(Cond,Mod,CondWrapped),
-	FLORA_TNOT_PREDICATE(CondWrapped).
+	FLORA_TNOT_PREDICATE(CondWrapped,Line,File).
 
 
 %% UNLESS ... DO ... is like IF...THEN true ELSE ...
-FLLIBUNLESSDO(_Mod,Cond,_Action) :-
+FLLIBUNLESSDO(_Mod,Cond,_Action,_Line,_File) :-
 	call(Cond).
-FLLIBUNLESSDO(Mod,Cond,Action) :-
+FLLIBUNLESSDO(Mod,Cond,Action,Line,File) :-
 	flora_apply_negation_wrapper(Cond,Mod,CondWrapped),
-	FLORA_TNOT_PREDICATE(CondWrapped),
+	FLORA_TNOT_PREDICATE(CondWrapped,Line,File),
 	call(Action).
 
 
@@ -74,7 +74,7 @@ FLLIBUNLESSDO(Mod,Cond,Action) :-
 
 %% This should fail ONLY if Cond is true, but Action fails.
 %% We use catch/throw to achieve this
-FLLIBWHILEDO(_Mod,Cond,Action) :- 
+FLLIBWHILEDO(_Mod,Cond,Action,_Line,_File) :- 
 	FLORA_SYMBOL('catch')((call(Cond),
 			       (call(Action) -> flora_commit_storage, fail
 			       ; throw(quitLoop)
@@ -85,7 +85,7 @@ FLLIBWHILEDO(_Mod,Cond,Action) :-
 			      fail). % fail, if condition was thrown
 
 %% Fails only if Action becomes false before Cond becomes true
-FLLIBDOUNTIL(_Mod,Action,Cond) :-
+FLLIBDOUNTIL(_Mod,Action,Cond,_Line,_File) :-
 	call(Action),
 	flora_commit_storage,
 	call(Cond).
@@ -98,12 +98,12 @@ FLLIBDOUNTIL(_Mod,Action,Cond) :-
 %%%% Variables that were unbound at the time of the call stay unbound
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-FLLIBWHILELOOP(_Mod,Cond,Action) :- 
+FLLIBWHILELOOP(_Mod,Cond,Action,Line,File) :- 
 	%% Must copy_term Action&Cond together so the variables
 	%% will be preserved
 	copy_term((Action,Cond),(Action1,Cond1)),
 	(call(Cond1) ->
-	    (call(Action1), FLLIBWHILELOOP(_Mod,Cond,Action)
+	    (call(Action1), FLLIBWHILELOOP(_Mod,Cond,Action,Line,File)
 	    ; fail
 	    )
 	; true
@@ -116,13 +116,13 @@ FLLIBWHILELOOP(_Mod,Cond,Action) :-
 %% FLORA_TNOT_PREDICATE, but this is dangerous:
 %%    If there is a recursive dependency on Cond then abolishing tables
 %%    while computing them can crash XSB
-FLLIBLOOPUNTIL(_Mod,Action,Cond) :-
+FLLIBLOOPUNTIL(_Mod,Action,Cond,Line,File) :-
 	%% Must copy_term Action&Cond together so the variables
 	%% will be preserved
 	copy_term((Action,Cond),(Action1,Cond1)),
 	call(Action1),
 	(call(Cond1) -> true
-	; FLLIBLOOPUNTIL(_Mod,Action,Cond)
+	; FLLIBLOOPUNTIL(_Mod,Action,Cond,Line,File)
 	).
 
 
