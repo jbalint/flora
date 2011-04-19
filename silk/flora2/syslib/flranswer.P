@@ -24,8 +24,13 @@
 #include "standard.h"
 #include "flora_terms.flh"
 
-/* Request number of getting the delay register */
+%% Request number for obtaining the delay register
 #define DELAY_REG  2
+
+%% Names of answer tries
+#define FLRANSWER_TRUE_TRIE   '_$_$flora_true_answer_storage'
+#define FLRANSWER_UNDEF_TRIE  '_$_$flora_undef_answer_storage'
+#define FLRANSWER_FUNCTOR     answer
 
 
 :- import cputime/1 from standard.
@@ -39,7 +44,11 @@
 	xwam_state/2
    from machine.
 
-:- import shell/5 from shell.
+:- import
+	storage_insert_fact/3,
+	storage_find_fact/2,
+	storage_delete_all/1
+   from storage.
 
 :- import flora_builtin_datatype/1 from flrdatatype.
 
@@ -151,11 +160,11 @@ flora_print_all(Gs,NVs) :-
 	flora_reclaim_storage_space,
 	abolish(FL_QUERY_PREDICATE/QueryArity),
 	sort(TempL,L),
-	length(L,N),
-	( N == 0 -> flora_write_No, fail
+	( L = [] -> flora_write_No, fail
 	;
 	    flora_write_matches(L),
 	    ( flora_switch(chatter) ->
+		length(L,N),
 		flora_stdfdbk_string('~n~w solution(s) in ~w seconds~n', [N,T])
 	    ;
 		true
@@ -216,7 +225,6 @@ flora_write_Yes_or_Unknown(DelayRegVal) :-
 	(DelayRegVal =:= 0 -> flora_stdfdbk_line('~nYes~n')
 	; flora_stdfdbk_line('~nYes  - unknown~n')
 	).
-
 
 /********************************************************************/
 %% Hookup to the Flora debugger
@@ -288,6 +296,159 @@ flranswer_all_answers_query_handler(Exception,QueryTemplate,AroundHookLink) :-
 	abolish(QueryTemplate),
 	throw(Exception).
 
+flranswer_all_answers_query_handler_new(Exception,QueryTemplate,AroundHookLink) :-
+	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
+	flora_reclaim_storage_space,
+	storage_delete_all(FLRANSWER_TRUE_TRIE),
+	storage_delete_all(FLRANSWER_UNDEF_TRIE),
+	throw(Exception).
+
 
 %% to silence the tracer
 flora_findall(X,Y,Z) :- findall(X,Y,Z).
+
+
+/****************************************************************************
+TODO: rewrite flora_print_all using this more efficient predicate
+
+      flora_collect_all(+Goal,+NameVarPairList,?TrueAnswers,?UndefinedAnswers)
+
+      Goal:            a reified goal
+      NameVarPairList: a list of the form
+                       [VarName1=val1, VarName2=val2,...]
+      TrueAnswers/UndefinedAnswers:
+                       lists of Prolog terms of the form
+                       [Var1=val1,Var2=val2,...],
+		       one for true answers and one for the undefined ones.
+
+      If either TrueAnswers or UndefinedAnswers is a nonvar, then the
+      corresponding argument is not touched. This is provided in order to
+      minimize communication over slow links, like HTTP or sockets, in case
+      either true or undefined answers are not required.
+
+      This is used for other applications that wish to call
+      FLORA-2 and get all results
+*****************************************************************************/
+flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
+	NVs == [],
+	!,
+	flora_call(Gs,NVs),
+	close_open_tables,
+	xwam_state(DELAY_REG,RegVal),
+	(var(TrueAns), RegVal=:=0
+	-> TrueAns = [[]],
+	    (var(UndefAns) -> UndefAns = [] ; true)
+	; var(UndefAns), RegVal=\=0
+	-> UndefAns = [[]],
+	    (var(TrueAns) -> TrueAns = [] ; true)
+	; var(TrueAns)
+	-> TrueAns = [],
+	    (var(UndefAns) -> UndefAns = [] ; true)
+	; var(UndefAns)
+	-> UndefAns = [],
+	    (var(TrueAns) -> TrueAns = [] ; true)
+	).
+
+
+flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
+	%% All answers are asserted into temp tries for true/undefined answers.
+	%% Since these are tries, duplicates are deleted.
+	%% Rationale: some answer lists might have hundreds of thousands
+	%% items, which takes a long time to collect and sort.
+	%% Sometimes sorting runs out of memory and crashes XSB. 
+	%% Dealing with tries adds a very small overhead to each query, but
+	%% overall speeds up returning the answers and often avoids crashes.
+	QueryTemplate =.. [FLRANSWER_FUNCTOR|NVs],
+	
+	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,before,AroundHookLink),
+	catch(
+	      (flora_call(Gs,NVs),
+		  xwam_state(DELAY_REG,RegVal),
+		  (RegVal=:=0
+		  -> storage_insert_fact(FLRANSWER_TRUE_TRIE,QueryTemplate,_)
+		  ; storage_insert_fact(FLRANSWER_UNDEF_TRIE,QueryTemplate,_)
+		  ),
+		  fail
+	      ; true
+	      ),
+	      Exception,
+	      flranswer_all_answers_query_handler_new(Exception,
+	                                              QueryTemplate,
+						      AroundHookLink)
+	     ),
+	(var(TrueAns)
+	-> flora_findall(X,storage_find_fact(FLRANSWER_TRUE_TRIE,X),TrueAns1),
+	    sort(TrueAns1,TrueAns)
+	; true
+	),
+	(var(UndefAns)
+	-> flora_findall(X,storage_find_fact(FLRANSWER_UNDEF_TRIE,X),UndefAns1),
+	    sort(UndefAns1,UndefAns)
+	; true
+	),
+	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
+	flora_reclaim_storage_space,
+	storage_delete_all(FLRANSWER_TRUE_TRIE),
+	storage_delete_all(FLRANSWER_UNDEF_TRIE),
+	( TrueAns == [], UndefAns == [] -> fail
+	; true
+	).
+
+
+
+/*
+%% less efficient version
+flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
+	%% Construct a temporary trie-indexed predicate, FL_QUERY_PREDICATE
+	%% All answers are asserted into that predicate.
+	%% Since it is trie-indexed, duplicates are deleted.
+	%% Reason: some answer lists might have thousands or
+	%% millions of items, which takes a long time to sort. Sometimes
+	%% sort runs out of memory and crashes XSB. 
+	%% Having a trie-asserted query predicate adds a very small
+	%% penalty to each query, but overall speeds up 
+	%% returning the answers, and sometimes avoids crashes.
+	QueryTemplate =.. [FL_QUERY_PREDICATE,_|NVs], %% 1st arg = truth value
+	length([_|NVs],QueryArity),
+	dynamic(FL_QUERY_PREDICATE/QueryArity),
+	index(FL_QUERY_PREDICATE/QueryArity,trie),
+	
+	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,before,AroundHookLink),
+	catch(
+	      (flora_call(Gs,NVs),
+		  xwam_state(DELAY_REG,RegVal),
+		  (RegVal=:=0 -> TVal=0 ; TVal=1),
+		  arg(1,QueryTemplate,TVal), %% bind arg 1 to truth value
+		  assert(QueryTemplate),
+		  fail
+	      ; true
+	      ),
+	      Exception,
+	      flranswer_all_answers_query_handler(Exception,QueryTemplate,AroundHookLink)
+	     ),
+	(var(TrueAns)
+	->
+	    functor(TrueTemplate,FL_QUERY_PREDICATE,QueryArity),
+	    arg(1,TrueTemplate,0), %% select only true answers
+	    flora_findall(TrueTemplate, TrueTemplate, TrueAns1),
+	    sort(TrueAns1,TrueAns)
+	; true
+	),
+	(var(UndefAns)
+	->
+	    functor(UndefTemplate,FL_QUERY_PREDICATE,QueryArity),
+	    arg(1,UndefTemplate,1), %% select only undef answers
+	    flora_findall(UndefTemplate, UndefTemplate, UndefAns1),
+	    sort(UndefAns1,UndefAns)
+	; true
+	),
+	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
+	flora_reclaim_storage_space,
+	abolish(FL_QUERY_PREDICATE/QueryArity),
+	( TrueAns == [], UndefAns == [] -> fail
+	;
+	    true
+	).
+
+*/
+
