@@ -326,28 +326,40 @@ TODO: rewrite flora_print_all using this more efficient predicate
       minimize communication over slow links, like HTTP or sockets, in case
       either true or undefined answers are not required.
 
+      This predicate always succeeds. If the query has no answers,
+      both TrueAnswers and UndefinedAnswers are bound to [] 
+      (unless they were bound at the call time; in this case,
+      they retain their original bindings).
+
       This is used for other applications that wish to call
       FLORA-2 and get all results
 *****************************************************************************/
 flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
 	NVs == [],
 	!,
-	flora_call(Gs,NVs),
-	close_open_tables,
-	xwam_state(DELAY_REG,RegVal),
-	(var(TrueAns), RegVal=:=0
-	-> TrueAns = [[]],
-	    (var(UndefAns) -> UndefAns = [] ; true)
-	; var(UndefAns), RegVal=\=0
-	-> UndefAns = [[]],
-	    (var(TrueAns) -> TrueAns = [] ; true)
-	; var(TrueAns)
-	-> TrueAns = [],
-	    (var(UndefAns) -> UndefAns = [] ; true)
-	; var(UndefAns)
-	-> UndefAns = [],
-	    (var(TrueAns) -> TrueAns = [] ; true)
-	).
+	flora_call_hooks(_Mod,QUERYHOOK,Gs,before,AroundHookLink),
+	(flora_call(Gs,NVs),
+	    close_open_tables,
+	    xwam_state(DELAY_REG,RegVal),
+	    (RegVal=:=0
+	    -> storage_insert_fact(FLRANSWER_TRUE_TRIE,FLRANSWER_FUNCTOR,_)
+	    ; storage_insert_fact(FLRANSWER_UNDEF_TRIE,FLRANSWER_FUNCTOR,_)
+	    ),
+	    fail
+	; true
+	),
+	(var(TrueAns)
+	-> flora_findall(X,storage_find_fact(FLRANSWER_TRUE_TRIE,X),TrueAns)
+	; true
+	),
+	(var(UndefAns)
+	-> flora_findall(X,storage_find_fact(FLRANSWER_UNDEF_TRIE,X),UndefAns)
+	; true
+	),
+	flora_call_hooks(_Mod,QUERYHOOK,Gs,after,AroundHookLink),
+	flora_reclaim_storage_space,
+	storage_delete_all(FLRANSWER_TRUE_TRIE),
+	storage_delete_all(FLRANSWER_UNDEF_TRIE).
 
 
 flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
@@ -376,6 +388,7 @@ flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
 	                                              QueryTemplate,
 						      AroundHookLink)
 	     ),
+	close_open_tables,
 	(var(TrueAns)
 	-> flora_findall(X,storage_find_fact(FLRANSWER_TRUE_TRIE,X),TrueAns1),
 	    sort(TrueAns1,TrueAns)
@@ -389,10 +402,7 @@ flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
 	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
 	flora_reclaim_storage_space,
 	storage_delete_all(FLRANSWER_TRUE_TRIE),
-	storage_delete_all(FLRANSWER_UNDEF_TRIE),
-	( TrueAns == [], UndefAns == [] -> fail
-	; true
-	).
+	storage_delete_all(FLRANSWER_UNDEF_TRIE).
 
 
 
