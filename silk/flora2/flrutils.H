@@ -42,6 +42,7 @@
 	flora_concat_items/2,
 	flora_copy_input/2,
 	flora_write_atom/1,
+	flora_delete_from_list/3,
 	flora_running_under/1
    from flrporting.
 
