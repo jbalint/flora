@@ -278,7 +278,7 @@ flloadtrailer1(TrailerOptions,Workspace) :-
 		),
 		%%compile(UserTrailerPFile,[optimize,spec_repr,ti_all]),
 		compile(UserTrailerPFile,[optimize,ti_all]),
-		flora_rename_file(UserTrailerOFile,UserTrailerWSXWAMFile),
+		util_rename_file(UserTrailerOFile,UserTrailerWSXWAMFile),
 		flora_clear_xpp_options
 	    ),
 	    %% abolish tables after loading the trailer
@@ -354,7 +354,7 @@ flloadpatch(Workspace) :-
 	    ;  true
 	    ),
 	    compile(UserPatchPFile,[optimize,ti_all]),
-	    flora_rename_file(UserPatchOFile,UserPatchWSXWAMFile),
+	    util_rename_file(UserPatchOFile,UserPatchWSXWAMFile),
 	    flora_clear_xpp_options
         ),
 	consult(UserPatchWSXWAMFile),
@@ -390,7 +390,7 @@ util_user_tmpfile(Filename) :-
 
 
 /*************************************************************************
-   flora_rename_file(+F1,+F2)
+   util_rename_file(+F1,+F2)
    This is like flora_file_op(rename,F1,F2), but it issues an error when fails.
    The reason is that on Windows files sometimes fail to be renamed for 
    strange reasons, so we first delete F2, try to rename, and if failed,
@@ -398,8 +398,8 @@ util_user_tmpfile(Filename) :-
    There is no point to continue after a failure, because Flora 
    will be in a broken state.
 *************************************************************************/
-flora_rename_file(F1,F2) :-
-	( (flora_file_op(unlink,F2), !; true),
+util_rename_file(F1,F2) :-
+	( (flora_file_op(unlink,F2), ! ; true),
 	    flora_file_op(rename,F1,F2), !
 	;
 	    flora_abort(['something wrong -- cannot rename file ',F1,' to ',F2])
@@ -451,7 +451,7 @@ flora_compile_then_prolog_compile_add(FlrFile,ModuleName) :-
 	  flora_clear_xpp_options,
 	  flora_check_module_name(ModuleName),
 	  util_addWSXWAM_filename(FlrFile,ModuleName,WSXWAMFile),
-	  flora_rename_file(AddXWAMFile,WSXWAMFile)
+	  util_rename_file(AddXWAMFile,WSXWAMFile)
         ),
 	!.
 
@@ -500,7 +500,7 @@ flora_compile_then_prolog_compile(FlrFile,ModuleName) :-
 	  flora_clear_xpp_options,
 	  flora_check_module_name(ModuleName),
 	  util_WSXWAM_filename(FlrFile,ModuleName,WSXWAMFile),
-	  flora_rename_file(MainXWAMFile,WSXWAMFile)
+	  util_rename_file(MainXWAMFile,WSXWAMFile)
         ),
 	!.
 
@@ -641,7 +641,7 @@ flora_fladd(FlrFile,Workspace) :-
 	    flora_clear_xpp_options,
 	    fail
 	  ),
-	  flora_rename_file(AddXWAMFile,WSXWAMFile)
+	  util_rename_file(AddXWAMFile,WSXWAMFile)
         ),
         consult(WSXWAMFile),
 	flora_clear_xpp_options,
@@ -703,7 +703,7 @@ flora_flload(FlrFile,Workspace) :-
 	    flora_clear_xpp_options,
 	    fail
 	  ),
-	  flora_rename_file(MainXWAMFile,WSXWAMFile)
+	  util_rename_file(MainXWAMFile,WSXWAMFile)
         ),
 	flora_call_hooks(Workspace,LOADTOMODULE,FlrFile,before,AroundHookLink),
 	consult(WSXWAMFile),
@@ -877,11 +877,11 @@ util_addFLD_filename(File,FLDFile) :-
 	flora_concat_atoms([Dir,Base,'#for_add.',FLORA_FLD_EXT],FLDFile).
 
 %% File name for the object file with module name attached
-util_addWSXWAM_filename(File,WS,WSXWAMFile) :-
+util_addWSXWAM_filename(File,WS,WSFile) :-
 	parse_filename(File,Dir,Base,_),
 	url_encode(WS,WS_enc),
-	flora_concat_atoms([Dir,Base,'_',WS_enc,'#for_add.',PROLOG_OFILE_EXT],
-			   WSXWAMFile).
+	flora_concat_atoms([Dir,Base,'#for_add_',WS_enc,'.',PROLOG_OFILE_EXT],
+			   WSFile).
 
 
 /*************************************************************************
@@ -917,10 +917,12 @@ util_FLH_filename(File,FLHFile) :-
 
 %% File name for the object file with module name attached
 util_WSXWAM_filename(File,WS,WSXWAMFile) :-
+	util_WS_filename(File,WS,PROLOG_OFILE_EXT,WSXWAMFile).
+
+util_WS_filename(File,WS,Extenstion,WSFile) :-
 	parse_filename(File,Dir,Base,_),
 	url_encode(WS,WS_enc),
-	flora_concat_atoms([Dir,Base,'_',WS_enc,'.',PROLOG_OFILE_EXT],
-			   WSXWAMFile).
+	flora_concat_atoms([Dir,Base,'_',WS_enc,'.',Extenstion], WSFile).
 
 util_dump_filename(File,DFile) :-
 	parse_filename(File,Dir,Base,Ext),
@@ -1165,8 +1167,8 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	see(IOportFromProc),
 	flora_measure_time(
 			   util_rpc_file_add(MaxErrNum,0,CompiledRuleList,
-					      FileOptionList,
-					      RuleStatus,CompileStatus),
+					     FileOptionList,
+					     RuleStatus,CompileStatus),
 			   'Compile time '
 			   ),
 	%% Wait, to not leave zombies.
@@ -1208,7 +1210,13 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	( FileStatus == FLORA_FAILURE ->
 	    util_remove_file_carefully(PFile),
 	    util_remove_file_carefully(DBFile),
-	    util_remove_file_carefully(FLDFile)
+	    util_remove_file_carefully(FLDFile),
+	    util_WS_filename(PFile,FLORA_DEFAULT_WORKSPACE,PROLOG_OFILE_EXT,Main_XWAMfile),
+	    util_remove_file_carefully(Main_XWAMfile),
+	    util_WS_filename(DBFile,FLORA_DEFAULT_WORKSPACE,FLORA_FDB_EXT,Main_DBfile),
+	    util_remove_file_carefully(Main_DBfile),
+	    util_WS_filename(FLDFile,FLORA_DEFAULT_WORKSPACE,FLORA_FLD_EXT,Main_FLDfile),
+	    util_remove_file_carefully(Main_FLDfile)
 	;
 	    T is T1-T0,
 	    flora_loader_message('Done! CPU time used: ~w seconds',[T])
@@ -1375,7 +1383,13 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	( FileStatus == FLORA_FAILURE ->
 	    util_remove_file_carefully(PFile),
 	    util_remove_file_carefully(DBFile),
-	    util_remove_file_carefully(FLDFile)
+	    util_remove_file_carefully(FLDFile),
+	    util_WS_filename(PFile,FLORA_DEFAULT_WORKSPACE,PROLOG_OFILE_EXT,Main_XWAMfile),
+	    util_remove_file_carefully(Main_XWAMfile),
+	    util_WS_filename(DBFile,FLORA_DEFAULT_WORKSPACE,FLORA_FDB_EXT,Main_DBfile),
+	    util_remove_file_carefully(Main_DBfile),
+	    util_WS_filename(FLDFile,FLORA_DEFAULT_WORKSPACE,FLORA_FLD_EXT,Main_FLDfile),
+	    util_remove_file_carefully(Main_FLDfile)
 	;
 	    T is T1-T0,
 	    flora_loader_message('Done! CPU time used: ~w seconds',[T])
