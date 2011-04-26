@@ -132,6 +132,7 @@ GREP="grep -i"
 MSG_FILE=/tmp/flora_test_msg.$USER
 LOG_FILE=/tmp/flora_test_log.$USER
 RES_FILE=/tmp/flora_test_res.$USER
+SUMMARY_FILE=./summary.txt
 
 if test ! -x "$FLORADIR/runflora"; then
     echo "Can't execute $FLORADIR/runflora"
@@ -255,6 +256,11 @@ fi
 
 HOSTNAME=`hostname`
 
+echo "" >> $SUMMARY_FILE
+date >> $SUMMARY_FILE
+$GREP "FLORA-2 Version" $LOG_FILE | sort -u >> $SUMMARY_FILE
+$GREP "TESTTIME" $LOG_FILE >> $SUMMARY_FILE
+
 # -s tests if size > 0
 if test -s $RES_FILE; then
 	cat $RES_FILE
@@ -267,12 +273,16 @@ if test -s $RES_FILE; then
 	echo "" >> $MSG_FILE
 	cat $RES_FILE >> $MSG_FILE
 	#mail $USER < $MSG_FILE
+	$GREP "differ!" $LOG_FILE >> $SUMMARY_FILE
+	echo "FAILED" >> $SUMMARY_FILE
 	rm -f $MSG_FILE
 else
 	echo "PASSED testsuite for $FLORADIR/runflora on $HOSTNAME"
-	$GREP "TESTTIME" $LOG_FILE
+	echo "PASSED" >> $SUMMARY_FILE
 	rm -f $NEW_LOG
 fi
+
+$GREP "TESTTIME" $LOG_FILE
 
 rm -f $RES_FILE
 rm -f $lockfile
