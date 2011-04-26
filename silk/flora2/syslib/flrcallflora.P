@@ -35,6 +35,7 @@
    from flrlibman.
 
 :- import flora_handle_notrace/0 from flrdebugger.
+:- import flora_call/3 from usermod.
 
 :- import print_backtrace/1 from error_handler.
 
@@ -42,14 +43,14 @@
 
 :- import member/2 from basics.
 
-
+:- ensure_loaded(flranswer).
 
 :- export
 	flora_good_command/1,
 	flora_bad_command/1,
 	flora_noop_command/1,
 	flora_string_command_line/4,
-	flora_call_string_command/4.
+	flora_call_string_command/5.
 
 :- dynamic
 	flora_query_cache/3,
@@ -60,7 +61,7 @@
 
 
 /*************************************************************************
-   flora_call_string_command(+String,+Vars,-Status,-Exception)
+   flora_call_string_command(+String,+Vars,-Status,-XWamState,-Exception)
 
    Execute a query specified in String.
 
@@ -75,24 +76,25 @@
 	   Then Xyz will be bound to the value of ?X in p(?X,?Y) after
 	   the execution and Qpr will be bound to the value of ?Y in p(?X,?Y).
    Status: indicates the status of compilation of the command in String.
+   XWamState: If =:=0, the answer is true. Otherwise undefined
    Exception: is a possible exception during the runtime execution 
               of the command in String.
 *************************************************************************/
 
-flora_call_string_command(String,_UserVars,Status,_Exception) :-
+flora_call_string_command(String,_UserVars,Status,_XWamState,_Exception) :-
 	\+ atom(String),
 	\+ is_charlist(String),
 	!,
 	Status = [FLORA_INVALID_INPUT, FLORA_FAILURE].
 
-flora_call_string_command(String,UserVars,Status,Exception) :-
+flora_call_string_command(String,UserVars,Status,XWamState,Exception) :-
 	%% use stored query
 	flora_query_cache(String,QueryCode,ArgList),
 	!,
 	Status = [FLORA_SUCCESS],
-	exec_saved_query(QueryCode,ArgList,UserVars,Exception).
+	exec_saved_query(QueryCode,ArgList,UserVars,XWamState,Exception).
 	
-flora_call_string_command(String,UserVars,Status,Exception) :-
+flora_call_string_command(String,UserVars,Status,XWamState,Exception) :-
 	flora_string_command_line(String,Code,Options,Status),
         %% there may be import directives
         handle_import_directive(Code,ShellCode),
@@ -103,7 +105,7 @@ flora_call_string_command(String,UserVars,Status,Exception) :-
 	    findall(SysLibOp,member(FLSYSLIB(SysLibOp),Options),SysLibLst),
 	    findall(SysModOp,member(FLSYSMOD(SysModOp),Options),SysModLst),
 	    save_query(String,Code1,Vars,SysModLst,SysLibLst),
-	    exec_saved_query(Code1,Vars,UserVars,Exception)
+	    exec_saved_query(Code1,Vars,UserVars,XWamState,Exception)
 	;
 	    true
 	).
@@ -134,14 +136,16 @@ save_query(QString,QCode,QArgs,SysModList,SysLibList) :-
 	flora_load_system_module(SysModList).
 
 
-exec_saved_query(QueryCode,QArgs,UserVars,Exception) :-
+exec_saved_query(QueryCode,QArgs,UserVars,XWamState,Exception) :-
 	bind_q_variables(UserVars,QArgs),
-	catch(call(QueryCode),
+	%%catch(call(QueryCode),  %% - old. Use flora_call
+	catch(flora_call(QueryCode,UserVars,XWamState),
 	      Exception,
 	      string_command_handler(Exception)),
 	(var(Exception)
-	-> Exception = FLORA_NORMAL,
-	    bind_q_variables(UserVars,QArgs)
+	-> Exception = FLORA_NORMAL
+	%% bind_q_variables not needed here any more: flora_call binds UserVars
+	%% , bind_q_variables(UserVars,QArgs)
 	;
 	    true
 	).

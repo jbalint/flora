@@ -64,9 +64,8 @@ public class PrologFlora extends FloraConstants
 		"bootstrap_flora",
 		"consult(flrimportedcalls)",
 		"import ('_load')/1, ('_add')/1 from flora2",
-		"import flora_query/4 from flora2",
-		"import flora_decode_oid_as_atom/2 from flrdecode",
-		"import 	flora_handle_trace/0 from flrdebugger"
+		"import flora_query/5 from flora2",
+		"import flora_decode_oid_as_atom/2 from flrdecode"
 	    });
     }
     
@@ -168,7 +167,7 @@ public class PrologFlora extends FloraConstants
     
     
 
-    /* Call the flora_query/4 predicate of FLORA-2
+    /* Call the flora_query/5 predicate of FLORA-2
     ** Binds FLORA-2 variables to the returned values
     ** and returns an array of answers. Each answer is an Interprolog
     ** term model from which variable bindings can be obtained.
@@ -194,12 +193,10 @@ public class PrologFlora extends FloraConstants
 	}
 	varsString = "[" + varsString + "]";
 
-String listString = "L_rnd=" + varsString + ",";
-String queryString = "S_rnd='" + cmd + "',";
-String floraQueryString =
-    "findall(TM_rnd,(flora_handle_trace, flora_query(S_rnd,L_rnd,_St,_Ex),buildTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
-
-
+	String listString = "L_rnd=" + varsString + ",";
+	String queryString = "S_rnd='" + cmd + "',";
+	String floraQueryString =
+	    "findall(TM_rnd,(flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex),buildTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
 	
 	sb.append(queryString);
 	sb.append(listString);
@@ -233,7 +230,7 @@ String floraQueryString =
         StringBuffer sb = new StringBuffer();
 	sb.append(queryString);
 	sb.append(listString);
-        sb.append("flora_query(S_rnd,L_rnd,_St,_Ex)");
+        sb.append("flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex)");
 
 	if (debug)
 	    System.out.println("simpleFloraCommand: " + sb);

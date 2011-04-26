@@ -108,18 +108,17 @@ flora_print_all(Gs,NVs) :-
 	NVs == [],
 	!,
 	cputime(T0),
-	( flora_call(Gs,NVs),
+	( flora_call(Gs,NVs,XWamState),
 	    close_open_tables
 	->
 	    (
-	      xwam_state(DELAY_REG,RegVal),
 	      cputime(T1),
 	      T is T1-T0,
 	      ( flora_switch(chatter) ->
 		  flora_stdfdbk_string('~nElapsed time ~w seconds~n', [T])
 	      ; true
 	      ),
-	      flora_write_Yes_or_Unknown(RegVal)
+	      flora_write_Yes_or_Unknown(XWamState)
 	    ),
 	    fail
 	;
@@ -144,10 +143,9 @@ flora_print_all(Gs,NVs) :-
 	
 	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,before,AroundHookLink),
 	catch(
-	      flora_findall((NVs,RegVal),
-			    (flora_call(Gs,NVs),
-				(\+ QueryTemplate -> assert(QueryTemplate)),
-				xwam_state(DELAY_REG,RegVal)
+	      flora_findall((NVs,XWamState),
+			    (flora_call(Gs,NVs,XWamState),
+				(\+ QueryTemplate -> assert(QueryTemplate))
 			    ),
 			    TempL
 			   ),
@@ -179,17 +177,15 @@ flora_print_all(Gs,NVs) :-
 flora_print_one(Gs,NVs) :-
 	NVs == [],
 	!,
-	(flora_call(Gs,NVs)
+	(flora_call(Gs,NVs,XWamState)
 	->
-	    xwam_state(DELAY_REG,RegVal),
-	    flora_write_Yes_or_Unknown(RegVal)
+	    flora_write_Yes_or_Unknown(XWamState)
 	;
 	    flora_write_No
 	).
 flora_print_one(Gs,NVs) :-
-	    ( flora_call(Gs,NVs),
-		xwam_state(DELAY_REG,RegVal),
-		flora_write_pairs(NVs,RegVal),
+	    ( flora_call(Gs,NVs,XWamState),
+		flora_write_pairs(NVs,XWamState),
 		flora_fail_unless_return
 	    ;
 		flora_write_No
@@ -221,8 +217,8 @@ flora_fail_unless_return :- flora_fail_unless_return, fail.
 /********************************************************************/
 flora_write_Yes :- flora_stdfdbk_line('~nYes~n').
 flora_write_No  :- flora_stdfdbk_line('~nNo~n').
-flora_write_Yes_or_Unknown(DelayRegVal) :-
-	(DelayRegVal =:= 0 -> flora_stdfdbk_line('~nYes~n')
+flora_write_Yes_or_Unknown(XWamState) :-
+	(XWamState =:= 0 -> flora_stdfdbk_line('~nYes~n')
 	; flora_stdfdbk_line('~nYes  - unknown~n')
 	).
 
@@ -230,14 +226,16 @@ flora_write_Yes_or_Unknown(DelayRegVal) :-
 %% Hookup to the Flora debugger
 %% flora_call is a wrapper around XSB call
 %% Used only in top-level queries
-flora_call(Goal,NVs) :- 
+%% If XWamState = 0, the answer is true. Otherwise: undefined
+flora_call(Goal,NVs,XWamState) :- 
     	flora_handle_trace,
     	call(Goal),
+	xwam_state(DELAY_REG,XWamState),
 	FLDELAYSUPPORTMOD:FLORA_DELAY_CHECKER(NVs,[]),
 	flora_commit_storage,
 	flora_handle_end_of_call.
 
-flora_call(_Goal,_NVs) :-
+flora_call(_Goal,_NVs,_XWamState) :-
 	flora_handle_notrace,
 	fail.
 
@@ -245,23 +243,23 @@ flora_call(_Goal,_NVs) :-
 /********************************************************************/
 flora_write_matches([]).
 
-flora_write_matches([(M,DelayRegVal)|Ms]) :-
-	flora_write_pairs(M,DelayRegVal),
+flora_write_matches([(M,XWamState)|Ms]) :-
+	flora_write_pairs(M,XWamState),
 	flora_stdfdbk_nl,
 	flora_write_matches(Ms).
 
 
 flora_write_pairs([],_).
 
-flora_write_pairs([N=V|NVs],DelayRegVal) :-
+flora_write_pairs([N=V|NVs],XWamState) :-
 	flora_stdfdbk_nl,
 	flora_stdfdbk_string('~w = ',[N]),
 	flora_display_feedback(V),
-	flora_write_if_undefined(DelayRegVal),
-	flora_write_pairs(NVs,DelayRegVal).
+	flora_write_if_undefined(XWamState),
+	flora_write_pairs(NVs,XWamState).
 
-flora_write_if_undefined(DelayRegVal) :-
-	(DelayRegVal =:= 0 -> true
+flora_write_if_undefined(XWamState) :-
+	(XWamState =:= 0 -> true
 	; flora_stdfdbk_string('  - unknown')
 	).
 
@@ -338,10 +336,9 @@ flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
 	NVs == [],
 	!,
 	flora_call_hooks(_Mod,QUERYHOOK,Gs,before,AroundHookLink),
-	(flora_call(Gs,NVs),
+	(flora_call(Gs,NVs,XWamState),
 	    close_open_tables,
-	    xwam_state(DELAY_REG,RegVal),
-	    (RegVal=:=0
+	    (XWamState=:=0
 	    -> storage_insert_fact(FLRANSWER_TRUE_TRIE,FLRANSWER_FUNCTOR,_)
 	    ; storage_insert_fact(FLRANSWER_UNDEF_TRIE,FLRANSWER_FUNCTOR,_)
 	    ),
@@ -374,9 +371,8 @@ flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
 	
 	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,before,AroundHookLink),
 	catch(
-	      (flora_call(Gs,NVs),
-		  xwam_state(DELAY_REG,RegVal),
-		  (RegVal=:=0
+	      (flora_call(Gs,NVs,XWamState),
+		  (XWamState=:=0
 		  -> storage_insert_fact(FLRANSWER_TRUE_TRIE,QueryTemplate,_)
 		  ; storage_insert_fact(FLRANSWER_UNDEF_TRIE,QueryTemplate,_)
 		  ),
@@ -425,9 +421,8 @@ flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
 	
 	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,before,AroundHookLink),
 	catch(
-	      (flora_call(Gs,NVs),
-		  xwam_state(DELAY_REG,RegVal),
-		  (RegVal=:=0 -> TVal=0 ; TVal=1),
+	      (flora_call(Gs,NVs,XWamState),
+		  (XWamState=:=0 -> TVal=0 ; TVal=1),
 		  arg(1,QueryTemplate,TVal), %% bind arg 1 to truth value
 		  assert(QueryTemplate),
 		  fail
