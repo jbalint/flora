@@ -266,6 +266,7 @@
 	flora_read_parse_compile_build_loop/3,
 
 	flora_patch_full_filename/1,
+	flora_user_floradir/1,
 
 	incremental_tabling_in_effect/1,
 	flora_read_from_source/2,

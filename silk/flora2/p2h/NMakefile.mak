@@ -23,7 +23,7 @@ CLEAN :
 	-@erase *.bak
 
 
-CPP_PROJ = /nologo /MT /W3 /GX /O2 /I "$(PROLOGDIR)\config\x86-pc-windows" \
+CPP_PROJ = /nologo /MT /W3 /EHsc /O2 /I "$(PROLOGDIR)\config\x86-pc-windows" \
 		 /I "$(PROLOGDIR)\emu" /I "$(PROLOGDIR)\prolog_includes" \
 		 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_MBCS" \
 		 /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /c 

@@ -19,6 +19,9 @@
 
 :- compiler_options([xpp_on]).
 
+#include "version.flh"
+#include "versionbuild.flh"
+
 #define CH_BACKSLASH   	     92	      /*  \     */
 
 %% Records Prolog and Flora installation directories
@@ -38,9 +41,15 @@
 	flora_convert_win_path_to_cygwin/2
    from flrporting.
 
+:- import
+	flora_user_floradir/1
+   from flrutils.
+
 :- import shell/1 from shell.
+:- import get_date/6 from standard.
 
 ?- path_sysop(expand,'.',FloraDir),
+   asserta(library_directory(FloraDir)),
    PrologOptions = '-m 100000 -c 20000',  % to prevent XSB from crashing
    xsb_configuration(install_dir,InstallDir),
    xsb_configuration(config_bindir,ConfigBinDirPrelim),
@@ -60,9 +69,9 @@
    (flora_running_under(windows)
    -> write('PROLOG='), write(ConfigBinDir), writeln('\\xsb'),
        write('PROLOGDIR='), writeln(InstallDir),
-       flora_concat_atoms([UserHome,'\\.xsb\\flora\\*'], FloraTmpFiles),
-       shell(['del ', '"', FloraTmpFiles, '.P"']),
-       shell(['del ', '"', FloraTmpFiles, '.xwam"'])
+       flora_user_floradir(FloraTmpDir),
+       shell(['del ', '"', FloraTmpDir, '\\*.P"']),
+       shell(['del ', '"', FloraTmpDir, '\\*.xwam"'])
    ;
        write(ConfigBinDir)
    ),
@@ -97,9 +106,21 @@
    told,
    %% If we are in the packages/flora2 directory and ../../emu exists, then
    %% we are installing as a package; otherwise - standalone
-   tell('floraInstallMode.P'),
-   writeln(':- import flora_configuration/2 from flrregistry.'),
    flora_slash(Slash),
+   (flora_running_under(windows)
+   -> flora_concat_atoms([FloraDir,Slash,platforms,Slash,
+			  windows,Slash,'floraInstallMode.P'],
+			 FloraInstallModeFile)
+   ; flora_running_under(cygwin)
+   -> flora_concat_atoms([FloraDir,Slash,platforms,Slash,
+			  cygwin,Slash,'floraInstallMode.P'],
+			 FloraInstallModeFile)
+   ;  flora_concat_atoms([FloraDir,Slash,platforms,Slash,
+			  unix,Slash,'floraInstallMode.P'],
+			 FloraInstallModeFile)
+   ),
+   tell(FloraInstallModeFile),
+   writeln(':- import flora_configuration/2 from flrregistry.'),
    flora_concat_atoms([InstallDir,Slash,packages,Slash,flora2],FloraPkgDir),
    flora_file_op(expand,FloraPkgDir,FloraPkgDirExpanded),
    flora_file_op(expand,FloraDir,FloraDirExpanded),
@@ -112,6 +133,10 @@
    write('?- assert(flora_configuration(installdir,'),
    writeq(FloraDirExpanded),
    writeln(')).'),
+   get_date(Yr,Mon,Day,_,_,_),
+   write('?- assert(flora_configuration(builddate,'''),
+   write(Yr), write('-'), write(Mon), write('-'), write(Day),
+   writeln(''')).'),
    told,
    %% set up the variables for Java
    (flora_running_under(windows)
