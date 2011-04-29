@@ -19,7 +19,12 @@
 :- compiler_options([xpp_on,spec_off]).
 
 #include "token_defs_xsb.h"
-%% DO NOT include any FLORA .flh files here, or else FLORA won't
+#include "version.flh"
+#include "versionbuild.flh"
+%% Forward slash is ok here, because XSB understands this even on Windows
+#include "flrincludes/flora_porting.flh"
+#include "flrincludes/flora_exceptions.flh"
+%% DO NOT include any other FLORA .flh files here, or else FLORA won't
 %% build correctly when installed outside of the XSB tree
 
 #define CH_QUOTE  39
@@ -44,9 +49,12 @@
 	file_read_line_atom/1, file_read_line_list/1
 	from file_io.
 
-:- import banner_control/1 from banner.
+:- import
+	close_open_tables/0,
+	xsb_backtrace/1
+   from machine.
 
-:- import flora_abort/1 from flrutils.
+:- import banner_control/1 from banner.
 
 :- import flora_configuration/2 from flrregistry.
 
@@ -54,16 +62,22 @@
 	flora_write_quoted_atom/1,
 	flora_write_atom_quoted_as_needed/1,
 	flora_write_atom/1,
-	flora_slash/1,
-	flora_running_under/1,
 	flora_file_op/2,
 	flora_file_op/3,
 	flora_read_line_as_atom/1,
 	flora_read_line_as_list/1,
 	flora_copy_input/0,
 	flora_copy_input/2,
+
+	flora_slash/1,
+	flora_running_under/1,
 	flora_user_home/1,
 	flora_install_dir/1,
+	flora_user_floradir/1,
+	flora_abort/0,
+	flora_abort/1,
+	flora_abort/2,
+
 	flora_atom_length/2,
 	flora_match_substring/3,
 	flora_match_substring/5,
@@ -192,6 +206,29 @@ flora_user_home(Path) :- xsb_configuration(user_home,Path).
 
 %% where Flora is installed
 flora_install_dir(Path) :- flora_configuration(installdir,Path).
+
+/*************************************************************************
+  flora_user_floradir(-Dir)
+*************************************************************************/
+flora_user_floradir(Dir) :-
+	( flora_configuration(userdir,Dir) ->
+	    true
+	;
+	    flora_user_home(UserHome),
+	    flora_slash(S),
+	    %% something like $HOME/.xsb/flora-version
+	    url_encode(FLORA_BUILD,Buildnumber),
+	    flora_concat_atoms([UserHome,S,PROLOG_CUSTOM_DIR,S,flora,'-',FLORA_VERSION,'-',Buildnumber],Dir),
+	    ( flora_file_op(exists,Dir) -> true
+	    ;
+		( flora_file_op(mkdir,Dir) -> true
+		;
+		    flora_abort(['startup failed: cannot create user directory: ',Dir])
+		)
+	    ),
+	    assert(flora_configuration(userdir,Dir))
+	),
+	!.
 
 %% File system-related
 flora_file_op(exists,File)          :- path_sysop(exists,File).
@@ -344,3 +381,26 @@ double_backslash_list([Ch|Rest], [Ch|DoubleRest]) :-
 	
 
 flora_delete_from_list(Elt,List,NewList) :- basics:select(Elt,List,NewList).
+
+
+flora_abort :-
+	xsb_backtrace(Bt),
+	close_open_tables,
+	throw(FLORA_ABORT(Bt)).
+flora_abort(Msg) :-
+	flora_abort(Msg,FLORA_ABORT).
+
+%% AbortType == FLORA_ABORT_NOTRACE: no backtrace will be printed
+flora_abort(Msg,AbortType) :-
+	is_list(Msg),
+	!,
+	flora_concat_items(Msg,AtomMsg),
+	xsb_backtrace(Bt),
+	close_open_tables,
+	ThrowMsg =.. [AbortType,AtomMsg,Bt],
+	throw(ThrowMsg).
+flora_abort(Msg,AbortType) :-
+	xsb_backtrace(Bt),
+	close_open_tables,
+	ThrowMsg =.. [AbortType,Msg,Bt],
+	throw(ThrowMsg).

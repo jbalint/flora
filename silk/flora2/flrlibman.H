@@ -18,8 +18,6 @@
 
 
 
-:- import flora_abort/0 from flrutils.
-
 :- import flora_configuration/2 from flrregistry.
 
 :- import flora_syslib_loaded/1 from usermod.
@@ -30,7 +28,9 @@
 :- dynamic flora_sysmod_loaded(_).
 :- index flora_sysmod_loaded/1-1.
 
-:- import flora_slash/1,
+:- import
+	flora_slash/1,
+	flora_abort/0,
 	flora_concat_atoms/2
    from flrporting.
 

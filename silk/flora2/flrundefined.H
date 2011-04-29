@@ -34,11 +34,11 @@
 
 :- import
 	flora_concat_atoms/2,
+        flora_abort/1,
 	flora_concat_items/2
    from flrporting.
 
 :- import 
-        flora_abort/1,
         flora_coder_error/1
    from flrutils.
 

@@ -23,14 +23,14 @@
 
 
 :- import
-	close_open_tables/0,
-	xsb_backtrace/1,
-        put_attr/3
+	put_attr/3,
+	term_psc/2,
+	term_new/2
    from machine.
-:- import term_psc/2, term_new/2 from machine.
 
 :- import
-	flora_user_home/1,
+	flora_abort/1,
+	flora_user_floradir/1,
 	flora_file_op/2,
 	flora_file_op/3,
 	flora_module_path_get/1,
@@ -56,10 +56,7 @@
 
 :- import xpp_options/1, xpp_process_file/3 from parse.
 
-:- import
-	parse_filename/4
-   from machine.
-
+:- import parse_filename/4 from machine.
 
 :- import process_control/2 from shell.
 
@@ -206,9 +203,6 @@
 :- dynamic flora_warnings_level(_).
 
 :- export
-	flora_abort/0,
-	flora_abort/1,
-	flora_abort/2,
 	flora_set_maxerrors/1,
 	checkCallerInfo/3,
 
@@ -266,7 +260,6 @@
 	flora_read_parse_compile_build_loop/3,
 
 	flora_patch_full_filename/1,
-	flora_user_floradir/1,
 
 	incremental_tabling_in_effect/1,
 	flora_read_from_source/2,

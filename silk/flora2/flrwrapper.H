@@ -21,6 +21,7 @@
    from basics.
 
 :- import
+	flora_abort/1,
 	flora_term_to_atom/2,
 	flora_match_substring/3,
 	flora_match_substring/5,
@@ -32,7 +33,6 @@
 
 :- import flora_module_registry/1 from flrregistry.
 
-:- import flora_abort/1 from flrutils.
 
 :- dynamic flora_flogic_fact_wrapper(_,_).
 :- dynamic flora_current_flogic_module(_).
