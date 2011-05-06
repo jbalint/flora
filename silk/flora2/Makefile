@@ -129,6 +129,9 @@ ${FLORA_TABLING_METHODS} : ${FLORA_DEFAULT_TABLING}
 flrversion${OBJEXT}: flrversion${PROLOGEXT} version.flh
 	@echo 'mc(flrversion,$(OPTION)).' >> cmd...
 
+flrporting${OBJEXT}: flrporting${PROLOGEXT} version.flh
+	@echo 'mc(flrporting,$(OPTION)).' >> cmd...
+
 flrlexer${OBJEXT} : flrlexer${PROLOGEXT} flrlexer.H $(FLORA_CHAR_DEFS) $(FLORA_TERMS) $(FLORA_ERRORS) $(FLORA_PORTING)
 	@echo 'mc(flrlexer,$(OPTION)).' >> cmd...
 
