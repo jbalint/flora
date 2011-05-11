@@ -178,29 +178,36 @@ public class PrologFlora extends FloraConstants
     */
     public Object[] FloraCommand(String cmd,Vector<String> vars)
     {
-        StringBuffer sb = new StringBuffer();
-	String varsString = "";
-	for (int i=0; i<vars.size(); i++) {
-	    String floravar = vars.elementAt(i);
-	    if (!floravar.startsWith("?"))
-		throw new FlrException("\n*** Java-FLORA-2 interface: Illegal variable name "
-				       + floravar
-				       + ". Variables passed to ExecuteQuery "
-				       + "must be FLORA-2 variables and "
-				       + "start with a `?'\n");
-	    if (i>0) varsString += ",";
-	    varsString += "'" + vars.elementAt(i) + "'=__Var" + i;
-	}
-	varsString = "[" + varsString + "]";
+    	StringBuffer sb = new StringBuffer();
+    	String varsString = "";
+    	for (int i=0; i<vars.size(); i++) {
+    		String floravar = vars.elementAt(i);
+    		if (!floravar.startsWith("?"))
+    			throw new FlrException("\n*** Java-FLORA-2 interface: Illegal variable name "
+    					+ floravar
+    					+ ". Variables passed to ExecuteQuery "
+    					+ "must be FLORA-2 variables and "
+    					+ "start with a `?'\n");
+    		if (i>0) varsString += ",";
+    		if (floravar.equals("?XWamState"))
+    			varsString += "'" + "?XWamState" + "'=_XWamState";
+    		else
+    			varsString += "'" + vars.elementAt(i) + "'=__Var" + i;
+    	}
+//    	if (varsString.length() > 0)
+//    		varsString += "," ;
+//    	varsString += "'" + "?XWamState" + "'=_XWamState";
+    	varsString = "[" + varsString + "]";
 
-	String listString = "L_rnd=" + varsString + ",";
-	String queryString = "S_rnd='" + cmd + "',";
-	String floraQueryString =
-	    "findall(TM_rnd,(flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex),buildTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
-	
-	sb.append(queryString);
-	sb.append(listString);
-	sb.append(floraQueryString);
+    	String listString = "L_rnd=" + varsString + ",";
+    	String queryString = "S_rnd='" + cmd + "',";
+    	String floraQueryString =
+    		//"findall(TM_rnd,(flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex),buildTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
+    		"findall(TM_rnd,(flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex),buildTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
+    		
+    	sb.append(queryString);
+    	sb.append(listString);
+    	sb.append(floraQueryString);
 	
 	if (debug)
 	    System.out.println("FloraCommand: " + sb);
