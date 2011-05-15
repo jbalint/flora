@@ -28,6 +28,7 @@
 
 :- export
 	flora_db_insert_base/2,
+	flora_db_insert_base_fast/2, %% for loading of facts only
 	flora_db_delete_base/2,
 	flora_db_insert_base_bt/2,
 	flora_db_delete_base_bt/2,
@@ -36,10 +37,7 @@
 	flora_new_db_storage/1,
 	flora_db_commit/1,
 	flora_db_reclaim_space/1,
-	flora_storage_insert_fact_bt/3,
-	flora_storage_delete_fact_bt/3,
-	flora_storage_insert_fact/3,
-	flora_storage_delete_fact/3,
+	flora_storage_fast_insert_fact/3,
 	flora_storage_find_fact/2.
 
 
@@ -61,7 +59,12 @@
 	storage_commit/1
    from storage.
 
-:- import flora_refresh_tables/1 from flrtables.
+:- import trie_intern_deterministic/4 from intern.
+
+:- import
+	flora_abolish_table_call/1,
+	flora_refresh_tables/1
+   from flrtables.
 
 :- import flora_call_hooks/5 from flrhooks.
 
@@ -85,7 +88,7 @@ flora_db_insert_base(StorageName,Call) :-
 	%% before hooks to after hooks
 	call_if_fdb_storage(StorageName,
 			    flora_call_hooks(Module,INSERTFACT,CallSansCaller,before,AroundHookLink)),
-	flora_storage_insert_fact(StorageName,CallSansCaller,_ResultFlag),
+	flora_storage_insert_fact(StorageName,CallSansCaller,Call,_ResultFlag),
 	call_if_fdb_storage(StorageName,
 			    flora_call_hooks(Module,INSERTFACT,CallSansCaller,after,AroundHookLink)).
 
@@ -107,7 +110,7 @@ flora_db_delete_base(StorageName,Call) :-
 	call_if_fdb_storage(StorageName,
 			    flora_call_hooks(Module,DELETEFACT,CallSansCaller,before,AroundHookLink)),
 	%%may or may not be present in main memory.
-	flora_storage_delete_fact(StorageName,CallSansCaller,_ResultFlag),
+	flora_storage_delete_fact(StorageName,CallSansCaller,Call,_ResultFlag),
 	call_if_fdb_storage(StorageName,
 			    flora_call_hooks(Module,DELETEFACT,CallSansCaller,after,AroundHookLink)).
 
@@ -157,29 +160,37 @@ flora_storage_insert_fact_bt(StorageName,Fact,Call,Inserted) :-
 	  flora_is_fdb_storage(StorageName)
 	-> incr_storage_insert_fact_bt(StorageName,Fact,Inserted)
 	;
-	    storage_insert_fact_bt(StorageName,Fact,Inserted,
-				   true,
-				   %% Refresh on backtracking. Forward refresh
-				   %% is done in flrbtdbop.P and flrdbop.P
-				   %% Forward refresh can't be done here, since
-				   %% flora_storage_insert_fact is too low
-				   %% level and is used elsewhere. Refreshing
-				   %% of tables on forward execution here is
-				   %% too low level and can be dangerous
-				   flora_refresh_tables(Call))
-	).
+	  storage_insert_fact_bt(StorageName,Fact,Inserted,
+				 true,
+				 %% Refresh on backtracking. Forward refresh
+				 %% is done after this statement.
+				 flora_refresh_tables(Call)
+				),
+	  call_if_fdb_storage(StorageName,
+			      flora_refresh_tables(Call)
+			     )
+	),
+	call_if_fdb_storage(StorageName,
+			    flrnegation:incr_flora_update_counter
+			   ).
 
 
 %% Nonbacktrackable insert
-flora_storage_insert_fact(StorageName,Fact,Inserted) :-	
+flora_storage_insert_fact(StorageName,Fact,Call,Inserted) :-	
 	flora_storage_module(StorageName,Module),
 	(
 	  flora_trailer_registry(Module,FL_TABLING(FL_INCREMENTAL)),
 	  flora_is_fdb_storage(StorageName)
 	-> incr_storage_insert_fact(StorageName,Fact,Inserted)
 	;
-	    storage_insert_fact(StorageName,Fact,Inserted)
-	).
+	  storage_insert_fact(StorageName,Fact,Inserted),
+	  call_if_fdb_storage(StorageName,
+			      flora_refresh_tables(Call)
+			     )
+	),
+	call_if_fdb_storage(StorageName,
+			    flrnegation:incr_flora_update_counter
+			   ).
 
 
 %% Backtrackable delete.
@@ -195,17 +206,19 @@ flora_storage_delete_fact_bt(StorageName,Fact,Call,Deleted) :-
 	  storage_delete_fact_bt(StorageName,Fact,Deleted,
 				 true,
 				 %% Refresh on backtracking. Forward refresh is
-				 %% done in flrbtdbop.P and flrdbop.P
-				 %% Forward refresh can't be done here, since
-				 %% flora_storage_delete_fact is too low level
-				 %% and is used elsewhere. Refreshing of tables
-				 %% on forward execution here is too low level
-				 %% and can be dangerous
-				 flora_refresh_tables(Call))
-	).
+				 %% done after this statement.
+				 flora_refresh_tables(Call)
+				),
+	  call_if_fdb_storage(StorageName,
+			      flora_refresh_tables(Call)
+			     )
+	),
+	call_if_fdb_storage(StorageName,
+			    flrnegation:incr_flora_update_counter
+			   ).
 
 %% Nonbacktrackable delete
-flora_storage_delete_fact(StorageName,Fact,Deleted) :-
+flora_storage_delete_fact(StorageName,Fact,Call,Deleted) :-
 	flora_storage_module(StorageName,Module),
 	(
 	  flora_trailer_registry(Module,FL_TABLING(FL_INCREMENTAL)),
@@ -213,15 +226,24 @@ flora_storage_delete_fact(StorageName,Fact,Deleted) :-
 	-> 
 	  incr_storage_delete_fact(StorageName,Fact,Deleted)
 	;
-	  storage_delete_fact(StorageName,Fact,Deleted)
-	).
+	  storage_delete_fact(StorageName,Fact,Deleted),
+	  call_if_fdb_storage(StorageName,
+			      flora_refresh_tables(Call)
+			     )
+	),
+	call_if_fdb_storage(StorageName,
+			    flrnegation:incr_flora_update_counter
+			   ).
 
 %% deletes the whole trie
 %% exported
-flora_db_delete_all(StorageName) :- storage_delete_all(StorageName).
+flora_db_delete_all(StorageName) :-
+	storage_delete_all(StorageName).
 
-%%flora_new_db_storage(StorageName) :- storage_handle(StorageName,NON_INCREMENTAL_TRIE,_,_).
-flora_new_db_storage(StorageName) :- storage_handle(StorageName,INCREMENTAL_TRIE,_,_).
+%%flora_new_db_storage(StorageName) :-
+%%        storage_handle(StorageName,NON_INCREMENTAL_TRIE,_,_).
+flora_new_db_storage(StorageName) :-
+	storage_handle(StorageName,INCREMENTAL_TRIE,_,_).
 
 
 %% Find fact in storage
@@ -237,10 +259,26 @@ flora_db_commit(StorageName) :- storage_commit(StorageName).
 %% Reclaims space by removing nodes from the backtrackable insert/keypair trie
 %% which were marked for deletion. This should be done only at the top 
 %% level of a query.
-%% exported
+%% This is exported
 flora_db_reclaim_space(StorageName) :- storage_reclaim_space(StorageName).
 
 
 %% Call Goal, if StorageName is FDB storage (and not FLD storage)
 call_if_fdb_storage(StorageName,Goal) :-
 	(flora_is_fdb_storage(StorageName) -> Goal; true).
+
+
+/******************************************************************************
+    The following are used only for loading facts and for update
+    management in flrnegation.P
+******************************************************************************/
+%% IncrFlag INCREMENTAL_TRIE/NON_INCREMENTAL_TRIE
+flora_storage_fast_insert_fact(StorageName,IncrFlag,Fact) :-
+	storage_handle(StorageName,IncrFlag,Handle,_),
+	    trie_intern_deterministic(Fact,Handle,_Leaf,_).
+
+flora_db_insert_base_fast(StorageName,Call) :-
+	flora_trim_last(Call,Fact),
+	flora_storage_fast_insert_fact(StorageName,INCREMENTAL_TRIE,Fact),
+	
+	flora_abolish_table_call(Call).

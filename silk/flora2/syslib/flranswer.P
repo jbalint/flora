@@ -23,6 +23,7 @@
 #include "char_defs.h"
 #include "standard.h"
 #include "flora_terms.flh"
+#include "flora_status_codes.flh"
 
 %% Request number for obtaining the delay register
 #define DELAY_REG  2
@@ -301,6 +302,11 @@ flranswer_all_answers_query_handler_new(Exception,QueryTemplate,AroundHookLink) 
 	storage_delete_all(FLRANSWER_UNDEF_TRIE),
 	throw(Exception).
 
+flranswer_one_answer_query_handler_new(Exception,QueryTemplate,AroundHookLink) :-
+	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
+	flora_reclaim_storage_space,
+	throw(Exception).
+
 
 %% to silence the tracer
 flora_findall(X,Y,Z) :- findall(X,Y,Z).
@@ -309,7 +315,7 @@ flora_findall(X,Y,Z) :- findall(X,Y,Z).
 /****************************************************************************
 TODO: rewrite flora_print_all using this more efficient predicate
 
-      flora_collect_all(+Goal,+NameVarPairList,?TrueAnswers,?UndefinedAnswers)
+      flora_collect_all(+Goal,+NameVarPairList,?TrueAnswers,?UndefinedAnswers,?Exception)
 
       Goal:            a reified goal
       NameVarPairList: a list of the form
@@ -332,11 +338,16 @@ TODO: rewrite flora_print_all using this more efficient predicate
       This is used for other applications that wish to call
       FLORA-2 and get all results
 *****************************************************************************/
-flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
+flora_collect_all(Gs,NVs,TrueAns,UndefAns,Exception) :-
 	NVs == [],
 	!,
 	flora_call_hooks(_Mod,QUERYHOOK,Gs,before,AroundHookLink),
-	(flora_call(Gs,NVs,XWamState),
+	(catch(flora_call(Gs,NVs,XWamState),
+	       Exception,
+	       flranswer_one_answer_query_handler_new(Exception,
+						      Gs,
+						      AroundHookLink)
+	      ),
 	    close_open_tables,
 	    (XWamState=:=0
 	    -> storage_insert_fact(FLRANSWER_TRUE_TRIE,FLRANSWER_FUNCTOR,_)
@@ -359,7 +370,7 @@ flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
 	storage_delete_all(FLRANSWER_UNDEF_TRIE).
 
 
-flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
+flora_collect_all(Gs,NVs,TrueAns,UndefAns,Exception) :-
 	%% All answers are asserted into temp tries for true/undefined answers.
 	%% Since these are tries, duplicates are deleted.
 	%% Rationale: some answer lists might have hundreds of thousands
@@ -384,6 +395,9 @@ flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
 	                                              QueryTemplate,
 						      AroundHookLink)
 	     ),
+	(var(Exception) ->  Exception = FLORA_NORMAL
+	; true
+	),
 	close_open_tables,
 	(var(TrueAns)
 	-> flora_findall(X,storage_find_fact(FLRANSWER_TRUE_TRIE,X),TrueAns1),

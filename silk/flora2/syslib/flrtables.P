@@ -43,6 +43,7 @@
    from increval.
 
 :- import
+	incr_flora_update_counter/0,
 	flora_unwrap_negation/2
    from flrnegation.
 :- import
@@ -52,14 +53,12 @@
 :- import flora_warning_line/2 from flrprint.
 %%:- import flora_decode_goal_as_atom/2 from flrdecode.
 
-%% need to import that to match the error's module
-:- import error/3 from usermod.
-
 :- ensure_loaded('flrdynmod.P').
 
 
 FLLIBREFRESH(_ThisModule,CallList) :-
-	flora_refresh_list(CallList).
+	flora_refresh_list(CallList),
+	incr_flora_update_counter.
 
 flora_refresh_list([]).
 flora_refresh_list([H|T]) :-
@@ -72,7 +71,6 @@ flora_refresh_tables(Call) :-
 	FLORA_SYMBOL('refresh_table_for')(GenCall),
 	!.
 flora_refresh_tables(_).
-
 
 
 %% Call must be of the form p(_,_) -- it is an internal Flora-2 predicate
@@ -91,11 +89,9 @@ flora_abolish_table_predicate(Call,Hook) :-
 		call(Hook)
 	    ;  abolish_table_pred(Call)
 	    )
-	;
-	  %% ignore incremental tabling errors that might arise
-	  catch(incr_invalidate_call(Call),
-		error(typed_table_error(incremental_tabling),_,_),
-	       true)
+	; (flora_has_incomplete_incr_dependent_table(Call) -> true
+	  ; incr_invalidate_call(Call)
+	  )
 	).
 
 abolish_table_pred_hook(Error) :-
@@ -145,7 +141,9 @@ flora_abolish_table_call(Call,IncrementalFlag,Hook) :-
 	    incremental_predicate(Call),
 	    IncrementalFlag == incremental_also
 	-> 
-	    incr_invalidate_call(Call)
+	    (flora_has_incomplete_incr_dependent_table(Call) -> true
+	    ; incr_invalidate_call(Call)
+	    )
 	),
 	fail.
 flora_abolish_table_call(_Call,_Flag,_Hook).

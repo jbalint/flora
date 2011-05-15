@@ -63,11 +63,13 @@
 :- import xpp_process_file/3 from parse.
 
 :- import 
-	flora_db_insert_base/2,
+	flora_db_insert_base_fast/2,
 	flora_db_commit/1,
 	flora_db_reclaim_space/1,
 	flora_storage_find_fact/2
    from flrstoragebase.
+
+:- import incr_flora_update_counter/0 from flrnegation.
 
 :- import flora_call_hooks/5 from flrhooks.
 

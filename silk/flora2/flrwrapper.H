@@ -31,7 +31,11 @@
 
 :- import term_psc/2, term_new/2, psc_name/2 from machine.
 
-:- import flora_module_registry/1 from flrregistry.
+:- import
+	flora_storage_registry/1,
+	flora_fld_storage_registry/1,
+	flora_module_registry/1
+   from flrregistry.
 
 
 :- dynamic flora_flogic_fact_wrapper(_,_).

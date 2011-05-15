@@ -12,12 +12,10 @@
 ** For information about licensing terms, please see
 ** http://silk.projects.semwebcentral.org/flora2-license.html
 **
-**
 */
 
-
-
 :- compiler_options([xpp_on]).
+#include "trie_defs.h"
 #include "flora_terms.flh"
 #include "flora_porting.flh"
 #include "flora_prefix.flh"
@@ -25,30 +23,16 @@
 
 #include "flora_tabling_methods.flh"
 
-#define MAX_NEGATION_NESTING_DEPTH 10000
-
-
-%% Identical to XSB's sk_not, but allows us to clean up the intermediate
-%% tables created while computing the negation
-
-%% Variables temporarily changed to ground and tnot 
-%% call is made.  Should give existential semantics to nonground negative
-%% calls.  That is
-%%	...:- FLORA_TNOT_PREDICATE(p(X)),...
-%% is like
-%%	... :- tnot(pp),...
-%%	pp :- p(X).
-%% where pp is a new proposition.
-
 :- import numbervars/4 from num_vars.
 :- import copy_term/2 from basics.
 :- import
-	table_state/4,
-	get_calls/3,
 	't not'/1
    from tables.
-:- import incr_invalidate_call/1 from increval.
 :- import
+	incr_invalidate_call/1
+   from increval.
+:- import
+	flora_has_incomplete_incr_dependent_table/1,
 	flora_abolish_table_call/1
    from flrtables.
 :- import
@@ -61,13 +45,38 @@
 %% need to import that to match the error's module
 :- import error/3 from usermod.
 
+:- import
+	storage_delete_fact/3,
+	storage_find_fact/2
+   from storage.
+
+:- import
+	flora_storage_fast_insert_fact/3
+   from flrstoragebase.
+
+:- dynamic update_counter/2.
+:- local update_counter/2.
+
 :- export
 	flora_unwrap_negation/2,
-	flora_cleanup_negation/1, 
 	flora_apply_negation_wrapper/3,
+	incr_flora_update_counter/0,
 	FLORA_TNOT_PREDICATE/3,
 	FLORA_TNOT_PREDICATE/1.
 
+
+%% Similar to XSB's sk_not, but allows us to clean up the intermediate
+%% tables created while computing negation. Also, tries to deal with
+%% various builtins, like var, integer, =, directly.
+
+%% Variables temporarily changed to ground and tnot 
+%% call is made.  Should give existential semantics to nonground negative
+%% calls.  That is
+%%	...:- FLORA_TNOT_PREDICATE(p(X)),...
+%% is like
+%%	... :- tnot(pp),...
+%%	pp :- p(X).
+%% where pp is a new proposition.
 
 FLORA_TNOT_PREDICATE(Goal) :- FLORA_TNOT_PREDICATE(Goal,NULL,NULL).
 
@@ -77,29 +86,19 @@ FLORA_TNOT_PREDICATE(Goal,Line,File) :-
 	catch(NewGoal,error(typed_table_error(incremental_tabling),_,_),incr_tabling_error_handler(Line,File,UnwrappedGoal)).
 
 	
-	
 %% Delete tables for FLORA_THIS_WORKSPACE(tabled_unnumber_call)/1, which
-%% defined in closure/flrcommon.fli
-%% Invalidate for incremental tabling
-flora_cleanup_negation(Call) :-
-	(curr_sym:predicate_property(Call,incremental)
-	->
-	    (get_calls(Call,Handle,_Template),
-		table_state(Handle,_PredType,_CallType,AnsSetStatus),
-		AnsSetStatus == incomplete
-	    -> true
-	    ; 
-		%% ignore incremental tabling errors that might arise
-		%%incr_invalidate_call(Call)
-		catch(incr_invalidate_call(Call),
-		      error(typed_table_error(incremental_tabling),_,_),
-		      true)
-	    )
-	;
-	    flrcanon:convert_to_body_literal(Call,Call1),
-	    flora_abolish_table_call(Call1)
-	),
+%% is defined in closure/flrcommon.fli
+cleanup_negation(Call) :-
+	donot_cleanup_negation(Call),
 	!.
+cleanup_negation(Call) :-
+	(curr_sym:predicate_property(Call,incremental)
+	-> ( flora_has_incomplete_incr_dependent_table(Call) -> true
+	   ; incr_invalidate_call(Call)
+	   )
+	; flora_abolish_table_call(Call)
+	).
+
 
 %% unwrap Call = FLORA_THIS_WORKSPACE(FL_TABLED_UNNUMBER_CALL)(Unwrapped)
 flora_unwrap_negation(Call,Unwrapped) :-
@@ -134,8 +133,32 @@ incr_tabling_error_handler(Line,File,Goal) :-
 		     MainMsg1, GoalAtm, MainMsg2, EndingMsg],
 		    FLORA_ABORT_NOTRACE).
 
+%% optimizations for common cases. more to be added as the need arises
+%% may add write predicates here
+%% May push through conjunctions and disjunctions later
+make_negated_goal('='(Left,Right),   _OrigGoal, '\='(Left,Right))   :- !.
+make_negated_goal('\='(Left,Right),  _OrigGoal, '='(Left,Right))    :- !.
+make_negated_goal('=='(Left,Right),  _OrigGoal, '\=='(Left,Right))  :- !.
+make_negated_goal('\=='(Left,Right), _OrigGoal, '=='(Left,Right))   :- !.
+make_negated_goal('<'(Left,Right),   _OrigGoal, '>='(Left,Right))   :- !.
+make_negated_goal('=<'(Left,Right),  _OrigGoal, '>'(Left,Right))    :- !.
+make_negated_goal('>'(Left,Right),   _OrigGoal, '=<'(Left,Right))   :- !.
+make_negated_goal('>='(Left,Right),  _OrigGoal, '<'(Left,Right))    :- !.
+make_negated_goal('@<'(Left,Right),  _OrigGoal, '@>='(Left,Right))  :- !.
+make_negated_goal('@=<'(Left,Right), _OrigGoal, '@>'(Left,Right))   :- !.
+make_negated_goal('@>'(Left,Right),  _OrigGoal, '@=<'(Left,Right))  :- !.
+make_negated_goal('@>='(Left,Right), _OrigGoal, '@<'(Left,Right))   :- !.
+make_negated_goal(var(V),     _OrigGoal, nonvar(V))     :- !.
+make_negated_goal(nonvar(V),  _OrigGoal, var(V))        :- !.
+make_negated_goal(integer(V), _OrigGoal, \+integer(V))  :- !.
+make_negated_goal(float(V),   _OrigGoal, \+float(V))    :- !.
+make_negated_goal(number(V),  _OrigGoal, \+number(V))   :- !.
+make_negated_goal(is_list(V), _OrigGoal, \+is_list(V))  :- !.
+make_negated_goal(true, _OrigGoal, fail)                :- !.
+make_negated_goal(fail, _OrigGoal, true)                :- !.
+make_negated_goal(false,_OrigGoal, true)                :- !.
 
-make_negated_goal(FLLIBHYPOTHETICAL(Type,Goal),_OrigGoal, FLLIBHYPOTHETICAL(ReverseType,Goal)) :-
+make_negated_goal(FLLIBHYPOTHETICAL(Type,Goal), _OrigGoal, FLLIBHYPOTHETICAL(ReverseType,Goal)) :-
 	!,
 	(Type == FL_POSSIBLE -> ReverseType = FL_IMPOSSIBLE
 	; ReverseType = FL_POSSIBLE
@@ -145,20 +168,39 @@ make_negated_goal(_UnwrappedGoal,OrigGoal,'t not'(TempGoal)) :-
 	copy_term(OrigGoal,TempGoal),
 	%% make TempGoal ground, so no checks would be necessary in 't not'
 	numbervars(TempGoal,0,_,[attvar(bind)]),
-	%% we are checking for incomplete tables: Should be safe?
-	flora_cleanup_negation(TempGoal).
+	%% cleanup_negation/1 is checking for incomplete tables to be safe
+	cleanup_negation(TempGoal),
+	%% register_negated_call must be after cleanup_negation
+	register_negated_call(TempGoal),
+	!.
 
+%% update_counter business
+#define NEG_MGT_TRIE  FLORA_SYMBOL('neg_mgt_trie')
+?- assert(update_counter(0,0)).
+donot_cleanup_negation(Call) :-
+	update_counter(CurrL,CurrR),
+	(storage_find_fact(NEG_MGT_TRIE,negated_calls_cache(Call,CallFlag))
+	-> (CurrL,CurrR) = CallFlag
+	; true
+	).
+incr_flora_update_counter :-
+	%%update_counter(H,L),
+	retract(update_counter(H,L)),
+	current_prolog_flag(max_integer,MaxInt),
+	(L < MaxInt -> L1 is L+1, H1 is H
+	; L1 = 0, H1 is H+1
+	),
+	assert(update_counter(H1,L1)).
 
-/*
-   Instead of catching the errors, we might want to instead examine
-   if we are abolishing incomplete dependent tables. Table dependency
-   in incremental tabling can be found using the following idiom:
-
-          predicate_property(Skel,incremental),
-	    increval:get_calls_incr(Skel,_Hndl),
-	       incr_trans_depends(Skel,Call).
-
-   Direct dependency can be checked using:
-
-	    incr_directly_depends(Skel,Call)
-*/
+register_negated_call(Call) :-
+	%% get current flag
+	update_counter(L,R),
+	CurrFlag = (L,R),
+	(storage_find_fact(NEG_MGT_TRIE,negated_calls_cache(Call,CurrFlag))
+	-> true
+	; storage_delete_fact(NEG_MGT_TRIE,negated_calls_cache(Call,_),_),
+	    %%!,   %% cut here has no effect
+	    flora_storage_fast_insert_fact(NEG_MGT_TRIE,
+					   NON_INCREMENTAL_TRIE,
+					   negated_calls_cache(Call,CurrFlag))
+	).

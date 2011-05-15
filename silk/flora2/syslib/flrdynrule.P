@@ -72,8 +72,11 @@
 	flora_storage_check_module_name/1
    from flrstorageutils.
 :- import
-	flora_abolish_table_call_carefully/1
+	flora_refresh_tables/1
    from flrtables.
+:- import
+	incr_flora_update_counter/0
+   from flrnegation.
 :- import
         conjunct_to_list/2,
         flora_bind_libmodobj/2,
@@ -88,8 +91,7 @@
         flora_build_pred_signature/2
    from flrcanon.
 :- import
-	flora_bind_last/2,
-        flora_generalize_last/2
+	flora_bind_last/2
    from flrtrim.
 
 :- import FLLIBNEWOID/1 from flrnewoid.
@@ -362,7 +364,8 @@ flora_insert_rule(InsOp,Id,Head,Body,OrigBody,Meta,DefeatCond,BridgeRule) :-
             flora_record_rule_signature(Id,FLDYNZPREFIX,Module,InstHeadB,OrigBody,Meta,DefeatCond,[NewRule1],BridgeRule)
         ),
 	adaptive_assert(NewRule),
-	flora_abolish_table_call_carefully(InstHead),
+	flora_refresh_tables(InstHead),
+	incr_flora_update_counter,
 	(BaseWrap==WRAP_OBJEQL ->
 	    ( flloadtrailer([FLOBJEQLDEF],Module), ! ; flora_abort)
 	;
@@ -400,13 +403,13 @@ flora_check_and_delete_rules(DelOp,RuleList) :-
 flora_refresh_ruleheads([]) :- !.
 flora_refresh_ruleheads([H|L]) :-
         flora_refresh_rulehead(H),
-        flora_refresh_ruleheads(L).
+        flora_refresh_ruleheads(L),
+	incr_flora_update_counter.
 
 flora_refresh_rulehead(Head) :-
 	%% heads might be passed in body form
 	convert_to_head_literal(Head,HHead),
-	flora_generalize_last(HHead,GeneralizedHead), % head with no module arg
-	flora_abolish_table_call_carefully(GeneralizedHead).
+	flora_refresh_tables(HHead).
 
 /***********************************************************************
  flora_check_rules(+DelOp,+RuleList,-SigList,-HeadList)
@@ -430,7 +433,7 @@ flora_check_rules(DelOp,[(R,L)|Rules],SigList,HL) :-
 flora_check_rules(_DelOp,[H|_Tail],_SigList,_HL) :-
 	!,
 	flora_decode_goal_as_atom(H,AtomH),
-	flora_abort(['non-rule element in the rule list of deleterule{...}, ',
+	flora_abort(['non-rule item in the rule-list of deleterule{...}, ',
 		     AtomH]).
 
 /***********************************************************************
