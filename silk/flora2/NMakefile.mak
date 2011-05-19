@@ -50,7 +50,7 @@ OPTIONS = [optimize,ti_all]
 
 .SUFFIXES: $(PROLOGEXT) $(OBJEXT)
 
-## p2h is handled specially, buy makeflora
+## p2h is handled specially, by makeflora
 ALL:: CLEANTEMP $(ALLOBJS)
 	cd closure
 	nmake /f NMakefile.mak

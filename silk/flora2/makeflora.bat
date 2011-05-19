@@ -1,13 +1,15 @@
 @echo off
 
 REM  Call:
-REM     makeflora [-S] [-c] full-path-to-prolog
+REM     makeflora [-S] [-c|-c64] full-path-to-prolog
 REM     makeflora clean
 
 REM   makeflora -S full-path-to-prolog
 REM       means: configure FLORA for subsumptive tabling
 REM   makeflora -c full-path-to-prolog
 REM       means: use the C compiler to recompile the directory
+REM   makeflora -c64 full-path-to-prolog
+REM       Like -c, but make for the 64 bit version of Windows
 REM   .\p2h - developer's option
 
 REM  NOTE: DOS batch language is very brittle. For instance, replacing
@@ -51,6 +53,8 @@ echo ***The above `Could Not Find prolog2hilog.*' messages are NORMAL
 
 if "%1" == "-c" if not exist ..\binary-distribution.txt nmake /f NMakefile.mak
 if "%1" == "-c" if not exist ..\binary-distribution.txt del prolog2hilog.obj
+if "%1" == "-c64" if not exist ..\binary-distribution.txt nmake /f NMakefile64.mak
+if "%1" == "-c64" if not exist ..\binary-distribution.txt del prolog2hilog.obj
 
 cd ..
 

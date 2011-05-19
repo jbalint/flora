@@ -31,10 +31,12 @@
 #include "error_xsb.h"
 #include "cinterf.h"
 
-#define FLORA_META_PREFIX      "_$_$_flora'mod"
-#define FLORA_LIB_PREFIX       "fllib"
-#define FLORA_META_PREFIX_LEN  14
-#define FLORA_LIB_PREFIX_LEN    5
+#define FLORA_META_PREFIX         "_$_$_flora'mod"
+#define FLORA_LIB_PREFIX          "fllib"
+#define FLORA_DATATYPE_FUNC       "_datatype"
+#define FLORA_META_PREFIX_LEN     14
+#define FLORA_LIB_PREFIX_LEN      5
+#define FLORA_DATATYPE_FUNC_LEN   7
 
 
 #if 0
@@ -54,6 +56,7 @@ static char *pterm2string(CTXTdeclc prolog_term term);
 inline static int is_hilog(prolog_term term, char *apply_funct);
 inline static int is_special_form(prolog_term term);
 inline static int is_formula(prolog_term term);
+inline static int is_protected_term(prolog_term term);
 static prolog_term map_special_form(CTXTdeclc prolog_term (*func)(), prolog_term term, char *apply, int unify_vars);
 static prolog_term map_list(CTXTdeclc prolog_term func(), prolog_term term, char *apply, int unify_vars);
 
@@ -64,7 +67,7 @@ static char errormessage[300];
   - Pterm:  Prolog term
   - Hterm:  HiLog term
   - Apply:  Symbol name for the HiLog apply predicate
-  - UnifyGlag: If true, unify if both Pterm and Hterm are variables
+  - UnifyFlag: If true, unify if both Pterm and Hterm are variables
 
   If Pterm is a variable, then it is unified with Hterm.
   If Hterm is a variable, then it is unified with Pterm.
@@ -166,6 +169,7 @@ static prolog_term hilog2prolog(CTXTdeclc prolog_term hterm, char *apply, int un
       return pterm; /* don't reuse input vars: make new ones */
   }
   if (is_scalar(hterm)) return hterm;
+  if (is_protected_term(hterm)) return hterm;
 
   if (is_list(hterm))
     return map_list(CTXTc hilog2prolog,hterm,apply,unify_vars);
@@ -229,6 +233,7 @@ static prolog_term prolog2hilog(CTXTdeclc prolog_term pterm, char *apply, int un
       return hterm; /* don't reuse input vars: create new */
   }
   if (is_scalar(pterm)) return pterm;
+  if (is_protected_term(pterm)) return pterm;
 
   if (is_list(pterm))
     return map_list(CTXTc prolog2hilog,pterm,apply, unify_vars);
@@ -359,6 +364,20 @@ static int is_formula(prolog_term term)
     (strncmp(functor, FLORA_META_PREFIX, FLORA_META_PREFIX_LEN)==0)
     ||
     (strncmp(functor, FLORA_LIB_PREFIX, FLORA_LIB_PREFIX_LEN)==0);
+}
+
+
+/* Check if term is protected from conversion. Example: a datatype */
+static int is_protected_term(prolog_term term)
+{
+  char *functor;
+  if (is_scalar(term) || is_list(term)) return FALSE;
+
+  functor = extern_p2c_functor(term);
+  return
+    (strncmp(functor, FLORA_DATATYPE_FUNC, FLORA_DATATYPE_FUNC_LEN)==0)
+    // ||    // add more as needed
+    ;
 }
 
 
