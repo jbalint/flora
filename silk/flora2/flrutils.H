@@ -147,8 +147,6 @@
 	flora_stdwarn_string/1,
 	flora_stdwarn_string/2,
 	
-	flora_stdmsg_nl/0,
-	
 	flora_error_indentline/0,
 	flora_warning_indentline/0,
 	
@@ -160,6 +158,11 @@
 	
 	flora_loader_message/1,
 	flora_loader_message/2,
+
+	flora_loader_msg_nl/0,
+	%%flora_stdmsg_nl/0,
+	
+
 	%%flora_message_line/1,
 	flora_message_line/2
    from flrprint.

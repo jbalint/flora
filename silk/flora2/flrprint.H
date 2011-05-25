@@ -68,6 +68,7 @@
 	flora_message_line/2,
 	flora_loader_message/1,
 	flora_loader_message/2,
+	flora_loader_msg_nl/0,
 	
 	flora_err_stream/1,
 	flora_warn_stream/1,
