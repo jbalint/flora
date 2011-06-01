@@ -31,6 +31,8 @@
 	flatten/2
    from basics.
 
+:- import 't not'/1 from tables.
+
 %%:- import term_to_atom/2 from string.
 
 :- import
@@ -55,7 +57,11 @@
    from flrporting.
 
 :- import flora_unwrap_truthvalued_call/2 from usermod.
-:- import flora_unwrap_negation/2 from flrnegation.
+:- import
+	FLORA_TNOT_PREDICATE/1,
+	FLORA_TNOT_PREDICATE/3,
+	flora_unwrap_negation/2
+   from flrnegation.
 
 %%:- import flora_warning_line/2 from flrprint.
 
@@ -1149,7 +1155,7 @@ decode_literal_internal(FLLIBTRUTHVALUE(Call,Truth),[ReifyStart,TruthCode,'{',Ca
 	Truth=TruthCode.
 
 %% _load(...) in the form of [...]
-decode_literal_internal(FLLIBLOAD([Arg],_,_,_),[ReifyStart,'[',LoadCode,']',ReifyEnd],Level,_Depth) :-
+decode_literal_internal(FLLIBLOAD([Arg],_,_,_),[ReifyStart,'_load(',LoadCode,')',ReifyEnd],Level,_Depth) :-
 	!,
 	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	(Arg = '>>'(File,Module)
@@ -1240,26 +1246,33 @@ decode_literal_internal('-->'(Call1,Call2),[ReifyStart,Call1Code,' --> ',Call2Co
 	decode_literal_internal(Call2,Call2Code,Level,Depth1).
 
 %% call(...), tnot(...), not(...), \+ (...)
-decode_literal_internal(FLORA_TNOT_PREDICATE(Subcall),[ReifyStart,'(','not ',SubcallCode,')',ReifyEnd],Level,Depth) :-
+decode_literal_internal(FLORA_TNOT_PREDICATE(Subcall),[ReifyStart,'(','naf ',SubcallCode,')',ReifyEnd],Level,Depth) :-
 	!,
 	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	Depth1 is Depth+1,
 	flora_unwrap_negation(Subcall,Unwrapped),
 	flora_decode_goal(Unwrapped,SubcallCode,Depth1).
-decode_literal_internal(FLORA_TNOT_PREDICATE(Subcall,_,_),[ReifyStart,'(','not ',SubcallCode,')',ReifyEnd],Level,Depth) :-
+decode_literal_internal(FLORA_TNOT_PREDICATE(Subcall,_,_),[ReifyStart,'(','naf ',SubcallCode,')',ReifyEnd],Level,Depth) :-
 	!,
 	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	Depth1 is Depth+1,
 	flora_unwrap_negation(Subcall,Unwrapped),
 	flora_decode_goal(Unwrapped,SubcallCode,Depth1).
-decode_literal_internal(tnot(Subcall),[ReifyStart,'not ',SubcallCode,ReifyEnd],_Level,Depth) :-
+decode_literal_internal(tnot(Subcall),[ReifyStart,'naf ',SubcallCode,ReifyEnd],_Level,Depth) :-
 	!,
 	%%(Level==0 -> ReifyStart='',ReifyEnd=''; ReifyStart='${',ReifyEnd='}'),
 	ReifyStart='', ReifyEnd='',
 	Depth1 is Depth+1,
 	flora_unwrap_negation(Subcall,Unwrapped),
 	flora_decode_goal(Unwrapped,SubcallCode,Depth1).
-decode_literal_internal(not(Subcall),[ReifyStart,'not ',SubcallCode,ReifyEnd],_Level,Depth) :-
+decode_literal_internal('t not'(Subcall),[ReifyStart,'naf ',SubcallCode,ReifyEnd],_Level,Depth) :-
+	!,
+	%%(Level==0 -> ReifyStart='',ReifyEnd=''; ReifyStart='${',ReifyEnd='}'),
+	ReifyStart='', ReifyEnd='',
+	Depth1 is Depth+1,
+	flora_unwrap_negation(Subcall,Unwrapped),
+	flora_decode_goal(Unwrapped,SubcallCode,Depth1).
+decode_literal_internal(not(Subcall),[ReifyStart,'\+ ',SubcallCode,ReifyEnd],_Level,Depth) :-
 	!,
 	%%(Level==0 -> ReifyStart='',ReifyEnd=''; ReifyStart='${',ReifyEnd='}'),
 	ReifyStart='', ReifyEnd='',
