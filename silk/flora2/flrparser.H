@@ -55,6 +55,10 @@
 	flora_prlgdef/2
    from flrprolog.
 
+:- import
+	flora_retractall_substitute/1
+   from flrutils.
+
 :- import flora_argdef/4 from flrarguments.
 
 :- import flora_delayed_literal/2 from FLDELAYSUPPORTMOD.

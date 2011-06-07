@@ -67,6 +67,7 @@
 
 :- import
 	flora_compiler_environment/2,
+	flora_retractall_substitute/1,
 	flora_token_index_to_line/2
    from flrutils.
 

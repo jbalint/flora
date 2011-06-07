@@ -26,6 +26,10 @@
 
 :- import eval/2 from eval.
 
+:- import
+	flora_retractall_substitute/1
+   from flrutils.
+
 :- import 
 	flora_set_counter/2,
 	flora_get_counter/2

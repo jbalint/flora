@@ -210,6 +210,7 @@
 :- export
 	flora_set_maxerrors/1,
 	checkCallerInfo/3,
+	flora_retractall_substitute/1,
 
 	flora_compile_util/1,
 	flora_compile_util/2,

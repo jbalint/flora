@@ -257,7 +257,7 @@ flloadtrailer1(TrailerOptions,Workspace) :-
 		      ?- table ... as variant/subsumptive
 	          do not seem to cause predicates to be tabled.
 	      */
-	      util_include_file([FLHEADER2,FLDYNDECLARE],_FileStatus),
+	      util_include_file([FLHEADER2,FLDYNDECLARE,FLINDEX_P],_FileStatus),
 	      told,
 	      tell(PreOutFile)
 	    ),
@@ -333,9 +333,10 @@ flloadpatch(Workspace) :-
 	    tell(UserPatchPFile),
 	    %% Creating .xsb/flora/patch.P
 	    util_include_file([FLHEADER,FLDEFINITION,FLHEADER2,FLPATCH,
-				FLDYNDECLARE, FLDYNALIB, FLDYNZLIB,
-				FLOPPOSESBASELIB,
-				FLPREDDEF,FLREFRESHTABLE],_FileStatus),
+			       FLDYNDECLARE, FLINDEX_P,
+			       FLDYNALIB, FLDYNZLIB,
+			       FLOPPOSESBASELIB,
+			       FLPREDDEF,FLREFRESHTABLE],_FileStatus),
 	    told,
 	    tell(PreOutFile)
 	),
@@ -387,7 +388,7 @@ util_rename_file(F1,F2) :-
 /*************************************************************************
   flora_compile_then_prolog_compile_add(+FlrFile,+ModuleName)
 
-  This procedure is called to compile either a Flora user module or a
+  This predicate is called to compile either a Flora user module or a
   Flora system module. In the former case, the module name is an atom
   whereas in the latter case the module name looks like _name.
   It first calls the FLORA-2 compiler and then Prolog compiler.
@@ -436,7 +437,7 @@ flora_compile_then_prolog_compile_add(FlrFile,ModuleName) :-
 /*************************************************************************
   flora_compile_then_prolog_compile(+FlrFile,+ModuleName)
 
-  This procedure is called to compile either a Flora user module or a
+  This predicate is called to compile either a Flora user module or a
   Flora system module. In the former case, the module name is an atom
   whereas in the latter case the module name looks like _name.
   It first calls the FLORA-2 compiler and then Prolog compiler.
@@ -566,7 +567,7 @@ flora_load_system_module_util(ModuleName) :-
 /*************************************************************************
   flora_fladd(+FlrFile,+Workspace)
 
-  Need to make sure the GPP options are cleared when this procedure is
+  Need to make sure the GPP options are cleared when this predicate is
   finished.
 *************************************************************************/
 flora_fladd(FlrFile,Workspace) :-
@@ -620,7 +621,12 @@ flora_fladd(FlrFile,Workspace) :-
 	  ),
 	  util_rename_file(AddXWAMFile,WSXWAMFile)
         ),
+	flora_cputime(T0),
         consult(WSXWAMFile),
+	flora_cputime(T1),
+	T is T1-T0,
+	flora_loader_message('Done adding ~w. CPU time used: ~w seconds',
+			     [FlrFile,T]),
 	flora_clear_xpp_options,
 	!.
 
@@ -628,7 +634,7 @@ flora_fladd(FlrFile,Workspace) :-
 /*************************************************************************
   flora_flload(+FlrFile,+Workspace)
 
-  Need to make sure the GPP options are cleared when this procedure is
+  Need to make sure the GPP options are cleared when this predicate is
   finished.
 *************************************************************************/
 flora_flload(FlrFile,Workspace) :-
@@ -657,7 +663,7 @@ flora_flload(FlrFile,Workspace) :-
 	  )
 	),
 	!,
-	flora_loader_message('Loading ~w in module ~w',[FlrFile,Workspace]),
+	flora_loader_message('Loading ~w into module ~w',[FlrFile,Workspace]),
 	( util_file_newerthan(WSXWAMFile,MPFile)
 	->
 	    true
@@ -683,7 +689,11 @@ flora_flload(FlrFile,Workspace) :-
 	  util_rename_file(MainXWAMFile,WSXWAMFile)
         ),
 	flora_call_hooks(Workspace,LOADTOMODULE,FlrFile,before,AroundHookLink),
+	flora_cputime(T0),
 	consult(WSXWAMFile),
+	flora_cputime(T1),
+	T is T1-T0,
+	flora_loader_message('Done loading ~w. CPU time used: ~w seconds',[FlrFile,T]),
 	flora_call_hooks(Workspace,LOADTOMODULE,FlrFile,after,AroundHookLink),
 	flora_clear_xpp_options,
 	!.
@@ -1016,7 +1026,7 @@ flora_add_xpp_options(NewOpt) :-
 	flora_assert_xpp_options(Opt).
 
 flora_clear_xpp_options :-
-	retractall(xpp_options(_)).
+	flora_retractall_substitute(xpp_options(_)).
 
 flora_assert_xpp_options(Options) :- assert(xpp_options(Options)).
 
@@ -1107,20 +1117,21 @@ reset_modules_for_file(FullFileName) :-
 	flora_reset_prolog,
 	flora_reset_compiler,
 	flora_set_counter(flora_shell_mode,0),
-	retractall(flora_compiler_environment(_,_)),
+	flora_retractall_substitute(flora_compiler_environment(_,_)),
 	assert(flora_compiler_environment(file,FullFileName)),
 	!.
 
 
 /*************************************************************************
   reset_modules_for_shell/0
+  Not used any more?
 *************************************************************************/
 reset_modules_for_shell :-
 	flora_reset_composer,
 	flora_reset_lexer,
 	flora_reset_compiler,
 	flora_set_counter(flora_shell_mode,1),
-	retractall(flora_compiler_environment(_,_)),
+	flora_retractall_substitute(flora_compiler_environment(_,_)),
 	assert(flora_compiler_environment(file,userin)).
 
 
@@ -1129,12 +1140,12 @@ reset_modules_for_shell :-
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 
-        The appropriate GPP options must be set before this procedure is called.
+        The appropriate GPP options must be set before this predicate is called.
 *************************************************************************/
 util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	flora_maxerr(MaxErrNum),
 	flora_loader_msg_nl,
-	flora_loader_message('Compiling ~w for addition to module',[InputFile]),
+	flora_loader_message('Compiling ~w for addition to modules',[InputFile]),
 	flora_cputime(T0),
 	seeing(PreInFile),
 	%% Disable the compilation for FLORA template include file.
@@ -1146,7 +1157,7 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 			   util_rpc_file_add(MaxErrNum,0,CompiledRuleList,
 					     FileOptionList,
 					     RuleStatus,CompileStatus),
-			   'Compile time '
+			   '<Compiler> Compile time (for addition) '
 			   ),
 	%% Wait, to not leave zombies.
 	check_xpp_process_status(InputFile,XPP_process),
@@ -1196,7 +1207,7 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	    util_remove_file_carefully(Main_FLDfile)
 	;
 	    T is T1-T0,
-	    flora_loader_message('Done! CPU time used: ~w seconds',[T])
+	    flora_loader_message('Done compiling ~w. CPU time used: ~w seconds',[InputFile,T])
 	),
 	print_warnings([depend(DepErrList)|RuleStatus]),
 	print_errors([depend(DepErrList)|RuleStatus]),
@@ -1220,7 +1231,7 @@ generate_code_add(CompiledRuleList,FileOptionList,TrailerOptions,PFile,DBFile,FL
 					      FileOptions,TrailerOptions,
 					      RuleList,FactList,
 					      DBFile,FLDFile,PFileStatus),
-			   '[Coder] Generating P file'
+			   '<Coder> Generating .P file for addition'
 			   ),
 	( PFileStatus == FLORA_FAILURE ->
 	    FileStatus=FLORA_FAILURE
@@ -1230,7 +1241,7 @@ generate_code_add(CompiledRuleList,FileOptionList,TrailerOptions,PFile,DBFile,FL
 	  ;
 	      flora_measure_time(
 				 flora_generate_DBfile(DBFile,FactList,FileStatus),
-				 '[Coder] Generating DB file'
+				 '<Coder> Generating data file'
 				 )
 	  )
         ),
@@ -1259,7 +1270,7 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBF
 	( member(XSB_SPECREPR,FileOptionList) -> true
 	; flora_current_out_line(':- compiler_options([spec_off]).')
 	),
-	util_include_file([FLHEADER],FLHeaderStatus),
+	util_include_file([FLHEADER,FLHEADER2,FLDYNDECLARE,FLINDEX_P],FLHeaderStatus),
 	%% we must abolish tables when adding rules, since old tables
 	%% may no longer be valid
 	flora_concat_atoms(['?- catch(abolish_all_tables,_,flora_warning_line(''',
@@ -1301,7 +1312,7 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBF
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 
-        The appropriate GPP options must be set before this procedure is called.
+        The appropriate GPP options must be set before this predicate is called.
 *************************************************************************/
 util_compile_file(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	flora_maxerr(MaxErrNum),
@@ -1318,7 +1329,7 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 			   util_rpc_file(MaxErrNum,0,CompiledRuleList,
 					 FileOptionList,
 					 RuleStatus,CompileStatus),
-			   'Compile time: '
+			   '<Compiler> Compile time (static code): '
 			   ),
 	%% Wait, to not leave zombies.
 	check_xpp_process_status(InputFile,XPP_process),
@@ -1369,7 +1380,7 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	    util_remove_file_carefully(Main_FLDfile)
 	;
 	    T is T1-T0,
-	    flora_loader_message('Done! CPU time used: ~w seconds',[T])
+	    flora_loader_message('Done compiling ~w. CPU time used: ~w seconds',[InputFile,T])
 	),
 	print_warnings([depend(DepErrList)|RuleStatus]),
 	print_errors([depend(DepErrList)|RuleStatus]),
@@ -1394,7 +1405,7 @@ generate_code(CompiledRuleList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFil
 					  FileOptions,TrailerOptions,
 					  RuleList,FactList,
 					  DBFile,FLDFile,PFileStatus),
-			   '[Coder] Generating P file'
+			   '<Coder> Generating static .P file'
 			   ),
 	( PFileStatus == FLORA_FAILURE ->
 	    FileStatus=FLORA_FAILURE
@@ -1404,7 +1415,7 @@ generate_code(CompiledRuleList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFil
 	  ;
 	      flora_measure_time(
 				 flora_generate_DBfile(DBFile,FactList,FileStatus),
-				 '[Coder] Generating DB file'
+				 '<Coder> Generating data file'
 				 )
 	  )
         ),
@@ -1440,18 +1451,22 @@ generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBFile,
 	  will affect the tabling definitions included from FLHEADER2
 	*/
 	include_xpp_control_variables(TrailerOptions),
-	util_include_file([FLHEADER,FLHEADER2,FLDYNDECLARE],FLHeaderStatus),
+	util_include_file([FLHEADER,FLHEADER2,FLDYNDECLARE,FLINDEX_P],
+			  FLHeaderStatus),
 	( FLHeaderStatus == FLORA_FAILURE -> FileStatus=FLORA_FAILURE
 	;
-	    findall((Arity,Pos),member(FLINDEX(Arity,Pos),FileOptionList),IndexList),
-	    write_index_directives(IndexList),
+	    findall((Arity,Pos),
+		    member(FLINDEX(Arity,Pos),FileOptionList),
+		    IndexList),
 	    util_include_file([FLDEFINITION,FLTRAILERREGISTRY,
-				FLREFRESHTABLE,FLLIBIMPORTEDCALLS,
-				FLINDEX_P,FLPATCH,
-				FLOPPOSESBASELIB,
-				FLDYNDECLARE,
-				FLDYNALIB|OptList],
-			       HeaderStatus),
+			       FLREFRESHTABLE,FLLIBIMPORTEDCALLS,
+			       FLPATCH,
+			       FLOPPOSESBASELIB,
+			       %% These are allready included above
+			       %% FLDYNDECLARE, FLINDEX_P,
+			       FLDYNALIB|OptList],
+			      HeaderStatus),
+	    write_index_directives(IndexList),
 	    ( HeaderStatus == FLORA_FAILURE -> FileStatus=FLORA_FAILURE
 	    ;
 		(FactList == [] -> true; insert_code_for_loaddyn_data(DBFile)),
@@ -1557,7 +1572,7 @@ flora_generate_DBfile(DBFileName,FactList,FileStatus) :-
 /*************************************************************************
   flora_loaddyn_data(+InFile,+ModuleName,+Ext)
 
-  This procedure reads a Flora DB/FLD file that contains facts in canonical
+  This predicate reads a Flora DB/FLD file that contains facts in canonical
   form and inserts them into the storage trie for the module. The module
   could be either a Flora user module, or a Flora system module. In the
   latter case, it is structured term.
@@ -1614,7 +1629,7 @@ flora_loaddyn_data(OrigInFile,ModuleName,Ext) :-
 	    see(PreInFile),
 	    flora_cputime(T1),
 	    T is T1-T0,
-	    flora_loader_message('Done! CPU time used: ~w seconds',[T])
+	    flora_loader_message('Done loading ~w. CPU time used: ~w seconds',[File,T])
 	;
 	  flora_error_line('File ~w does not exist', [InFileAbs]),
 	  fail
@@ -1713,7 +1728,7 @@ save_module_internal(ModuleName,FlrFile) :-
 	    tell(PreInFile),
             flora_cputime(T1),
 	    T is T1-T0,
-	    flora_loader_message('Done! CPU time used: ~w seconds',[T])
+	    flora_loader_message('Done saving module ~w. CPU time used: ~w seconds',[ModuleName,T])
 	),
 	!.
 
@@ -1819,9 +1834,9 @@ util_rpc_file_add(+MaxErr,+ErrNum,-CompiledRuleList,-FileOptionList,-RuleStatus,
       Each time checks if there were errors. 
 *************************************************************************/
 util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,FileOptionList,RuleStatus,FileStatus) :-
-	read_parse_compile_add(FLORA_FILE,Tokens,
+	read_parse_compile_add(FLORA_FILE, Tokens,
 			       CompiledRuleList-NewCompiledRuleList,
-			       RuleOptions,RuleStatus1),
+			       RuleOptions, RuleStatus1),
 	member(error(EN),RuleStatus1),
 	NewErrNum is ErrNum+EN,
 	( EN > 0 -> %% errors found in the latest compiled rule
@@ -1878,12 +1893,12 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,FileOptionList,RuleStatus,FileS
 /*************************************************************************
   read_parse_compile_add(+Option,-Tokens,-RulesCode,-OptionList,-Status)
 
-  Note: This procedure can be used to read both file and command line.
+  Note: This predicate can be used to read both file and command line.
         For reading file, Option is FLORA_FILE. For reading command line,
         Option is FLORA_COMMANDLINE.
 
         RulesCode is a difference list in the form of List-Tail,
-        where Tail is the tail of List. Tail is unbound when this procedure
+        where Tail is the tail of List. Tail is unbound when this predicate
         returns and so it should be set to [] later accordingly to close
         the end of the list.
 *************************************************************************/
@@ -2048,12 +2063,12 @@ discard_tokens :-
 
         Read file or command line, then parse and compile.
 
-        This procedure can be used to read both file and command line.
+        This predicate can be used to read both file and command line.
         For reading file, Option is FLORA_FILE. For reading command line,
         Option is FLORA_COMMANDLINE.
 
         RulesCode is a difference list in the form of List-Tail,
-        where Tail is the tail of List. Tail is unbound when this procedure
+        where Tail is the tail of List. Tail is unbound when this predicate
         returns and so it should be set to [] later accordingly to close
         the end of the list.
 *************************************************************************/
@@ -2274,7 +2289,7 @@ flora_shell_command_line(Code,Options,Status) :-
 /*************************************************************************
   flrfilename_error(+FileName)
 
-  This procedure is called when search for a Flora file is failed. The
+  This predicate is called when search for a Flora file is failed. The
   failure may be due to incorrect file name extension or non-existence.
 *************************************************************************/
 flrfilename_error(File) :-
@@ -2441,10 +2456,10 @@ util_lexer_error([(Tokens,LexerStatus)|Rest],ErrNum) :-
 	    util_last_element(Tokens,Tk),
 	    flora_token_text(Tk,TextStr,_BLN,_BCN,ELN,ECN),
 	    ( atom(FileName) ->
-		flora_error_line('[~w] [Lexer] near line(~w)/char(~w) `~s''',
+		flora_error_line('[~w] <Lexer> near line(~w)/char(~w) `~s''',
 	                         [FileName,ELN,ECN,TextStr])
 	    ;
-	      flora_error_line('[Lexer] near line(~w)/char(~w) `~s''',
+	      flora_error_line('<Lexer> near line(~w)/char(~w) `~s''',
 	                       [ELN,ECN,TextStr])
 	    ),
 	    flora_error_indentline,
@@ -2481,10 +2496,10 @@ util_composer_error([error(Indx,Msg)|L],ErrNum) :-
 	  flora_token_text(Tk,TextStr,BLN,BCN,_ELN,_ECN)
 	),
 	( flora_compile_filename_by_token(Indx,FileName) ->
-	    flora_error_line('[~w] [Composer] near line(~w)/char(~w) `~s''',
+	    flora_error_line('[~w] <Composer> near line(~w)/char(~w) `~s''',
                              [FileName,BLN,BCN,TextStr])
 	;
-	  flora_error_line('[Composer] near line(~w)/char(~w) `~s''',
+	  flora_error_line('<Composer> near line(~w)/char(~w) `~s''',
                            [BLN,BCN,TextStr])
 	),
 	flora_error_indentline,
@@ -2513,10 +2528,10 @@ util_composer_error([error(I1,I2,Msg)|L],ErrNum) :-
 	  flora_token_text(Tk2,TextStr2,BLN2,BCN2,_ELN2,_ECN2)
 	),
 	( flora_compile_filename_by_token(I1,FileName) ->
-	    flora_error_line('[~w] [Composer] near line(~w)/char(~w) `~s'' and near line(~w)/char(~w) `~s''',
+	    flora_error_line('[~w] <Composer> near line(~w)/char(~w) `~s'' and near line(~w)/char(~w) `~s''',
 	                     [FileName,BLN1,BCN1,TextStr1,BLN2,BCN2,TextStr2])
 	;
-	  flora_error_line('[Composer] near line(~w)/char(~w) `~s'' and near line(~w)/char(~w) `~s''',
+	  flora_error_line('<Composer> near line(~w)/char(~w) `~s'' and near line(~w)/char(~w) `~s''',
 	                   [BLN1,BCN1,TextStr1,BLN2,BCN2,TextStr2])
 	),
 	flora_error_indentline,
@@ -2530,9 +2545,9 @@ util_composer_error([error(I1,I2,Msg)|L],ErrNum) :-
 util_composer_error([error(Msg)|L],ErrNum) :-
 	!,
 	( flora_current_compile_filename(FileName) ->
-	    flora_error_line('[~w] [Composer] ~w',[FileName,Msg])
+	    flora_error_line('[~w] <Composer> ~w',[FileName,Msg])
 	;
-	  flora_error_line('[Composer] ~w',[Msg])
+	  flora_error_line('<Composer> ~w',[Msg])
 	),
 	util_composer_error(L,EN),
 	ErrNum is EN+1.
@@ -2563,10 +2578,10 @@ util_composer_warn([warning(I1,I2,Msg)|L],WarnNum) :-
 	    flora_token_text(Tk2,TextStr2,BLN2,BCN2,_ELN2,_ECN2)
 	),
 	( flora_compile_filename_by_token(I1,FileName) ->
-	    flora_warning_line('[~w] [Composer] near line(~w)/char(~w) `~s'' and near line(~w)/char(~w) `~s''',
+	    flora_warning_line('[~w] <Composer> near line(~w)/char(~w) `~s'' and near line(~w)/char(~w) `~s''',
 	                       [FileName,BLN1,BCN1,TextStr1,BLN2,BCN2,TextStr2])
 	;
-	  flora_warning_line('[Composer] near line(~w)/char(~w) `~s'' and near line(~w)/char(~w) `~s''',
+	  flora_warning_line('<Composer> near line(~w)/char(~w) `~s'' and near line(~w)/char(~w) `~s''',
 	                     [BLN1,BCN1,TextStr1,BLN2,BCN2,TextStr2])
 	),
 	flora_warning_indentline,
@@ -2595,10 +2610,10 @@ util_parser_error([error(Indx,Msg)|L],ErrNum) :-
 	    flora_token_text(Tk,TextStr,BLN,BCN,_ELN,_ECN)
 	),
 	( flora_compile_filename_by_token(Indx,FileName) ->
-	    flora_error_line('[~w] [Parser] near line(~w)/char(~w) `~s''',
+	    flora_error_line('[~w] <Parser> near line(~w)/char(~w) `~s''',
                              [FileName,BLN,BCN,TextStr])
 	;
-	  flora_error_line('[Parser] near line(~w)/char(~w) `~s''',
+	  flora_error_line('<Parser> near line(~w)/char(~w) `~s''',
                            [BLN,BCN,TextStr])
 	),
 	flora_error_indentline,
@@ -2611,9 +2626,9 @@ util_parser_error([error(Indx,Msg)|L],ErrNum) :-
 util_parser_error([error(Msg)|L],ErrNum) :-
 	!,
 	( flora_current_compile_filename(FileName) ->
-	    flora_error_line('[~w] [Parser] ~w',[FileName,Msg])
+	    flora_error_line('[~w] <Parser> ~w',[FileName,Msg])
 	;
-	  flora_error_line('[Parser] ~w',[Msg])
+	  flora_error_line('<Parser> ~w',[Msg])
 	),
 	util_parser_error(L,EN),
 	ErrNum is EN+1.
@@ -2693,10 +2708,10 @@ util_compiler_error([error(Indx,Msg)|L],ErrNum) :-
 	  flora_token_text(Tk,TextStr,BLN,BCN,_ELN,_ECN)
 	),
 	( flora_compile_filename_by_token(Indx,FileName) ->
-	    flora_error_line('[~w] [Compiler] near line(~w)/char(~w) `~s''',
+	    flora_error_line('[~w] <Compiler> near line(~w)/char(~w) `~s''',
                              [FileName,BLN,BCN,TextStr])
 	;
-	  flora_error_line('[Compiler] near line(~w)/char(~w) `~s''',
+	  flora_error_line('<Compiler> near line(~w)/char(~w) `~s''',
                            [BLN,BCN,TextStr])
 	),
 	flora_error_indentline,
@@ -2708,9 +2723,9 @@ util_compiler_error([error(Indx,Msg)|L],ErrNum) :-
 util_compiler_error([error(Msg)|L],ErrNum) :-
 	!,
 	( flora_current_compile_filename(FileName) ->
-	    flora_error_line('[~w] [Compiler] ~w',[FileName,Msg])
+	    flora_error_line('[~w] <Compiler> ~w',[FileName,Msg])
 	;
-	  flora_error_line('[Compiler] ~w',[Msg])
+	  flora_error_line('<Compiler> ~w',[Msg])
 	),
 	util_compiler_error(L,EN),
 	ErrNum is EN+1.
@@ -2733,10 +2748,10 @@ util_compiler_warn([warning(Indx,Msg)|L],WarnNum) :-
 	  flora_token_text(Tk,TextStr,BLN,BCN,_ELN,_ECN)
 	),
 	( flora_compile_filename_by_token(Indx,FileName) ->
-	    flora_warning_line('[~w] [Compiler] near line(~w)/char(~w) `~s''',
+	    flora_warning_line('[~w] <Compiler> near line(~w)/char(~w) `~s''',
                                [FileName,BLN,BCN,TextStr])
 	;
-	  flora_warning_line('[Compiler] near line(~w)/char(~w) `~s''',
+	  flora_warning_line('<Compiler> near line(~w)/char(~w) `~s''',
                              [BLN,BCN,TextStr])
 	),
 	flora_warning_indentline,
@@ -2757,9 +2772,9 @@ flora_coder_error([]) :- !.
 flora_coder_error([error(Msg)|L]) :-
 	!,
 	( flora_current_compile_filename(FileName) ->
-	    flora_error_line('[~w] [Coder] ~w',[FileName,Msg])
+	    flora_error_line('[~w] <Coder> ~w',[FileName,Msg])
 	;
-	  flora_error_line('[Coder] ~w',[Msg])
+	  flora_error_line('<Coder> ~w',[Msg])
 	),
 	flora_coder_error(L).
 
@@ -2775,10 +2790,10 @@ flora_coder_error([error(Indx,Msg)|L]) :-
 	  flora_token_text(Tk,TextStr,BLN,BCN,_ELN,_ECN)
 	),
 	( flora_compile_filename_by_token(Indx,FileName) ->
-	    flora_error_line('[~w] [Coder] near line(~w)/char(~w) `~s''',
+	    flora_error_line('[~w] <Coder> near line(~w)/char(~w) `~s''',
                              [FileName,BLN,BCN,TextStr])
 	;
-	  flora_error_line('[Coder] near line(~w)/char(~w) `~s''',
+	  flora_error_line('<Coder> near line(~w)/char(~w) `~s''',
                            [BLN,BCN,TextStr])
 	),
 	flora_error_indentline,
@@ -2811,7 +2826,7 @@ flora_set_maxerrors(X) :-
 	    flora_error_line('Invalid argument to maxerr'),
 	    fail
 	;
-	  retractall(flora_maxerr(_)),
+	  flora_retractall_substitute(flora_maxerr(_)),
 	  assert(flora_maxerr(X))
 	).
 
@@ -2889,7 +2904,7 @@ dump_file_internal(OrigInFile,Workspace,SquashingOption) :-
 /*************************************************************************
   gpp_dumpfile_internal(+FileName,+DumpFileName,+Workspace)
 
-  When this procedure is called, the input file is already checked
+  When this predicate is called, the input file is already checked
   for existence.
 *************************************************************************/
 gpp_dumpfile_internal(FileName,DumpFileName,Workspace) :-
@@ -3100,7 +3115,7 @@ extract_trailer_options(InputFile,OldOptions,Defaults,NewOptions,NewTrailerOptio
 	strip_indices_from_options_and_split(OldOptions,NewOptions,TrailerOptions),
 	fixup_trailer_options(TrailerOptions,Defaults,NewTrailerOptions).
 
-%% This should be replaced by a recursive procedure that takes a list like
+%% This should be replaced by a recursive predicate that takes a list like
 %% [FL_EQUALITY,FL_INHERITANCE,FL_TABLING,FL_CUSTOM]
 %% and checks every element for conflicts
 found_option_conflicts(InputFile,OptList) :-
@@ -3476,3 +3491,13 @@ util_remove_file_carefully(File) :-
 	( flora_file_op(exists,File) -> flora_file_op(unlink,File)
 	; true
 	).
+
+
+%% This is used because retractall/1 is either slow by itself
+%% or is prone to invoke garbage collection too often
+%% Using retractall slows down the compiler tremendously for large rule sets
+%% The fail-loop is preferable for crearing up small predicates
+flora_retractall_substitute(X) :- (retract(X), fail ; true).
+
+
+%%% For profiling: xsb_profiling:profile_call(...)

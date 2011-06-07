@@ -50,7 +50,7 @@
 :- dynamic COMPILATION_CONTEXT(_).
 :- dynamic DYNRULE_VARLIST(_,_).
 
-:- index(TMPOPTION/2,trie).
+%%:- index(TMPOPTION/2,trie).
 
 
 /****************************************************************************
@@ -1527,6 +1527,8 @@ new_oidobj(RuleNum,OidNumStr,Index,OidObject) :-
 	newoid_struct(Name,Index,OidObject).
 
 
+clear_ruleoid :- flora_retractall_substitute(ruleoid(_,_,_)).
+
 /****************************************************************************
   reset_rulenum
 
@@ -1606,7 +1608,11 @@ collect_flvars(ParserTermOrList,Vars) :-
 	collect_flvars(ParserTermOrList,Vars,[]).
 
 collect_flvars(ParserTerm,Vars,Vars) :-
-	(var(ParserTerm); atomic(ParserTerm)),
+	var(ParserTerm),
+	!.
+
+collect_flvars(ParserTerm,Vars,Vars) :-
+	atomic(ParserTerm),
 	!.
 
 collect_flvars([],Vars,Vars) :- !.
@@ -1968,32 +1974,33 @@ vars_to_var_names([V|VarList],[Name|NameList]) :-
   get_dynrule_varlist(-L)
   get_dynrule_varlist(+CompileVarList,-L)
 ****************************************************************************/
-clear_directive :- retractall(TMPDIRECT(_)).
+clear_directive :- flora_retractall_substitute(TMPDIRECT(_)).
 get_directive(L) :- findall(D,TMPDIRECT(D),L).
 %% Not used any more. Instead of import we use the module:pred notation
 %%report_directive(Direct) :- assert(TMPDIRECT(Direct)).
 
 
-clear_options :- retractall(TMPOPTION(_,_)).
+clear_options :- flora_retractall_substitute(TMPOPTION(_,_)).
 get_options(L) :- findall((O,Idx),TMPOPTION(O,Idx),L).
 report_option(Option,Idx) :-
-	assert(TMPOPTION(Option,Idx)).
+	asserta(TMPOPTION(Option,Idx)).
 
-flora_clear_compilation_permaoptions :- retractall(PERMAOPTION(_)).
-set_permaoption(X) :- assert(PERMAOPTION(X)).
+set_permaoption(X) :- asserta(PERMAOPTION(X)).
 has_permaoption(X) :- PERMAOPTION(X).
-clear_permaoption(X) :- retractall(PERMAOPTION(X)).
+flora_clear_compilation_permaoptions :- flora_retractall_substitute(PERMAOPTION(_)).
+clear_permaoption(X) :- (retract(PERMAOPTION(X)) ; true).
 
-clear_context(X) :- retractall(COMPILATION_CONTEXT(X)).
+clear_context(X) :- (retract(COMPILATION_CONTEXT(X)) ; true).
+clear_contextall(X) :- flora_retractall_substitute(COMPILATION_CONTEXT(X)).
 set_context(X) :-
 	(\+has_context(X)
-	-> assert(COMPILATION_CONTEXT(X))
+	-> asserta(COMPILATION_CONTEXT(X))
 	; true
 	).
 has_context(X) :- COMPILATION_CONTEXT(X).
 
-clear_dynrule_varlist :- retractall(DYNRULE_VARLIST(_,_)).
-report_dynrule_varlist(AttrVar,Val) :- assert(DYNRULE_VARLIST(AttrVar,Val)).
+clear_dynrule_varlist :- flora_retractall_substitute(DYNRULE_VARLIST(_,_)).
+report_dynrule_varlist(AttrVar,Val) :- asserta(DYNRULE_VARLIST(AttrVar,Val)).
 get_dynrule_varlist(L) :- findall((Var,Val),DYNRULE_VARLIST(Var,Val),L).
 get_dynrule_varlist(VarList,L) :- findall((Var,Val),(DYNRULE_VARLIST(Var,Val),member(Var,VarList)),L).
 
@@ -2019,7 +2026,7 @@ initialize_work :-
 	flora_reset_newvar,
 	clear_directive,
 	clear_options,
-	clear_context(_),
+	clear_contextall(_),
         clear_dynrule_varlist.
 
 /****************************************************************************
@@ -2055,6 +2062,7 @@ compile_add_internal(ParserTerm,LabelCode,CodeDiffList,OptionList,Status) :-
 	%% extract the rule number
 	flora_increment_counter(RULE_NUM,1,_,_),
 	initialize_work,
+	!,
 	( is_flrule(ParserTerm,Head,Body) ->
 	    compile_rule_add(Head,Body,LabelCode,CodeDiffList,Status)
 
@@ -2072,7 +2080,7 @@ compile_add_internal(ParserTerm,LabelCode,CodeDiffList,OptionList,Status) :-
         ),
 	!,
 	get_options(OptionList),
-	retractall(ruleoid(_,_,_)).
+	clear_ruleoid.
 
 /****************************************************************************
   compile_rule_add(+Head,+Body,+LabelCode,-CodeDiffList,-Status)
@@ -2151,6 +2159,7 @@ compile_internal(ParserTerm,LabelCode,CodeDiffList,OptionList,Status) :-
 	%% extract the rule number
 	flora_increment_counter(RULE_NUM,1,_,_),
 	initialize_work,
+	!,
 	( is_flrule(ParserTerm,Head,Body) ->
 	    compile_rule(Head,Body,LabelCode,CodeDiffList,S),
 	    %% check whether singleton numbered anon oid exists
@@ -2171,7 +2180,7 @@ compile_internal(ParserTerm,LabelCode,CodeDiffList,OptionList,Status) :-
         ),
 	!,
 	get_options(OptionList),
-	retractall(ruleoid(_,_,_)).
+	clear_ruleoid.
 
 /***************************************************************************
   referenced_once(+Status_rf,-Status)
@@ -6796,7 +6805,7 @@ compile_fldynrule(Op,R,RCode,Status) :-
 	workspaceterm_struct(WS,WSTerm),
 	set_context(dynruleworkspace(WSTerm)),
 	compile_fldynrule(Op,Rule,RCode,Status),
-	clear_context(dynruleworkspace(_)).
+	clear_contextall(dynruleworkspace(_)).
 
 compile_fldynrule(_Op,R,RCode,Status) :-
 	is_flvariable(R,Name,Index),
@@ -7310,3 +7319,4 @@ code_line_and_file_by_prterm(CompiledTerm,Line,File) :-
 code_line_and_file_by_index(Index,Line,File) :-
 	flora_token_index_to_line(Index,Line),
 	get_current_compile_file(File).
+
