@@ -202,6 +202,7 @@
 :- dynamic flora_xpp_extra_options/1.
 
 :- dynamic flora_maxerr(_).
+:- index(flora_maxerr/1,0).
 
 :- dynamic flora_compiler_environment(_,_).
 

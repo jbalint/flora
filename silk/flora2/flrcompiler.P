@@ -44,13 +44,13 @@
 
 %% ruleoid is used for numbered anonymous oid generation
 :- dynamic ruleoid(_,_,_).
-:- dynamic TMPDIRECT(_).
+%%:- dynamic TMPDIRECT(_).
 :- dynamic TMPOPTION(_,_).
 :- dynamic PERMAOPTION(_).
 :- dynamic COMPILATION_CONTEXT(_).
 :- dynamic DYNRULE_VARLIST(_,_).
 
-%%:- index(TMPOPTION/2,trie).
+%%:- index(TMPOPTION/2,0).
 
 
 /****************************************************************************
@@ -1974,9 +1974,9 @@ vars_to_var_names([V|VarList],[Name|NameList]) :-
   get_dynrule_varlist(-L)
   get_dynrule_varlist(+CompileVarList,-L)
 ****************************************************************************/
-clear_directive :- flora_retractall_substitute(TMPDIRECT(_)).
-get_directive(L) :- findall(D,TMPDIRECT(D),L).
 %% Not used any more. Instead of import we use the module:pred notation
+%%clear_directive :- flora_retractall_substitute(TMPDIRECT(_)).
+%%get_directive(L) :- findall(D,TMPDIRECT(D),L).
 %%report_directive(Direct) :- assert(TMPDIRECT(Direct)).
 
 
@@ -1985,7 +1985,7 @@ get_options(L) :- findall((O,Idx),TMPOPTION(O,Idx),L).
 report_option(Option,Idx) :-
 	asserta(TMPOPTION(Option,Idx)).
 
-set_permaoption(X) :- asserta(PERMAOPTION(X)).
+set_permaoption(X) :- \+PERMAOPTION(X), asserta(PERMAOPTION(X)).
 has_permaoption(X) :- PERMAOPTION(X).
 flora_clear_compilation_permaoptions :- flora_retractall_substitute(PERMAOPTION(_)).
 clear_permaoption(X) :- (retract(PERMAOPTION(X)) ; true).
@@ -2000,7 +2000,9 @@ set_context(X) :-
 has_context(X) :- COMPILATION_CONTEXT(X).
 
 clear_dynrule_varlist :- flora_retractall_substitute(DYNRULE_VARLIST(_,_)).
-report_dynrule_varlist(AttrVar,Val) :- asserta(DYNRULE_VARLIST(AttrVar,Val)).
+report_dynrule_varlist(AttrVar,Val) :-
+	\+ DYNRULE_VARLIST(AttrVar,Val),
+	asserta(DYNRULE_VARLIST(AttrVar,Val)).
 get_dynrule_varlist(L) :- findall((Var,Val),DYNRULE_VARLIST(Var,Val),L).
 get_dynrule_varlist(VarList,L) :- findall((Var,Val),(DYNRULE_VARLIST(Var,Val),member(Var,VarList)),L).
 
@@ -2024,7 +2026,7 @@ report_semantic_options([H|T]) :-
 ****************************************************************************/
 initialize_work :-
 	flora_reset_newvar,
-	clear_directive,
+	%%clear_directive,
 	clear_options,
 	clear_contextall(_),
         clear_dynrule_varlist.
@@ -2099,10 +2101,11 @@ compile_rule_add(Head,Body,Label,CodeList-ListTail,Status):-
 	compile_flupdaterule(FLATOM(FL_INSERTRULE_Z,NO_INDEX),[FLDYNRULE(Head,Body,Label)],RCode,Status),
 	get_dynrule_varlist(L),
 	add_dynrule_attr_code(L,RCode,RuleCode),
-	get_directive(DirectCodeList),
-	append(DirectCodeList,T,CodeList),
+	%%get_directive(DirectCodeList),
+	%%append(DirectCodeList,Tail,CodeList),
 	query_struct(RuleCode,Code),
-	append([Code],ListTail,T).
+	%%append([Code],ListTail,Tail).
+	append([Code],ListTail,CodeList).
 
 compile_directive_add([],_,T-T,[]) :- !.
 
@@ -2417,13 +2420,14 @@ compile_fact(Head,CodeList-ListTail,Status) :-
 		get_dynrule_varlist(L),
 		conjunct_code([H2BCodeHead,H2BCodeTail],H2BCode),
 		add_dynrule_attr_code(L,H2BCode,BodyCode),
-		get_directive(DirectCodeList),
-		append(DirectCodeList,T,CodeList),
+		%%get_directive(DirectCodeList),
+		%%append(DirectCodeList,Tail,CodeList),
 		compile_label((NULL,NULL),LblCode,MetaCode,_),
 		split_ruleheads_add_rulesig(HeadCodeList,
 					    BodyCode,BodyCode,
 					    (LblCode,MetaCode),
-					    T-ListTail,[]),
+					    %%Tail-ListTail,[]),
+					    CodeList-ListTail,[]),
 		check_head_vars_for_safety(Head,[],Status)
 	    )
         ;
@@ -2515,8 +2519,9 @@ compile_query(Body,CodeList-ListTail,Status) :-
 	    %% in queries, since it is explicit in FLLIBANSWER
 	    florasyslib_struct(FLLIBANSWER,2,[AugmentedBodyCode,NVCode],Goal),
 	    query_struct(Goal,QueryCode),
-            get_directive(DirectCodeList),
-	    append(DirectCodeList,[QueryCode|ListTail],CodeList)
+            %%get_directive(DirectCodeList),
+	    %%append(DirectCodeList,[QueryCode|ListTail],CodeList)
+	    CodeList = [QueryCode|ListTail]
 	;
 	  true
 	).
@@ -2731,13 +2736,14 @@ compile_rule(Head,Body,Annotation,CodeList-ListTail,Status) :-
 	    ),
 	    conjunct_struct(BodyCodeSansDelay,DelayCode,BodyCode),
 	    ( BodyStatus == [] ->
-		get_directive(DirectCodeList),
-		append(DirectCodeList,Tail,CodeList),
+		%%get_directive(DirectCodeList),
+		%%append(DirectCodeList,Tail,CodeList),
 		compile_label(Annotation,LblCode,MetaCode,_),
 		split_ruleheads_add_rulesig(HeadCodeList,
 					    BodyCode,BodyCodeSansDelay,
 					    (LblCode,MetaCode),
-					    Tail-ListTail, Status1),
+					    %%Tail-ListTail, Status1),
+					    CodeList-ListTail, Status1),
 		(Status1 == []
 		-> check_head_vars_for_safety(Head,Body,Status)
 		; Status = Status1
