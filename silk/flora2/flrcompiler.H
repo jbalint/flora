@@ -100,7 +100,7 @@
 	flora_clear_compilation_permaoptions/0,
         flora_reset_newvar/0,
         flora_new_varobj/3,
-	flora_compile_add/4,
 	flora_reset_compiler/0, 
 	flora_compile_pathexp/3,
-	flora_compile/4.
+	flora_compile_add/5,
+	flora_compile/5.

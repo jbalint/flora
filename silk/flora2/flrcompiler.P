@@ -2042,57 +2042,58 @@ flora_reset_compiler :-
 
 
 /****************************************************************************
-  flora_compile_add(+ParserTerm,-CodeDiffList,-OptionList,-Status)
+  flora_compile_add(+ParserTerm,-RuleDiffList,-FactDiffList,-OptionList,-Status)
 
   This is the top level predicate that is called to compile code for
   adding code to module.
 
-  CodeDiffList is a difference list in the form of [...|T]-T. It is for
-  the optimization of append.
+  RuleDiffList is a difference list in the form of [...|T]-T. Diff lists
+  are used for optimization of append.
 ****************************************************************************/
-flora_compile_add(NULL,X-X,[],[]) :- !.
+flora_compile_add(NULL,X-X,F-F,[],[]) :- !.
 	
-flora_compile_add(ParserTerm,CodeDiffList,OptionList,Status) :-
+flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,OptionList,Status) :-
 	compile_add_internal(ParserTerm,(NULL,NULL),
-				   CodeDiffList,OptionList,Status).
+			     RuleDiffList,FactDiffList,OptionList,Status).
 	
 %% This rule is for debugging.
-flora_compile_add(_ParserTerm,[],[],[error(UNKNOWN_ERROR)]).
+flora_compile_add(_ParserTerm,[],[],[],[error(UNKNOWN_ERROR)]).
 
-compile_add_internal(ParserTerm,LabelCode,CodeDiffList,OptionList,Status) :-
+compile_add_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,OptionList,Status) :-
 	%% extract the rule number
 	flora_increment_counter(RULE_NUM,1,_,_),
 	initialize_work,
 	!,
 	( is_flrule(ParserTerm,Head,Body) ->
-	    compile_rule_add(Head,Body,LabelCode,CodeDiffList,Status)
+	    compile_rule_add(Head,Body,LabelCode,RuleDiffList,FactDiffList,Status)
 
 	; is_flfact(ParserTerm,Head) ->
-	    compile_fact(Head,CodeDiffList,Status)
+	    compile_fact(Head,RuleDiffList,FactDiffList,Status)
 
 	; is_flquery(ParserTerm,Body) ->
-	    compile_query(Body,CodeDiffList,Status)
+	    compile_query(Body,RuleDiffList,FactDiffList,Status)
 
 	; is_fldirective(ParserTerm,DirectList,DirctIdx) ->
-	    compile_directive_add(DirectList,DirctIdx,CodeDiffList,Status)
+	    compile_directive_add(DirectList,DirctIdx,RuleDiffList,FactDiffList,Status)
 
 	; is_fllabeled_construct(ParserTerm,Label,Contents) ->
-	    compile_labeled_construct_add(Label,Contents,CodeDiffList,Status)
+	    compile_labeled_construct_add(Label,Contents,RuleDiffList,FactDiffList,Status)
         ),
 	!,
 	get_options(OptionList),
 	clear_ruleoid.
 
 /****************************************************************************
-  compile_rule_add(+Head,+Body,+LabelCode,-CodeDiffList,-Status)
+  compile_rule_add(+Head,+Body,+LabelCode,-RuleDiffList,-FactDiffList,-Status)
 
   LabelCode has the form (LblCode, MetaCode). LblCode is NULL or an atom-object.
   MetaCode is a NULL or a list of codes.
 
-  CodeDiffList is a difference list in the form of [...|T]-T.
+  RuleDiffList is a difference list in the form of [...|T]-T.
+  FactDiffList is Facts-Facts == empty diff list
   It is for the optimization of append.
 ****************************************************************************/
-compile_rule_add(Head,Body,Label,CodeList-ListTail,Status):-
+compile_rule_add(Head,Body,Label,RuleList-RuleTail,Facts-Facts,Status):-
 	%% Note: Label here is already compiled code of the form
 	%% (LblCode,MetaCode). A special case in compile_label takes care
 	%% of that. If FLDYNRULE(H,B,L) comes from the parser, then the
@@ -2101,18 +2102,19 @@ compile_rule_add(Head,Body,Label,CodeList-ListTail,Status):-
 	get_dynrule_varlist(L),
 	add_dynrule_attr_code(L,RCode,RuleCode),
 	%%get_directive(DirectCodeList),
-	%%append(DirectCodeList,Tail,CodeList),
+	%%append(DirectCodeList,Tail,RuleList),
 	query_struct(RuleCode,Code),
-	%%append([Code],ListTail,Tail).
-	CodeList = [Code|ListTail].
+	%%append([Code],RuleTail,Tail).
+	RuleList = [Code|RuleTail].
 
-compile_directive_add([],_,T-T,[]) :- !.
+compile_directive_add([],_,T-T,F-F,[]) :- !.
 
-compile_directive_add([D|L],DirIdx,CodeList-ListTail,Status) :-
+%% Facts-Facts = empty diff list
+compile_directive_add([D|L],DirIdx,RuleList-RuleTail,Facts-Facts,Status) :-
 	compile_direct_add(D,DirIdx,DCodeList,S),
 	( S == [] ->
-	    append(DCodeList,T,CodeList),
-	    compile_directive_add(L,DirIdx,T-ListTail,Status)
+	    append(DCodeList,T,RuleList),
+	    compile_directive_add(L,DirIdx,T-RuleTail,Facts-Facts,Status)
 	;
 	  Status=S
         ).
@@ -2126,59 +2128,61 @@ compile_direct_add(DirectTerm,_DirIdx,[Code],S) :-
 compile_direct_add(DirectTerm,DirIdx,DCodeList,S) :-
 	compile_direct(DirectTerm,DirIdx,DCodeList,S).
 
-compile_labeled_construct_add(Label,Contents,CodeList-ListTail,Status) :-
+%% Facts-Facts = empty diff list
+compile_labeled_construct_add(Label,Contents,RuleList-RuleTail,Facts,Status) :-
 	compile_label(Label,LblCode,MetaCode,Status1),
 	(Status1 == []
 	-> 
 	    compile_add_internal(Contents,(LblCode,MetaCode),
-				       CodeList1-[],_OptionList,Status),
-	    append(CodeList1,ListTail,CodeList)
+				 RuleList1-[],Facts,_OptionList,Status),
+	    append(RuleList1,RuleTail,RuleList)
 	;  Status = Status1
 	).
 
 
 /****************************************************************************
-  flora_compile(+ParserTerm,-CodeDiffList,-OptionList,-Status)
+  flora_compile(+ParserTerm,-RuleDiffList,-FactDiffList,-OptionList,-Status)
 
   This is the top level procedure that is called to compile code.
 
-  CodeDiffList is a difference list in the form of [...|T]-T. It is for
-  the optimization of append.
+  RuleDiffList is a rule difference list in the form of [...|T]-T.
+      It is used in order to optimize append.
+  FactDiffList is the same for facts
 ****************************************************************************/
-flora_compile(NULL,X-X,[],[]) :- !.
+flora_compile(NULL,X-X,F-F,[],[]) :- !.
 
-flora_compile(ParserTerm,CodeDiffList,OptionList,Status) :-
-	compile_internal(ParserTerm,(NULL,NULL),CodeDiffList,OptionList,Status).
+flora_compile(ParserTerm,RuleDiffList,FactDiffList,OptionList,Status) :-
+	compile_internal(ParserTerm,(NULL,NULL),RuleDiffList,FactDiffList,OptionList,Status).
 	
 %% This rule is for debugging.
-flora_compile(_ParserTerm,[],[],[error(UNKNOWN_ERROR)]).
+flora_compile(_ParserTerm,[],[],[],[error(UNKNOWN_ERROR)]).
 
 
 %% This does the main work
 %% LabelCode has the form (LblCode, MetaCode). LblCode is NULL or atom-object.
 %% MetaCode is a NULL or a list of codes.
-compile_internal(ParserTerm,LabelCode,CodeDiffList,OptionList,Status) :-
+compile_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,OptionList,Status) :-
 	%% extract the rule number
 	flora_increment_counter(RULE_NUM,1,_,_),
 	initialize_work,
 	!,
 	( is_flrule(ParserTerm,Head,Body) ->
-	    compile_rule(Head,Body,LabelCode,CodeDiffList,S),
+	    compile_rule(Head,Body,LabelCode,RuleDiffList,FactDiffList,S),
 	    %% check whether singleton numbered anon oid exists
 	    (ruleoid(_,_,1) -> referenced_once(S,Status);  Status=S)
 
 	; is_flfact(ParserTerm,Head) ->
-	    compile_fact(Head,CodeDiffList,S),
+	    compile_fact(Head,RuleDiffList,FactDiffList,S),
 	    (ruleoid(_,_,1) -> referenced_once(S,Status);  Status=S)
 
 	; is_flquery(ParserTerm,Body) ->
-	    compile_query(Body,CodeDiffList,Status)
+	    compile_query(Body,RuleDiffList,FactDiffList,Status)
 
 	; is_fldirective(ParserTerm,DirectList,DirctIdx) ->
-	    compile_directive(DirectList,DirctIdx,CodeDiffList,Status)
+	    compile_directive(DirectList,DirctIdx,RuleDiffList,FactDiffList,Status)
 
 	; is_fllabeled_construct(ParserTerm,Label,Contents) ->
-	    compile_labeled_construct(Label,Contents,CodeDiffList,Status)
+	    compile_labeled_construct(Label,Contents,RuleDiffList,FactDiffList,Status)
         ),
 	!,
 	get_options(OptionList),
@@ -2206,16 +2210,17 @@ singleton_oid_warning([Index|L],WarnList,WarnTail) :-
 
 
 /****************************************************************************
-  compile_directive(+DirectList,+DirctIdx,-CodeDiffList,-Status)
-  compile_direct(+DirectTerm,+DirctIdx,-CodeList,-Status)
+  compile_directive(+DirectList,+DirctIdx,-RuleDiffList,-FactDiffList,-Status)
+  compile_direct(+DirectTerm,+DirctIdx,-RuleList,-Status)
 ****************************************************************************/
-compile_directive([],_,T-T,[]) :- !.
+compile_directive([],_,T-T,F-F,[]) :- !.
 
-compile_directive([D|L],DirIdx,CodeList-ListTail,Status) :-
+%% Facts-Facts = empty diff list
+compile_directive([D|L],DirIdx,RuleList-RuleTail,Facts-Facts,Status) :-
 	compile_direct(D,DirIdx,DCodeList,S),
 	( S == [] ->
-	    append(DCodeList,T,CodeList),
-	    compile_directive(L,DirIdx,T-ListTail,Status)
+	    append(DCodeList,T,RuleList),
+	    compile_directive(L,DirIdx,T-RuleTail,Facts-Facts,Status)
 	;
 	  Status=S
         ).
@@ -2398,21 +2403,23 @@ compile_sensor(SensCall,DelayCond,Code,Status) :-
 	prologterm_struct(FunctCode,2,[SensCode,DelayCode], FLDELAYSUPPORTMOD,Code).
 
 /****************************************************************************
-  compile_fact(+Head,-CodeDiffList,-Status)
+  compile_fact(+Head,-RuleDiffList,-FactDiffList,-Status)
 
-  CodeDiffList is a difference list in the form of [...|T]-T. It is for
-  the optimization of append.
+  RuleDiffList is a difference list in the form of [...|T]-T.
+		It is used to optimize append
+  FactDiffList is a difference list of facts
 
   Note: a fact containing a path expression might cause this
         fact to become a rule. However, we strip annotations from facts in
 	the parser, so no need here to take rule tag/meta info into account.
 ****************************************************************************/
-compile_fact(Head,CodeList-ListTail,Status) :-
+compile_fact(Head,RuleList-RuleTail,FactList-FactTail,Status) :-
 	set_context(compiling_facts), 
 	compile_head(Head,HeadCode,H2BCodeHead,H2BCodeTail,S),
 	( S == [] ->
 	    ( H2BCodeHead == NULL, H2BCodeTail == NULL ->
-		compile_factlist(HeadCode,CodeList-ListTail),
+		compile_factlist(HeadCode,FactList-FactTail),
+		RuleList = RuleTail, %% empty rule diff list
 		check_head_vars_for_safety(Head,[],Status)
 	     ;
 	        compile_conjunct2list(HeadCode,HeadCodeList),
@@ -2420,13 +2427,14 @@ compile_fact(Head,CodeList-ListTail,Status) :-
 		conjunct_code([H2BCodeHead,H2BCodeTail],H2BCode),
 		add_dynrule_attr_code(L,H2BCode,BodyCode),
 		%%get_directive(DirectCodeList),
-		%%append(DirectCodeList,Tail,CodeList),
+		%%append(DirectCodeList,Tail,RuleList),
 		compile_label((NULL,NULL),LblCode,MetaCode,_),
 		split_ruleheads_add_rulesig(HeadCodeList,
 					    BodyCode,BodyCode,
 					    (LblCode,MetaCode),
-					    %%Tail-ListTail,[]),
-					    CodeList-ListTail,[]),
+					    %%Tail-RuleTail,[]),
+					    RuleList-RuleTail,[]),
+		FactList = FactTail, %% empty fact diff list
 		check_head_vars_for_safety(Head,[],Status)
 	    )
         ;
@@ -2493,12 +2501,13 @@ attrvar_code_delayed(Var,Val,AttrName,Code) :-
         prologterm_struct(VarValFunct,3,[Var,AttrName,Val],Code).
 
 /****************************************************************************
-  compile_query(+Body,-CodeDiffList,-Status)
+  compile_query(+Body,-RuleDiffList,-FactDiffList,-Status)
 
-  CodeDiffList is a difference list in the form of [...|T]-T. It is for
-  the optimization of append.
+  RuleDiffList is a difference list in the form of [...|T]-T.
+	It is used to optimize append/3
+  FactDiffList = Facts-Facts: the empty diff list
 ****************************************************************************/
-compile_query(Body,CodeList-ListTail,Status) :-
+compile_query(Body,RuleList-RuleTail,Facts-Facts,Status) :-
 	compile_body(Body,BCode,Status),
 	( Status == [] ->
 	    collect_prdatatypevars(BCode,DTVarsCode),
@@ -2519,26 +2528,27 @@ compile_query(Body,CodeList-ListTail,Status) :-
 	    florasyslib_struct(FLLIBANSWER,2,[AugmentedBodyCode,NVCode],Goal),
 	    query_struct(Goal,QueryCode),
             %%get_directive(DirectCodeList),
-	    %%append(DirectCodeList,[QueryCode|ListTail],CodeList)
-	    CodeList = [QueryCode|ListTail]
+	    %%append(DirectCodeList,[QueryCode|RuleTail],RuleList)
+	    RuleList = [QueryCode|RuleTail]
 	;
 	  true
 	).
 
 
 /****************************************************************************
-  compile_labeled_construct(+Label,Contents,-CodeDiffList,-Status)
+  compile_labeled_construct(+Label,Contents,-RuleDiffList,-FactDiffList,-Status)
 
-  CodeDiffList is a difference list in the form of [...|T]-T. It is for
-  the optimization of append.
+  RuleDiffList is a difference list in the form of [...|T]-T.
+		It is used for append/3 optimization
+  FactDiffList = Facts-Facts: the empty diff list
 ****************************************************************************/
-compile_labeled_construct(Label,Contents,CodeList-ListTail,Status) :-
+compile_labeled_construct(Label,Contents,RuleList-RuleTail,Facts,Status) :-
 	compile_label(Label,LblCode,MetaCode,Status1),
 	(Status1 == []
 	-> 
 	    compile_internal(Contents,(LblCode,MetaCode),
-			     CodeList1-[],_OptionList,Status),
-	    append(CodeList1,ListTail,CodeList)
+			     RuleList1-[],Facts,_OptionList,Status),
+	    append(RuleList1,RuleTail,RuleList)
 	;  Status = Status1
 	).
 
@@ -2653,7 +2663,7 @@ compile_export_predicate(ExportTerm,Code,Status) :-
 	%% compile_fact expects the argument to be a list.
 	%% Hence the ParseBodyTerm is enclosed in a list.
 	%%if they are uninitialized, they will be taken care at run-time.
-	compile_fact([ParseBodyTerm],ListBodyTermCode,_StatusFact),
+	compile_fact([ParseBodyTerm],_,ListBodyTermCode,_StatusFact),
 	compile_pathexp(ModuleList,ModuleListCode,_,_,_StatusModule),
 	compile_pathexp(IsUpdatable,IsUpdatableCode,_,_,_Status),
 	(
@@ -2709,16 +2719,17 @@ construct_export_struct(TermCode,WSCode,IsUpdatableCode,ModuleListCode,Code) :-
 
 
 /****************************************************************************
-  compile_rule(+Head,+Body,+Annotation,-CodeDiffList,-Status)
+  compile_rule(+Head,+Body,+Annotation,-RuleDiffList,-FactDiffList,-Status)
 
   Annotation has the form (LblCode, MetaCode).
   LblCode is NULL or an atom-object.
   MetaCode is a NULL or a list of codes.
 
-  CodeDiffList is a difference list in the form of [...|T]-T. It is for
+  RuleDiffList is a difference list in the form of [...|T]-T. It is for
   the optimization of append.
+  FactDiffList = Facts-Facts: the empty diff list
 ****************************************************************************/
-compile_rule(Head,Body,Annotation,CodeList-ListTail,Status) :-
+compile_rule(Head,Body,Annotation,RuleList-RuleTail,Facts-Facts,Status) :-
 	compile_head(Head,HeadCode,H2BCodeHead,H2BCodeTail,HeadStatusPre),
 	compile_conjunct2list(HeadCode,HeadCodeList),
 	no_mixed_sensor_nonsensor_heads(HeadCodeList,Head,DelayStatus),
@@ -2737,13 +2748,13 @@ compile_rule(Head,Body,Annotation,CodeList-ListTail,Status) :-
 	    conjunct_struct(BodyCodeSansDelay,DelayCode,BodyCode),
 	    ( BodyStatus == [] ->
 		%%get_directive(DirectCodeList),
-		%%append(DirectCodeList,Tail,CodeList),
+		%%append(DirectCodeList,Tail,RuleList),
 		compile_label(Annotation,LblCode,MetaCode,_),
 		split_ruleheads_add_rulesig(HeadCodeList,
 					    BodyCode,BodyCodeSansDelay,
 					    (LblCode,MetaCode),
-					    %%Tail-ListTail, Status1),
-					    CodeList-ListTail, Status1),
+					    %%Tail-RuleTail, Status1),
+					    RuleList-RuleTail, Status1),
 		(Status1 == []
 		-> check_head_vars_for_safety(Head,Body,Status)
 		; Status = Status1
@@ -2756,7 +2767,7 @@ compile_rule(Head,Body,Annotation,CodeList-ListTail,Status) :-
         ).
 
 /****************************************************************************
-  split_ruleheads_add_rulesig(+HeadCodeList,+BodyCode,+BodyCodeSansDelay,?LabelCode,-CodeDiffList,-Status)
+  split_ruleheads_add_rulesig(+HeadCodeList,+BodyCode,+BodyCodeSansDelay,?LabelCode,-RuleDiffList,-Status)
 
   HeadCodeList is a list of atoms in the rule head. BodyCode is the formula
   in the rule body. This procedure splits the list of atoms in the rule

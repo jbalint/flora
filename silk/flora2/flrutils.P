@@ -1154,7 +1154,8 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	xpp_process_file(InputFile,XPP_process,IOportFromProc),
 	see(IOportFromProc),
 	flora_measure_time(
-			   util_rpc_file_add(MaxErrNum,0,CompiledRuleList,
+			   util_rpc_file_add(MaxErrNum,0,
+					     CompiledRuleList,CompiledFactList,
 					     FileOptionList,
 					     RuleStatus,CompileStatus),
 			   ['<Compiler> Compile time for adding to modules of ',
@@ -1187,7 +1188,7 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	    ;
 		(check_custom_trailer_file(TrailerOptions)
 		->
-		    generate_code_add(CompiledRuleList,
+		    generate_code_add(CompiledRuleList,CompiledFactList,
 				      StrippedFileOptions,TrailerOptions,
 				      PFile,DBFile,FLDFile,FileStatus)
 		; 
@@ -1218,30 +1219,30 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 util_compile_file_add(_InputFile,_PFile,_DBFile,_FLDFile,FLORA_FAILURE).
 
 /*************************************************************************
-  generate_code_add(+CompiledRuleList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,-FileStatus)
+  generate_code_add(+CompiledRuleList,+CompiledFactList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,-FileStatus)
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 *************************************************************************/
-generate_code_add(CompiledRuleList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FileStatus) :-
+generate_code_add(CompiledRuleList,CompiledFactList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FileStatus) :-
 	%% Generate FLD file for undefinedness checking
-	flora_debug_code(CompiledRuleList, FLDFile),
-	flora_divide_program(CompiledRuleList,RuleList,FactList),
+	flora_debug_code(CompiledRuleList,CompiledFactList,FLDFile),
+	%%flora_divide_program(CompiledRuleList,RuleList,FactList),
 	sort(FileOptionList,FileOptions),
 	flora_measure_time(
 			   generate_Pfile_add(PFile,
 					      FileOptions,TrailerOptions,
-					      RuleList,FactList,
+					      CompiledRuleList,CompiledFactList,
 					      DBFile,FLDFile,PFileStatus),
 			   '<Coder> Generating .P file for adding to modules'
 			   ),
 	( PFileStatus == FLORA_FAILURE ->
 	    FileStatus=FLORA_FAILURE
 	;
-	  ( FactList == [] ->
+	  ( CompiledFactList == [] ->
 	      FileStatus=FLORA_SUCCESS
 	  ;
 	      flora_measure_time(
-				 flora_generate_DBfile(DBFile,FactList,FileStatus),
+				 flora_generate_DBfile(DBFile,CompiledFactList,FileStatus),
 				 '<Coder> Generating data file'
 				 )
 	  )
@@ -1327,7 +1328,8 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	xpp_process_file(InputFile,XPP_process,IOportFromProc),
 	see(IOportFromProc),
 	flora_measure_time(
-			   util_rpc_file(MaxErrNum,0,CompiledRuleList,
+			   util_rpc_file(MaxErrNum,0,
+					 CompiledRuleList,CompiledFactList,
 					 FileOptionList,
 					 RuleStatus,CompileStatus),
 			   ['<Compiler> Compile time for ', InputFile, ':']
@@ -1360,9 +1362,9 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	    ;
 		(check_custom_trailer_file(TrailerOptions)
 		->
-		    generate_code(CompiledRuleList,
-					StrippedFileOptions,TrailerOptions,
-					PFile,DBFile,FLDFile,FileStatus)
+		    generate_code(CompiledRuleList,CompiledFactList,
+				  StrippedFileOptions,TrailerOptions,
+				  PFile,DBFile,FLDFile,FileStatus)
 		; 
 		    FileStatus=FLORA_FAILURE
 		)
@@ -1392,30 +1394,30 @@ util_compile_file(_InputFile,_PFile,_DBFile,_FLDFile,FLORA_FAILURE).
 
 
 /*************************************************************************
-  generate_code(+CompiledRuleList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,-FileStatus)
+  generate_code(+CompiledRuleList,+CompiledFactList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,-FileStatus)
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 *************************************************************************/
-generate_code(CompiledRuleList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FileStatus) :-
+generate_code(CompiledRuleList,CompiledFactList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FileStatus) :-
 	%% Generate FLD file for undefinedness checking
-	flora_debug_code(CompiledRuleList, FLDFile),
-	flora_divide_program(CompiledRuleList,RuleList,FactList),
+	flora_debug_code(CompiledRuleList,CompiledFactList,FLDFile),
+	%%flora_divide_program(CompiledRuleList,RuleList,FactList),
 	sort(FileOptionList,FileOptions),
 	flora_measure_time(
 			   generate_Pfile(PFile,
 					  FileOptions,TrailerOptions,
-					  RuleList,FactList,
+					  CompiledRuleList,CompiledFactList,
 					  DBFile,FLDFile,PFileStatus),
 			   '<Coder> Generating .P file'
 			   ),
 	( PFileStatus == FLORA_FAILURE ->
 	    FileStatus=FLORA_FAILURE
 	;
-	  ( FactList == [] ->
+	  ( CompiledFactList == [] ->
 	      FileStatus=FLORA_SUCCESS
 	  ;
 	      flora_measure_time(
-				 flora_generate_DBfile(DBFile,FactList,FileStatus),
+				 flora_generate_DBfile(DBFile,CompiledFactList,FileStatus),
 				 '<Coder> Generating data file'
 				 )
 	  )
@@ -1545,7 +1547,7 @@ write_index_directives([(A,P)|L]) :-
   Things it does:
   (1) include .flh file directive.
   (2) output header file.
-  (3) factList from flora_divide_program/3 written directly to .fdb file
+  (3) factList from flora_compile/5 written directly to .fdb file
       using flora_extern_code/2
   
 *************************************************************************/
@@ -1827,14 +1829,15 @@ flora_reclaim_storage_space :-
 
 
 /*************************************************************************
-util_rpc_file_add(+MaxErr,+ErrNum,-CompiledRuleList,-FileOptionList,-RuleStatus,-FileStatus),
+util_rpc_file_add(+MaxErr,+ErrNum,-CompiledRuleList,-CompiledFactList,-FileOptionList,-RuleStatus,-FileStatus),
 
-  util_rpc_file_add/6 calls the lexer/composer/parser/compiler rule-by-rule.
+  util_rpc_file_add/7 calls the lexer/composer/parser/compiler rule-by-rule.
       Each time checks if there were errors. 
 *************************************************************************/
-util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,FileOptionList,RuleStatus,FileStatus) :-
+util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,FileOptionList,RuleStatus,FileStatus) :-
 	read_parse_compile_add(FLORA_FILE, Tokens,
 			       CompiledRuleList-NewCompiledRuleList,
+			       CompiledFactList-NewCompiledFactList,
 			       RuleOptions, RuleStatus1),
 	member(error(EN),RuleStatus1),
 	NewErrNum is ErrNum+EN,
@@ -1848,15 +1851,17 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,FileOptionList,RuleStatus,FileS
 		member(RuleDelimeterToken,Tokens)
 	    ->
 	        util_rpc_file_add(MaxErr,NewErrNum,
-				   _CompiledRuleList,_FileOptionList,
-				   RuleStatus2,FileStatus),
+				  _CompiledRuleList,_CompiledFactList,
+				  _FileOptionList,
+				  RuleStatus2,FileStatus),
 		merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
 
 	    ; flora_not_end_of_input(RuleStatus1), discard_tokens
 	    ->
 	        util_rpc_file_add(MaxErr,NewErrNum,
-				   _CompiledRuleList,_FileOptionList,
-				   RuleStatus2,FileStatus),
+				  _CompiledRuleList,_CompiledFactList,
+				  _FileOptionList,
+				  RuleStatus2,FileStatus),
 		merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
 	    ;
 		FileStatus=FLORA_FAILURE,
@@ -1871,12 +1876,14 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,FileOptionList,RuleStatus,FileS
 	  ( flora_not_end_of_input(RuleStatus1)
 	  ->
 	      util_rpc_file_add(MaxErr,NewErrNum,
-				 NewCompiledRuleList,NewFileOptionList,
-				 RuleStatus2,FileStatus),
+				NewCompiledRuleList,NewCompiledFactList,
+				NewFileOptionList,
+				RuleStatus2,FileStatus),
 	      merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
 	  ; %% end of file reached
 	      ( NewErrNum == 0 ->
 		  NewCompiledRuleList=[],
+		  NewCompiledFactList=[],
 		  NewFileOptionList=[],
 		  FileStatus=FLORA_SUCCESS
 	      ;
@@ -1890,7 +1897,7 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,FileOptionList,RuleStatus,FileS
 
 
 /*************************************************************************
-  read_parse_compile_add(+Option,-Tokens,-RulesCode,-OptionList,-Status)
+  read_parse_compile_add(+Option,-Tokens,-RulesCode,-FactsCode,-OptionList,-Status)
 
   Note: This predicate can be used to read both file and command line.
         For reading file, Option is FLORA_FILE. For reading command line,
@@ -1900,20 +1907,23 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,FileOptionList,RuleStatus,FileS
         where Tail is the tail of List. Tail is unbound when this predicate
         returns and so it should be set to [] later accordingly to close
         the end of the list.
+	FactsCode is the same for facts.
 *************************************************************************/
-read_parse_compile_add(Option,Tokens,RulesCode,OptionList,Status) :-
+read_parse_compile_add(Option,Tokens,RulesCode,FactsCode,OptionList,Status) :-
 	%% get InputTokens
 	flora_tokens(InputTokens,LexerStatus), 
 	count_errors(LexerStatus,LexErrNum),
 	( LexErrNum > 0 ->
 	    Tokens=InputTokens,
 	    RulesCode=T-T,
+	    FactsCode=F-F,
 	    OptionList=[],
 	    ErrNum=LexErrNum
 
 	; flora_blank_line(InputTokens) ->
 	    Tokens=InputTokens,
 	    RulesCode=T-T,
+	    FactsCode=F-F,
 	    OptionList=[],
 	    ErrNum=0
 	;
@@ -1926,6 +1936,7 @@ read_parse_compile_add(Option,Tokens,RulesCode,OptionList,Status) :-
 	    count_errors(ComposerStatus,CompoErrNum),
 	    ( CompoErrNum > 0 ->
 		RulesCode=T-T,
+		FactsCode=F-F,
 		OptionList=[],
 		ErrNum=CompoErrNum
 	    ;
@@ -1933,11 +1944,12 @@ read_parse_compile_add(Option,Tokens,RulesCode,OptionList,Status) :-
 		count_errors(ParserStatus,ParErrNum),
 		( ParErrNum > 0 ->
 		    RulesCode=T-T,
+		    FactsCode=F-F,
 		    OptionList=[],
 		    ErrNum=ParErrNum
 		;
 		    %% compile, and get RulesCode,OptionList
-		    flora_compile_add(ParserTerm,RulesCode,OptionList,CompileStat),
+		    flora_compile_add(ParserTerm,RulesCode,FactsCode,OptionList,CompileStat),
 		    count_errors(CompileStat,CompiErrN),
 		    ErrNum=CompiErrN
 		)
@@ -1961,10 +1973,10 @@ read_parse_compile_add(Option,Tokens,RulesCode,OptionList,Status) :-
 
 
 /*************************************************************************
-  util_rpc_file(+MaxErr,+ErrNum,-CompiledRuleList,-FileOptionList,-RuleStatus,-FileStatus)
+  util_rpc_file(+MaxErr,+ErrNum,-CompiledRuleList,-CompiledFactList,-FileOptionList,-RuleStatus,-FileStatus)
   util_tailappend(+L1,+L2,-Result)
 
-  util_rpc_file/6 calls the lexer/composer/compiler rule-by-rule.
+  util_rpc_file/7 calls the lexer/composer/compiler rule-by-rule.
       Each time checks if there have been any errors. Collects options passed
       in by the compiler into a list. These options tell which libraries
       to load, how to compose the trailer, etc.
@@ -1978,9 +1990,10 @@ util_tailappend(V,[],V) :- !.
 util_tailappend([H|V],[H|L],T) :- util_tailappend(V,L,T).
 
 
-util_rpc_file(MaxErr,ErrNum,CompiledRuleList,FileOptionList,RuleStatus,FileStatus) :-
+util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,FileOptionList,RuleStatus,FileStatus) :-
 	util_read_parse_compile(FLORA_FILE,Tokens,
 				CompiledRuleList-NewCompiledRuleList,
+				CompiledFactList-NewCompiledFactList,
 				RuleOptions,RuleStatus1),
 	member(error(EN),RuleStatus1),
 	NewErrNum is ErrNum+EN,
@@ -1993,15 +2006,20 @@ util_rpc_file(MaxErr,ErrNum,CompiledRuleList,FileOptionList,RuleStatus,FileStatu
 		flora_not_end_of_input(RuleStatus1),
 		member(RuleDelimeterToken,Tokens)
 	    ->
+		%% continue collecting errors, ignore compiled code
 	        util_rpc_file(MaxErr,NewErrNum,
-			      _CompiledRuleList,_FileOptionList,
+			      _CompiledRuleList,_CompiledFactList,
+			      _FileOptionList,
 			      RuleStatus2,FileStatus),
 		merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
 
 	    ; flora_not_end_of_input(RuleStatus1), discard_tokens
 	    ->
+		%% continue collecting errors, ignore compiled code
+		%% here we are reading next rule while ignoring compiled code
 	        util_rpc_file(MaxErr,NewErrNum,
-			      _CompiledRuleList,_FileOptionList,
+			      _CompiledRuleList,_CompiledFactList,
+			      _FileOptionList,
 			      RuleStatus2,FileStatus),
 		merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
 	    ;
@@ -2017,12 +2035,14 @@ util_rpc_file(MaxErr,ErrNum,CompiledRuleList,FileOptionList,RuleStatus,FileStatu
 	    ( flora_not_end_of_input(RuleStatus1)
 	    ->
 		util_rpc_file(MaxErr,NewErrNum,
-			      NewCompiledRuleList,NewFileOptionList,
+			      NewCompiledRuleList,NewCompiledFactList,
+			      NewFileOptionList,
 			      RuleStatus2,FileStatus),
 		merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
 	    ; %% end of file reached
 		( NewErrNum == 0 ->
 		    NewCompiledRuleList=[],
+		    NewCompiledFactList=[],
 		    NewFileOptionList=[],
 		    FileStatus=FLORA_SUCCESS
 		;
@@ -2058,7 +2078,7 @@ discard_tokens :-
 
 
 /*************************************************************************
-  util_read_parse_compile(+Option,-Tokens,-RulesCode,-OptionList,-Status)
+  util_read_parse_compile(+Option,-Tokens,-RulesCode,-FactsCode,-OptionList,-Status)
 
         Read file or command line, then parse and compile.
 
@@ -2071,19 +2091,21 @@ discard_tokens :-
         returns and so it should be set to [] later accordingly to close
         the end of the list.
 *************************************************************************/
-util_read_parse_compile(Option,Tokens,RulesCode,OptionList,Status) :-
+util_read_parse_compile(Option,Tokens,RulesCode,FactsCode,OptionList,Status) :-
 	flora_tokens(InputTokens,LexerStatus), 
 	%% get InputTokens
 	count_errors(LexerStatus,LexErrNum),
 	( LexErrNum > 0 ->
 	    Tokens=InputTokens,
 	    RulesCode=T-T,
+	    FactsCode=F-F,
 	    OptionList=[],
 	    ErrNum=LexErrNum
 
 	; flora_blank_line(InputTokens) ->
 	    Tokens=InputTokens,
 	    RulesCode=T-T,
+	    FactsCode=F-F,
 	    OptionList=[],
 	    ErrNum=0
 	;
@@ -2098,6 +2120,7 @@ util_read_parse_compile(Option,Tokens,RulesCode,OptionList,Status) :-
 	    count_errors(ComposerStatus,CompoErrNum),
 	    ( CompoErrNum > 0 ->
 		RulesCode=T-T,
+		FactsCode=F-F,
 		OptionList=[],
 		ErrNum=CompoErrNum
 	    ;
@@ -2106,11 +2129,12 @@ util_read_parse_compile(Option,Tokens,RulesCode,OptionList,Status) :-
 		count_errors(ParserStatus,ParErrNum),
 		( ParErrNum > 0 ->
 		    RulesCode=T-T,
+		    FactsCode=F-F,
 		    OptionList=[],
 		    ErrNum=ParErrNum
 		;
-		    %% compile, and get RulesCode,OptionList
-		    flora_compile(ParserTerm,RulesCode,OptionList,CompileStat),
+		    %% compile, and get RulesCode,FactsCode,OptionList
+		    flora_compile(ParserTerm,RulesCode,FactsCode,OptionList,CompileStat),
 		    count_errors(CompileStat,CompiErrN),
 		    ErrNum=CompiErrN
 		)
@@ -2241,7 +2265,8 @@ construct_rest_query_term([T|Ts],[T|L]) :-
 *************************************************************************/
 flora_shell_command_line(Code,Options,Status) :-
 	reset_modules_for_shell,
-	util_read_parse_compile(FLORA_COMMANDLINE,Tokens,Rules-[],
+	util_read_parse_compile(FLORA_COMMANDLINE,Tokens,
+				Rules-[],Facts-[],
 				RuleOptions,RuleStatus),
 	%% Trailer options will always be empty list in the shell
 	strip_indices_from_options_and_split(RuleOptions,StrippedOptions,_TrailerOptions),
@@ -2262,12 +2287,13 @@ flora_shell_command_line(Code,Options,Status) :-
 	    ),
 	    Status=[InputStatus,FLORA_FAILURE]
 	; %% ErrNum > 0  end
-	    ( Rules == [] ->
+	    ( Rules == [], Facts == [] ->
 		CommandStatus=FLORA_NOOP
 	    ;
-		%% The below is ErrNum = 0 and Rules \= []
-		flora_intern_code(Rules,FLORA_DEFAULT_WORKSPACE,Code,CoderStatus),
-		%% get Code from Rules
+		append(Rules,Facts,CmdLineProg),
+		%% The below is ErrNum = 0 and CmdLineProg \= []
+		flora_intern_code(CmdLineProg,FLORA_DEFAULT_WORKSPACE,Code,CoderStatus),
+		%% get Code from CmdLineProg
 		( CoderStatus == [] ->
 		    CommandStatus=FLORA_SUCCESS
 		;

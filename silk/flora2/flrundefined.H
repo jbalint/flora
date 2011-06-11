@@ -88,7 +88,7 @@
 :- import term_to_atom/2 from string.
 
 :- export
-	flora_debug_code/2,
+	flora_debug_code/3,
 	flora_temp_protect_call/2,
 	flora_temp_unprotect_call/1,
 	flora_define_predicate/1,

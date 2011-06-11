@@ -109,12 +109,12 @@
 	flora_clear_compilation_permaoptions/0,
 	flora_reset_compiler/0,
 	flora_compile_pathexp/3,
-	flora_compile/4,
-        flora_compile_add/4
+	flora_compile/5,
+        flora_compile_add/5
    from flrcompiler.
 
 :- import
-	flora_divide_program/3,
+	%%flora_divide_program/3,
 	flora_extern_code/2,
 	flora_build_struct/7,
 	flora_intern_code/4
@@ -122,7 +122,7 @@
 
 %% support for undefinedness
 :- import 
-	flora_debug_code/2
+	flora_debug_code/3
    from flrundefined.
 
 :- import
