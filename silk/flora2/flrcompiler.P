@@ -1716,6 +1716,7 @@ add_underscore(Atom,NewAtom) :-
 
 /****************************************************************************
   subtract_vars(+VarsList1,+VarsList2,-VarsList)
+
   subtracts the VarsList2 from VarsList1.
   Both VarsList1 and VarsList2 must be of the same type: parser vars
   or compiler vars. Alternatively, VarsList2 can be a list of names of vars.
@@ -1752,6 +1753,22 @@ subtract_vars([H|T],L,V) :-
 
 subtract_vars([H|T1],L,[H|T2]) :-
 	subtract_vars(T1,L,T2).
+
+/*****************************************************************************
+     vars_contains(+VarList1,+VarList2)
+     Checks if VarList1 contains VarList2 up to indices.
+     VarList1,VarList2 are assumed to be sorted and of the same kind
+*****************************************************************************/
+vars_contains(_,[]) :- !.
+vars_contains([H1|T1],[H2|T2]) :-
+	( is_flvariable(H1,N,_), is_flvariable(H2,N,_)
+	; is_fltransactionalvariable(H1,N,_), is_fltransactionalvariable(H2,N,_)
+	; is_prvariable(H1,N,_), is_prvariable(H2,N,_)
+	; is_prtransactionalvariable(H1,N,_), is_prtransactionalvariable(H2,N,_)
+	),
+	N \= FL_UNDERSCORE,
+	vars_contains(T1,T2).
+
 
 /*****************************************************************************
              remove_prdontcare_vars(+InList,-OutList)
@@ -1944,7 +1961,7 @@ check_head_vars_for_safety(HeadTermList,BodyTerm,Status) :-
 /****************************************************************************
     vars_to_var_names(+VarList,-NameList)
 
- Takes a list of vars from the either the parser or compiler
+ Takes a list of vars from either the parser or compiler
  and returns a list of their names.
  Assumes that the list is indeed a list of vars.
 
@@ -2745,7 +2762,9 @@ compile_rule(Head,Body,Annotation,RuleList-RuleTail,Facts-Facts,Status) :-
 	    (all_defined_as_sensors(HeadCodeList) -> DelayCode = NULL
 	    ; delay_literals_checking_code(Head,Body,DelayCode)
 	    ),
-	    conjunct_struct(BodyCodeSansDelay,DelayCode,BodyCode),
+	    (is_prvariable(DelayCode) -> BodyCode = BodyCodeSansDelay
+	    ; conjunct_struct(BodyCodeSansDelay,DelayCode,BodyCode)
+	    ),
 	    ( BodyStatus == [] ->
 		%%get_directive(DirectCodeList),
 		%%append(DirectCodeList,Tail,RuleList),
@@ -4223,7 +4242,9 @@ compile_mvdattspec(Object,AttObj,RefType,[T|L],OidCode,Code,Status) :-
 compile_flaggregate(Op,Var,GVars,SortSpec,BodyTerm,Object,Code,Status) :-
 	compile_body(BodyTerm,BCodeSansDelay,S),
 	delay_literals_checking_code([],BodyTerm,DelayCode),
-	conjunct_struct(BCodeSansDelay,DelayCode,BCode),
+	(is_prvariable(DelayCode) -> BCode = BCodeSansDelay
+	; conjunct_struct(BCodeSansDelay,DelayCode,BCode)
+	),
 	( S == [] ->
             (has_context(compile_with_var_module),
 		\+ has_context(goal_reification) ->
@@ -7199,10 +7220,19 @@ delay_literals_checking_code(Head,Body,Code) :-
 	    is_fllist(ParserHeadVars,HeadVars,[],NO_INDEX),
 	    is_fllist(ParserBodyVars,BodyVars,[],NO_INDEX)
 	),
-	compile_prlgterm(FLORA_DELAY_CHECKER,2,
-			 [ParserBodyVars,ParserHeadVars],
-			 FLDELAYSUPPORTMOD,
-			 Code,_OidCode,_ACode,_Status).
+	%% Optimization: if HeadVars contains BodyVars, no delay checking is
+	%% needed for that rule. Instead, we put a var instead of the delay
+	%% checker. In static & dynamic code, this var is ignored in generating
+	%% the corresponding rules. However, dynamic rules are encoded as
+	%% FLSYSRULEUPDATE(Id,Head,Body,Hvars,Bvars,DelayCode,Meta,Defeat)
+	%% To match with reified rules, we make DelayCode into a new var
+	(vars_contains(HeadVars,BodyVars) ->
+	    new_dontcare_prvariable(NO_INDEX,Code)
+	; compile_prlgterm(FLORA_DELAY_CHECKER,2,
+			   [ParserBodyVars,ParserHeadVars],
+			   FLDELAYSUPPORTMOD,
+			   Code,_OidCode,_ACode,_Status)
+	).
 
 no_mixed_sensor_nonsensor_heads(CompiledHead,ParsedHead,Status) :-
 	(no_mixed_sensor_nonsensor_heads(CompiledHead) -> Status = []
