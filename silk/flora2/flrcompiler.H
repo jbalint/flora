@@ -49,6 +49,7 @@
 :- import
 	flora_define_prolog/1,
 	flora_define_prolog/2,
+	flora_prlgdef/4,
 	flora_prlgdef/2
    from flrprolog.
 
@@ -81,6 +82,7 @@
         is_pratom/3,
         is_prnumber/1,
 	is_prbuiltin_identifier/2,
+	is_prbuiltin_identifier/3,
         is_prdatatype/4,
 	is_prdatatypelist/2,
         is_prtransactionalnumber/3,

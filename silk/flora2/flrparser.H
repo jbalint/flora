@@ -52,6 +52,7 @@
 :- import flora_nowsp/2 from flrnowsp.
 
 :- import
+	flora_prlgdef/4,
 	flora_prlgdef/2
    from flrprolog.
 

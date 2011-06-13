@@ -5,19 +5,21 @@
 !INCLUDE ..\.prolog_path_wind
 !ENDIF
 
-MYPROGRAM = prolog2hilog
-
-
 CPP = cl.exe
+LINK32 = link.exe
+
 OUTDIR = windows64
 INTDIR = .
 
-ALL : "$(OUTDIR)\$(MYPROGRAM).dll"
+ALL : "$(OUTDIR)\prolog2hilog.dll"  "$(OUTDIR)\flora_ground.dll"
 
 CLEAN :
-	-@erase "$(INTDIR)\$(MYPROGRAM).obj"
-	-@erase "$(INTDIR)\$(MYPROGRAM).dll"
-	-@erase "$(INTDIR)\$(MYPROGRAM).exp"
+	-@erase "$(INTDIR)\prolog2hilog.obj"
+	-@erase "$(INTDIR)\prolog2hilog.dll"
+	-@erase "$(INTDIR)\prolog2hilog.exp"
+	-@erase "$(INTDIR)\flora_ground.obj"
+	-@erase "$(INTDIR)\flora_ground.dll"
+	-@erase "$(INTDIR)\flora_ground.exp"
 	-@erase *~
 	-@erase .#*
 	-@erase *.bak
@@ -29,20 +31,33 @@ CPP_PROJ = /nologo /MT /W3 /EHsc /O2 /I "$(PROLOGDIR)\config\x64-pc-windows" \
 		 /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /c 
 	
 
-SOURCE = $(MYPROGRAM).c
+"$(INTDIR)\prolog2hilog.obj" : prolog2hilog.c "$(INTDIR)"
+	$(CPP) $(CPP_PROJ) prolog2hilog.c
 
-"$(INTDIR)\$(MYPROGRAM).obj" : $(SOURCE) "$(INTDIR)"
-	$(CPP) $(CPP_PROJ) $(SOURCE)
+"$(INTDIR)\flora_ground.obj" : flora_ground.c "$(INTDIR)"
+	$(CPP) $(CPP_PROJ) flora_ground.c
 
-LINK32 = link.exe
-LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib \
-		advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib \
-		odbc32.lib odbccp32.lib xsb.lib /nologo /dll \
-		/machine:x64 /out:"$(OUTDIR)\$(MYPROGRAM).dll" \
-		/libpath:"$(PROLOGDIR)\config\x64-pc-windows\bin" 
-LINK32_OBJS =  "$(INTDIR)\$(MYPROGRAM).obj"
+LINK_FLAGS_P2H = kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib \
+		 advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib \
+		 odbc32.lib odbccp32.lib xsb.lib /nologo /dll \
+		 /machine:x64 /out:"$(OUTDIR)\prolog2hilog.dll" \
+		 /libpath:"$(PROLOGDIR)\config\x64-pc-windows\bin" 
 
-"$(OUTDIR)\$(MYPROGRAM).dll" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+LINK_FLAGS_GRND = kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib \
+		  advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib \
+		  odbc32.lib odbccp32.lib xsb.lib /nologo /dll \
+		  /machine:x64 /out:"$(OUTDIR)\flora_ground.dll" \
+		  /libpath:"$(PROLOGDIR)\config\x64-pc-windows\bin" 
+
+LINK_OBJS_P2H  =  "$(INTDIR)\prolog2hilog.obj"
+LINK_OBJS_GRND =  "$(INTDIR)\flora_ground.obj"
+
+"$(OUTDIR)\prolog2hilog.dll" : "$(OUTDIR)" $(LINK_OBJS_P2H)
     $(LINK32) @<<
-  $(LINK32_FLAGS) $(LINK32_OBJS)
+  $(LINK_FLAGS_P2H) $(LINK_OBJS_P2H)
+<<
+
+"$(OUTDIR)\flora_ground.dll" : "$(OUTDIR)" $(LINK_OBJS_GRND)
+    $(LINK32) @<<
+  $(LINK_FLAGS_GRND) $(LINK_OBJS_GRND)
 <<
