@@ -81,9 +81,10 @@
 
 :- import 
         flora_add_last/3,
-	flora_generalize_last/2,
-        flora_trim_last/2
+	flora_generalize_last/2
    from flrtrim.
+
+:- import flrtrim_last/2 from flora_ground.
 
 :- import term_to_atom/2 from string.
 
