@@ -62,7 +62,10 @@
 
 :- import flora_argdef/4 from flrarguments.
 
-:- import flora_delayed_literal/2 from FLDELAYSUPPORTMOD.
+:- import
+	flora_delayed_builtin_literal/2,
+	flora_delayed_sensor_literal/2
+   from FLDELAYSUPPORTMOD.
 
 :- import flora_system_module/1 from flrlibman.
 

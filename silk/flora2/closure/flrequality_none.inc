@@ -7,6 +7,13 @@
 
 /* First, make sure that data types are handled quickly and not tabled */
 
+WRAP_OBJEQL(X,Y,_CallerInfo) :-
+	%% when experimenting with subsumptive tabling, need to disable
+	%% attibuted vars, since their combo has not been implemented yet
+	%% Also replace equality with unification to simplify the tests
+	flrutils:flora_experimenting_with(no_attr_vars),
+	X=Y,
+	!.
 WRAP_OBJEQL(X,Y,_CallerInfo) :- (integer(X); integer(Y)), !, X=Y.
 WRAP_OBJEQL(X,Y,_CallerInfo) :-
         (flora_datatype_name(X,FL_INTEGER); flora_datatype_name(Y,FL_INTEGER)),

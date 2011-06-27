@@ -24,8 +24,7 @@
 #include "flora_exceptions.flh"
 
 :- import
-	term_variables/2,
-	when/2
+	term_variables/2
    from constraintLib.
 :- import
 	flora_abort/1,
@@ -37,6 +36,8 @@
 	get_attr/3,
 	del_attr/2
    from machine.
+
+:- import flora_when/2 from flrutils.
 
 :- import
 	flrtrim_last/2,
@@ -68,9 +69,18 @@
 	flora_mathnotequal_builtin/4,
 	flora_arith_is_builtin/4,
 
+	flora_number_builtin/3,
+	flora_integer_builtin/3,
+	flora_float_builtin/3,
+	flora_atom_builtin/3,
+	flora_atomic_builtin/3,
+
 	flora_register_sensor/2.
 
-:- export flora_delayed_literal/2.
+:- export
+	flora_delayed_literal/2,
+	flora_delayed_builtin_literal/2,
+	flora_delayed_sensor_literal/2.
 
 
 /*******    Wrappers for builtins    ********/
@@ -78,7 +88,7 @@ FLLIBDELAYEDLITERAL(Builtin,FileN,Line,Args) :-
 	delay_spec_to_predicate(Builtin,FileN,Line,Args,Call,Condition_pre),
 	%% sometimes statically created delay conditions need postprocessing
 	make_delay_condition(Builtin,Condition_pre,Condition),
-	when(Condition,Call).
+	flora_when(Condition,Call).
 
 /********************** Wrappers for NAF ***********************************/
 %% \+ or WFS not
@@ -200,6 +210,30 @@ flora_arith_is_builtin(File,Line,X,Y) :-
 	; catch(X is Y,_,builtin_instantiation_error(File,Line,FL_IS,'non-numeric value',X,Y))
 	).
 
+
+%%%%%%%%%%%%%%%%%% Type Builtins %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% =:=
+flora_number_builtin(File,Line,X) :-
+	(var(X) -> builtin_instantiation_error(File,Line,number,'unbound',X)
+	; number(X)
+	).
+flora_integer_builtin(File,Line,X) :-
+	(var(X) -> builtin_instantiation_error(File,Line,integer,'unbound',X)
+	; integer(X)
+	).
+flora_float_builtin(File,Line,X) :-
+	(var(X) -> builtin_instantiation_error(File,Line,float,'unbound',X)
+	; float(X)
+	).
+flora_atom_builtin(File,Line,X) :-
+	(var(X) -> builtin_instantiation_error(File,Line,atom,'unbound',X)
+	; atom(X)
+	).
+flora_atomic_builtin(File,Line,X) :-
+	(var(X) -> builtin_instantiation_error(File,Line,atomic,'unbound',X)
+	; atomic(X)
+	).
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 FLORA_DELAY_CHECKER(BodyVars,HeadVars) :-
@@ -255,6 +289,7 @@ get_trigger_goal(Trigger,Goal) :-
 get_trigger_goal(Trigger,Goal) :- Trigger = Goal.
 
 
+%% For binary builtins
 builtin_instantiation_error(File,Line,ArgNo,Builtin,Message,Arg1,Arg2) :-
 	fmt_write_string(S, '%S %S %S', args(Arg1,Builtin,Arg2)),
 	flora_abort(['in file ',File,' on line ',Line,': ',
@@ -267,6 +302,15 @@ builtin_instantiation_error(File,Line,Builtin,Message,Arg1,Arg2) :-
 	flora_abort(['in file ',File,' on line ',Line,': ',
 		     'instantiation error in builtin: ', Str,
 		     '; ', Message, ' in one of the arguments'],
+		    FLORA_ABORT_NOTRACE
+		   ).
+
+%% For unary builtins
+builtin_instantiation_error(File,Line,Builtin,Message,Arg) :-
+	fmt_write_string(Str, '%S(%S)', args(Builtin,Arg)),
+	flora_abort(['in file ',File,' on line ',Line,': ',
+		     'instantiation error in builtin: ', Str,
+		     '; ', Message, ' argument'],
 		    FLORA_ABORT_NOTRACE
 		   ).
 
@@ -355,6 +399,23 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
    flora_register_delay(builtin,FL_IS,F,L,[X,Y],
 			flora_arith_is_builtin(F,L,X,Y),
 			(ground(Y))),
+
+   flora_register_delay(builtin,number,F,L,[X],
+			flora_number_builtin(F,L,X),
+			(ground(X))),
+   flora_register_delay(builtin,integer,F,L,[X],
+			flora_integer_builtin(F,L,X),
+			(ground(X))),
+   flora_register_delay(builtin,float,F,L,[X],
+			flora_float_builtin(F,L,X),
+			(ground(X))),
+   flora_register_delay(builtin,atom,F,L,[X],
+			flora_atom_builtin(F,L,X),
+			(ground(X))),
+   flora_register_delay(builtin,atomic,F,L,[X],
+			flora_atomic_builtin(F,L,X),
+			(ground(X))),
+
    %% Add more builtins here
    true.
 
@@ -384,9 +445,16 @@ delayed_builtin(FL_EQLT,2)      :- !.
 delayed_builtin(FL_MATHEQ,2)    :- !.
 delayed_builtin(FL_MATHNOTEQ,2) :- !.
 delayed_builtin(FL_IS,2)        :- !.
+delayed_builtin(number,1)       :- !.
+delayed_builtin(integer,1)      :- !.
+delayed_builtin(float,1)        :- !.
+delayed_builtin(atom,1)         :- !.
+delayed_builtin(atomic,1)       :- !.
 
 flora_delayed_literal(X,Y) :- delayed_builtin(X,Y), !.
 flora_delayed_literal(X,Y) :- delayed_sensor(X,Y).
+flora_delayed_builtin_literal(X,Y) :- delayed_builtin(X,Y).
+flora_delayed_sensor_literal(X,Y)  :- delayed_sensor(X,Y).
 
 %% For sensors we use all arguments in delay_spec_to_predicate/6
 decompose_sensor_call(SensorCall,SensorSymbol,Module,FileName,Line,[FileName,Line|RestArgs]) :-

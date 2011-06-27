@@ -2839,6 +2839,25 @@ parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[Head,Body],If,Ip),WS,WS,Code,St
         ( var(PrevContext) -> true; set_context(parsing_reify)).
 
 %% Delayed builtins: !=, >, >=, =:=, etc. Also sensors defined in .flr files
+%% If the user wrote @_prolog or @_prologall then we pass it down to prolog
+%% and do not delay. This is a change from the original treatment
+parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
+	get_name(Funct,Atom),
+	flora_delayed_builtin_literal(Atom,N),
+	%% if @_plg or @_plgall, pass down to Prolog, don't delay
+	\+ WS == PROLOGMODULE,
+	\+ WS == PROLOGALLMODULE,
+	\+ flora_get_module_from_spec(WS,PROLOGMODULE,Mod),
+	\+ flora_get_module_from_spec(WS,PROLOGALLMODULE,Mod),
+	%% If inside a CLP constraint, don't delay
+	\+ has_context(parsing_CLP_constraint),
+	!,
+	flatom_struct(Atom,If,OpCode),
+	parse_body_pathexplist(Args,DWS,ACode,Status),
+	fllist_struct(ACode,[],Ip,ArgsCode),
+	fldelayedliteral_struct(OpCode,ArgsCode,Code).
+
+%% Delayed sensors
 parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	((flora_get_module_from_spec(WS,PROLOGMODULE,Mod)
@@ -2846,10 +2865,9 @@ parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) 
 	 ),
 	 is_flatom_struct(Mod,ModAtm)
 	->
-	    flora_delayed_literal(ModAtm:Atom,N)
-	; flora_delayed_literal(Atom,N)
+	    flora_delayed_sensor_literal(ModAtm:Atom,N)
+	; flora_delayed_sensor_literal(Atom,N)
 	),
-	\+ has_context(parsing_CLP_constraint),
 	!,
 	flatom_struct(Atom,If,OpCode),
 	parse_body_pathexplist(Args,DWS,ACode,Status),

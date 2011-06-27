@@ -29,13 +29,15 @@
 #include "flora_errors.flh"
 #include "flora_characters.flh"
 
-:- table rec_depend/6.
-:- use_subsumptive_tabling rec_depend(_,_,_,_,_,_).
+%% tabling rec_depend/7 speeds checking us drastically
+:- table rec_depend/7.
+:- use_subsumptive_tabling rec_depend(_,_,_,_,_,_,_).
 
-#define MAXDEPTH	4
-#define STARTPOINT	1
+#define MAXDEPTH          4
+#define MAX_RULE_CHAIN    4
+#define STARTPOINT	  1
 /* maximum number of warnings to display */
-#define MAXWARNSHOW	20
+#define MAXWARNSHOW	  10
 
 /*
    DUMMY_WORKSPACE (actually _@ == FL_THISMODULE) is used as a module name
@@ -319,7 +321,7 @@ is_constraint(PRCONSTRAINT(Constr),Constr).
 
 /****************************************************************************
   cut_off(+Term_before_cutoff,-Term_after_cutoff)
-  cut off a term whose depth is greater than MAXDEPTH
+  cut off Term if its depth > MAXDEPTH
  ****************************************************************************/
 cut_off(T1,T2) :- cut_off(T1,T2,1).
 
@@ -362,13 +364,13 @@ too_deep(_Term,N) :-
 
 too_deep(Term,N) :-
         atomic(Term),
-        not (N > MAXDEPTH),
+        N =< MAXDEPTH,
         !,
         fail.
 
 too_deep(Term,N) :-
         var(Term),
-        not (N > MAXDEPTH),
+        N =< MAXDEPTH,
         !,
         fail.
 
@@ -473,33 +475,35 @@ depend_detail((_Sk1,IndSk1),dep(S,anu(A,N,U),Templ)) :-
     ;
         ( var(Wrap), S = (B,BI)
 	; nonvar(Wrap), target(Wrap,Args,Mod), S = (B,BI)
-	; copy_term(B,CP), rec_depend(CP,S,A,N,U,Templ)
+	; copy_term(B,CP), rec_depend(CP,S,A,N,U,Templ,1)
 	)
     ).
 
 
 /****************************************************************************
-  rec_depend(+Head,-(Body,IndexedBody),-A,-N,-U,-T)
+  rec_depend(+Head,-(Body,IndexedBody),-A,-N,-U,-T,+SearchDepth)
   Search for all possible dependencies rooted from Head. 
   For each rule whose head can unify with Head, we consider the body. If
   1) the rule body unifies with some target, then we have found a dependency
   2) otherwise, the body and its cut-off form will be recursively checked
  ****************************************************************************/
-rec_depend(H,S,A,N,U,T) :-
+rec_depend(H,S,A,N,U,T,SearchDepth) :-
     match_rule(H,_RuleHead,(RB,RBI),anu(A,N,U)),
     get_canonical_form(RB,FLCANON(Wrap,Args,Mod,_Callable,_TF)),
-    ( ignored(W1,A1,M1), subsumes(ignored(W1,A1,M1),ignored(Wrap,Args,Mod)) ->
-        fail
+    ( ignored(W1,A1,M1), subsumes(ignored(W1,A1,M1),ignored(Wrap,Args,Mod))
+    -> fail
+    ; SearchDepth == MAX_RULE_CHAIN -> fail
     ;
         ( var(Wrap), S = (RB,RBI)
 	; nonvar(Wrap), target(Wrap,Args,Mod), S = (RB,RBI)
 	; 
+	    SearchDepth1 is SearchDepth+1,
 	    ( too_deep(RB) ->
 		cut_off(RB,NRB),
 		T=t,
-		copy_term(NRB,CP), rec_depend(CP,S,A,N,U,T)
+		copy_term(NRB,CP), rec_depend(CP,S,A,N,U,T,SearchDepth1)
 	    ;
-		copy_term(RB,CP), rec_depend(CP,S,A,N,U,T)
+		copy_term(RB,CP), rec_depend(CP,S,A,N,U,T,SearchDepth1)
 	    )
 	)
     ).
@@ -698,7 +702,7 @@ check_for_dependencies(CodeList,WarnList) :-
         retractall(ignored(_,_,_)),
 	%% rec_depend is NOT incrementally tabled, so
 	%% flora_abolish_table_predicate is ok here
-        flora_abolish_table_predicate(rec_depend(_,_,_,_,_,_)),
+        flora_abolish_table_predicate(rec_depend(_,_,_,_,_,_,_)),
         assert_targets,
 
 	generate_rules(CodeList),

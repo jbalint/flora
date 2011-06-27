@@ -248,6 +248,12 @@
 
 	flora_compiler_environment/2,
 
+	flora_put_attr/3,
+	flora_disable_attributed_variables/0,
+	flora_enable_attributed_variables/0,
+	flora_when/2,
+	flora_experimenting_with/1,
+
 	flora_read_canonical_and_insert/2,
 	flora_load_system_module_util/1,
 	flora_measure_time/2,
