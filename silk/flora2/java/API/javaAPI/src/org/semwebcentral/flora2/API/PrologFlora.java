@@ -27,6 +27,7 @@
 package org.semwebcentral.flora2.API;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.Vector;
 
 import org.apache.log4j.Level;
@@ -180,6 +181,11 @@ public class PrologFlora extends FloraConstants
     {
     	StringBuffer sb = new StringBuffer();
     	String varsString = "";
+    	
+    	//add var to capture exception
+    	varsString += "'" + "?Ex" + "'=_Ex";
+    	
+    	//add other variables
     	for (int i=0; i<vars.size(); i++) {
     		String floravar = vars.elementAt(i);
     		if (!floravar.startsWith("?"))
@@ -188,15 +194,13 @@ public class PrologFlora extends FloraConstants
     					+ ". Variables passed to ExecuteQuery "
     					+ "must be FLORA-2 variables and "
     					+ "start with a `?'\n");
-    		if (i>0) varsString += ",";
+    		varsString += ",";
     		if (floravar.equals("?XWamState"))
     			varsString += "'" + "?XWamState" + "'=_XWamState";
     		else
     			varsString += "'" + vars.elementAt(i) + "'=__Var" + i;
     	}
-//    	if (varsString.length() > 0)
-//    		varsString += "," ;
-//    	varsString += "'" + "?XWamState" + "'=_XWamState";
+
     	varsString = "[" + varsString + "]";
 
     	String listString = "L_rnd=" + varsString + ",";
@@ -215,6 +219,7 @@ public class PrologFlora extends FloraConstants
 	try {
 	    Object solutions[] =
 		(Object[])engine.deterministicGoal(sb.toString(), "[LM]")[0];
+	    findException(solutions);
 	    return solutions;
 	}
 	catch(Exception e) {
@@ -229,6 +234,8 @@ public class PrologFlora extends FloraConstants
     **
     ** cmd : Command to be executed
     */
+    //TODO - may want to add a variable so that we can get exception information back?
+    //But that would kind of defeat the simplicity advantage...
     public boolean simpleFloraCommand(String cmd)
     {
 	String queryString = "S_rnd='"+cmd + "',";
@@ -263,8 +270,20 @@ public class PrologFlora extends FloraConstants
 	    throw ipe;
 	}
     }
-    
 
+    public void findException(Object[] solutions) {
+    	//look for exception (?Ex binding) in solution and throw it
+    	//An exception will look like error(type-of-error(message,...) ...)
+    	TermModel objName = null;
+    	if (solutions != null && solutions.length != 0) {
+    		TermModel tm = (TermModel)solutions[0];
+    		objName = PrologFlora.findValue(tm,"?Ex");
+    		if (objName == null || (!(objName.node instanceof String)) || 
+    				(!((String)objName.node).equals("normal")))
+    			throw new FlrException("Returned exception: " + objName.toString());
+    	}
+    }
+    	
     /* Query the term model structure 
     **
     ** tm : TermModel to be queried 
