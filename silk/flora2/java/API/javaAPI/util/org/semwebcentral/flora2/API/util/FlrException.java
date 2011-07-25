@@ -30,8 +30,13 @@ package org.semwebcentral.flora2.API.util;
 /** An Exception related to Flora processing in general */
 public class FlrException extends RuntimeException{
     private static final long serialVersionUID = 1;
-    public FlrException(String s){
-	super(s);
+    
+    public FlrException(String message){
+	super(message);
+    }
+
+    public FlrException(String message, Throwable cause){
+	super(message, cause);
     }
 }
 

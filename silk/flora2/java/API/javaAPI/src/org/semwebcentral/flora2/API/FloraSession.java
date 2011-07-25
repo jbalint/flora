@@ -31,7 +31,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Vector;
 
-//import org.semwebcentral.flora2.API.util.FlrException;
+import org.semwebcentral.flora2.API.util.FlrException;
 
 import com.declarativa.interprolog.PrologEngine;
 import com.declarativa.interprolog.TermModel;
@@ -65,11 +65,11 @@ public class FloraSession extends FloraConstants
 	    if (debug)
 		System.out.println("ExecuteCommand: "+command);
 	}
+	catch (FlrException e) {
+	    throw e;
+	}
 	catch (Exception e) {
-	    //e.printStackTrace();
-	    System.err.println(e.getMessage());
-	    // This is thrown in FloraCommand
-	    //throw new FlrException("\n*** Java-FLORA-2 interface: Command " + command + " failed\n");
+	    throw new FlrException("Executing FLORA command " + command, e);
 	}
 	return result;
     }
@@ -115,11 +115,11 @@ public class FloraSession extends FloraConstants
 		retBindings.add(currBinding);
 	    }
 	}
+	catch (FlrException e) {
+	    throw e;
+	}
 	catch (Exception e) {
-	    //e.printStackTrace();
-	    System.err.println(e.getMessage());
-	    // This is thrown in FloraCommand
-	    //throw new FlrException("\n*** Java-FLORA-2 interface: Error in query "+query+"\n");
+	    throw new FlrException("Executing FLORA query " + query, e);
 	}
 
 	Iterator<HashMap<String, FloraObject>> iter = retBindings.iterator();
@@ -214,11 +214,11 @@ public class FloraSession extends FloraConstants
 		retBindings.add(obj);
 	    }
 	}
+	catch(FlrException e) {
+	    throw e;
+	}
 	catch(Exception e) {
-	    //e.printStackTrace();
-	    System.err.println(e.getMessage());
-	    // This is thrown in FloraCommand
-	    //throw new FlrException("\n*** Java-FLORA-2 interface: Error in query "+query+"\n");
+	    throw new FlrException("Executing FLORA query " + query, e);
 	}
 	Iterator<FloraObject> iter = retBindings.iterator();
 	return iter;
