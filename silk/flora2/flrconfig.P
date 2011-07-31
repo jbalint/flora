@@ -42,10 +42,9 @@
 :- import shell/1 from shell.
 :- import get_date/6 from standard.
 
-?- path_sysop(expand,'.',FloraDir),
-   asserta(library_directory(FloraDir)),
+?- path_sysop(expand,'.',FloraDirPrelim),
    PrologOptions = '-m 100000 -c 20000',  % to prevent XSB from crashing
-   xsb_configuration(install_dir,InstallDir),
+   xsb_configuration(install_dir,InstallDirPrelim),
    xsb_configuration(config_bindir,ConfigBinDirPrelim),
    xsb_configuration(user_home,UserHome),
    (flora_running_under(windows)
@@ -53,11 +52,16 @@
        ConfigBinDir = ConfigBinDirPrelim
    ; flora_running_under(cygwin)
    ->  PrologPath = '.prolog_path_cygwin',
-       flora_convert_win_path_to_cygwin(ConfigBinDirPrelim,ConfigBinDir)
+       flora_convert_win_path_to_cygwin(ConfigBinDirPrelim,ConfigBinDir),
+       flora_convert_win_path_to_cygwin(InstallDirPrelim,InstallDir),
+       flora_convert_win_path_to_cygwin(FloraDirPrelim,FloraDir)
    ;
        PrologPath = '.prolog_path',
-       ConfigBinDir = ConfigBinDirPrelim
+       ConfigBinDir = ConfigBinDirPrelim,
+       InstallDir = InstallDirPrelim,
+       FloraDir = FloraDirPrelim
    ),
+   asserta(library_directory(FloraDir)),
    telling(F),
    tell(PrologPath),
    (flora_running_under(windows)
@@ -67,7 +71,9 @@
        shell(['if exist ', '"', FloraTmpDir, '\\*.P"',    ' del ', '"', FloraTmpDir, '\\*.P"']),
        shell(['if exist ', '"', FloraTmpDir, '\\*.xwam"', ' del ', '"', FloraTmpDir, '\\*.xwam"'])
    ;
-       write(InstallDir), writeln('/bin')
+       %% Important not to use writeln here!!!
+       %% Otherwise, it will have ^M at the end and unix shell will get confused
+       write(InstallDir), write('/bin\n')
    ),
    told,
    (flora_running_under(windows)
@@ -80,7 +86,7 @@
        writeln('@%PROLOG% %PROLOGOPTIONS% -e "asserta(library_directory(%FLORADIR%)). [flora2]. flora_shell." %1 %2 %3 %4 %5 %6 %7')
    ;
        tell('runflora'),
-       %% Use write with \n instead of writeln to be compatible with cygwin
+       %% Use write with \n instead of writeln to avoid the extra ^M in Cygwin
        write('#! /bin/sh\n\n'),
        write('if test ! "$*" = ""; then\n'),
        write('    extra_args="$*"\n'),
@@ -94,9 +100,9 @@
            writeq(FloraDir)
        ),
        write('"\n'),
-       write('PROLOG='), write(InstallDir), writeln('/bin/xsb'),
-       write('#PROLOGOPTIONS="'), write(PrologOptions), writeln('"'),
-       writeln('#PROLOGOPTIONS="-p"'),
+       write('PROLOG='), write(InstallDir), write('/bin/xsb\n'),
+       write('#PROLOGOPTIONS="'), write(PrologOptions), write('"\n'),
+       write('#PROLOGOPTIONS="-p"\n'),
        write('$PROLOG $PROLOGOPTIONS -e "asserta(library_directory($FLORADIR)). [flora2]. flora_shell." $extra_args\n')
    ),
    told,

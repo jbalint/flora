@@ -29,7 +29,8 @@
 	flora_concat_atoms/2,
 	flora_file_op/3,
 	flora_file_op/2,
-	flora_running_under/1
+	flora_running_under/1,
+	flora_abort/1
     from flrporting.
 :- import flora_configuration/2 from flrregistry.
 :- import search_module/6 from consult.
@@ -40,33 +41,32 @@
    '_$_$_flora_load_p2h'(flora_ground).
    
 '_$_$_flora_load_p2h'(Basename) :-
-    flora_configuration(installdir, FloraDir),
     flora_slash(Slash),
-    xsb_configuration(config_libdir, ConfigLibdir),
-    flora_concat_atoms([ConfigLibdir,Slash,Basename,'.',PROLOG_OFILE_EXT],
-		       LibObjFile),
+    flora_configuration(installdir, FloraDir),
+    '_$_$_flora_target_shared_lib'(Basename,TrgSharedLib,TrgPrlgObjFile),
     flora_concat_atoms([FloraDir,Slash,p2h,Slash,Basename],Module),
     flora_concat_atoms([Module,'.', PROLOG_OFILE_EXT], Objfile),
     (   %% avoid recompilation: check if FILE.OBJ exists and 
 	%% is newer than FILE.c.
 	search_module(Basename,_Dir,_Mod,_Ext,_Base,ModuleO),
 	flora_concat_atoms([Module, '.c'], ModuleSourceFile),
-	flora_file_op(newerthan,ModuleO,ModuleSourceFile)
+	flora_file_op(newerthan,ModuleO,ModuleSourceFile),
+	flora_file_op(newerthan,TrgSharedLib,ModuleSourceFile)
     %% module compiled and is current, so just load
     -> [Basename]
 
     ; (flora_running_under(windows) ; flora_running_under(cygwin))
     ->
-	xsb_configuration(config_bindir, ConfigBindir),
 	flora_concat_atoms([Module, '.dll'],CygModDLL),
-	flora_concat_atoms([FloraDir,Slash,'p2h\windows',Slash,Basename,'.dll'],WinModDLL),
+	(flora_running_under(windows64) -> DLLdir = 'p2h\windows64'
+	; DLLdir = 'p2h\windows'
+	),
+	flora_concat_atoms([FloraDir,Slash,DLLdir,Slash,Basename,'.dll'],WinModDLL),
 	(flora_running_under(cygwin)
 	->
 	    consult(Module, []),
-	    flora_concat_atoms([ConfigLibdir,Slash,Basename,'.dll'],
-			       TargetDLLCyg),
-	    (flora_file_op(unlink,TargetDLLCyg), ! ; true),
-	    flora_file_op(rename,CygModDLL, TargetDLLCyg),
+	    (flora_file_op(unlink,TrgSharedLib), ! ; true),
+	    flora_file_op(rename,CygModDLL, TrgSharedLib),
 	    %% clean up
 	    flora_concat_atoms([Module, '.a'],CygModA),
 	    flora_concat_atoms([Module, '.o'],CygModO),
@@ -74,41 +74,55 @@
 	    (flora_file_op(unlink,CygModA), ! ; true),
 	    (flora_file_op(unlink,CygModO), ! ; true),
 	    (flora_file_op(unlink,CygModDEF), ! ; true),
-	    (flora_file_op(unlink,LibObjFile), ! ; true),
-	    flora_file_op(rename,Objfile,LibObjFile),
+	    (flora_file_op(unlink,TrgPrlgObjFile), ! ; true),
+	    flora_file_op(rename,Objfile,TrgPrlgObjFile),
 	    [Basename]
 	; 
-	    flora_concat_atoms([ConfigBindir,Slash,Basename,'.dll'],
-			       TargetDLLWin),
-	    (flora_file_op(unlink,TargetDLLWin), ! ; true),
-	    shell(['copy /B /Y ', WinModDLL, ' ', TargetDLLWin]),
+	    (flora_file_op(unlink,TrgSharedLib), ! ; true),
+	    shell(['copy /B /Y ', WinModDLL, ' ', TrgSharedLib]),
 	    %% In windows Objfile is created by ?- [Basename], so it
 	    %% is copied after
-	    (flora_file_op(unlink,LibObjFile), ! ; true),
+	    (flora_file_op(unlink,TrgPrlgObjFile), ! ; true),
 	    [Basename],
-	    flora_file_op(rename,Objfile,LibObjFile)
+	    flora_file_op(rename,Objfile,TrgPrlgObjFile)
 	)
 
     %% If Module isn't compiled or is old --- recompile
     ;   xsb_configuration(compiler, CC),
 	consult(Module, [cc(CC), cc_opts(' ')]),
-	flora_file_op(rename,Objfile, LibObjFile),
+	flora_file_op(rename,Objfile, TrgPrlgObjFile),
 	( % MacOS
 	flora_running_under(darwin)
 	->
 	    %% Note: the .dylib ending is Mac-specific.
 	    flora_concat_atoms([Module, '.dylib'], SharedLib),
-	    flora_concat_atoms([ConfigLibdir,Slash,Basename,'.dylib'], LibMod),
-	    flora_file_op(rename,SharedLib,LibMod)
+	    flora_file_op(rename,SharedLib,TrgSharedLib)
 
 	; flora_running_under(unix)
 	->
 	    %% Note: the .so ending is Unix-specific.
 	    %% We don't need to run this script under Windows
 	    flora_concat_atoms([Module, '.so'], SharedLib),
-	    flora_concat_atoms([ConfigLibdir,Slash,Basename,'.so'], LibMod),
-	    flora_file_op(rename,SharedLib,LibMod)
+	    flora_file_op(rename,SharedLib,TrgSharedLib)
 	;
 	  true
 	)
      ).
+
+
+'_$_$_flora_target_shared_lib'(Basename,TrgSharedLib,TrgPrlgObjFile) :-
+	flora_slash(Slash),
+	xsb_configuration(config_libdir, ConfigLibdir),
+	xsb_configuration(config_bindir, ConfigBindir),
+	flora_concat_atoms([ConfigLibdir,Slash,Basename,'.',PROLOG_OFILE_EXT],
+			    TrgPrlgObjFile),
+    	(flora_running_under(windows)
+	-> flora_concat_atoms([ConfigBindir,Slash,Basename,'.dll'],TrgSharedLib)
+	; flora_running_under(cygwin)
+	-> flora_concat_atoms([ConfigLibdir,Slash,Basename,'.dll'],TrgSharedLib)
+	; flora_running_under(darwin)
+	-> flora_concat_atoms([ConfigLibdir,Slash,Basename,'.dylib'],TrgSharedLib)
+	; flora_running_under(unix)
+	-> flora_concat_atoms([ConfigLibdir,Slash,Basename,'.so'],TrgSharedLib)
+	; flora_abort('Cannot determine the type of the operating system')
+	).
