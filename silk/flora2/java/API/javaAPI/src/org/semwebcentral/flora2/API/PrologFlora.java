@@ -28,6 +28,8 @@ package org.semwebcentral.flora2.API;
 
 import java.io.File;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Vector;
 
 import org.apache.log4j.Level;
@@ -54,6 +56,9 @@ public class PrologFlora extends FloraConstants
 
     private static Logger logger = Logger.getLogger(PrologFlora.class);
 
+    
+    HashMap<Integer,Exception> exceptionStore = new HashMap<Integer,Exception>();
+    int numExceptions = 0;
     
     /* Function for setting Initialization commands */
     void initCommandStrings(String FloraRootDir)
@@ -271,12 +276,33 @@ public class PrologFlora extends FloraConstants
     	if (solutions != null && solutions.length != 0) {
     		TermModel tm = (TermModel)solutions[0];
     		objName = PrologFlora.findValue(tm,"?Ex");
-    		if (objName == null || (!(objName.node instanceof String)) || 
-    				(!((String)objName.node).equals("normal")))
-    			throw new FlrException("XSB exception: " + objName.toString());
+    		if (objName == null)
+    			throw new FlrException("Flora returned no exception info - probably a bug ");
+    		else if (objName.node instanceof String) {
+    			if (objName.toString().equals("normal"))
+    			    {}  //no exception
+    			else if (objName.node != null && objName.node.toString().equals("builtin_exception")) {
+    				Integer id = (Integer) ((TermModel) objName.getChild(0)).node;
+    				Exception ex = exceptionStore.remove(id);
+    				throw (FlrException) ex;
+    			}
+    			else
+    				throw new FlrException(objName.toString());
+    		}
+    		else
+    			throw new FlrException("Flora returned non- standard exception info - probably a bug - " + objName.toString());
     	}
     }
-    	
+    
+    public int storeException(Exception e) {
+    	exceptionStore.put(++numExceptions,e);
+    	return numExceptions;
+    }
+    
+    public void removeException(int key) {
+    	exceptionStore.remove(key);
+    }
+    
     /* Query the term model structure 
     **
     ** tm : TermModel to be queried 
