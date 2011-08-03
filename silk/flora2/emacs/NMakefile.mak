@@ -18,6 +18,6 @@
 
 
 CLEAN :
-	-@erase *~
-	-@erase .#*
-	-@erase *.bak
+	-@if exist *~ erase *~
+	-@if exist *.bak erase *.bak
+	-@if exist .#* erase .#*

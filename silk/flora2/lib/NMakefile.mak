@@ -41,10 +41,10 @@ ALL: $(ALLOBJS)
 
 
 CLEAN:
-	-@erase *~
-	-@erase *$(OBJEXT)
-	-@erase *$(PROLOGEXT)
-	-@erase *.fdb
-	-@erase *.fld
-	-@erase *.bak
-	-@erase .#*
+	-@if exist *$(PROLOGEXT) erase *$(PROLOGEXT)
+	-@if exist *$(OBJEXT) erase *$(OBJEXT)
+	-@if exist *.flh erase *.fdb
+	-@if exist *.fld erase *.fld
+	-@if exist *~ erase *~
+	-@if exist *.bak erase *.bak
+	-@if exist .#* erase .#*

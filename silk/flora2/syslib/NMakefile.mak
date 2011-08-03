@@ -70,10 +70,10 @@ OPTIONS = [optimize,ti_all]
 ALL:: $(ALLOBJS)
 
 CLEAN :
-	-@erase *~
-	-@erase *$(OBJEXT)
-	-@erase *.bak
-	-@erase .#*
+	-@if exist *~ erase *~
+	-@if exist *$(OBJEXT) erase *$(OBJEXT)
+	-@if exist *.bak erase *.bak
+	-@if exist .#* erase .#*
 
 
 $(PROLOGEXT)$(OBJEXT):

@@ -36,7 +36,7 @@ if        "%1" == "-c"    (set PROLOG=%2 -s -m 40000 -c 4000
 if "%PROLOG%" == "" echo Usage:  makeflora [-c|-c64] full-path-to-prolog
 if "%PROLOG%" == "" goto end
 
-if "%1" == "clean" if not exist binary-distribution.txt nmake /f NMakefile.mak clean
+if "%1" == "clean" if not exist binary-distribution.txt nmake /nologo /f NMakefile.mak clean
 if "%1" == "clean" goto end
 
 if not exist .prolog_path_wind  echo. > .prolog_path_wind
@@ -48,23 +48,21 @@ if exist runflora.bat  del runflora.bat
 call %PROLOG% -e "[flrconfig]. halt."
 
 cd p2h
-if exist prolog2hilog.dll   del prolog2hilog.dll
-if exist prolog2hilog.lib   del prolog2hilog.lib
-if exist prolog2hilog.def   del prolog2hilog.def
-if exist prolog2hilog.exp   del prolog2hilog.exp
-if exist prolog2hilog.obj   del prolog2hilog.obj
-if exist prolog2hilog.a     del prolog2hilog.a
-if exist prolog2hilog.o     del prolog2hilog.o
-if exist prolog2hilog.xwam  del prolog2hilog.xwam
+if exist *.dll   del *.dll
+if exist *.lib   del *.lib
+if exist *.def   del *.def
+if exist *.exp   del *.exp
+if exist *.obj   del *.obj
+if exist *.a     del *.a
+if exist *.o     del *.o
+if exist *.xwam  del *.xwam
 
-if "%1" == "-c"   if not exist ..\binary-distribution.txt nmake /f NMakefile.mak
-if "%1" == "-c"   if not exist ..\binary-distribution.txt if exist prolog2hilog.obj del prolog2hilog.obj
-if "%1" == "-c64" if not exist ..\binary-distribution.txt nmake /f NMakefile64.mak
-if "%1" == "-c64" if not exist ..\binary-distribution.txt if exist prolog2hilog.obj del prolog2hilog.obj
+if "%1" == "-c"   if not exist ..\binary-distribution.txt nmake /nologo /f NMakefile.mak
+if "%1" == "-c64" if not exist ..\binary-distribution.txt nmake /nologo /f NMakefile64.mak
 
 cd ..
 
-if not exist binary-distribution.txt  nmake /f NMakefile.mak
+if not exist binary-distribution.txt  nmake /nologo /f NMakefile.mak
 
 :end
 @echo.

@@ -43,12 +43,12 @@ ALL: $(ALLOBJS)
 
 
 CLEAN:
-	-@erase *~
-	-@erase *$(OBJEXT)
-	-@erase *$(PROLOGEXT)
-	-@erase *$(PROLOGEXT)_gpp
-	-@erase *.fdb
-	-@erase *.fld
-	-@erase *.bak
-	-@erase .#*
+	-@if exist *$(PROLOGEXT) erase *$(PROLOGEXT)
+	-@if exist *$(PROLOGEXT)_gpp erase *$(PROLOGEXT)_gpp
+	-@if exist *$(OBJEXT) erase *$(OBJEXT)
+	-@if exist *.flh erase *.fdb
+	-@if exist *.fld erase *.fld
+	-@if exist *~ erase *~
+	-@if exist *.bak erase *.bak
+	-@if exist .#* erase .#*
 

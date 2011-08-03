@@ -53,49 +53,49 @@ OPTIONS = [optimize,ti_all]
 ## p2h is handled specially, by makeflora
 ALL:: CLEANTEMP $(ALLOBJS)
 	cd closure
-	nmake /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak
 	cd ..\genincludes
-	nmake /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak
 	cd ..\syslib
-	nmake /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak
 	cd ..\lib
-	nmake /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak
 	cd ..\debugger
-	nmake /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak
 	cd ..\pkgs
-	nmake /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak
 	cd ..\demos
-	nmake /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak
 	cd ..
 
 CLEAN : CLEANTEMP
-	-@erase *~
-	-@erase *$(OBJEXT)
-	-@erase *.bak
-	-@erase .#*
-	-@erase ..\flora2$(OBJEXT)
+	-@if exist *~ erase *~
+	-@if exist *$(OBJEXT) erase *$(OBJEXT)
+	-@if exist *.bak erase *.bak
+	-@if exist .#* erase .#*
+	-@if exist ..\flora2$(OBJEXT) erase ..\flora2$(OBJEXT)
 	cd p2h
-	nmake /f NMakefile.mak clean
+	nmake /nologo /f NMakefile.mak clean
 	cd ..\closure
-	nmake /f NMakefile.mak clean
+	nmake /nologo /f NMakefile.mak clean
 	cd ..\genincludes
-	nmake /f NMakefile.mak clean
+	nmake /nologo /f NMakefile.mak clean
 	cd ..\datatypes
-	nmake /f NMakefile.mak clean
+	nmake /nologo /f NMakefile.mak clean
 	cd ..\syslib
-	nmake /f NMakefile.mak clean
+	nmake /nologo /f NMakefile.mak clean
 	cd ..\debugger
-	nmake /f NMakefile.mak clean
+	nmake /nologo /f NMakefile.mak clean
 	cd ..\lib
-	nmake /f NMakefile.mak clean
+	nmake /nologo /f NMakefile.mak clean
 	cd ..\pkgs
-	nmake /f NMakefile.mak clean
+	nmake /nologo /f NMakefile.mak clean
 	cd ..\demos
-	nmake /f NMakefile.mak clean
+	nmake /nologo /f NMakefile.mak clean
 	cd ..\docs
-	nmake /f NMakefile.mak clean
+	nmake /nologo /f NMakefile.mak clean
 	cd ..\emacs
-	nmake /f NMakefile.mak clean
+	nmake /nologo /f NMakefile.mak clean
 	cd ..
 
 CLEANTEMP :

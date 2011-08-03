@@ -32,11 +32,11 @@ OPTIONS=[optimize]
 ALL:: $(ALLOBJS)
 
 CLEAN :
-	-@erase *~
-	-@erase *$(OBJEXT)
-	-@erase .#*
-	-@erase *.dat
-	-@erase *.bak
+	-@if exist *~ erase *~
+	-@if exist *$(OBJEXT) erase *$(OBJEXT)
+	-@if exist *.bak erase *.bak
+	-@if exist .#* erase .#*
+	-@if exist *.dat erase *.dat
 
 $(PROLOGEXT)$(OBJEXT):
 	$(PROLOG) -e "asserta(library_directory('..')). ['..\\flora2']. import bootstrap_flora/0 from flora2. bootstrap_flora,mc(%|fF,$(OPTIONS)). halt."

@@ -36,10 +36,10 @@ ALLOBJS = flrpatch.flh flrpreddef.flh flrindex_P.flh \
 ALL: $(ALLOBJS)
 
 CLEAN :
-	-@erase *~
-	-@erase .#*
-	-@erase *.flh
-	-@erase *.bak
+	-@if exist *~ erase *~
+	-@if exist *.flh erase *.flh
+	-@if exist *.bak erase *.bak
+	-@if exist .#* erase .#*
 
 flrpreddef.flh:
 	$(PROLOG) -e "asserta(library_directory('..')). ['..\\flora2']. import bootstrap_flora/0 from flora2. bootstrap_flora. [flrwraparound]. flWrapAround(flrpreddef). halt."
