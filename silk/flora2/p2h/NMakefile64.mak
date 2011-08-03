@@ -13,7 +13,8 @@ ARCHDIR    = "$(PROLOGDIR)\config\x64-pc-windows"
 ARCHBINDIR = $(ARCHDIR)\bin
 ARCHOBJDIR = $(ARCHDIR)\saved.o
 
-ALL :: "$(OUTDIR)\prolog2hilog.dll"  "$(OUTDIR)\flora_ground.dll"
+## Maybe create just one DLL out of these two?
+ALL : "$(OUTDIR)\prolog2hilog.dll"  "$(OUTDIR)\flora_ground.dll"
 
 CLEAN :
 	-@if exist *.obj" erase *.obj"
@@ -25,9 +26,9 @@ CLEAN :
 
 
 CPP_PROJ = /nologo /MT /W3 /EHsc /O2 /I "$(ARCHDIR)" \
-		 /I "$(PROLOGDIR)\emu" /I "$(PROLOGDIR)\prolog_includes" \
-		 /D "WIN64" /D "NDEBUG" /D "_WINDOWS" /D "_MBCS" \
-		 /Fo"$(ARCHOBJDIR)\\" /Fd"$(ARCHOBJDIR)\\" /c 
+	 /I "$(PROLOGDIR)\emu" /I "$(PROLOGDIR)\prolog_includes" \
+	 /D "WIN64" /D "NDEBUG" /D "_WINDOWS" /D "_MBCS" \
+	 /Fo"$(ARCHOBJDIR)\\" /Fd"$(ARCHOBJDIR)\\" /c 
 	
 
 "$(ARCHOBJDIR)\prolog2hilog.obj" :: prolog2hilog.c
@@ -44,21 +45,21 @@ LINK_FLAGS_P2H = kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib \
 	 /libpath:"$(ARCHBINDIR)" 
 
 LINK_FLAGS_GRND = kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib \
-	  advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib \
-	  odbc32.lib odbccp32.lib xsb.lib \
-	  /nologo /dll \
-	  /machine:x64 /out:"$(OUTDIR)\flora_ground.dll" \
-	  /libpath:"$(ARCHBINDIR)"
+	 advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib \
+	 odbc32.lib odbccp32.lib xsb.lib \
+	 /nologo /dll \
+	 /machine:x64 /out:"$(OUTDIR)\flora_ground.dll" \
+	 /libpath:"$(ARCHBINDIR)"
 
 LINK_OBJS_P2H  =  "$(ARCHOBJDIR)\prolog2hilog.obj"
 LINK_OBJS_GRND =  "$(ARCHOBJDIR)\flora_ground.obj"
 
-"$(OUTDIR)\prolog2hilog.dll" :: $(LINK_OBJS_P2H)
+"$(OUTDIR)\prolog2hilog.dll" : $(LINK_OBJS_P2H)
     $(LINK32) @<<
   $(LINK_FLAGS_P2H) $(LINK_OBJS_P2H)
 <<
 
-"$(OUTDIR)\flora_ground.dll" :: $(LINK_OBJS_GRND)
+"$(OUTDIR)\flora_ground.dll" : $(LINK_OBJS_GRND)
     $(LINK32) @<<
   $(LINK_FLAGS_GRND) $(LINK_OBJS_GRND)
 <<

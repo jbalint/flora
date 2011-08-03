@@ -13,7 +13,8 @@ ARCHDIR    = "$(PROLOGDIR)\config\x86-pc-windows"
 ARCHBINDIR = $(ARCHDIR)\bin
 ARCHOBJDIR = $(ARCHDIR)\saved.o
 
-ALL :: "$(OUTDIR)\prolog2hilog.dll"  "$(OUTDIR)\flora_ground.dll"
+## Maybe create just one DLL out of these two?
+ALL : "$(OUTDIR)\prolog2hilog.dll"  "$(OUTDIR)\flora_ground.dll"
 
 CLEAN :
 	-@if exist *.obj" erase *.obj"
@@ -53,12 +54,12 @@ LINK_FLAGS_GRND = kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib \
 LINK_OBJS_P2H  =  "$(ARCHOBJDIR)\prolog2hilog.obj"
 LINK_OBJS_GRND =  "$(ARCHOBJDIR)\flora_ground.obj"
 
-"$(OUTDIR)\prolog2hilog.dll" :: $(LINK_OBJS_P2H)
+"$(OUTDIR)\prolog2hilog.dll" : $(LINK_OBJS_P2H)
     $(LINK32) @<<
   $(LINK_FLAGS_P2H) $(LINK_OBJS_P2H)
 <<
 
-"$(OUTDIR)\flora_ground.dll" :: $(LINK_OBJS_GRND)
+"$(OUTDIR)\flora_ground.dll" : $(LINK_OBJS_GRND)
     $(LINK32) @<<
   $(LINK_FLAGS_GRND) $(LINK_OBJS_GRND)
 <<
