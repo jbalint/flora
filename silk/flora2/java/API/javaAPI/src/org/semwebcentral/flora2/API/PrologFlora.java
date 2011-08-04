@@ -182,10 +182,7 @@ public class PrologFlora extends FloraConstants
     {
     	StringBuffer sb = new StringBuffer();
     	String varsString = "";
-    	
-    	//add var to capture exception
-    	varsString += "'" + "?Ex" + "'=_Ex";
-    	
+   	
     	//add other variables
     	for (int i=0; i<vars.size(); i++) {
     		String floravar = vars.elementAt(i);
@@ -195,13 +192,19 @@ public class PrologFlora extends FloraConstants
     					+ ". Variables passed to ExecuteQuery "
     					+ "must be FLORA-2 variables and "
     					+ "start with a `?'\n");
-    		varsString += ",";
+    		if (i > 0)
+    			varsString += ",";
     		if (floravar.equals("?XWamState"))
     			varsString += "'" + "?XWamState" + "'=_XWamState";
     		else
     			varsString += "'" + vars.elementAt(i) + "'=__Var" + i;
     	}
 
+    	//add var to capture exception
+		if (!(varsString.equals("")))
+			varsString += ",";
+    	varsString += "'" + "?Ex" + "'=_Ex";
+    	
     	varsString = "[" + varsString + "]";
 
     	String listString = "L_rnd=" + varsString + ",";
