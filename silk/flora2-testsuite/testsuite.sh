@@ -116,7 +116,7 @@ if test -n "$config_tag" ; then
     config_tag="-$config_tag"
 fi
 
-PROLOGDIR=`cat $FLORADIR/.prolog_path`/../../..
+PROLOGDIR=`cat $FLORADIR/.prolog_path`/..
 
 # get canonical configuration name
 if test -z "$windows"; then
