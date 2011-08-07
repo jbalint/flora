@@ -5,11 +5,11 @@
 dir=`pwd`
 dir=`basename $dir`
 echo "-------------------------------------------------------"
-echo "--- Running $dir/test_dir.sh                       ---"
+echo "--- Running $dir/test_dir.sh                           "
 echo "-------------------------------------------------------"
 
 basedir=$1
-FLORADIR=$2
+FLORA=$2
 options=$3
 
 file_list=*.flr
@@ -35,7 +35,6 @@ exclude_list="clptest.flr \
               error_invalidsym.flr error_dynmod.flr \
               error_nonvar.flr error_nonvar2.flr error_nonvar3.flr"
 
-flora_command="_nochatter. %test. _end."
 
 # Test if element is a member of exclude list
 # $1 - element
@@ -69,6 +68,6 @@ for file in $file_list ; do
     fi
     prog=`basename $file .flr`
     touch $file
-    $basedir/test_one_file.sh $FLORADIR/runflora $prog "$flora_command"
+    $basedir/test_one_file.sh "$FLORA" "$prog" 
 done
 

@@ -50,11 +50,11 @@ if test -z "$1" -o $# -gt 1; then
   echo "where: opts       -- options to pass to PROLOG executable"
   echo "       excl_dirs  -- quoted, space-separated list of tests to NOT run"
   echo "       add_dirs   -- list of additional dirs in which to run tests"
-  echo "       floradir   -- full path name of FLORA-2 installation directory"
+  echo "       flora      -- full path name of FLORA-2 run script"
   exit
 fi
 
-FLORADIR=$1
+FLORA=$1
 
 # Test if element is a member of exclude list
 # $1 - element
@@ -86,7 +86,7 @@ for tst in $testlist ; do
     if test -f core ; then
 	rm -f core
     fi
-    $currdir/test_dir.sh $currdir "$FLORADIR" "-e segfault_handler(warn). $options"
+    $currdir/test_dir.sh $currdir "$FLORA" "-e segfault_handler(warn). $options"
     cd $currdir
   fi
 done

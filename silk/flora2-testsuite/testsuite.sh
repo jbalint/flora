@@ -118,13 +118,12 @@ fi
 
 PROLOGDIR=`cat $FLORADIR/.prolog_path`/..
 
-# get canonical configuration name
-if test -z "$windows"; then
-config=`$PROLOGDIR/build/config.guess`
-canonical=`$PROLOGDIR/build/config.sub $config`
+if test -n "$windows"; then
+    runflora_script=runflora.bat
+    scripttest_flag=-e
 else
-config=x86-pc-windows
-canonical=x86-pc-windows
+    runflora_script=runflora
+    scripttest_flag=-x
 fi
 
 
@@ -134,10 +133,12 @@ LOG_FILE=/tmp/flora_test_log.$USER
 RES_FILE=/tmp/flora_test_res.$USER
 SUMMARY_FILE=./summary.txt
 
-if test ! -x "$FLORADIR/runflora"; then
-    echo "Can't execute $FLORADIR/runflora"
+FLORA="$FLORADIR/$runflora_script"
+
+if test ! $scripttest_flag "$FLORA"; then
+    echo "Can't execute $FLORA"
     echo "aborting..."
-    echo "Can't execute $FLORADIR/runflora" >$MSG_FILE
+    echo "Can't execute $FLORA" >$MSG_FILE
     HOSTNAME=`hostname`
     echo "Aborted testsuite on $HOSTNAME..." >> $MSG_FILE
     #mail $USER < $MSG_FILE
@@ -187,10 +188,10 @@ fi
 # greps for errors and prints the results to an output file
 # and then this script can also be used in buildtest
 
-echo "Testing $FLORADIR/runflora"
+echo "Testing $FLORA"
 echo "The log will be left in  $LOG_FILE"
 
-echo "Log for  $FLORADIR/runflora > $LOG_FILE"
+echo "Log for  $FLORA > $LOG_FILE"
 (echo "Date-Time: `date +"%y%m%d-%H%M"`" >> $LOG_FILE) || status=failed
 if test -n "$status"; then
 	echo "Date-Time: no date for NeXT..." >> $LOG_FILE
@@ -199,11 +200,16 @@ else
 	NeXT_DATE=0
 fi
 
-/usr/bin/time -f "TESTTIME user: %U, elapsed: %E" \
-./testall.sh -opts "$options" -exclude "$excluded_tests" \
-                              -add "$added_tests"  \
-	      $FLORADIR  >> $LOG_FILE 2>&1
-
+if test -x /usr/bin/time; then
+    /usr/bin/time -f "TESTTIME user: %U, elapsed: %E" \
+	./testall.sh -opts "$options" -exclude "$excluded_tests" \
+		     -add "$added_tests"  \
+			    $FLORA  >> $LOG_FILE 2>&1
+else
+    ./testall.sh -opts "$options" -exclude "$excluded_tests" \
+		    -add "$added_tests"  \
+			    $FLORA  >> $LOG_FILE 2>&1
+fi
 
 touch $RES_FILE
 coredumps=`find . -name core -print`
@@ -265,8 +271,8 @@ $GREP "TESTTIME" $LOG_FILE >> $SUMMARY_FILE
 if test -s $RES_FILE; then
 	cat $RES_FILE
 	echo "-----------------------------------------"
-	echo "***FAILED testsuite for $FLORADIR/runflora on $HOSTNAME"
-        echo "***FAILED testsuite for $FLORADIR/runflora on $HOSTNAME" > $MSG_FILE
+	echo "***FAILED testsuite for $FLORA on $HOSTNAME"
+        echo "***FAILED testsuite for $FLORA on $HOSTNAME" > $MSG_FILE
 	echo "Check the log file $NEW_LOG" >> $MSG_FILE
 	echo "" >> $MSG_FILE
 	echo "    Summary of the problems:" >> $MSG_FILE
@@ -277,7 +283,7 @@ if test -s $RES_FILE; then
 	echo "FAILED" >> $SUMMARY_FILE
 	rm -f $MSG_FILE
 else
-	echo "PASSED testsuite for $FLORADIR/runflora on $HOSTNAME"
+	echo "PASSED testsuite for $FLORA on $HOSTNAME"
 	echo "PASSED" >> $SUMMARY_FILE
 	rm -f $NEW_LOG
 fi
