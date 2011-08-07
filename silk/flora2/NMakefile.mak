@@ -98,11 +98,13 @@ CLEAN : CLEANTEMP
 	nmake /nologo /f NMakefile.mak clean
 	cd ..
 
-CLEANTEMP :
-	-@for /D %%i in (%USERPROFILE%\.xsb\"flora-*") do erase %%i\*$(OBJEXT) %%i\*$(PROLOGEXT)
-
 
 $(PROLOGEXT)$(OBJEXT):
 	$(PROLOG) -e "['.\\flora2']. import bootstrap_flora/0 from flora2. bootstrap_flora,mc(%|fF,$(OPTIONS)). halt."
 
 
+.SILENT:
+
+CLEANTEMP :
+	-@for /D %%i in (%USERPROFILE%\.xsb\"flora-*") do \
+	     if exist %%i\*$(OBJEXT) erase %%i\*$(OBJEXT) %%i\*$(PROLOGEXT)
