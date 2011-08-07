@@ -63,7 +63,7 @@
 	print_backtrace/1
    from error_handler.
 
-:- import close_open_tables/0 from machine.
+:- import close_open_tables/1 from machine.
 
 :- import flora_undefined_predicate_hook/3 from flrundefhook.
 
