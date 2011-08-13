@@ -23,7 +23,10 @@
 OBJEXT = .xwam
 PROLOGEXT = .P
 
-ALLOBJS=  flrdebugger$(OBJEXT) dynamic_data.dat static_data.dat
+ALLOBJS=  flrdebugger$(OBJEXT) \
+	flrtabledump$(OBJEXT) \
+	dynamic_data.dat \
+	static_data.dat
 
 OPTIONS=[optimize]
 

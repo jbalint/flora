@@ -23,7 +23,10 @@ PROLOGEXT=.P
 
 FLORADIR = ..
 
-ALLOBJS = flrdebugger${OBJEXT} dynamic_data.dat static_data.dat
+ALLOBJS = flrdebugger${OBJEXT} \
+	flrtabledump${OBJEXT} \
+	dynamic_data.dat \
+	static_data.dat
 
 FLORA_INCLUDES_DIR = ../flrincludes
 DYN_INCLUDES_DIR = ../includes
@@ -61,8 +64,8 @@ static_data.dat: static_data.in $(FLORA_TERMS)
 	@echo 'flWrapAround($*).' >> cmd...
 
 
-flrdebugger${OBJEXT}: flrdebugger${PROLOGEXT} $(FLORA_TERMS)
-	@echo 'mc(flrdebugger,$(OPTION)).' >> cmd...
+%$(OBJEXT) : %$(PROLOGEXT) $(FLORA_TERMS) $(FLORA_PORTING) $(FLORA_EXTENSIONS)
+	@echo 'mc($*,$(OPTION)).' >> cmd...
 
 
 init:

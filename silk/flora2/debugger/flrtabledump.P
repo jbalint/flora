@@ -1,0 +1,115 @@
+/* File:      flrtabledump.P
+**
+** Author(s): Michael Kifer
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 2011;
+**      and Vulcan, Inc., 2011.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+:- compiler_options([xpp_on]).
+
+#include "flora_terms.flh"
+
+
+:- import table_dump/2 from dump_table.
+
+:- import convert_to_head_literal/2 from flrcanon.
+:- import
+	flora_generalize_last/2
+   from flrtrim.
+:- import
+	flora_abort/1,
+	flora_file_op/2 
+   from flrporting.
+
+:- import
+	flora_write_oid/1,
+	flora_decode_oid_as_atom/2
+   from flrdecode.
+
+:- import flora_plg2hlg/4 from prolog2hilog.
+
+:- export
+	flora_dump_tables/2,
+	flora_dump_tables/3.
+
+
+flora_dump_tables(File,AtomicGoal) :-
+	flora_dump_tables(File,AtomicGoal,[summary(true),output(true)]).
+flora_dump_tables(File,AtomicGoal,Options) :-
+	atom(File),
+	!,
+	flora_file_op(tmpfilename,TmpFile),
+	flora_plg2hlg(Options1,Options,WRAP_HILOG,0),
+	tell(TmpFile),
+	convert_to_head_literal(AtomicGoal,AtomicGoalH),
+	flora_generalize_last(AtomicGoalH,FinalGoal),
+	dump_all(FinalGoal,Options1),
+	told,
+	see(TmpFile),
+	tell(File),
+	convert_to_flora,
+	told,
+	seen,
+	flora_file_op(rm,TmpFile).
+flora_dump_tables(_File,_AtomicGoal,_Options) :-
+	flora_abort('flora_dump_tables: the first argument must be a file name or userout (for standard output)').
+
+convert_to_flora :-
+	repeat,
+	read(Term),
+	(Term == end_of_file, !
+	;
+	    nonvar(Term),
+	    (Term = (summary = Goal - subgoals(N) - returns(R)), N =\= 0
+	    ;
+		Term = (details - Goal - subgoals(N) - answers_for_subgoals(AnsList)), N =\= 0
+	    ),
+	    flora_decode_oid_as_atom(Goal,FloraGoal),
+	    write(FloraGoal),
+	    write('[total_subgoals->'),
+	    write(N),
+	    write(', '),
+	    (nonvar(R) -> write('total_subgoal_answers->'), write(R)
+	    ;
+		write('subgoal_details->{'),
+		write_answers_for_subgoals(AnsList),
+		write('}')
+	    ),
+	    writeln('].'),
+	    fail
+	),
+	!.
+convert_to_flora.
+
+dump_all(AtomicGoal,Options) :-
+	table_dump(AtomicGoal,Options),
+	fail.
+dump_all(_,_).
+
+%%write_answers_for_subgoals(AnsList) :- write(AnsList).
+write_answers_for_subgoals([]) :- !.
+write_answers_for_subgoals([First|Rest]) :-
+	First = Subgoal - Number - AnsList,
+	flora_write_oid(Subgoal),
+	write('[total_answers->'),
+	write(Number),
+	write(', answers_list->'),
+	flora_write_oid(AnsList),
+	write(']'),
+	(Rest == [] -> true
+	;
+	    write(', '),
+	    write_answers_for_subgoals(Rest)
+	).
+		  
