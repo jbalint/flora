@@ -21,8 +21,8 @@ PROLOGEXT=.P
 FLORADIR=..
 
 ALL = 	flrxml_aux${PROLOGEXT} javaAPI${PROLOGEXT} \
-	ogclp${PROLOGEXT} \
 	gclpe${PROLOGEXT} \
+	ogclp${PROLOGEXT} \
 	ogclpe${PROLOGEXT} \
 	atck2${PROLOGEXT} \
 	atck3${PROLOGEXT} \
