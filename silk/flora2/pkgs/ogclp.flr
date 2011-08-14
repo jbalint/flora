@@ -100,7 +100,12 @@ FL_REFUTED(?R,?Mod)   :- FL_REFUTES(?,?R,?Mod).
 // rebutted/2 is unused in this version of the argumentation theory
 FL_REBUTTED(?R,?Mod)  :- FL_REBUTS(?,?R,?Mod).
 
+/******************** FL_DISQUALIFIED **************************************/
+FL_DISQUALIFIED(?R,?Mod) :- beaten_by_strict_rule(?R,?Mod).
 FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
+// FL_DISQUALIFIED_AUX expresses interaction  of defeat and cancellation:
+// Cancellation rule is disqualified if the rule being canceled has higher
+// priority than the cancellation rule itself
 FL_DISQUALIFIED(?R,?Mod) :- FL_DISQUALIFIED_AUX(?R,?Mod).
 
 FL_REFUTES(?R1,?R2,?Mod) :-
@@ -146,6 +151,10 @@ FL_STATUS(?I,?H)[howDefeated -> canceled] :-
 	change_module(?H,?Mod,?RealMod,?HM),
 	?R = (?I,?HM),
 	FL_CANCEL_AUX(?RealMod,?R).
+FL_STATUS(?I,?H)[howDefeated->beatenByStrictRule(?SH)] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?RealMod,?HM),
+	beaten_by_strict_rule((?I,?HM),(?,?SH),?RealMod).
 
 FL_STATUS(?I,?H)[info -> refutes(?Refuted)] :-
 	caller{?Mod},
@@ -213,10 +222,27 @@ FL_CONFLICTS(?L1,?L2,?Mod) :-
 	FL_CANDIDATE(?L1,?Mod),
 	FL_CANDIDATE(?L2,?Mod).
 
-
 // FL_OPPOSES_AUX/3, FL_OVERRIDES_AUX/3, FL_CANCEL_AUX/2 are defined in
 // genincludes/flrdefeasible.fli
 
+
+beaten_by_strict_rule(?R,?Mod) :- beaten_by_strict_rule(?R,?,?Mod).
+beaten_by_strict_rule(?R,?Rstrict,?Mod) :-
+	FL_OPPOSES_AUX(?Mod,?R,?Rstrict),
+	FL_STRICT_CANDIDATE(?Rstrict,?Mod).
+
+FL_STRICT_CANDIDATE((?RId,?Head),?Mod) :-
+	/* Must reset term-depth limit, since both tag{...} and clause{...} can
+	   retrieve rules with very large bodies. As terms they will be very
+	   deep (>100). */
+	current_prolog_flag(max_table_subgoal_depth,?TermDepth)@_prolog,
+	set_prolog_flag(max_table_subgoal_depth, 0)@_prolog,
+	\+tag{?RId,?Head}, // strict
+	clause{@{?RId} ?Head@?Mod, ?Body},
+	call(?Body),
+	set_prolog_flag(max_table_subgoal_depth, ?TermDepth)@_prolog.
+
+/***** refresh the tables used by the defeasible theory ********************/
 
 // Hook for abolishing FL_CANDIDATE/1 after each query
 FL_DEFEASIBLE_CLEANUP(?,?) :- flora_abolish_table_call(${FL_CANDIDATE(?,?)})@_prolog(flrtables).

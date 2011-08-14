@@ -156,6 +156,7 @@ FL_BEATER(?H,?Beaten,?Mod) :-
         ).
 
 /******************** FL_DISQUALIFIED **************************************/
+FL_DISQUALIFIED(?R,?Mod) :- beaten_by_strict_rule(?R,?Mod).
 FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
 
 /* FL_DISQUALIFIED_AUX is defined in genincludes/flrdefeasible.fli
@@ -164,6 +165,8 @@ FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
                        _overrides(?Id2,?Head2,?Id1,_cancel(?Id2,?Head2)).
    FL_DISQUALIFIED((?Id1,_cancel(?Id2))) :-
                        _overrides(?Id2,?,?Id1,_cancel(?Id2)).
+   That is: Cancellation rule is disqualified if the rule being canceled
+            has higher priority than the cancellation rule itself
 */
 
 FL_DISQUALIFIED(?R,?Mod) :- FL_DISQUALIFIED_AUX(?R,?Mod).
@@ -328,6 +331,10 @@ FL_STATUS(?L,?H)[howDefeated -> canceled] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
 	FL_CANCEL_AUX(?RealMod,(?L,?HM)).
+FL_STATUS(?I,?H)[howDefeated->beatenByStrictRule(?SH)] :-
+	caller{?Mod},
+	change_module(?H,?Mod,?RealMod,?HM),
+	beaten_by_strict_rule((?I,?HM),(?,?SH),?RealMod).
 
 FL_STATUS(?_L,?H)[info -> stomped] :-
 	caller{?Mod},
@@ -422,9 +429,26 @@ FL_CANDIDATE((?RId,?Head),?Mod) :-
 	(?Exclusion:_Exclusion[_opposers->?H])@?Mod,
 	?HH = ?H@?Mod.
 
-
 // FL_OPPOSES_AUX/3, FL_OVERRIDES_AUX/3, FL_CANCEL_AUX/2 are defined in
 // genincludes/flrdefeasible.fli
+
+
+
+beaten_by_strict_rule(?R,?Mod) :- beaten_by_strict_rule(?R,?,?Mod).
+beaten_by_strict_rule(?R,?Rstrict,?Mod) :-
+	FL_OPPOSES_AUX(?Mod,?R,?Rstrict),
+	FL_STRICT_CANDIDATE(?Rstrict,?Mod).
+
+FL_STRICT_CANDIDATE((?RId,?Head),?Mod) :-
+	/* Must reset term-depth limit, since both tag{...} and clause{...} can
+	   retrieve rules with very large bodies. As terms they will be very
+	   deep (>100). */
+	current_prolog_flag(max_table_subgoal_depth,?TermDepth)@_prolog,
+	set_prolog_flag(max_table_subgoal_depth, 0)@_prolog,
+	\+tag{?RId,?Head}, // strict
+	clause{@{?RId} ?Head@?Mod, ?Body},
+	call(?Body),
+	set_prolog_flag(max_table_subgoal_depth, ?TermDepth)@_prolog.
 
 
 /***** refresh the tables used by the defeasible theory ********************/
