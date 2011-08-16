@@ -15,15 +15,20 @@ options=$3
 file_list=*.flr
 
 # abp.flr does not work. Perhaps the program is wrong.
-# trailer.flr is disabled: since there is no "SINGLE-valued" methods now,
+# trailer.flr is disabled: since there are no "SINGLE-valued" methods now,
 #                          the related trailer is not used.
 # btupdates.flr is loaded using btupdates_load.flr
 # tabledupdates.flr is loaded using tabledupdates_load.flr
-# add1.flr and add2.flr is loaded or added using add_load.flr
+# add1.flr and add2.flr are loaded or added using add_load.flr
 # ruleupdates.flr is loaded using ruleupdates_load.flr
 # compile_control.flr is loaded using compiletst.flr
-exclude_list="clptest.flr \
-              abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
+# depcheck_control.flr is loaded by depchecktest.flr
+# error_invalidsym.flr, error_dynmod.flr, error_nonvar*.flr 
+#                         are used in export_compile_test.flr
+# encap_mod*.flr are used in export_test.flr and importmodule.flr
+# encap_syntax_check.flr is used in export_compile_test.flr
+#
+exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
     	      basetype_moo.flr basetype_foo.flr \
               add1.flr add2.flr\
               trailer.flr \
