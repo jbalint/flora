@@ -881,6 +881,8 @@ flterm_struct(Fun,1,[NumberObj],NumberObj1) :-
 	flnumber_struct(Num1,Index, NumberObj1).
 flterm_struct(Funct,Arity,Args,FLTERM(Funct,Arity,Args)).
 
+flarith_struct(Term,FLARITH(Term)).
+
 fltransactionalterm_struct(Funct,Arity,Args,FLTRANSACTIONALTERM(Funct,Arity,Args)).
 is_fltransactionalterm_struct(FLTRANSACTIONALTERM(_Funct,_Arity,_Args)) :- !.
 is_fltransactionalterm_struct(FLTERM(FuncSpec,_Arity,_Args)) :-
@@ -2842,8 +2844,8 @@ parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[Head,Body],If,Ip),WS,WS,Code,St
 %% If the user wrote @_prolog or @_prologall then we pass it down to prolog
 %% and do not delay. This is a change from the original treatment
 parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
-	get_name(Funct,Atom),
-	flora_delayed_builtin_literal(Atom,N),
+	get_name(Funct,FAtom),
+	flora_delayed_builtin_literal(FAtom,N),
 	%% if @_plg or @_plgall, pass down to Prolog, don't delay
 	\+ WS == PROLOGMODULE,
 	\+ WS == PROLOGALLMODULE,
@@ -2852,8 +2854,11 @@ parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) 
 	%% If inside a CLP constraint, don't delay
 	\+ has_context(parsing_CLP_constraint),
 	!,
-	flatom_struct(Atom,If,OpCode),
-	parse_body_pathexplist(Args,DWS,ACode,Status),
+	flatom_struct(FAtom,If,OpCode),
+	(flora_argdef(FAtom,N,ArgTypes,DWS)
+	-> parse_body_argpathexplist(Args,ArgTypes,DWS,ACode,Status)
+	;  parse_body_pathexplist(Args,DWS,ACode,Status)
+	),
 	fllist_struct(ACode,[],Ip,ArgsCode),
 	fldelayedliteral_struct(OpCode,ArgsCode,Code).
 
@@ -3823,10 +3828,14 @@ parse_body_literal(CanoniTerm,DWS,Code,Status) :-
         !,
 	( has_context(parsing_reify), DWS==NULL
 	->
-            parsing_error(CanoniTerm,NO_REIFY_VAR,Status)
+	    %% implicit reification is when we reify because of an
+	    %% argument declaration FL_BODYFORMULA
+	    (has_context(implicit_reification) -> Code = C, Status = []
+            ; parsing_error(CanoniTerm,NO_REIFY_VAR,Status)
+	    )
 	/*
 	%% This happens when we have a predicate with a variable in an argument
-	%% declared as BODYLITERAL. Do not flag an error in this case.
+	%% declared as FL_BODYLITERAL. Do not flag an error in this case.
 	; has_context(parsing_fact) ->
             parsing_error(CanoniTerm,NO_PRED_VAR,Status)
 	*/
@@ -4574,7 +4583,7 @@ parse_body_term(Funct,N,Args,_TransFlag,DWS,Code,Status) :-
 	flora_argdef(FAtom,N,ArgTypes,DWS),
 	!, 
         flobject_struct(Funct,F),
-	parse_body_argpathexplist(Args,ArgTypes,DWS,AList,Status), 
+	parse_body_argpathexplist(Args,ArgTypes,DWS,AList,Status),
 	( Status == []
 	-> flterm_struct(F,N,AList,Code)
 	;
@@ -4713,7 +4722,9 @@ parse_pure_term_list_with_argdefs([Arg|Args],[FL_OID|ArgsDefs],DWS,[ArgCode|ArgC
 	; Status = Status1
 	).
 parse_pure_term_list_with_argdefs([Arg|Args],[FL_BODYFORMULA|ArgsDefs],DWS,[RArgCode|ArgCodeList], Status) :-
+	set_context(implicit_reification),
 	parse_rule_body(Arg,DWS,DWS,ArgCode,Status1),
+	clear_context(implicit_reification),
 	(Status1 == []
 	-> 
             flreify_struct(ArgCode,RArgCode),
@@ -4730,6 +4741,12 @@ parse_pure_term_list_with_argdefs([Arg|Args],[FL_BODYFORMULA|ArgsDefs],DWS,[RArg
     VarNameList - list of names of vars. Used for consistency checking
     We don't grok lists here.
 ***************************************************************************/
+parse_pure_prolog_term(Canoterm,_PrlgMod,Code,_,[]) :-
+	get_flvar_struct(Canoterm,Code),
+	!.
+parse_pure_prolog_term(Canoterm,_PrlgMod,Code,_,[]) :-
+	flobject_struct(Canoterm,Code),
+	!.
 parse_pure_prolog_term(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),PrlgMod,Code,VarNameList-Tail,Status) :-
 	get_name(Funct,_),
 	!,
@@ -4847,9 +4864,20 @@ parse_body_argpathexplist([T|L],[FL_OID|Arguments],DWS,[TCode|LCode],Status) :-
         ).
 
 parse_body_argpathexplist([T|L],[FL_BODYFORMULA|Arguments],DWS,[RTCode|LCode],Status) :-
+	set_context(implicit_reification),
 	protect_reification(parse_rule_body(T,DWS,DWS,TCode,S)),
+	clear_context(implicit_reification),
 	( S == [] ->
             flreify_struct(TCode,RTCode),
+	    parse_body_argpathexplist(L,Arguments,DWS,LCode,Status)
+	;
+	  Status=S
+        ).
+
+parse_body_argpathexplist([T|L],[FL_ARITH|Arguments],DWS,[TACode|LCode],Status) :-
+	parse_body_pathexp(T,DISALLOW_TRANS,DWS,TCode,S),
+	flarith_struct(TCode,TACode),
+	( S == [] ->
 	    parse_body_argpathexplist(L,Arguments,DWS,LCode,Status)
 	;
 	  Status=S
@@ -5580,7 +5608,9 @@ parse_head_argpathexplist([T|L],[FL_OID|Arguments],DWS,[TCode|LCode],Status) :-
         ).
 
 parse_head_argpathexplist([T|L],[FL_BODYFORMULA|Arguments],DWS,[RTCode|LCode],Status) :-
+	set_context(implicit_reification),
 	parse_rule_body(T,DWS,DWS,TCode,S),
+	clear_context(implicit_reification),
 	( S == [] ->
             flreify_struct(TCode,RTCode),
 	    parse_head_argpathexplist(L,Arguments,DWS,LCode,Status)

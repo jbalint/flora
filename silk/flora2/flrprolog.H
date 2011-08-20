@@ -32,6 +32,8 @@
 
 %%:- import flora_get_counter/2 from gensym.
 
+:- import flora_compilation_context/1 from flrcompiler.
+
 :- export
           flora_reset_prolog/0,
 	  flora_define_prolog/1,

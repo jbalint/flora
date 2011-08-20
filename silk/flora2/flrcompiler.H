@@ -100,6 +100,7 @@
 
 :- export 
 	flora_clear_compilation_permaoptions/0,
+	flora_compilation_context/1,
         flora_reset_newvar/0,
         flora_new_varobj/3,
 	flora_reset_compiler/0, 
