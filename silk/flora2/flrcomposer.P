@@ -179,25 +179,33 @@ is_sole_operator(SYMBOL_TOKEN(Op,_),NewOp) :-
 
 
 /**************************************************************************/
-is_atom_operator(IDENTIFIER(Op,_Info),IDENTIFIER(Op,_Info)) :-
-	flora_opdef(_,_,Op), !.
+is_base_atom_operator(IDENTIFIER(Op,_Info)) :- flora_opdef(_,_,Op), !.
+is_base_atom_operator(QUOTED_ATOM(Op,_Info)) :- flora_opdef(_,_,Op), !.
+is_base_atom_operator(BUILTIN_IDENTIFIER(Op,_Info)) :- flora_opdef(_,_,Op), !.
+
+is_atom_operator(X,X) :- is_base_atom_operator(X), !.
 is_atom_operator(IDENTIFIER(Synonym,_Info),IDENTIFIER(Op,_Info)) :-
-	flora_op_synonym(Synonym,Op), !.
-is_atom_operator(QUOTED_ATOM(Op,_Info),QUOTED_ATOM(Op,_Info)) :-
-	flora_opdef(_,_,Op), !.
+	flora_op_synonym(Synonym,Op),
+	flora_opdef(_,_,Op),
+	!.
 is_atom_operator(QUOTED_ATOM(Synonym,_Info),QUOTED_ATOM(Op,_Info)) :-
-	flora_op_synonym(Synonym,Op), !.
-is_atom_operator(BUILTIN_IDENTIFIER(Op,_Info),BUILTIN_IDENTIFIER(Op,_Info)) :-
-	flora_opdef(_,_,Op), !.
+	flora_op_synonym(Synonym,Op),
+	flora_opdef(_,_,Op),
+	!.
 is_atom_operator(BUILTIN_IDENTIFIER(Synonym,_Info),BUILTIN_IDENTIFIER(Op,_Info)) :-
-	flora_op_synonym(Synonym,Op), !.
+	flora_op_synonym(Synonym,Op),
+	flora_opdef(_,_,Op),
+	!.
 
 /**************************************************************************/
-%% Operator, which is a symbol
-is_symobject_operator(SYMBOL_TOKEN(Op,_Info),SYMBOL_TOKEN(Op,_Info)) :-
-	flora_opdef(_,_,Op), !.
+%% Operator, that is a symbol
+is_base_symobject_operator(SYMBOL_TOKEN(Op,_Info)) :- flora_opdef(_,_,Op), !.
+
+is_symobject_operator(X,X) :- is_base_symobject_operator(X), !.
 is_symobject_operator(SYMBOL_TOKEN(Synonym,_Info),SYMBOL_TOKEN(Op,_Info)) :-
-	flora_op_synonym(Synonym,Op), !.
+	flora_op_synonym(Synonym,Op),
+	flora_opdef(_,_,Op),
+	!.
 
 /**************************************************************************/
 is_infix(O,L,R,P) :-
@@ -476,14 +484,14 @@ flora_compose(PrevToken,TmStack,OpStack,N,CurToken,Term,Status) :-
 	see_operand(PrevToken,TmStack,OpStack,N,CurToken,Term,Status).
 
 flora_compose(PrevToken,TmStack,OpStack,N,CurToken,Term,Status) :-
-	is_symobject_operator(CurToken,TranslatedToken),
+	is_symobject_operator(CurToken,_),
 	!,
-	compose_symobject_operator(PrevToken,TmStack,OpStack,N,TranslatedToken,Term,Status).
+	compose_symobject_operator(PrevToken,TmStack,OpStack,N,CurToken,Term,Status).
 
 flora_compose(PrevToken,TmStack,OpStack,N,CurToken,Term,Status) :-
-	is_atom_operator(CurToken,TranslatedToken),
+	is_atom_operator(CurToken,_),
 	!,
-	compose_atom_operator(PrevToken,TmStack,OpStack,N,TranslatedToken,Term,Status).
+	compose_atom_operator(PrevToken,TmStack,OpStack,N,CurToken,Term,Status).
 
 flora_compose(PrevToken,TmStack,OpStack,N,COMMENT(_),Term,Status) :-
 	!,
@@ -526,16 +534,18 @@ compose_atom_operator(BRACE(B,I),TmStack,OpStack,N,CurToken,Term,Status) :-
 	M is N+1,
 	is_next_token(M,X),
 	!,
-	see_operand(BRACE(B,I),TmStack,OpStack,N,CurToken,Term,Status).
+	is_atom_operator(CurToken,IntendedToken),
+	see_operand(BRACE(B,I),TmStack,OpStack,N,IntendedToken,Term,Status).
 
 compose_atom_operator(PrevToken,TmStack,OpStack,N,CurToken,Term,Status) :-
-	( CurToken=IDENTIFIER(I,_) ->
+	is_atom_operator(CurToken,IntendedToken),
+	( IntendedToken=IDENTIFIER(I,_) ->
 	    compose_sole_operator(PrevToken,TmStack,OpStack,N,I,Term,Status)
 	;
-	  CurToken=QUOTED_ATOM(QA,_) ->
+	  IntendedToken=QUOTED_ATOM(QA,_) ->
 	  compose_sole_operator(PrevToken,TmStack,OpStack,N,QA,Term,Status)
 	;
-	  CurToken=BUILTIN_IDENTIFIER(QA,_),
+	  IntendedToken=BUILTIN_IDENTIFIER(QA,_),
 	  compose_sole_operator(PrevToken,TmStack,OpStack,N,QA,Term,Status)
         ).
 
@@ -544,6 +554,7 @@ compose_atom_operator(OPRND(_),_TmStack,_OpStack,_N,_CurToken,_Term,_Status) :-
 	fail.
 
 compose_atom_operator(PrevToken,TmStack,OpStack,N,CurToken,Term,Status) :-
+	%% case of a non-operator occurrence?
 	see_operand(PrevToken,TmStack,OpStack,N,CurToken,Term,Status).
 
 
@@ -556,16 +567,19 @@ compose_symobject_operator(BRACE(B,I),TmStack,OpStack,N,CurToken,Term,Status) :-
 	M is N+1,
 	is_next_token(M,X),
 	!,
-	see_operand(BRACE(B,I),TmStack,OpStack,N,CurToken,Term,Status).
+	is_symobject_operator(CurToken,IntendedToken),
+	see_operand(BRACE(B,I),TmStack,OpStack,N,IntendedToken,Term,Status).
 
 compose_symobject_operator(PrevToken,TmStack,OpStack,N,SYMBOL_TOKEN(S,_),Term,Status) :-
-	compose_sole_operator(PrevToken,TmStack,OpStack,N,S,Term,Status).
+	is_symobject_operator(SYMBOL_TOKEN(S,_),SYMBOL_TOKEN(IntendedS,_)),
+	compose_sole_operator(PrevToken,TmStack,OpStack,N,IntendedS,Term,Status).
 
 compose_symobject_operator(OPRND(_),_TmStack,_OpStack,_N,_CurToken,_Term,_Status) :-
 	!,
 	fail.
 
 compose_symobject_operator(PrevToken,TmStack,OpStack,N,CurToken,Term,Status) :-
+	%% case of a non-operator occurrence?
 	see_operand(PrevToken,TmStack,OpStack,N,CurToken,Term,Status).
 
 
