@@ -789,18 +789,24 @@ decode_anon_oid(NewOid,Code) :-
 	(flora_match_substring(FL_NEWOID_PREFIX,NewOid,forward,0,Pos), !
 	; flora_match_substring(FL_NEWOID_DYNPREFIX,NewOid,forward,0,Pos)
 	),
-	flora_get_substring(NewOid,Pos,_,Suffix),
-	Code = ['_#''',Suffix].
+	(flora_match_substring('|',NewOid,forward,_,Pos1) ->
+	    (flora_match_substring('''',NewOid,reverse,Pos2,_), Pos1 < Pos2, !
+	    ; true
+	    ),
+	    flora_get_substring(NewOid,Pos1,Pos2,OidNumber),
+	    Code = ['_#',OidNumber]
+	; Code = ['_#']
+	).
 
 
 
 %%%%%%%%%%%%%%%%%%%%%% Classifier %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 classify_call(Call,Type,Basename,ArgList,Module) :-
 	flora_decode_predicate(Call,Type1,Module,Prefix,Basename1,ArgList1),
-	/*
 	%% The following debugging statement helps weed out
 	%% calls that should be suppressed by the debugger
-	writeln(('Decodecall: ',Call,Type1,Module,Prefix,Basename1,ArgList1)),
+	/*
+	writeln(2,('Decodecall: ',Call,Type1,Module,Prefix,Basename1,ArgList1)),
 	*/
 	(Type1 == (flora)
 	-> (Prefix==inheritance_
@@ -817,6 +823,11 @@ classify_call(Call,Type,Basename,ArgList,Module) :-
 	   -> Basename = Basename1, Type = (neg_dynhead_before), ArgList = ArgList1
 	   ; Prefix==neg_dynz_ % This is actually hidden (possible future use)
 	   -> Basename = Basename1, Type = (neg_dynhead_after), ArgList = ArgList1
+	   ; Basename1 = WRAP_DIFFOBJEQL
+	   -> Basename = WRAP_OBJEQL, ArgList = ArgList1,
+	       (Prefix = 'neg_' -> Type = (neg_flogic)
+	       ; Type = (flogic))
+
 
 	   ;   %% must be a hilog predicate derivative formed by specialization
 	       %% such as FLORA_PREFIX'usermod''main''flapply_#303'
@@ -1399,10 +1410,13 @@ escape(Atom,Code) :-
         atom_codes(Atom1,Str),
         escape(Str,EscStr,Flag),
 	atom_codes(NA,EscStr),
-        ( Flag == escaped -> Code = ['''',NA,'''']
+        ( Flag == needs_quoting,
+	    \+ flora_opdef(_,_,NA)
+	-> Code = ['''',NA,'''']
+	; EscStr = [Ch|_], Ch >= CH_0, Ch =< CH_9  %% quote if starts with digit
+	-> Code = ['''',NA,'''']
 	;
-	    %%Code = NA
-	    Code = ['''',NA,'''']
+	    Code = NA
 	).
 
 escape(L,NL) :- is_list(L), !, escape(L,NL,_Flag).
@@ -1412,31 +1426,34 @@ escape(L,L) :- !.
         
 escape([],[],_Flag) :- !.
 
-escape([H|L],[CH_BACKSLASH,HC|EL],escaped) :-
+escape([H|L],[CH_BACKSLASH,HC|EL],needs_quoting) :-
         special_character(H,HC),
         !,
         escape(L,EL,_Flag).
-escape([CH_BACKSLASH,CH_QUOTE|L],[CH_QUOTE,CH_QUOTE|EL],escaped) :-
+escape([CH_BACKSLASH,CH_QUOTE|L],[CH_QUOTE,CH_QUOTE|EL],needs_quoting) :-
 	!,
 	escape(L,EL,_).
-escape([CH_QUOTE|L],[CH_QUOTE,CH_QUOTE|EL],escaped) :-
+escape([CH_QUOTE|L],[CH_QUOTE,CH_QUOTE|EL],needs_quoting) :-
 	!,
 	escape(L,EL,_).
 %% Backslash before special character is escaped: '\\n' is internally 
 %% translated as \ n and is printed as '\\n'
-escape([CH_BACKSLASH,H|L],[CH_BACKSLASH,CH_BACKSLASH,H|EL],escaped) :-
+escape([CH_BACKSLASH,H|L],[CH_BACKSLASH,CH_BACKSLASH,H|EL],needs_quoting) :-
         special_character(_,H),
         !,
         escape(L,EL,_Flag).
-escape([CH_BACKSLASH,H|L],[CH_BACKSLASH,CH_BACKSLASH|HEL],escaped) :-
+escape([CH_BACKSLASH,H|L],[CH_BACKSLASH,CH_BACKSLASH|HEL],needs_quoting) :-
         special_character(H,_),
         !,
         escape([H|L],HEL,_Flag).
-escape([CH_BACKSLASH,CH_BACKSLASH|L],[CH_BACKSLASH,CH_BACKSLASH|EL],escaped) :-
+escape([CH_BACKSLASH,CH_BACKSLASH|L],[CH_BACKSLASH,CH_BACKSLASH|EL],needs_quoting) :-
         !,
         escape([CH_BACKSLASH|L],EL,_Flag).
 escape([H|L],[H|EL],Flag) :-
-        escape(L,EL,Flag).
+	(needs_quoting(H) -> Flag = needs_quoting, NewFlag = _
+	; NewFlag = Flag
+	),
+        escape(L,EL,NewFlag).
 
 /****************************************************************************
  special_character(+C, -NC)
@@ -1449,6 +1466,12 @@ special_character(CH_NEWLINE,CH_n) :- !.
 special_character(CH_VERTAB,CH_v) :- !.
 special_character(CH_FORMFEED,CH_f) :- !.
 special_character(CH_RETURN,CH_r) :- !.
+
+needs_quoting(Ch) :-
+	(Ch < CH_0; Ch > CH_9), %% we should really quote numbers for safety
+	(Ch < CH_a; Ch > CH_z),
+	(Ch < CH_A; Ch > CH_Z),
+	Ch \= CH_UNDERSCORE.
 
 is_void(X) :-
 	(X == NULL ; var(X)),
