@@ -89,18 +89,14 @@ convert_to_flora :-
 		Term = (details - Goal - subgoals(N) - answers_for_subgoals(AnsList)), N =\= 0
 	    ),
 
-	    %% Hide FLLIBMODOBJ/5
-	    Goal \= FLLIBMODOBJ(_,_,_,_,_),
-	    %% Make sure this is at least a flora predicate
-	    functor(Goal,Functor,_Arity),
-	    str_sub(FLORA_MODULE_PREFIX,Functor),
+	    \+ irrelevant_goal(Goal),
 
 	    /*
 	    %% This hides too much. Better do it on a case-by-case basis
 	    %% hide whatever the debugger hides
 	    convert_to_body_literal(Goal,GoalB),
 	    functor(GoalB,FunctorB,_Arity),
-	    \+ hide_goal(FunctorB,_Arity),
+	    \+ hide_debug_goal(FunctorB,_Arity),
 	    */
 
 	    flora_decode_oid_as_atom(Goal,FloraGoal),
@@ -143,15 +139,32 @@ write_answers_for_subgoals([First|Rest]) :-
 
 /*
 %% Hiding rules taken from the debugger
-hide_goal(X,Y) :-
+hide_debug_goal(X,Y) :-
 	flora_hide_this_hide(pref(X1/Y)), atom(X),atom(X1), str_sub(X1,X,0), !
 	;
 	flora_hide_this_hide(match(X1/Y)), atom(X),atom(X1), str_sub(X1,X), !.
 
-hide_goal(X,Y) :-
+hide_debug_goal(X,Y) :-
 	flora_hide_this_show(pref(X1/Y)), atom(X),atom(X1), str_sub(X1,X,0), !
 	;
 	flora_hide_this_show(match(X1/Y)), atom(X),atom(X1), str_sub(X1,X), !
 	;
 	flora_hide_this_show(propermatch(X1/Y)), atom(X),atom(X1), str_sub(X1,X), X1 \= X, !.
 */
+
+irrelevant_goal(Goal) :-
+	    %% Hide FLLIBMODOBJ/5
+	    Goal = FLLIBMODOBJ(_,_,_,_,_),
+	    !.
+irrelevant_goal(Goal) :-
+	    functor(Goal,Functor,_Arity),
+	    (
+	      %% not a flora predicate
+	      \+ str_sub(FLORA_MODULE_PREFIX,Functor), !
+	    ;
+	      %% a negation wrapper
+	      str_sub(FL_TABLED_UNNUMBER_CALL,Functor), !
+	    ;
+	      %% a truth-checking call
+	      str_sub(FL_TRUTHVALUE_TABLED_CALL,Functor), !
+	    ).
