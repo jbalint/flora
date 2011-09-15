@@ -34,9 +34,10 @@
 
 :- import 't not'/1 from tables.
 
-:- import ';;'/2 from standard.
-
-%%:- import term_to_atom/2 from string.
+:- import
+	%%';;'/2,
+	goal_cut_untrans/2
+   from standard.
 
 :- import
 	flora_decode_predicate/6,
@@ -224,7 +225,8 @@ flora_decode_oid_as_list(Goal,FlatCode) :-
 %% represents a readable representation of Fact                            %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%	
 
-flora_decode_fact(Call,Code,Depth) :-
+flora_decode_fact(CallIn,Code,Depth) :-
+	goal_cut_untrans(CallIn,Call),
 	classify_call(Call,Type,Basename,ArgList,Module),
 	Depth1 is Depth+1,
 	( Type == (tabled_hilog)
@@ -246,10 +248,12 @@ flora_decode_fact(Call,Code,Depth) :-
 %% represents a readable representation of Goal                            %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-flora_decode_goal(Call,[FL_VARSYM,Call],_Depth) :-
-	var(Call), !.
+flora_decode_goal(CallIn,[FL_VARSYM,Call],_Depth) :-
+	var(CallIn), !.
 
-flora_decode_goal(Call,Code,Depth) :-
+flora_decode_goal(CallIn,Code,Depth) :-
+	%% goal_cut_untrans gets rid of various irregularities like ';;'/2
+	goal_cut_untrans(CallIn,Call),
 	classify_call(Call, Type,Basename,ArgList,Module),
 	(Type = (basefact,CallType)
 	-> Code = ['_isbasefact(', [RestCode], ')']
@@ -294,14 +298,14 @@ flora_decode_goal(Call,Code,Depth) :-
 %% or Flora primitives like insert{...}, throw{...}, etc.
 %% Even if a call is a prolog call, its arguments can be Flora stuff, so
 %% decode_literal_internal/3 processes them accordingly.
-flora_decode_goal(Call,Code,Depth) :-
+flora_decode_goal(CallIn,Code,Depth) :-
 	Depth1 is Depth+1,
-	decode_literal_internal(Call,Code,0,Depth1),
+	decode_literal_internal(CallIn,Code,0,Depth1),
 	!.
 
 %% Debugging
-flora_decode_goal(Call,_,_) :-
-	flora_abort([Call,': flora_decode_goal/2 failed to decode']).
+flora_decode_goal(CallIn,_,_) :-
+	flora_abort([CallIn,': flora_decode_goal/2 failed to decode']).
 
 
 %%%%%%%%%%%%%%%%%%%% flora decode oid %%%%%%%%%%%%%%%%%%%%%%%
@@ -1262,6 +1266,8 @@ decode_literal_internal(';'(L,R),[ReifyStart,'(',LCode,'; ',RCode,')',ReifyEnd],
 	decode_literal_internal(L,LCode,Level,Depth1),
 	decode_literal_internal(R,RCode,Level,Depth1).
 
+/*
+%% This is no longer necessary, since goal_cut_untrans/2 gets rid of ;;/2
 decode_literal_internal(';;'(L,R),[ReifyStart,'(',LCode,'; ',RCode,')',ReifyEnd],Level,Depth) :-
 	!,
 	Depth1 is Depth+1,
@@ -1269,6 +1275,7 @@ decode_literal_internal(';;'(L,R),[ReifyStart,'(',LCode,'; ',RCode,')',ReifyEnd]
 	ReifyStart='',ReifyEnd='',
 	decode_literal_internal(L,LCode,Level,Depth1),
 	decode_literal_internal(R,RCode,Level,Depth1).
+*/
 
 %% Can this happen?
 decode_literal_internal('-->'(Call1,Call2),[ReifyStart,Call1Code,' --> ',Call2Code,ReifyEnd],Level,Depth) :-
@@ -1369,7 +1376,9 @@ decode_literal_internal(Call,Code,Level,_Depth) :-
 	    decode_update(UpdName,[UpdLiterals,RealQuery],Code,Level)
 	).
 
-decode_literal_internal(Call,Code,Level,Depth) :-
+decode_literal_internal(CallIn,Code,Level,Depth) :-
+	%% goal_cut_untrans gets rid of various irregularities like ';;'/2
+	goal_cut_untrans(CallIn,Call),
 	(\+callable(Call)
 	-> flora_abort([Call,': Ill-formed HiLog term in decode_literal_internal/3'])
 	;
