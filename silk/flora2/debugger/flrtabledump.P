@@ -63,9 +63,14 @@ flora_dump_tables(File,AtomicGoal,Options) :-
 	atom(File),
 	!,
 	flora_file_op(tmpfilename,TmpFile),
+	(member(details,Options) -> Options1 = [details(true)]
+	; Options1 = [summary(true)]
+	),
+	/*
 	(member(details,Options) -> Options1 = [output(true),details(true)]
 	; Options1 = [output(true),summary(true)]
 	),
+	*/
 	convert_to_head_literal(AtomicGoal,AtomicGoalH),
 	flora_generalize_last(AtomicGoalH,FinalGoal),
 	tell(TmpFile),
@@ -76,8 +81,8 @@ flora_dump_tables(File,AtomicGoal,Options) :-
 	convert_to_flora,
 	told,
 	seen,
-	flora_file_op(rm,TmpFile).
-	%%true.
+	%%flora_file_op(rm,TmpFile).
+	true.
 flora_dump_tables(_File,_AtomicGoal,_Options) :-
 	flora_abort('flora_dump_tables: the first argument must be a file name or userout (for standard output)').
 
@@ -87,9 +92,9 @@ convert_to_flora :-
 	(Term == end_of_file, !
 	;
 	    nonvar(Term),
-	    (Term = (summary = Goal - subgoals(N) - returns(R)), N =\= 0
+	    (Term = (summary = Goal - subgoals(NSG) - total_times_called(NC) - total_answers(R)), NSG =\= 0
 	    ;
-		Term = (details - Goal - subgoals(N) - answers_for_subgoals(AnsList)), N =\= 0
+		Term = (details - Goal - subgoals(NSG) - details(AnsList)), NSG =\= 0
 	    ),
 
 	    \+ irrelevant_goal(Goal),
@@ -105,9 +110,11 @@ convert_to_flora :-
 	    flora_decode_oid_as_atom(Goal,FloraGoal),
 	    write(FloraGoal),
 	    write('[total_subgoals->'),
-	    write(N),
+	    write(NSG),
 	    write(', '),
-	    (nonvar(R) -> write('total_subgoal_answers->'), write(R)
+	    (nonvar(R)
+	    -> write('total_subgoal_answers->'), write(R),
+		write(', total_times_called->'), write(NC)
 	    ;
 		write('subgoal_details->{'),
 		write_answers_for_subgoals(AnsList),
@@ -126,10 +133,12 @@ dump_all(_,_).
 
 write_answers_for_subgoals([]) :- !.
 write_answers_for_subgoals([First|Rest]) :-
-	First = Subgoal - Number - AnsList,
+	First = Subgoal - calls_to(Calls) - answers(Answers) - AnsList,
 	flora_write_oid(Subgoal),
 	write('[total_answers->'),
-	write(Number),
+	write(Answers),
+	write(', total_calls->'),
+	write(Calls),
 	write(', answer_list->'),
 	flora_write_oid(AnsList),
 	write(']'),
