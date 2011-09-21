@@ -356,7 +356,13 @@ public class PrologFlora extends FloraConstants
 	engineType = engineType.toUpperCase();
 	if (engineType.equals("NATIVE")) {
 	    try {
-		engine = new NativeEngine(systemSpecificFilePath(PrologRootDir));
+		String args[] = new String[0]; 
+		if (! logger.isInfoEnabled())
+		    {
+			args = new String[1];
+			args[0] = "--quietload";
+		    }
+		engine = new NativeEngine(systemSpecificFilePath(PrologRootDir), args, false, true);
 		isNative = true;
 	    }
 	    catch(Throwable e) {
