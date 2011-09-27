@@ -4580,6 +4580,16 @@ compile_head_pathexp(ParserTerm,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
 
 	; is_reifyop(ParserTerm,Formula) ->
 	    %% Code: code to get Object
+	    /* We could push fllibmodobj that creates reified statement
+	       to the body. This would allow us to have reified statements with
+	       var module in the head. However, this is hard to do: requires
+	       changes to fllibmodobj. Test case:
+	        p(${a(?X)@?M}) :- a(?X,?M).
+		a(1,mmm).
+		?- p(${a(?X)@mmm}).
+	    %%compile_reifyop(Formula,Object,H2BCodeHead,Status),
+	    %%Code = NULL,
+	    */
 	    compile_reifyop(Formula,Object,Code,Status),
 	    H2BCodeHead = NULL,
 	    H2BCodeTail = NULL
@@ -5182,6 +5192,13 @@ compile_wsfltermobj(Funct,N,Args,WS,Object,OidCode,Code,Status) :-
 /****************************************************************************
   compile_wstermlit(+FunctorTerm,+Arity,+ArgList,+Workspace,-OidCode,-Code,-Status)
 ****************************************************************************/
+compile_wstermlit(_Funct,_N,_Args,WS,_OidCode,_Code,Status) :-
+	is_flvariable(WS,_Name,VarIndex),
+	has_context(compiling_headliteral),
+	!,
+	compiling_error(VarIndex,VARWSINHEAD,Err),
+	Status = [Err].
+
 compile_wstermlit(Funct,N,Args,WS,OidCode,Code,Status) :-
 	compile_wsflpathexplist([Funct|Args],WS,[FObj|AObj],OidCode,ObjCode,Status),
 	( Status == [] ->
@@ -6199,7 +6216,8 @@ compile_head_wstermobj(_Funct,_N,_Args,WS,_Object,_Code,_H2BCodeHead,_H2BCodeTai
 	%% this will generate an error. However, this might be solved by moving
 	%% the code that generates the workspace predicate to the body
 	%% of the rule.
-	compiling_error(VarIndex,VARWSINHEAD,Status).
+	compiling_error(VarIndex,VARWSINHEAD,Err),
+	Status = [Err].
 
 compile_head_wstermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	compile_head_wsflpathexplist([Funct|Args],WS,[FObj|AObj],Code,H2BCodeHead,H2BCodeTail,Status),
