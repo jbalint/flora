@@ -30,7 +30,10 @@
 	flora_abort/1,
 	flora_abort/2
    from flrporting.
-:- import length/2 from basics.
+:- import
+	member/2,
+	length/2
+   from basics.
 %%:- import flora_decode_goal_as_atom/2 from flrdecode.
 :- import
 	get_attr/3,
@@ -67,7 +70,7 @@
 	
 	flora_mathequal_builtin/4,
 	flora_mathnotequal_builtin/4,
-	flora_arith_is_builtin/4,
+	flora_arith_IS_builtin/4,
 
 	flora_number_builtin/3,
 	flora_integer_builtin/3,
@@ -120,13 +123,16 @@ flora_defeat_condition_wrapper(+File,+Line,+DefeatCond,+VarList,+VarnameList,+Dy
 	  in the static head.
 *****************************************************************************/
 flora_defeat_condition_wrapper(File,Line,DefeatCond,VarList,VarnameList,DynHead) :-
-	check_variables_for_groundedness(File,Line,VarList,VarnameList),
+	(ground(VarList) -> true
+	; issue_nongroundedness_error(File,Line,VarList,VarnameList)
+	),
 	check_dynamic_rule_head_for_groundedness(File,Line,DynHead),
+	!,
 	DefeatCond.
 
-check_variables_for_groundedness(_,_,[],[]) :- !.
-check_variables_for_groundedness(File,Line,[Var|VarList],[VarName|VarnameList]) :-
-	(ground(Var) -> check_variables_for_groundedness(File,Line,VarList,VarnameList)
+issue_nongroundedness_error(_,_,[],[]) :- !.
+issue_nongroundedness_error(File,Line,[Var|VarList],[VarName|VarnameList]) :-
+	(ground(Var) -> issue_nongroundedness_error(File,Line,VarList,VarnameList)
 	; flora_abort(['in file ', File, ' on line ', Line, ': ',
 		       'argument ?', VarName,
 		       ' is not ground during invocation of defeasible rule'],
@@ -205,7 +211,7 @@ flora_mathnotequal_builtin(File,Line,X,Y) :-
 	).
 
 %% is/2
-flora_arith_is_builtin(File,Line,X,Y) :-
+flora_arith_IS_builtin(File,Line,X,Y) :-
 	(
 	  \+ground(Y) -> builtin_instantiation_error(File,Line,2,FL_IS,'non-ground',X,Y)
 	; catch(X is Y,_,builtin_instantiation_error(File,Line,FL_IS,'non-numeric value',X,Y))
@@ -250,25 +256,27 @@ FLORA_DELAY_CHECKER(BodyVars,HeadVars) :-
 %% like those satisfying delayed_pred_template/1.
 flora_execute_delayed_literals([],_HeadVars,_Template) :- !.
 flora_execute_delayed_literals([Term|Rest],HeadVars,Template) :-
-	((ground(Term) ; aliased_to_head(Term,HeadVars))
-	-> true
-	; var(Term)
+	(
+	  var(Term)
 	->  ( %% do execution
-	      get_trigger_list(Term,Triggers) ->
-	      call_trigger_list(Triggers,Template)
+		get_attr(Term,when,Triggers) ->
+		call_trigger_list(Triggers,Template)
 	    ; true
 	    )
+	;  flrground(Term) -> true
+	;  aliased_to_head(Term,HeadVars) -> true
 	;  flora_term_variables(Term,Vars)
 	-> flora_execute_delayed_literals(Vars,HeadVars,Template)
 	; 
 	    flora_abort(['bug: unexpected term in delay list, ',Term])
 	),
+	!,
 	flora_execute_delayed_literals(Rest,HeadVars,Template).
 
-aliased_to_head(V,[H|_HV]):- V == H.
+aliased_to_head(V,[H|_HV]):- V == H, !.
 aliased_to_head(V,[_|H]):- aliased_to_head(H,V).
 
-call_trigger_list([],_) :- true.
+call_trigger_list([],_) :- !.
 call_trigger_list([Trigger|Rest],Template) :-
 	%% a trigger has the form trigger_NAME(VarList,Goal)
 	get_trigger_goal(Trigger,Goal),
@@ -281,18 +289,14 @@ call_trigger_list([Trigger|Rest],Template) :-
 	call(Goal),
 	call_trigger_list(Rest,Template).
 
-
-%% the next two should eventually go into constraintLib.P
-get_trigger_list(Var,Triggers) :-
-	      get_attr(Var,when,Triggers).
-
+%% this should eventually go into constraintLib.P
 get_trigger_goal(Trigger,Goal) :-
 	functor(Trigger,Fun,2),
-	(Fun==trigger; Fun==trigger_nonvar; Fun==trigger_ground),
+	member(Fun,[trigger,trigger_nonvar,trigger_ground]),
 	!,
 	arg(2,Trigger,T),
 	get_trigger_goal(T,Goal).
-get_trigger_goal(Trigger,Goal) :- Trigger = Goal.
+get_trigger_goal(Trigger,Trigger).
 
 
 %% For binary builtins
@@ -403,7 +407,7 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
 			flora_mathnotequal_builtin(F,L,X,Y),
 			(ground(X),ground(Y))),
    flora_register_delay(builtin,FL_IS_INTERNAL,F,L,[X,Y],
-			flora_arith_is_builtin(F,L,X,Y),
+			flora_arith_IS_builtin(F,L,X,Y),
 			(ground(Y))),
 
    flora_register_delay(builtin,number,F,L,[X],
