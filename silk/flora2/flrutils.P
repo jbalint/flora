@@ -397,8 +397,9 @@ flora_compile_then_prolog_compile_add(FlrFile,ModuleName) :-
 	util_addP_filename(FlrFile,AddPFile),
 	util_addFDB_filename(FlrFile,FDBFile),
 	util_addFLD_filename(FlrFile,FLDFile),
+	util_addFLS_filename(FlrFile,FLSFile),
 	flora_set_xpp_options_for_compile(ModuleName),
-	util_compile_file_add(FlrFile,AddPFile,FDBFile,FLDFile,Status),
+	util_compile_file_add(FlrFile,AddPFile,FDBFile,FLDFile,FLSFile,Status),
 	( Status == FLORA_FAILURE ->
 	    flora_clear_xpp_options,
 	    !,
@@ -446,8 +447,9 @@ flora_compile_then_prolog_compile(FlrFile,ModuleName) :-
 	util_mainP_filename(FlrFile,MPFile),
 	util_FDB_filename(FlrFile,FDBFile),
 	util_FLD_filename(FlrFile,FLDFile),
+	util_FLS_filename(FlrFile,FLSFile),
 	flora_set_xpp_options_for_compile(ModuleName),
-	util_compile_file(FlrFile,MPFile,FDBFile,FLDFile,Status),
+	util_compile_file(FlrFile,MPFile,FDBFile,FLDFile,FLSFile,Status),
 	( Status == FLORA_FAILURE ->
 	    flora_clear_xpp_options,
 	    !,
@@ -576,6 +578,7 @@ flora_fladd(FlrFile,Workspace) :-
 	util_addFDB_filename(FlrFile,FDBFile),
 	%% support for undefinedness
 	util_addFLD_filename(FlrFile,FLDFile),
+	util_addFLS_filename(FlrFile,FLSFile),
 
 	util_addWSXWAM_filename(FlrFile,Workspace,WSXWAMFile),
 	!,
@@ -586,7 +589,7 @@ flora_fladd(FlrFile,Workspace) :-
 	-> flora_loader_msg_nl,
 	    true
 	;
-	  util_compile_file_add(FlrFile,AddPFile,FDBFile,FLDFile,Status),
+	  util_compile_file_add(FlrFile,AddPFile,FDBFile,FLDFile,FLSFile,Status),
 	  ( Status == FLORA_FAILURE ->
 	      flora_clear_xpp_options,
 	      !,
@@ -643,6 +646,7 @@ flora_flload(FlrFile,Workspace) :-
 	util_FDB_filename(FlrFile,FDBFile),
 	%% support for undefinedness
 	util_FLD_filename(FlrFile,FLDFile),
+	util_FLS_filename(FlrFile,FLSFile),
 
 	util_WSXWAM_filename(FlrFile,Workspace,WSXWAMFile),
 	!,
@@ -653,7 +657,7 @@ flora_flload(FlrFile,Workspace) :-
 	-> flora_loader_msg_nl,
 	    true
 	;
-	  util_compile_file(FlrFile,MPFile,FDBFile,FLDFile,Status),
+	  util_compile_file(FlrFile,MPFile,FDBFile,FLDFile,FLSFile,Status),
 	  ( Status == FLORA_FAILURE ->
 	      flora_clear_xpp_options,
 	      !,
@@ -870,6 +874,10 @@ util_addWSXWAM_filename(File,WS,WSFile) :-
 	flora_concat_atoms([Dir,Base,'#for_add_',WS_enc,'.',PROLOG_OFILE_EXT],
 			   WSFile).
 
+util_addFLS_filename(File,FLSFile) :-
+	parse_filename(File,Dir,Base,_),
+	flora_concat_atoms([Dir,Base,'#for_add.',FLORA_FLS_EXT],FLSFile).
+
 
 /*************************************************************************
   util_mainP_filename(+File,-MPFile)
@@ -919,6 +927,10 @@ util_FLR_filename(File,FlrFile) :-
 	parse_filename(File,Dir,Base,_),
 	flora_concat_atoms([Dir,Base,'.',FLORA_FILE_EXT],FlrFile).	
 	
+util_FLS_filename(File,FLSFile) :-
+	parse_filename(File,Dir,Base,_),
+	flora_concat_atoms([Dir,Base,'.',FLORA_FLS_EXT],FLSFile).
+
 /*************************************************************************
   utilities
 *************************************************************************/
@@ -1136,13 +1148,13 @@ reset_modules_for_shell :-
 
 
 /*************************************************************************
-  util_compile_file_add(+InputFile,+OutputPFile,+OutputDBFile,+OutputFLDFile,-FileStatus)
+  util_compile_file_add(+InputFile,+OutputPFile,+OutputDBFile,+OutputFLDFile,+OutputFLSFile,-FileStatus)
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 
         The appropriate GPP options must be set before this predicate is called.
 *************************************************************************/
-util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
+util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
 	flora_maxerr(MaxErrNum),
 	flora_loader_msg_nl,
 	flora_loader_message('Compiling ~w for addition to modules',[InputFile]),
@@ -1190,7 +1202,7 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 		->
 		    generate_code_add(CompiledRuleList,CompiledFactList,
 				      StrippedFileOptions,TrailerOptions,
-				      PFile,DBFile,FLDFile,FileStatus)
+				      PFile,DBFile,FLDFile,FLSFile,FileStatus)
 		; 
 		    FileStatus=FLORA_FAILURE
 		)
@@ -1211,21 +1223,24 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	    T is T1-T0,
 	    flora_loader_message('Done compilation & code generation for ~w. CPU time used: ~w seconds',[InputFile,T])
 	),
+	flora_clear_compilation_symbols,
 	print_warnings([depend(DepErrList)|RuleStatus]),
 	print_errors([depend(DepErrList)|RuleStatus]),
 	!.
 
 %% Catch a failure
-util_compile_file_add(_InputFile,_PFile,_DBFile,_FLDFile,FLORA_FAILURE).
+util_compile_file_add(_InputFile,_PFile,_DBFile,_FLDFile,_FLSFile,FLORA_FAILURE).
 
 /*************************************************************************
-  generate_code_add(+CompiledRuleList,+CompiledFactList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,-FileStatus)
+  generate_code_add(+CompiledRuleList,+CompiledFactList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,+FLSFile,-FileStatus)
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 *************************************************************************/
-generate_code_add(CompiledRuleList,CompiledFactList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FileStatus) :-
+generate_code_add(CompiledRuleList,CompiledFactList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
 	%% Generate FLD file for undefinedness checking
 	flora_debug_code(CompiledRuleList,CompiledFactList,FLDFile),
+	%% Generate symbol file - fls
+	flora_symbol_context_info(FLSFile),
 	%%flora_divide_program(CompiledRuleList,RuleList,FactList),
 	sort(FileOptionList,FileOptions),
 	flora_measure_time(
@@ -1310,13 +1325,13 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBF
 
 
 /*************************************************************************
-  util_compile_file(+InputFile,+OutputPFile,+OutputDBFile,+OutputFLDFile,-FileStatus)
+  util_compile_file(+InputFile,+OutputPFile,+OutputDBFile,+OutputFLDFile,OutputFLSFile,-FileStatus)
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 
         The appropriate GPP options must be set before this predicate is called.
 *************************************************************************/
-util_compile_file(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
+util_compile_file(InputFile,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
 	flora_maxerr(MaxErrNum),
 	flora_loader_msg_nl,
 	flora_loader_message('Compiling ~w',[InputFile]),
@@ -1364,7 +1379,7 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 		->
 		    generate_code(CompiledRuleList,CompiledFactList,
 				  StrippedFileOptions,TrailerOptions,
-				  PFile,DBFile,FLDFile,FileStatus)
+				  PFile,DBFile,FLDFile,FLSFile,FileStatus)
 		; 
 		    FileStatus=FLORA_FAILURE
 		)
@@ -1385,22 +1400,25 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FileStatus) :-
 	    T is T1-T0,
 	    flora_loader_message('Done compilation & code generation for ~w. CPU time used: ~w seconds',[InputFile,T])
 	),
+	flora_clear_compilation_symbols,
 	print_warnings([depend(DepErrList)|RuleStatus]),
 	print_errors([depend(DepErrList)|RuleStatus]),
 	!.
 
 %% Catch a failure situation.
-util_compile_file(_InputFile,_PFile,_DBFile,_FLDFile,FLORA_FAILURE).
+util_compile_file(_InputFile,_PFile,_DBFile,_FLDFile,_FLSFile,FLORA_FAILURE).
 
 
 /*************************************************************************
-  generate_code(+CompiledRuleList,+CompiledFactList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,-FileStatus)
+  generate_code(+CompiledRuleList,+CompiledFactList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,+FLSFile,-FileStatus)
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 *************************************************************************/
-generate_code(CompiledRuleList,CompiledFactList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FileStatus) :-
+generate_code(CompiledRuleList,CompiledFactList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
 	%% Generate FLD file for undefinedness checking
 	flora_debug_code(CompiledRuleList,CompiledFactList,FLDFile),
+	%% Generate symbol file - fls
+	flora_symbol_context_info(FLSFile),
 	%%flora_divide_program(CompiledRuleList,RuleList,FactList),
 	sort(FileOptionList,FileOptions),
 	flora_measure_time(
@@ -2887,12 +2905,13 @@ dump_file_internal(OrigInFile,Workspace,SquashingOption) :-
 	util_mainP_filename(FlrFile,PFile),
 	util_FDB_filename(FlrFile,FDBFile),
 	util_FLD_filename(FlrFile,FLDFile),
+	util_FLS_filename(FlrFile,FLSFile),
 	util_dump_filename(PFile,DumpPFile),
 	util_dump_filename(FDBFile,DumpFDBFile),
 	util_dump_filename(FLDFile,DumpFLDFile),
 
 	flora_set_xpp_options_for_compile,
-	util_compile_file(FlrFile,PFile,FDBFile,FLDFile,Status),
+	util_compile_file(FlrFile,PFile,FDBFile,FLDFile,FLSFile,Status),
 	( Status == FLORA_FAILURE -> flora_clear_xpp_options, !, fail
 	; true
 	),
@@ -3335,7 +3354,7 @@ checkCallerInfo(_,_,_).
 
     Reads a term from std input, parses, compiles, and builds it.
     Term can also be a reification.
-    Molecules or rules not allowed unless represented as reified terms.
+    Molecules or rules are not allowed unless represented as reified terms.
     Always succeeds (unless there is a bug).
 
     Code: the code of the term read. 
@@ -3423,7 +3442,8 @@ flora_read_parse_compile_build_term(Code,Module,Status) :-
 	( flora_end_of_input(LexerStatus)
 	-> Status = [Outcome,FLORA_EOF|Status2]
 	;  Status = [Outcome,FLORA_NOT_EOF|Status2]
-	).
+	),
+	!.
 
 /*
     flora_read_parse_compile_build_term(-String,-Code,?Module,-Status)
@@ -3519,6 +3539,45 @@ util_remove_file_carefully(File) :-
 	( flora_file_op(exists,File) -> flora_file_op(unlink,File)
 	; true
 	).
+
+
+
+/*********************************************************************
+  flora_symbol_context_info(+File)
+  Save symbols that are used in a flora program into and .fls File
+**********************************************************************/
+flora_symbol_context_info(File) :-
+        telling(PreOut),
+        tell(File),
+	write_symbols,
+	write_nowarn_symbols,
+        told,
+        tell(PreOut).
+
+write_symbols:-
+	findall(symbol(Name,N,Index,Line,Context,Transactional),
+		symbol(Name,N,Index,Line,Context,Transactional),
+		List),
+	!,
+	write_symbols_list(List).
+
+write_symbols.
+
+write_nowarn_symbols :-
+	findall(nowarn_symbol(Name,N,WS,Context,Transactional),
+		nowarn_symbol(Name,N,WS,Context,Transactional),
+		List),
+	write_symbols_list(List).
+
+write_symbols_list([H|T]):-
+	write_canonical(H),
+	flora_write_atom('.'),
+	nl,
+	write_symbols_list(T).
+
+write_symbols_list([]).
+
+
 
 
 %% This is used because retractall/1 is either slow by itself

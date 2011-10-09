@@ -84,4 +84,7 @@
 	flora_parse_term_external/3,
 	parsing_error/3,
 	flora_parse/3,
-	fldirective_struct/3.
+	fldirective_struct/3,
+	flatom_struct/3,
+	flterm_struct/4,
+	flconjunct_struct/3.

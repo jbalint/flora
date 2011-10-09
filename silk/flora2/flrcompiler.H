@@ -94,6 +94,15 @@
         
 :- import flora_error_line/2 from flrprint.
 
+:- import
+	flora_get_flatomvar_name/2,
+	flatom_struct/3,
+	flterm_struct/4,
+	flconjunct_struct/3
+   from flrparser.
+
+:- import flora_nodefp/2 from flrnodefp.
+
 :- dynamic compile_with_var_module(_).
 
 :- dynamic dynrule_warnings(_).
@@ -106,4 +115,7 @@
 	flora_reset_compiler/0, 
 	flora_compile_pathexp/3,
 	flora_compile_add/5,
-	flora_compile/5.
+	flora_compile/5,
+	flora_clear_compilation_symbols/0,
+	symbol/6,
+	nowarn_symbol/5.

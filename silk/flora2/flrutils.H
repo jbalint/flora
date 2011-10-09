@@ -110,7 +110,10 @@
 	flora_reset_compiler/0,
 	flora_compile_pathexp/3,
 	flora_compile/5,
-        flora_compile_add/5
+        flora_compile_add/5,
+        flora_clear_compilation_symbols/0,
+	symbol/6,
+	nowarn_symbol/5
    from flrcompiler.
 
 :- import
