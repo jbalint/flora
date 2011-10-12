@@ -2439,7 +2439,7 @@ parse_body_symbol(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Code,Status) :-
         ).
 
 parse_body_symbol(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),Code,Status) :-
-	get_atom(Funct,FL_UDFF),
+	get_atom(Funct,FL_SYMBOL_CONTEXT_UDF),
 	!,
         parse_body_symbol_literal(Term,NULL,TermCode,Status),
         fludfsymbol_struct(TermCode,Code).
@@ -2660,7 +2660,8 @@ parse_udf_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
 
 
 parse_udf_body(CanoniTerm,Code,Status) :-
-	parse_rule_body(CanoniTerm,NO_UDF_PARSE,Code,Status). %% do not restrict udf body
+	%%parse_rule_body(CanoniTerm,NO_UDF_PARSE,Code,Status). %% do not restrict udf body
+	parse_rule_body(CanoniTerm,Code,Status). %% do not restrict udf body
 	%%parse_rule_body(CanoniTerm,UDF_TERM_PARSE,Code,Status).
 	%%parse_body_literal(CanoniTerm,NULL,UDF_TERM_PARSE,Code,Status).
 	%%parse_body_pathexp(CanoniTerm,ALLOW_TRANS,NULL,UDF_TERM_PARSE,Code,Status).
@@ -2914,7 +2915,7 @@ parse_head_literal_list([First|List],DWS,[FirstCode|ListCode],Status) :-
 
 
 /****************************************************************************
-  parse_rule_body(+CanoniTerm,+UDF,-Goal,-Status)
+  parse_rule_body(+CanoniTerm,-Goal,-Status)
 
   This predicate is called to parse the *entire* body of a rule. It takes a
   canonical term as input and parses it into an intermediate term to be
@@ -2937,24 +2938,11 @@ parse_head_literal_list([First|List],DWS,[FirstCode|ListCode],Status) :-
         if-then-else statement. For example, (if a then b else c)@mod has
         the same effect as (if a@mod then b@mod else c@mod).
 
-  +UDF - parse for user defined function definition. This flag indicates if
-         we must check if term has only variables as arguments
-     NO_UDF_PARSE - do not check if parsing a UDF definition term
-     UDF_TERM_PARSE - parse term, i.e. call parsing on arguments with the
-                      UDF flag set to UDF_ARG_PARSE
-     UDF_ARG_PARSE - parse arguments, i.e. check if they are variables only
-
 ****************************************************************************/
 parse_rule_body(CanoniTerm,Goal,Status) :-
-	parse_rule_body(CanoniTerm,NULL,NULL,NO_UDF_PARSE,Goal,Status).
+	parse_rule_body(CanoniTerm,NULL,NULL,Goal,Status).
 
-parse_rule_body(CanoniTerm,UDF,Goal,Status) :-
-	parse_rule_body(CanoniTerm,NULL,NULL,UDF,Goal,Status).
-
-parse_rule_body(CanoniTerm,WS,DWS,Code,Status) :-
-	parse_rule_body(CanoniTerm,WS,DWS,NO_UDF_PARSE,Code,Status).
-
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),WS,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	(F == FL_COMMA; F == FL_SEMICOLON),
 	!, % Module name is distributive over conjunction or disjunction.
@@ -2974,13 +2962,7 @@ parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),WS,DWS,NO_UDF_PAR
 	  Status=S
         ).
 
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,F),
-	(F == FL_COMMA; F == FL_SEMICOLON),
-	!, % Module name is distributive over conjunction or disjunction.
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
-parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[G],_If,_Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[G],_If,_Ip),WS,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	(is_nafop(F); is_notop(F)),
 	set_context(parsing_default_negation),
@@ -2993,13 +2975,7 @@ parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[G],_If,_Ip),WS,DWS,NO_UDF_PARSE
         ),
 	clear_context(parsing_default_negation).
 
-parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,F),
-	(is_nafop(F); is_notop(F)),
-	!, 
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
-parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[G],If,_Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[G],If,_Ip),WS,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_negop(F),
 	!, %% Module name is distributive over negation.
@@ -3013,18 +2989,11 @@ parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[G],If,_Ip),WS,DWS,NO_UDF_PARSE,
 	    true
         ).
 
-parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,F),
-	is_negop(F),
-	!, 
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
-
 %% Parsing quantifiers.
 %% QF: quantified formula. We allow only one quantifier here: existential.
 %% And only once, under \+ or not/naf.
 %% This would have to be generalized for Lloyd-Topor
-parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[QF],If,_Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[QF],If,_Ip),WS,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_quantifier(F),
 	has_context(parsing_default_negation),
@@ -3045,19 +3014,13 @@ parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[QF],If,_Ip),WS,DWS,NO_UDF_PARSE
 	).
 
 %% quantification not under negation has not been implemented yet
-parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,_,If,_Ip),_WS,_DWS,NO_UDF_PARSE,_,Status) :-
+parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,_,If,_Ip),_WS,_DWS,_,Status) :-
 	get_atom(Funct,F),
 	is_quantifier(F),
 	!,
 	parsing_error(If,NO_QUANTIFIERS,Status).
 
-parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,F),
-	is_quantifier(F),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
-parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_hypothetical(F),
 	!, %% Module name is distributive over hypothetical.
@@ -3072,14 +3035,7 @@ parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,NO_UDF_PARSE,
 	    true
         ).
 
-parse_rule_body(CANOTERM(Funct,_N,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,F),
-	is_hypothetical(F),
-	!, 
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
-
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),_WS,DWS,UDF,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),_WS,DWS,Code,Status) :-
 	get_atom(Funct,FL_AT),
 	!, % nesting of module name scope
 	%% The module name needs to be parsed early; otherwise, some
@@ -3091,16 +3047,16 @@ parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),_WS,DWS,UDF,Code,
 	      ; flora_get_module_from_spec(RCode,PROLOGMODULE,_)
 	      ; flora_get_module_from_spec(RCode,PROLOGALLMODULE,_))
 	    ->
-                parse_rule_body(L,RCode,DWS,UDF,Code,Status)
+                parse_rule_body(L,RCode,DWS,Code,Status)
             ;
-                parse_rule_body(L,RCode,RCode,UDF,Code,Status)
+                parse_rule_body(L,RCode,RCode,Code,Status)
             )
         ; 
             Status=S
         ).
 
 %% reify op ${...} that occurs as a formula
-parse_rule_body(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_atom(Funct,Atom),
 	is_reifyop(Atom),
 	!,
@@ -3112,14 +3068,8 @@ parse_rule_body(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),WS,DWS,NO_UDF_PARSE,Code,S
 	    parse_rule_body(Arg,WS,DWS,Code,Status)
 	).
 
-parse_rule_body(CANOTERM(Funct,_N,FL_BRACE,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,Atom),
-	is_reifyop(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% Literal is a rule and we are inside reification
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[Head,Body],If,Ip),WS,WS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[Head,Body],If,Ip),WS,WS,Code,Status) :-
 	get_name(Funct,FL_IMPLYOP),
 	has_context(reifying),
 	!,
@@ -3133,15 +3083,10 @@ parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[Head,Body],If,Ip),WS,WS,NO_UDF_
 		      WS,Code,Status),
         ( var(PrevContext) -> true; set_context(parsing_reify)).
 
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_WS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_IMPLYOP),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% Delayed builtins: !=, >, >=, =:=, etc. Also sensors defined in .flr files
 %% If the user wrote @_prolog or @_prologall then we pass it down to prolog
 %% and do not delay. This is a change from the original treatment
-parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,UDF,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,FAtom),
 	flora_delayed_builtin_literal(FAtom,N),
 	%% if @_plg or @_plgall, pass down to Prolog, don't delay
@@ -3152,20 +3097,16 @@ parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,UDF,Code,Stat
 	%% If inside a CLP constraint, don't delay
 	\+ has_context(parsing_CLP_constraint),
 	!,
-	( UDF=NO_UDF_PARSE ->
-		flatom_struct(FAtom,If,OpCode),
-		(flora_argdef(FAtom,N,ArgTypes,DWS)
-		-> parse_body_argpathexplist(Args,ArgTypes,DWS,ACode,Status)
-		;  parse_body_pathexplist(Args,DWS,ACode,Status)
-		),
-		fllist_struct(ACode,[],Ip,ArgsCode),
-		fldelayedliteral_struct(OpCode,ArgsCode,Code)
-	;
-		parsing_error(Funct,ERROR_UDF_TERM,Status)
-	).
+	flatom_struct(FAtom,If,OpCode),
+	(flora_argdef(FAtom,N,ArgTypes,DWS)
+	-> parse_body_argpathexplist(Args,ArgTypes,DWS,ACode,Status)
+	;  parse_body_pathexplist(Args,DWS,ACode,Status)
+	),
+	fllist_struct(ACode,[],Ip,ArgsCode),
+	fldelayedliteral_struct(OpCode,ArgsCode,Code).
 
 %% Delayed sensors
-parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,UDF,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	((flora_get_module_from_spec(WS,PROLOGMODULE,Mod)
 	 ; flora_get_module_from_spec(WS,PROLOGALLMODULE,Mod)
@@ -3176,144 +3117,84 @@ parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,UDF,Code,Stat
 	; flora_delayed_sensor_literal(Atom,N)
 	),
 	!,
-	( UDF=NO_UDF_PARSE ->
-		flatom_struct(Atom,If,OpCode),
-		parse_body_pathexplist(Args,DWS,ACode,Status),
-		fllist_struct(ACode,[],Ip,ArgsCode),
-		(var(Mod) -> fldelayedliteral_struct(OpCode,ArgsCode,Code)
-		; fldelayedliteral_struct(OpCode,ArgsCode,Mod,Code)
-		)
-	;
-		parsing_error(Funct,ERROR_UDF_TERM,Status)
+	flatom_struct(Atom,If,OpCode),
+	parse_body_pathexplist(Args,DWS,ACode,Status),
+	fllist_struct(ACode,[],Ip,ArgsCode),
+	(var(Mod) -> fldelayedliteral_struct(OpCode,ArgsCode,Code)
+	; fldelayedliteral_struct(OpCode,ArgsCode,Mod,Code)
 	).
 
 
 %% At this point, CanoniTerm is not a logical formula.
-parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,Args,If,Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,FL_IF),
 	!,
 	%% Module name is distributive over if-then-else statement.
         parse_body_ifthenelse(CANOTERM(Funct,1,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status).
 
-parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_IF),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_WS,_DWS,NO_UDF_PARSE,_Code,Status) :-
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_WS,_DWS,_Code,Status) :-
 	get_name(Funct,FL_THEN),
 	!,
         parsing_error(If,ERROR_THENBODY,Status).
 
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_THEN),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_WS,_DWS,NO_UDF_PARSE,_Code,Status) :-
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_WS,_DWS,_Code,Status) :-
 	get_name(Funct,FL_ELSE),
 	!,
         parsing_error(If,ERROR_ELSEBODY,Status).
 
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_ELSE),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% Parse the a<~~b form of if-then
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[ThenPart,IfPart],_If,_Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[ThenPart,IfPart],_If,_Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,FL_LEFTNAFIMPLY),
 	!,
 	leftNAF_implication(IfPart,ThenPart,WS,DWS,Code,Status).
-
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_LEFTNAFIMPLY),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
 
 %% Parse the a~~>b form of if-then
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[IfPart,ThenPart],_If,_Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[IfPart,ThenPart],_If,_Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,FL_RIGHTNAFIMPLY),
 	!,
 	leftNAF_implication(IfPart,ThenPart,WS,DWS,Code,Status).
 
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_RIGHTNAFIMPLY),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% Parse the a<==b form of if-then (using NEG instead of NAF)
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[ThenPart,IfPart],_If,_Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[ThenPart,IfPart],_If,_Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,FL_LEFTNEGIMPLY),
 	!,
 	leftNEG_implication(IfPart,ThenPart,WS,DWS,Code,Status).
-
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_LEFTNEGIMPLY),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
 
 %% Parse the a==>b form of if-then (using NEG instead of NAF)
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[IfPart,ThenPart],_If,_Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[IfPart,ThenPart],_If,_Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,FL_RIGHTNEGIMPLY),
 	!,
 	leftNEG_implication(IfPart,ThenPart,WS,DWS,Code,Status).
 
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_RIGHTNEGIMPLY),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% Parse the ~ meta predicate
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,FL_UNIVEQFORM),
 	!,
         parse_body_univeqform(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status).
 
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_UNIVEQFORM),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% Parse the ~ meta predicate
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,FL_NOTUNIVEQFORM),
 	!,
         parse_body_notuniveqform(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status).
 
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_NOTUNIVEQFORM),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% Parse the =.. meta predicate
 %% Workspace as in (A=..B)@foo is illegal.  But (A@foo =.. B) is fine.
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,FL_METAUNIV),
 	!,
         parse_body_metauniv(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status).
 
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_METAUNIV),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% Process the control constructs while-do/loop, loop/do-until, unless-do
-parse_rule_body(CANOTERM(TopWrapper,1,FL_PARENTHESIS,Args,_If,_Ip),WS,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CANOTERM(TopWrapper,1,FL_PARENTHESIS,Args,_If,_Ip),WS,DWS,Code,Status) :-
 	get_name(TopWrapper,TopName),
 	get_control_construct_definition(_CtlWrapper,TopName,_InnerName),
 	!,
 	%% Args should be [CanonTerm]. If not, will issue a syntax error
 	parse_body_controlconstruct(Args,WS,DWS,TopName,Code,Status).
 
-parse_rule_body(CANOTERM(TopWrapper,1,FL_PARENTHESIS,_Args,_If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
-	get_name(TopWrapper,TopName),
-	get_control_construct_definition(_CtlWrapper,TopName,_InnerName),
-	!,
-	parsing_error(TopWrapper,ERROR_UDF_TERM,Status).
-
 %% If inner keyword of ctl construct occurs at the top level -- error
-parse_rule_body(CANOTERM(TopWrapper,2,_Paren,_Args,If,_Ip),_WS,_DWS,_UDF,_Code,Status) :-
+parse_rule_body(CANOTERM(TopWrapper,2,_Paren,_Args,If,_Ip),_WS,_DWS,_Code,Status) :-
 	get_name(TopWrapper,TopName),
 	get_control_construct_definition(_,_,TopName),
 	!,
@@ -3321,31 +3202,22 @@ parse_rule_body(CANOTERM(TopWrapper,2,_Paren,_Args,If,_Ip),_WS,_DWS,_UDF,_Code,S
 
 
 %% @_prolog()
-parse_rule_body(CanoniTerm,PROLOGMODULE,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CanoniTerm,PROLOGMODULE,DWS,Code,Status) :-
 	!,
 	%% Prolog builtin
 	parse_prlgterm(CanoniTerm,DWS,TCode,Status),
 	(Status == [] -> flplib_struct(TCode,Code); true).
 
-parse_rule_body(CanoniTerm,PROLOGMODULE,_DWS,_UDF,_Code,Status) :-
-	!,
-	parsing_error(CanoniTerm,ERROR_UDF_TERM,Status).
-
 %% @_prolog(...)
-parse_rule_body(CanoniTerm,PrologModuleSpec,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CanoniTerm,PrologModuleSpec,DWS,Code,Status) :-
 	flora_get_module_from_spec(PrologModuleSpec,PROLOGMODULE,Mod),
 	!,
 	%% Prolog module
 	parse_prlgterm(CanoniTerm,DWS,TCode,Status),
 	(Status == [] -> flmodule_struct(TCode,Mod,PROLOGMODULE,Code); true).
 
-parse_rule_body(CanoniTerm,PrologModuleSpec,_DWS,_UDF,_Code,Status) :-
-	flora_get_module_from_spec(PrologModuleSpec,PROLOGMODULE,_Mod),
-	!,
-	parsing_error(CanoniTerm,ERROR_UDF_TERM,Status).
-
 %% @_prologall()
-parse_rule_body(CanoniTerm,PROLOGALLMODULE,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CanoniTerm,PROLOGALLMODULE,DWS,Code,Status) :-
 	!,
 	%% Prolog builtin
 	parse_pure_term(CanoniTerm,DWS,TCode,Status1),
@@ -3356,12 +3228,8 @@ parse_rule_body(CanoniTerm,PROLOGALLMODULE,DWS,NO_UDF_PARSE,Code,Status) :-
 	; Status=Status1
 	).
 
-parse_rule_body(CanoniTerm,PROLOGALLMODULE,_DWS,_UDF,_Code,Status) :-
-	!,
-	parsing_error(CanoniTerm,ERROR_UDF_TERM,Status).
-
 %% @_prologall(...)
-parse_rule_body(CanoniTerm,PrologModuleSpec,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CanoniTerm,PrologModuleSpec,DWS,Code,Status) :-
 	flora_get_module_from_spec(PrologModuleSpec,PROLOGALLMODULE,Mod),
 	!,
 	%% Prolog module
@@ -3373,13 +3241,8 @@ parse_rule_body(CanoniTerm,PrologModuleSpec,DWS,NO_UDF_PARSE,Code,Status) :-
 	; Status=Status1
 	).
 
-parse_rule_body(CanoniTerm,PrologModuleSpec,_DWS,_UDF,_Code,Status) :-
-	flora_get_module_from_spec(PrologModuleSpec,PROLOGALLMODULE,_Mod),
-	!,
-	parsing_error(CanoniTerm,ERROR_UDF_TERM,Status).
-
 %% @module
-parse_rule_body(CanoniTerm,FloraModSpec,FloraModSpec,UDF,Code,Status) :-
+parse_rule_body(CanoniTerm,FloraModSpec,FloraModSpec,Code,Status) :-
 	flora_get_module_from_spec(FloraModSpec,_ModuleType,Module),
 	!,
 	%% Flora user or system module
@@ -3391,36 +3254,30 @@ parse_rule_body(CanoniTerm,FloraModSpec,FloraModSpec,UDF,Code,Status) :-
 	    get_index(Module,Idx),
 	    parsing_error(Idx,NO_WS_VAR,Status)
 	;
-            parse_body_literal(CanoniTerm,FloraModSpec,UDF,Code,Status)
+            parse_body_literal(CanoniTerm,FloraModSpec,Code,Status)
 	).
 
-parse_rule_body(CanoniTerm,WS,_DWS,NO_UDF_PARSE,Code,Status) :-
+parse_rule_body(CanoniTerm,WS,_DWS,Code,Status) :-
 	is_labeled_construct(CanoniTerm,_Label,Construct),
 	has_context(reifying),
 	is_rule(Construct,_,_),
 	!,
 	parse_dynrule(CanoniTerm,WS,Code,Status).
 
-parse_rule_body(CanoniTerm,WS,DWS,NO_UDF_PARSE,Goal,Status) :-
+parse_rule_body(CanoniTerm,WS,DWS,Goal,Status) :-
 	is_labeled_construct(CanoniTerm,_Label,Construct),
 	!,
 	%% currently we ignore labeling & metadata constructs in rule body
 	%% unless reified rule
 	parse_rule_body(Construct,WS,DWS,Goal,Status).
 
-parse_rule_body(CanoniTerm,_WS,_DWS,_UDF,_Goal,Status) :-
-	is_labeled_construct(CanoniTerm,_Label,_Construct),
-	!,
-	parsing_error(CanoniTerm,ERROR_UDF_TERM,Status).
-
-
 %% At this point, CanoniTerm is neither a logical formula nor a 
 %% if-then-else statement, nor some other special builtin 
 %% (like while-loops or meta operators)
-parse_rule_body(CanoniTerm,NULL,NULL,UDF,Code,Status) :-
+parse_rule_body(CanoniTerm,NULL,NULL,Code,Status) :-
 	!,
 	%% no module name
-	parse_body_literal(CanoniTerm,NULL,UDF,Code,Status).
+	parse_body_literal(CanoniTerm,NULL,Code,Status).
 
 /****************************************************************************
   parse_workspace(+CanoniTerm,-WSCode,-Status)
@@ -3793,22 +3650,14 @@ distribute_workspace([A|Args],WS,DWS,[TA|TArgs],Status) :-
 
 
 /****************************************************************************
-  parse_body_literal(+CanoniTerm,+DWS,+UDF,-Code,-Status)
+  parse_body_literal(+CanoniTerm,+DWS,-Code,-Status)
 
   This predicate is called to parse a literal in a rule body.
   If DWS=NULL (which is indicated by the failure of flora_get_module_from_spec/3),
   this means that the literal has no module name specification.
 
-  +UDF - parse for user defined function definition, check if term has only variables as arguments
-	 NO_UDF_PARSE - do not check
-	 UDF_TERM_PARSE - parse term, i.e. call parsing of arguments with UDF flag set to 2
-	 UDF_ARG_PARSE - parse arguments, i.e. check if they are variables only
-
 ****************************************************************************/
 parse_body_literal(CanoniTerm,DWS,Code,Status) :-
-	parse_body_literal(CanoniTerm,DWS,NO_UDF_PARSE,Code,Status).
-
-parse_body_literal(CanoniTerm,DWS,NO_UDF_PARSE,Code,Status) :-
 	exec_directive(CanoniTerm,DWS,TCode,Status),
 	!,
         (flora_get_module_from_spec(DWS,ModuleType,Module) ->
@@ -3816,17 +3665,12 @@ parse_body_literal(CanoniTerm,DWS,NO_UDF_PARSE,Code,Status) :-
         ;   Code=TCode
         ).
 
-parse_body_literal(CanoniTerm,DWS,_UDF,_Code,Status) :-
-	exec_directive(CanoniTerm,DWS,_TCode,_Status),
-	!,
-	parsing_error(CanoniTerm,ERROR_UDF_TERM,Status).
-
 %% :(_,_), ::(_,_)
-parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,UDF,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_birelop(F),
 	!,
-	parse_body_pathexplist(Args,DWS,UDF,[LCode,RCode],Status),
+	parse_body_pathexplist(Args,DWS,[LCode,RCode],Status),
 	(Status == [] ->
             flbirelate_struct(LCode,F,RCode,TCode),
             (flora_get_module_from_spec(DWS,ModuleType,Module) ->
@@ -3837,59 +3681,35 @@ parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,UDF,Code,St
 
 %% Path expression without a []: a.c.b rather than a.b.c[].
 %% '.'(_,_), '!'(_,_),
-parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_DWS,NO_UDF_PARSE,_Code,Status) :-
+parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_DWS,_Code,Status) :-
 	get_atom(Funct,F),
 	is_objrefop(F),
 	!,
 	parsing_error(If,ERROR_NONBOOLPATHEXP,Status).
 
-parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,F),
-	is_objrefop(F),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% catch{...}
-parse_body_literal(CANOTERM(Funct,3,FL_BRACE,[Goal,Error,Handler],_If,_Ip),DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,3,FL_BRACE,[Goal,Error,Handler],_If,_Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_catchop(Atom),
 	!,
 	parse_catch(Goal,Error,Handler,DWS,Code,Status).
 
-parse_body_literal(CANOTERM(Funct,3,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,Atom),
-	is_catchop(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% throw{...}
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Error],_If,_Ip),DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Error],_If,_Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_throwop(Atom),
 	!,
 	parse_throw(Error,DWS,Code,Status).
 
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,Atom),
-	is_throwop(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% p2h{...}
-parse_body_literal(CANOTERM(Funct,2,FL_BRACE,[Prolog,Hilog],_If,_Ip),DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,2,FL_BRACE,[Prolog,Hilog],_If,_Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_p2hop(Atom),
 	!,
 	parse_p2h(Prolog,Hilog,DWS,Code,Status).
 
-parse_body_literal(CANOTERM(Funct,2,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,Atom),
-	is_p2hop(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% newoid{...}
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[VarTerm],_If,Ip),_DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[VarTerm],_If,Ip),_DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_newoidop(Atom),
 	!,
@@ -3901,17 +3721,11 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[VarTerm],_If,Ip),_DWS,NO_UDF_PARSE
 	    parsing_error(Ip,EXP_VARIABLE,Status)
 	).
 
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,Atom),
-	is_newoidop(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 /*
 %% We'd like to restrict the use of true{...}, but top level is too much.
 %% Need some kind of stratification.
 %% true{...}, false{...}, unknown{...} - check that they are used at top level
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[_Arg],_If,Ip),_DWS,NO_UDF_PARSE,_Code,Status) :-
+parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[_Arg],_If,Ip),_DWS,_Code,Status) :-
 	get_name(Funct,Atom),
 	is_truthvalue_op(Atom),
 	\+has_context(parsing_query),
@@ -3920,7 +3734,7 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[_Arg],_If,Ip),_DWS,NO_UDF_PARSE,_C
 */
 
 %% true{...}, false{...}, unknown{...}
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_truthvalue_op(Atom),
 	!,
@@ -3933,14 +3747,8 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),DWS,NO_UDF_PARSE,Code
 	    true
 	).
 
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,Atom),
-	is_truthvalue_op(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% refresh{...}
-parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_tablerefreshop(Atom),
 	!,
@@ -3951,14 +3759,8 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,NO_UDF_PARSE,Code,
 	    parse_tablerefresh(Args,DWS,Code,Status)
 	).
 
-parse_body_literal(CANOTERM(Funct,_N,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,Atom),
-	is_tablerefreshop(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% label{Label, Head}
-parse_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),DWS,NO_UDF_PARSE,_Code,Status) :-
+parse_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),DWS,_Code,Status) :-
 	get_name(Funct,Atom),
 	is_labelprimitive_op(Atom),
 	( DWS \== NULL -> parsing_error(If,ERROR_LABELPRIMITIVEMOD,Status)
@@ -3966,7 +3768,7 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),DWS,NO_UDF_PARSE,_Cod
 	).
 
 %% label{?Label,?Head}.  label{...}@Mod is not supported
-parse_body_literal(CANOTERM(Funct,2,FL_BRACE,[Label,Head],_If,_Ip),DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,2,FL_BRACE,[Label,Head],_If,_Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_labelprimitive_op(Atom),
 	!,
@@ -3981,14 +3783,8 @@ parse_body_literal(CANOTERM(Funct,2,FL_BRACE,[Label,Head],_If,_Ip),DWS,NO_UDF_PA
 	    Status = S1
 	).
 
-parse_body_literal(CANOTERM(Funct,2,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,Atom),
-	is_labelprimitive_op(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% prefix{?X,?Expansion} and prefix{?X,?Expansion}@Module
-parse_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),_DWS,NO_UDF_PARSE,_Code,Status) :-
+parse_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),_DWS,_Code,Status) :-
 	get_name(Funct,Atom),
 	is_prefixprimitive_op(Atom),
 	N \= 2,
@@ -3996,7 +3792,7 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),_DWS,NO_UDF_PARSE,_Co
 	parsing_error(If,ERROR_PREFIXPRIMITIVEARITY,Status).
 
 %% prefix{?X,?Expansion} and prefix{?X,?Expansion}@Module
-parse_body_literal(CANOTERM(Funct,2,FL_BRACE,[Prefix,Expansion],If,_Ip),DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,2,FL_BRACE,[Prefix,Expansion],If,_Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_prefixprimitive_op(Atom),
 	!,
@@ -4011,14 +3807,8 @@ parse_body_literal(CANOTERM(Funct,2,FL_BRACE,[Prefix,Expansion],If,_Ip),DWS,NO_U
 	; parsing_error(If,ERROR_PREFIXPRIMITIVESYNTAX,Status)
 	).
 
-parse_body_literal(CANOTERM(Funct,2,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,Atom),
-	is_prefixprimitive_op(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% insert{...}
-parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_dbinsertop(Atom),
 	!,
@@ -4032,14 +3822,8 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,NO_UDF_PARSE,Code,
 	    parse_dbinsert(FCode,N,Args,DWS,Code,Status)
         ).
 
-parse_body_literal(CANOTERM(Funct,_N,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,Atom),
-	is_dbinsertop(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% delete{...}
-parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_dbdeleteop(Atom),
 	!,
@@ -4053,14 +3837,8 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,NO_UDF_PARSE,Code,
 	    parse_dbdelete(FCode,N,Args,DWS,Code,Status)
         ).
 
-parse_body_literal(CANOTERM(Funct,_N,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,Atom),
-	is_dbdeleteop(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% newmodule{Module}
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,Code,Status) :-
 	get_name(Funct,FL_NEWMODULE),
 	!,
 	flobject_struct(Funct,FCode),
@@ -4072,13 +3850,8 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,NO_UDF_PARSE,Cod
 	    parsing_error(Ip,ERROR_WSNAME,Status)
 	).
 
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_NEWMODULE),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% erasemodule{Module}
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,Code,Status) :-
 	get_name(Funct,FL_ERASEMODULE),
 	!,
 	flobject_struct(Funct,FCode),
@@ -4090,13 +3863,8 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,NO_UDF_PARSE,Cod
 	  parsing_error(Ip,ERROR_WSNAME,Status)
 	).
 
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_ERASEMODULE),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% caller{Module}
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,Code,Status) :-
 	get_name(Funct,FL_CALLERMODULE),
 	!,
 	flobject_struct(Funct,FCode),
@@ -4108,15 +3876,9 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,NO_UDF_PARSE,Cod
 	    parsing_error(Ip,ERROR_WSNAME,Status)
 	).
 
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,FL_CALLERMODULE),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
-
 %% insertrule_a{...}, insertrule_z{...}, deleterule_a{...},
 %% deleterule_z{...}, or deleterule{...}
-parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_ruleupdateop(Atom),
 	!,
@@ -4128,14 +3890,8 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,NO_UDF_PARSE,Code,
 	    parse_ruleupdate(FCode,N,Args,DWS,Code,Status)
         ).
 
-parse_body_literal(CANOTERM(Funct,_N,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,Atom),
-	is_ruleupdateop(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
 %% clause{[Mode,]Head, Body}
-parse_body_literal(CANOTERM(Funct,_N,FL_BRACE,_Args,If,_Ip),DWS,NO_UDF_PARSE,_Code,Status) :-
+parse_body_literal(CANOTERM(Funct,_N,FL_BRACE,_Args,If,_Ip),DWS,_Code,Status) :-
 	get_name(Funct,Atom),
 	is_clauseop(Atom),
 	DWS \== NULL,
@@ -4143,7 +3899,7 @@ parse_body_literal(CANOTERM(Funct,_N,FL_BRACE,_Args,If,_Ip),DWS,NO_UDF_PARSE,_Co
 	parsing_error(If,ERROR_CLAUSEMOD,Status).
 
 %% clause{[Mode,]Head, Body}
-parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_clauseop(Atom),
 	DWS==NULL,
@@ -4211,22 +3967,16 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,NO_UDF_PARSE,Code,S
         ),
 	clear_context(clause_construct).
 
-parse_body_literal(CANOTERM(Funct,_N,FL_BRACE,_Args,_If,_Ip),_DWS,_UDF,_Code,Status) :-
-	get_name(Funct,Atom),
-	is_clauseop(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-        
 valid_clause_mode(STATIC_CLAUSE) :- !.
 valid_clause_mode(DYNAMIC_CLAUSE) :- !.
 valid_clause_mode(DYNA_CLAUSE) :- !.
 valid_clause_mode(DYNZ_CLAUSE) :- !.
 
 %% :=:
-parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,UDF,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
 	get_atom(Funct,FL_OBJEQL),
 	!,
-	parse_body_pathexplist(Args,DWS,UDF,[LCode,RCode],Status),
+	parse_body_pathexplist(Args,DWS,[LCode,RCode],Status),
 	(Status == [] ->
             flobjeql_struct(LCode,RCode,TCode),
             (flora_get_module_from_spec(DWS,ModuleType,Module) ->
@@ -4235,9 +3985,9 @@ parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,UDF,Code,St
             )
         ; true).
 
-parse_body_literal(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),DWS,UDF,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
 	!,
-	parse_body_term(Funct,N,Args,ALLOW_TRANS,DWS,UDF,TCode,Status),
+	parse_body_term(Funct,N,Args,ALLOW_TRANS,DWS,TCode,Status),
         ( Status == [] ->
             ( get_atom(Funct,F), flora_nowsp(F,N) ->
                 TCode = Code
@@ -4249,7 +3999,7 @@ parse_body_literal(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),DWS,UDF,Code,St
         ; true).
 
 %% ...[...]
-parse_body_literal(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),DWS,Code,Status) :-
 	!,
 	parse_body_objspec(Funct,N,Args,DWS,TCode,Status),
 	(Status == [] ->
@@ -4259,7 +4009,7 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),DWS,NO_UDF_PARSE,Co
             )
         ; true).
 
-parse_body_literal(CANOLIST(L,T,_N,I,_Ib),_DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOLIST(L,T,_N,I,_Ib),_DWS,Code,Status) :-
 	!,
 	( L == []
 	-> parsing_error(I,ERROR_LOADLIST,Status)
@@ -4269,7 +4019,7 @@ parse_body_literal(CANOLIST(L,T,_N,I,_Ib),_DWS,NO_UDF_PARSE,Code,Status) :-
 	).
 
 %% {...} at the top level -- constraint
-parse_body_literal(CANOBRACE(L,_N,I),DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CANOBRACE(L,_N,I),DWS,Code,Status) :-
 	!,
 	(L == []
 	%% {} at the top level with nothing inside
@@ -4280,12 +4030,12 @@ parse_body_literal(CANOBRACE(L,_N,I),DWS,NO_UDF_PARSE,Code,Status) :-
 	    clear_context(parsing_CLP_constraint)
 	).
 
-parse_body_literal(CANOEMPTYTERM(I),_DWS,NO_UDF_PARSE,_Code,Status) :-
+parse_body_literal(CANOEMPTYTERM(I),_DWS,_Code,Status) :-
 	!,
 	%% () at the top level with nothing inside
 	parsing_error(I, ERROR_BDLITERAL, Status).
 
-parse_body_literal(CanoniTerm,DWS,NO_UDF_PARSE,Code,[]) :-
+parse_body_literal(CanoniTerm,DWS,Code,[]) :-
 	get_atom(CanoniTerm,A),
 	!,
 	( A == FL_CUT ->
@@ -4304,7 +4054,7 @@ parse_body_literal(CanoniTerm,DWS,NO_UDF_PARSE,Code,[]) :-
             )
         ).
 
-parse_body_literal(CanoniTerm,DWS,NO_UDF_PARSE,Code,[]) :-
+parse_body_literal(CanoniTerm,DWS,Code,[]) :-
 	get_transactionalatom(CanoniTerm,_A),
 	!,
 	fltransactionalobject_struct(CanoniTerm,TCode),
@@ -4313,7 +4063,7 @@ parse_body_literal(CanoniTerm,DWS,NO_UDF_PARSE,Code,[]) :-
         ;   Code=TCode      %% DWS is NULL
         ).
 
-parse_body_literal(CanoniTerm,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CanoniTerm,DWS,Code,Status) :-
 	get_flvar_struct(CanoniTerm,C),
         !,
 	( has_context(parsing_reify), DWS==NULL
@@ -4337,7 +4087,7 @@ parse_body_literal(CanoniTerm,DWS,NO_UDF_PARSE,Code,Status) :-
             )
         ).
 
-parse_body_literal(CanoniTerm,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_literal(CanoniTerm,DWS,Code,Status) :-
 	get_fltransactionalvar_struct(CanoniTerm,C),
         !,
         (has_context(clause_construct)
@@ -4357,13 +4107,9 @@ parse_body_literal(CanoniTerm,DWS,NO_UDF_PARSE,Code,Status) :-
           Status=[]
         ).
         
-parse_body_literal(CanoniTerm,_DWS,NO_UDF_PARSE,_Code,Status) :-
+parse_body_literal(CanoniTerm,_DWS,_Code,Status) :-
 	!,
 	parsing_error(CanoniTerm,ERROR_BDLITERAL,Status).
-
-parse_body_literal(CanoniTerm,_DWS,_UDF,_Code,Status) :-
-	parsing_error(CanoniTerm,ERROR_UDF_TERM,Status).
-
 
 /****************************************************************************
   parse_body_template_list(+List,-CodeList,-Status)
@@ -5404,7 +5150,7 @@ parse_list(L,T,Index,DWS,Code,Status) :-
 
 ****************************************************************************/
 parse_body_pathexplist(List,DWS,Code,Status) :-
-	parse_body_pathexplist(List,DWS,0,Code,Status).
+	parse_body_pathexplist(List,DWS,NO_UDF_PARSE,Code,Status).
 
 parse_body_pathexplist([],_DWS,_UDF,[],[]) :- !.
 
@@ -5471,7 +5217,7 @@ parse_body_argpathexplist([T|L],[FL_ARITH|Arguments],DWS,[TACode|LCode],Status) 
 
 ****************************************************************************/
 parse_body_pathexp(CanoniTerm,TransFlag,DWS,Code,Status) :-
-	parse_body_pathexp(CanoniTerm,TransFlag,DWS,0,Code,Status).
+	parse_body_pathexp(CanoniTerm,TransFlag,DWS,NO_UDF_PARSE,Code,Status).
 
 parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_TransFlag,DWS,NO_UDF_PARSE,Code,Status) :-
 	get_atom(Funct,F),
