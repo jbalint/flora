@@ -86,6 +86,13 @@
 	flora_write_rule_body/1,
 	flora_write_rule_body/2.
 
+:- export
+	flora_set_display_mode/1,
+	flora_display_mode/1,
+	flora_display_symbol/2.
+
+:- dynamic display_mode/1.
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% flora_write_goal %%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -358,16 +365,22 @@ decode_molecule_base(WRAP_BOOLSIG, [O,P|_], [O,'[',' => ',P,']']).
 decode_molecule_base(WRAP_IBOOLSIG, [O,P|_], [O,'[',' *=> ',P,']']).
 decode_molecule_base(WRAP_TRANSIG, [O,P|_], [O,'[',' =>% ',P,']']).
 decode_molecule_base(WRAP_ITRANSIG, [O,P|_], [O,'[',' *=>% ',P,']']).
-decode_molecule_base(WRAP_MVDCON, [O,M,L,U|_], [O,'[',M,'{',L,':',U,'}=>?']).
-decode_molecule_base(WRAP_IMVDCON, [O,M,L,U|_], [O,'[',M,'{',L,':',U,'}*=>?']).
-decode_molecule_base(WRAP_MVDCONDEF, [O,M,L,U|_], [O,'[',M,'{',L,':',U,'}=>?']).
-decode_molecule_base(WRAP_IMVDCONDEF, [O,M,L,U|_], [O,'[',M,'{',L,':',U,'}*=>?']).
+decode_molecule_base(WRAP_MVDCON, [O,M,L,U|_], [O,'[',M,'{',L,Symbol,U,'}=>?']) :-
+	flora_display_symbol(cardinality,Symbol).
+decode_molecule_base(WRAP_IMVDCON, [O,M,L,U|_], [O,'[',M,'{',L,Symbol,U,'}*=>?']) :-
+	flora_display_symbol(cardinality,Symbol).
+decode_molecule_base(WRAP_MVDCONDEF, [O,M,L,U|_], [O,'[',M,'{',L,Symbol,U,'}=>?']) :-
+	flora_display_symbol(cardinality,Symbol).
+decode_molecule_base(WRAP_IMVDCONDEF, [O,M,L,U|_], [O,'[',M,'{',L,Symbol,U,'}*=>?']) :-
+	flora_display_symbol(cardinality,Symbol).
 decode_molecule_base(WRAP_MVDINC, [O,M,V|_], [O,'[',M,' +>> ',V,']']).
 decode_molecule_base(WRAP_IMVDINC, [O,M,V|_], [O,'[',M,' *+>> ',V,']']).
 decode_molecule_base(WRAP_MVDTOLIST, [O,M,V|_], [O,'[',M, ' ->-> ',V,']']).
 decode_molecule_base(WRAP_IMVDTOLIST, [O,M,V|_], [O,'[',M, ' *->-> ',V,']']).
-decode_molecule_base(WRAP_ISA, [O,C|_], [O,':',C]).
-decode_molecule_base(WRAP_SUB, [Sub,Sup|_], [Sub,'::',Sup]).
+decode_molecule_base(WRAP_ISA, [O,C|_], [O,Symbol,C]) :-
+	flora_display_symbol(isa,Symbol).
+decode_molecule_base(WRAP_SUB, [Sub,Sup|_], [Sub,Symbol,Sup]) :-
+	flora_display_symbol(sub,Symbol).
 decode_molecule_base(WRAP_EXISTS, [O|_], [O,'[',']']).
 %% boolean method
 decode_molecule_base(WRAP_METH, [O,P|_], [O,'[',P,']']).
@@ -799,13 +812,14 @@ decode_anon_oid(NewOid,Code) :-
 	(flora_match_substring(FL_NEWOID_PREFIX,NewOid,forward,0,Pos), !
 	; flora_match_substring(FL_NEWOID_DYNPREFIX,NewOid,forward,0,Pos)
 	),
+	flora_display_symbol(skolem,Symbol),
 	(flora_match_substring('|',NewOid,forward,_,Pos1) ->
 	    (flora_match_substring('''',NewOid,reverse,Pos2,_), Pos1 < Pos2, !
 	    ; true
 	    ),
 	    flora_get_substring(NewOid,Pos1,Pos2,OidNumber),
-	    Code = ['_#',OidNumber]
-	; Code = ['_#']
+	    Code = [Symbol,OidNumber]
+	; Code = [Symbol]
 	).
 
 
@@ -906,15 +920,19 @@ decode_literal_internal(Call,Code,_Level,_Depth) :-
 %% data types
 decode_literal_internal(FL_DATATYPE(Term,Type), Code, Level,Depth) :-
         !,
-	(var(Term) -> Code = ['?', Term, FL_DATATYPE_CONNECTOR, Type]
+	(var(Term)
+	->
+	    flora_display_type_name(Type,DisplayTypename),
+	    Code = ['?', Term, FL_DATATYPE_CONNECTOR, DisplayTypename]
 	;
 	    flora_printable_type_representation(Term,[TypeName,TypeLit]),
+	    flora_display_type_name(TypeName,DisplayTypename),
 	    (flora_parsed_datatypelist(TypeLit,LitList)
 	    ->
 		decode_literal_internal(LitList,TypeLitDecoded,Level,Depth),
-		Code = [TypeLitDecoded,FL_DATATYPE_CONNECTOR,TypeName]
+		Code = [TypeLitDecoded,FL_DATATYPE_CONNECTOR,DisplayTypename]
 	    ;
-		Code = ['"',TypeLit,'"',FL_DATATYPE_CONNECTOR,TypeName]
+		Code = ['"',TypeLit,'"',FL_DATATYPE_CONNECTOR,DisplayTypename]
 	    )
 	).
 
@@ -1514,3 +1532,54 @@ needs_quoting(Ch) :-
 is_void(X) :-
 	(X == NULL ; var(X)),
 	!.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Display mode stuff
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+flora_set_display_mode(Mode) :-
+	valid_display_mode(Mode),
+	!,
+	(retract(display_mode(_)), ! ; true),
+	assert(display_mode(Mode)).
+flora_set_display_mode(Mode) :-
+	flora_abort(['Invalid FLORA-2 display mode: ', Mode]).
+
+valid_display_mode(silk).
+valid_display_mode(flora).
+
+flora_display_mode(Mode) :- display_mode(Mode), !.
+flora_display_mode(flora) :- \+ display_mode(_).
+
+flora_display_symbol(SymType,Symbol) :-
+	flora_display_mode(Mode),
+	display_table(SymType,Mode,Symbol).
+
+display_table(isa,flora,':').
+display_table(isa,silk,'#').
+display_table(sub,flora,'::').
+display_table(sub,silk,'##').
+display_table(terminator,flora,'.').
+display_table(terminator,silk,';').
+display_table(skolem,flora,'_#').
+display_table(skolem,silk,'_').
+display_table(cardinality,flora,':').
+display_table(cardinality,silk,'..').
+
+flora_display_type_name(SymType,Typename) :-
+	flora_display_mode(Mode),
+	display_datatype_name(SymType,Mode,Typename).
+
+%% display_datatype_name(Type,Mode,CanonName)
+display_datatype_name(Type,flora,Type) :- !.
+display_datatype_name(FL_TIME,silk,'xsd:time') :- !.
+display_datatype_name(FL_DATETIME,silk,'xsd:datetime') :- !.
+display_datatype_name(FL_DURATION,silk,'xsd:duration') :- !.
+display_datatype_name(FL_DATE,silk,'xsd:date') :- !.
+display_datatype_name(FL_IRI,silk,'rif:iri') :- !.
+display_datatype_name(FL_STRING,silk,'xsd:string') :- !.
+display_datatype_name(FL_LONG,silk,'xsd:long') :- !.
+display_datatype_name(FL_DOUBLE,silk,'xsd:double') :- !.
+display_datatype_name(FL_BOOL,silk,'xsd:bool') :- !.
+display_datatype_name(FL_DECIMAL,silk,'xsd:decimal') :- !.
+display_datatype_name(Type,silk,Type) :- !.

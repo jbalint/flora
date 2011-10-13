@@ -40,7 +40,9 @@
    from flrporting.
 
 :- import
-	flora_write_oid/1,
+	flora_display_symbol/2,
+	flora_display_mode/1,
+	%%flora_write_oid/1,
 	flora_decode_oid_as_atom/2
    from flrdecode.
 
@@ -63,14 +65,15 @@ flora_dump_tables(File,AtomicGoal,Options) :-
 	atom(File),
 	!,
 	flora_file_op(tmpfilename,TmpFile),
+	/*
 	(member(details,Options) -> Options1 = [details(true)]
 	; Options1 = [summary(true)]
 	),
-	/*
-	(member(details,Options) -> Options1 = [output(true),details(true)]
+	*/
+	((member(details,Options) ; Options == details) ->
+	    Options1 = [output(true),details(true)]
 	; Options1 = [output(true),summary(true)]
 	),
-	*/
 	convert_to_head_literal(AtomicGoal,AtomicGoalH),
 	flora_generalize_last(AtomicGoalH,FinalGoal),
 	tell(TmpFile),
@@ -107,8 +110,7 @@ convert_to_flora :-
 	    \+ hide_debug_goal(FunctorB,_Arity),
 	    */
 
-	    flora_decode_oid_as_atom(Goal,FloraGoal),
-	    write(FloraGoal),
+	    write_according_to_display_mode(Goal),
 	    write('[total_subgoals->'),
 	    write(NSG),
 	    write(', '),
@@ -120,7 +122,8 @@ convert_to_flora :-
 		write_answers_for_subgoals(AnsList),
 		write('}')
 	    ),
-	    writeln('].'),
+	    flora_display_symbol(terminator,Terminator),
+	    write(']'), writeln(Terminator),
 	    fail
 	),
 	!.
@@ -134,20 +137,27 @@ dump_all(_,_).
 write_answers_for_subgoals([]) :- !.
 write_answers_for_subgoals([First|Rest]) :-
 	First = Subgoal - calls_to(Calls) - answers(Answers) - AnsList,
-	flora_write_oid(Subgoal),
+	%%flora_write_oid(Subgoal),
+	write_according_to_display_mode(Subgoal),
 	write('[total_answers->'),
 	write(Answers),
 	write(', total_calls->'),
 	write(Calls),
-	write(', answer_list->'),
-	flora_write_oid(AnsList),
-	write(']'),
+	write(', answer_list->['),
+	%%flora_write_oid(AnsList),
+	write_plain_list_of_answers(AnsList),
+	write(']]'),
 	(Rest == [] -> true
 	;
 	    write(', '),
 	    write_answers_for_subgoals(Rest)
 	).
 
+write_plain_list_of_answers([]) :- !.
+write_plain_list_of_answers([H|Tail]) :-
+	write_according_to_display_mode(H),
+	(Tail==[], ! ; write(',')),
+	write_plain_list_of_answers(Tail).
 
 /*
 %% Hiding rules taken from the debugger
@@ -183,3 +193,11 @@ irrelevant_goal(Goal) :-
 	      %% too confusing to show that to the user.
 	      flora_unwrap_negation(Goal,Unwrapped), Goal \== Unwrapped, !
 	    ).
+
+
+write_according_to_display_mode(Goal) :-
+	flora_decode_oid_as_atom(Goal,FloraGoal),
+	(flora_display_mode(silk) ->
+	    write_canonical(FloraGoal)
+	;   write(FloraGoal)
+	).
