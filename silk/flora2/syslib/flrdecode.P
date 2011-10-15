@@ -88,6 +88,7 @@
 
 :- export
 	flora_set_display_mode/1,
+	flora_escape_atom/2,
 	flora_display_mode/1,
 	flora_display_symbol/2.
 
@@ -1451,10 +1452,18 @@ flora_write_vars(V,Rest) :-
 */
 
 /****************************************************************************
- escape(+Text1, -Text2)
- for strings, replace every occurency of \ with \\ so that \n is printed
- as it is instead of being interpreted
- ****************************************************************************/
+* flora_escape_atom(+Text1, -Text2)
+* escape(+Text1, -Text2)
+* for strings, replace every occurency of \ with \\ so that \n is printed
+* as it is instead of being interpreted
+* ****************************************************************************/
+flora_escape_atom(Atom, Quoted) :-
+	atom(Atom),
+	atom_codes(Atom,Codes),
+	escape(Codes, Escaped,needs_quoting),
+	atom_codes(EscapedAtm,Escaped),
+	flora_concat_atoms(['''',EscapedAtm,''''],Quoted).
+
 escape(NL,['?', NL]) :-
         var(NL),
         !.
@@ -1487,9 +1496,19 @@ escape([H|L],[CH_BACKSLASH,HC|EL],needs_quoting) :-
         !,
         escape(L,EL,_Flag).
 escape([CH_BACKSLASH,CH_QUOTE|L],[CH_QUOTE,CH_QUOTE|EL],needs_quoting) :-
+	flora_display_mode(flora),
+	!,
+	escape(L,EL,_).
+escape([CH_BACKSLASH,CH_QUOTE|L],[CH_BACKSLASH,CH_QUOTE|EL],needs_quoting) :-
+	flora_display_mode(silk),
 	!,
 	escape(L,EL,_).
 escape([CH_QUOTE|L],[CH_QUOTE,CH_QUOTE|EL],needs_quoting) :-
+	flora_display_mode(flora),
+	!,
+	escape(L,EL,_).
+escape([CH_QUOTE|L],[CH_BACKSLASH,CH_QUOTE|EL],needs_quoting) :-
+	flora_display_mode(silk),
 	!,
 	escape(L,EL,_).
 %% Backslash before special character is escaped: '\\n' is internally 
