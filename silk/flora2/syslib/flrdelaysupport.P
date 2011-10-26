@@ -59,7 +59,7 @@
 	FLLIBDELAYEDLITERAL/4.
 
 :- export
-	flora_default_negation_wrapper/5,
+	flora_default_negation_wrapper/3,
 	flora_defeat_condition_wrapper/6,
 
 	flora_unequal_builtin/4,
@@ -92,27 +92,25 @@ FLLIBDELAYEDLITERAL(Builtin,FileN,Line,Args) :-
 	delay_spec_to_predicate(Builtin,FileN,Line,Args,Call,Condition_pre),
 	%% sometimes statically created delay conditions need postprocessing
 	make_delay_condition(Builtin,Condition_pre,Condition),
+	!,
 	flora_when(Condition,Call).
 
-/********************** Wrappers for NAF ***********************************/
-%% \+ or WFS not
-%% Note: \+ is delayed, but no errors are issued
-/*
-flora_default_negation_wrapper(File,Line,NafCall,FreeVarList,FreeVarnameList) :-
-	(functor(NafCall,FLORA_TNOT_PREDICATE,_), \+ground(FreeVarList) ->
-	    flora_abort(['in file ', File, ' on line ', Line, ': ',
-			 'one of the free variables ',
-			 FreeVarnameList,
-			 ' is not grounded in a default negation subgoal ',
-			 'naf(...)'],
-			FLORA_ABORT_NOTRACE
-		       )
-	;
-	    NafCall
-	).
-*/
-flora_default_negation_wrapper(_File,_Line,NafCall,_FreeVarList,_FreeVarnameList) :-
+/******************** Actual definitions of builtins ***********************/
+
+/********************** Wrapper for NAF ************************************/
+%% WFS not/naf are delayed, no errors issued
+%% Note: \+ is NOT delayed
+flora_default_negation_wrapper(_File,_Line,NafCall) :-
 	NafCall.
+
+/********************* Action to be executed for WRAP_DIFFOBJEQL ***********/
+flora_diffojbeql_action(X,Y,_Call) :- 
+	var(X),
+	var(Y),
+	!,
+	fail.
+flora_diffojbeql_action(_X,_Y,Call) :- 
+	Call.
 
 /********************** Wrapper for undefeated *******************************
 flora_defeat_condition_wrapper(+File,+Line,+DefeatCond,+VarList,+VarnameList,+DynHead)
@@ -150,7 +148,6 @@ check_dynamic_rule_head_for_groundedness(File,Line,DynHead) :-
 	).
 
 
-/******************** Actual definitions of builtins ***********************/
 %% !=
 flora_unequal_builtin(File,Line,X,Y) :-
 	(var(X) -> builtin_instantiation_error(File,Line,1,FL_C_UNEQUAL,unbound,X,Y)
@@ -360,11 +357,10 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
 ?-
    %% default negation
    flora_register_delay(builtin,FL_DEFLTNEG,F,L,
-			[NafCall,FreeVarList,FreeVarnameList],
-			flora_default_negation_wrapper(F,L,NafCall,
-						       FreeVarList,
-						       FreeVarnameList),
-		       ground(FreeVarList)),
+			[NafCall],
+			flora_default_negation_wrapper(F,L,NafCall),
+			%% the actual condition is made by make_delay_condition
+			NafCall),
    flora_register_delay(builtin,FL_UNDEFEATED,F,L,
 			[DefeatCond,VarList,VarnameList,DynHead],
 			flora_defeat_condition_wrapper(F,L,DefeatCond,
@@ -372,8 +368,13 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
 						       VarnameList,
 						       DynHead),
 			%% this will be postprocessed by make_delay_condition/3
-			%%(ground(VarList),ground(DynHead))),
+			%% It takes the terms below and makes
+			%% (ground(VarList),ground(DynHead))),
 			(VarList,DynHead)),
+    flora_register_delay(builtin,WRAP_DIFFOBJEQL,F,L,
+			 [X,Y,DiffObjEqlCall],
+			 flora_diffojbeql_action(X,Y,DiffObjEqlCall),
+			 (nonvar(X) ; nonvar(Y))),
 
    %% builtins
    flora_register_delay(builtin,FL_C_UNEQUAL,F,L,[X,Y],
@@ -441,6 +442,10 @@ make_delay_condition(FL_UNDEFEATED,CondIn,CondOut) :-
 	%% rules will be delayed incorrectly due to caller variables.
 	flora_term_variables(RuntimeCond,RuntimeCondVars),
 	CondOut = (ground(CompiletimeCond),ground(RuntimeCondVars)).
+make_delay_condition(FL_DEFLTNEG,Goal,CondOut) :-
+	!,
+	flora_term_variables(Goal,Vars),
+	CondOut = ground(Vars).
 %% catchall
 make_delay_condition(_,Cond,Cond).
 
@@ -502,21 +507,22 @@ remove_attributes_aux([X|Vars]) :-
 
 
 flora_term_variables(Term, Vars) :-
-	non_caller_vars(Term, Vars, []).
+	get_significant_vars(Term, Vars, []).
 
-non_caller_vars(Term, Vh, Vt) :-
+get_significant_vars(Term, Vh, Vt) :-
 	(var(Term)
 	 ->	Vh = [Term | Vt]
-	 ;
-	    flora_decode_predicate(Term,CallType,_,_,_,Args),
+	; Term = FLORA_TNOT_PREDICATE(Call,_Line,_File)
+	-> get_significant_vars(Call,Vh,Vt)
+	; flora_decode_predicate(Term,CallType,_,_,_,Args),
 	    (CallType == prolog ->
 		TrueArgs = Args
 	    ;
 		flrtrim_last(Args,TrueArgs)
 	    ),
-	    non_caller_vars_aux(TrueArgs, Vh, Vt)
+	    get_significant_vars_aux(TrueArgs,Vh,Vt)
 	).
-non_caller_vars_aux([], V, V).
-non_caller_vars_aux([T|Ts], Vh, Vt) :-
-	non_caller_vars(T, Vh, Vm),
-	non_caller_vars_aux(Ts, Vm, Vt).
+get_significant_vars_aux([], V, V).
+get_significant_vars_aux([T|Ts], Vh, Vt) :-
+	get_significant_vars(T, Vh, Vm),
+	get_significant_vars_aux(Ts, Vm, Vt).

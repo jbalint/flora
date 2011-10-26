@@ -1,3 +1,6 @@
+/*
+   These are the equality axioms used everywhere, even without equality
+*/
 
 /****************************************************************************
   WRAP_OBJEQL/3
@@ -93,15 +96,21 @@ FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
    is not possible when equality is on, since WRAP_DIFFOBJEQL_AUX/3 is
    essentially in the body of every rule (it unfolded).
 */
+:- import FLLIBDELAYEDLITERAL/4 from flrdelaysupport.
 ?-  (
       clause(WRAP_DIFFOBJEQL_AUX(_,_,_),_) -> true
     ;
       assert((
 	      WRAP_DIFFOBJEQL_AUX(X,Y,Caller) :-
 	        (
-	        %% when((nonvar(X); nonvar(Y)), X = Y)
-	           X = Y
-	        %% ;  when((nonvar(X); nonvar(Y)), WRAP_DIFFOBJEQL(X,Y,_Caller))
+	          X = Y
+		/*
+		; %% this delays WRAP_DIFFOBJEQL untol X or Y is bound
+		  FLLIBDELAYEDLITERAL(WRAP_DIFFOBJEQL,
+		                      NULL,NULL,
+		                      [X,Y,WRAP_DIFFOBJEQL(X,Y,Caller)])
+	        */
+	        %% ;  when((nonvar(X); nonvar(Y)), WRAP_DIFFOBJEQL(X,Y,Caller))
 	        ;  WRAP_DIFFOBJEQL(X,Y,Caller)
 	        )
 		/*
