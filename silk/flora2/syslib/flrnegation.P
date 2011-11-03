@@ -26,8 +26,12 @@
 :- import numbervars/4 from num_vars.
 :- import copy_term/2 from basics.
 :- import
-	't not'/1
-   from tables.
+	term_arg/3,
+	is_cyclic/1
+   from machine.
+%%:- import
+%%	't not'/1
+%%   from tables.
 :- import
 	incr_invalidate_call/1
    from increval.
@@ -82,6 +86,7 @@ FLORA_TNOT_PREDICATE(Goal) :- FLORA_TNOT_PREDICATE(Goal,NULL,NULL).
 
 FLORA_TNOT_PREDICATE(Goal,Line,File) :-
 	flora_unwrap_negation_nocheck(Goal,UnwrappedGoal),
+	\+ is_cyclic(UnwrappedGoal),
 	make_negated_goal(UnwrappedGoal,Goal,NewGoal),
 	catch(NewGoal,error(typed_table_error(incremental_tabling),_,_),incr_tabling_error_handler(Line,File,UnwrappedGoal)).
 
@@ -109,7 +114,8 @@ flora_unwrap_negation(Call,Unwrapped) :-
 flora_unwrap_negation(Call,Call).
 
 flora_unwrap_negation_nocheck(Call,Unwrapped) :-
-	arg(1,Call,Unwrapped).
+	%%arg(1,Call,Unwrapped).
+	term_arg(Call,1,Unwrapped).
 
 
 flora_apply_negation_wrapper(Goal,Workspace,GoalWrapped) :-
@@ -137,6 +143,7 @@ incr_tabling_error_handler(Line,File,Goal) :-
 %% may add write predicates here
 %% May push through conjunctions and disjunctions later
 make_negated_goal('='(Left,Right),   _OrigGoal, '\='(Left,Right))   :- !.
+make_negated_goal('!='(Left,Right),   _OrigGoal, '='(Left,Right))   :- !.
 make_negated_goal('\='(Left,Right),  _OrigGoal, '='(Left,Right))    :- !.
 make_negated_goal('=='(Left,Right),  _OrigGoal, '\=='(Left,Right))  :- !.
 make_negated_goal('\=='(Left,Right), _OrigGoal, '=='(Left,Right))   :- !.
@@ -148,15 +155,20 @@ make_negated_goal('@<'(Left,Right),  _OrigGoal, '@>='(Left,Right))  :- !.
 make_negated_goal('@=<'(Left,Right), _OrigGoal, '@>'(Left,Right))   :- !.
 make_negated_goal('@>'(Left,Right),  _OrigGoal, '@=<'(Left,Right))  :- !.
 make_negated_goal('@>='(Left,Right), _OrigGoal, '@<'(Left,Right))   :- !.
-make_negated_goal(var(V),     _OrigGoal, nonvar(V))     :- !.
-make_negated_goal(nonvar(V),  _OrigGoal, var(V))        :- !.
-make_negated_goal(integer(V), _OrigGoal, \+integer(V))  :- !.
-make_negated_goal(float(V),   _OrigGoal, \+float(V))    :- !.
-make_negated_goal(number(V),  _OrigGoal, \+number(V))   :- !.
-make_negated_goal(is_list(V), _OrigGoal, \+is_list(V))  :- !.
-make_negated_goal(true, _OrigGoal, fail)                :- !.
-make_negated_goal(fail, _OrigGoal, true)                :- !.
-make_negated_goal(false,_OrigGoal, true)                :- !.
+make_negated_goal(FL_ISSKOLEM(V),    _OrigGoal, \+FL_ISSKOLEM(V))   :- !.
+make_negated_goal(FL_ISBASEFACT(V),  _OrigGoal, \+FL_ISBASEFACT(V)) :- !.
+make_negated_goal(\+(V),             _OrigGoal, V)                  :- !.
+make_negated_goal(var(V),            _OrigGoal, nonvar(V))          :- !.
+make_negated_goal(nonvar(V),         _OrigGoal, var(V))             :- !.
+make_negated_goal(integer(V),        _OrigGoal, \+integer(V))       :- !.
+make_negated_goal(float(V),          _OrigGoal, \+float(V))         :- !.
+make_negated_goal(number(V),         _OrigGoal, \+number(V))        :- !.
+make_negated_goal(is_list(V),        _OrigGoal, \+is_list(V))       :- !.
+make_negated_goal(is_charlist(V),    _OrigGoal, \+is_charlist(V))   :- !.
+make_negated_goal(is(V,W),           _OrigGoal, \+is(V,W))          :- !.
+make_negated_goal(true,           _OrigGoal, fail)                  :- !.
+make_negated_goal(fail,           _OrigGoal, true)                  :- !.
+make_negated_goal(false,          _OrigGoal, true)                  :- !.
 
 make_negated_goal(FLLIBHYPOTHETICAL(Type,Goal), _OrigGoal, FLLIBHYPOTHETICAL(ReverseType,Goal)) :-
 	!,
@@ -164,13 +176,13 @@ make_negated_goal(FLLIBHYPOTHETICAL(Type,Goal), _OrigGoal, FLLIBHYPOTHETICAL(Rev
 	; ReverseType = FL_POSSIBLE
 	).
 
-make_negated_goal(_UnwrappedGoal,OrigGoal,'t not'(TempGoal)) :-
+make_negated_goal(_UnwrappedGoal,OrigGoal,tnot(TempGoal)) :-
 	copy_term(OrigGoal,TempGoal),
 	%% make TempGoal ground, so no checks would be necessary in 't not'
 	numbervars(TempGoal,0,_,[attvar(bind)]),
 	%% cleanup_negation/1 is checking for incomplete tables to be safe
 	cleanup_negation(TempGoal),
-	%% register_negated_call must be after cleanup_negation
+	%% the below register_negated_call MUST come after cleanup_negation
 	register_negated_call(TempGoal),
 	!.
 
