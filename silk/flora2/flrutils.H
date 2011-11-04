@@ -56,7 +56,9 @@
 
 :- import xpp_options/1, xpp_process_file/3 from parse.
 
-:- import parse_filename/4 from machine.
+:- import
+	parse_filename/4
+   from machine.
 
 :- import process_control/2 from shell.
 
