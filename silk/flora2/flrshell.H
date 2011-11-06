@@ -119,7 +119,11 @@
 	flora_traceverylow/2,
 	flora_notrace/0,
 	flora_set_switch/1,
-	flora_clear_switch/1
+    flora_clear_switch/1,
+	flora_logforest_start/0,
+	flora_logforest_end/0,
+	flora_logforest_start/1,
+	flora_logforest_start/2
    from flrdebugger.
 
 :- dynamic flora_warnings_level(_).
