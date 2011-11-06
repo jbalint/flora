@@ -47,10 +47,13 @@
 
 :- import flora_concat_atoms/2,
 	flora_slash/1,
-	flora_set_counter/2
+	flora_set_counter/2,
+	flora_file_op/2
    from flrporting.
 
-:- import flora_write_goal/2 from flrdecode.
+:- import flora_write_goal/1,
+	flora_write_goal/2 
+   from flrdecode.
 
 %% This is a trick: the debugger wants the hook to be in usermod, 
 %% but we want to work in a module
@@ -126,17 +129,176 @@
 	flora_traceverylow/2,
 	flora_notrace/0.
 
+:- import 
+	log_all_forest_start/0, 
+	log_all_forest_end/0, 
+	log_all_forest_start/1
+   from tables. 
+
+:- dynamic logforest_tmp_file/1,
+	logforest_final_file/1.
+
+:- export
+	flora_logforest_start/0,
+	flora_logforest_start/1,
+	flora_logforest_start/2,
+	flora_logforest_end/0,
+	flora_convert_ctrace_to_flora/2.
+
+:- dynamic hide_this_ctrace_pred/1.
+
+?- assert(hide_this_ctrace_pred(flora_storage_module)),
+	assert(hide_this_ctrace_pred(flora_is_fdb_storage)).
+
+flora_logforest_start :-
+	flora_set_switch(logforest_low),
+	log_all_forest_start.
+
+flora_logforest_start(File) :-
+	flora_set_switch(logforest_low),
+ 	log_all_forest_start([file(File)]). 
+
+%% dump ctrace logforest to File in Flora queriable format
+flora_logforest_start(File,log) :-
+	flora_set_switch(logforest),
+	%% put ctrace from xsb into TmpFile
+	%% when logforest stops, convert TmpFile as File
+	%% File is in flora queriable format
+	flora_file_op(tmpfilename,TmpFile),
+	assert(logforest_tmp_file(TmpFile)),
+	assert(logforest_final_file(File)),
+ 	log_all_forest_start([file(TmpFile)]).
+	
+flora_logforest_end :-
+	%% flush_output,
+	(flora_switch(logforest_low) ->
+		log_all_forest_end,
+		flora_clear_switch(logforest_low)
+	; flora_switch(logforest) ->
+		log_all_forest_end,
+		flora_clear_switch(logforest),
+		logforest_tmp_file(TmpFile),
+		logforest_final_file(File),
+		see(TmpFile),
+		tell(File),
+		convert_to_flora,
+		seen,
+		told,
+		flora_file_op(rm,TmpFile),
+		retractall(logforest_tmp_file(TmpFile)),
+		retractall(logforest_final_file(File))
+	;
+		true
+	).
+
+convert_to_flora :-
+	repeat,
+	(read(Term) ->
+		true
+	;
+		abort(('[Debugger] Error while processing ctrace term ', Term))
+	),
+	(Term == end_of_file, !
+	;
+		flora_decode_predicate(Term,_CallType,_ModuleName,_WrapPrefix,Wrapper,ArgList),
+		hide_this_ctrace(ArgList),
+		(Wrapper == tc ->
+			ArgList = [S1,S2,Stage,Counter],
+			write(call),
+			write('('),
+			write(Counter),
+			write(')[goal->${'),
+			flora_write_goal(S1),
+			write('}, stage->'),
+			write(Stage),
+			write(', parent->'),
+			flora_write_goal(S2),
+			write('].')
+		; Wrapper == na ->
+			ArgList = [A,S,Counter],
+			write(answered),
+			write('('),
+			write(Counter),
+			write(')[goal->${'),
+			flora_write_goal(S),
+			write('}, answer->'),
+			write(A),
+			write('].')
+		; Wrapper == ar ->
+			ArgList = [A,S,ST,Counter],
+			write(answered_to_consumer),
+			write('('),
+			write(Counter),
+			write(')[goal->${'),
+			flora_write_goal(S),
+			write('}, answer->'),
+			write(A),
+			write(', consumer->{'),
+			flora_write_goal(ST),
+			write('}].')
+		; Wrapper == cmp ->
+			ArgList = [S,SCCNum,Counter],
+			write(completed),
+			write('('),
+			write(Counter),
+			write(')[goal->${'),
+			flora_write_goal(S),
+			write('}, sccnum->'),
+			write(SCCNum),
+			write('].')
+		; Wrapper == ta ->
+			ArgList = [Goal,Counter],
+			flora_decode_predicate(Goal,_,_,_,GoalWrapper,GoalArgList),
+			write(table_abolished),write('('),
+			write(Counter),
+			write(')[type->'),
+			(GoalWrapper == all ->
+				write('all].')
+			; GoalWrapper == pred ->
+				write('pred, predicate->'),
+				write(GoalArgList),
+				write('].')
+			; GoalWrapper == subg ->
+				write('subg, goal->'),
+				GoalArgList = [GoalToAbolish],
+				flora_write_goal(GoalToAbolish),
+				write('].')
+			;
+				abort(('[Debugger] Error while processing ctrace '))
+			)
+		; Wrapper == err ->
+			ArgList = [Counter],
+			write(error),write('('),
+			write(Counter),
+			write(')')
+		; 
+			abort(('[Debugger] Error while processing ctrace '))
+		),
+		nl,
+		fail
+	),
+	!.
+convert_to_flora.
+
+%% check whether this ctrace should be converted into flora queriable format
+hide_this_ctrace([]).
+hide_this_ctrace([H|T]) :-
+	flora_decode_predicate(H,_CallType,_Module,_WrapPrefix,Wrapper,_Args),
+	(hide_this_ctrace_pred(Wrapper) ->
+		fail
+	;
+		hide_this_ctrace(T)
+	).
 
 %% Assert the debugger hook
 ?- assert(debug_display_call_hook(flora_write_debugger_hook)),
-   assert(debug_tracelog_predicate(flora_tracelog)).
+	assert(debug_tracelog_predicate(flora_tracelog)).
 ?- assert((
-           flora_write_debugger_hook(X) :-
-	     (\+flora_switch(low_level_trace) -> flora_write_debug_call(X)
-	     ; flora_write_debug_call_prolog(X)
-	     )
-	  )).
-
+    flora_write_debugger_hook(X) :-
+	(\+flora_switch(low_level_trace) -> flora_write_debug_call(X)
+		; flora_write_debug_call_prolog(X)
+		)
+	)).
 
 %% Get the debugging output stream
 :- dynamic flora_dbg_stream/1.
@@ -219,13 +381,13 @@ write_matching_rules([Rule|Rest],prolog) :-
 %% write_rule(Rule,Flag)
 %% Flag: flora/prolog
 write_rule((Head:-Body),flora) :-
-        flora_write_debug_call_unreified(Head),
+    flora_write_debug_call_unreified(Head),
 	flora_write_dbg_item(' :- '),
-        flora_write_debug_call_unreified(Body).
+    flora_write_debug_call_unreified(Body).
 write_rule((Head:-Body),prolog) :-
-        flora_writeq_dbg_item(Head),
+    flora_writeq_dbg_item(Head),
 	flora_write_dbg_item(' :- '),
-        flora_writeq_dbg_item(Body).
+    flora_writeq_dbg_item(Body).
 */
 
 /*********************************************************************/
