@@ -141,30 +141,41 @@
 	logforest_final_file/1.
 
 :- export
+	flora_logforestlow_start/0,
 	flora_logforest_start/0,
+	flora_logforestlow_start/1,
 	flora_logforest_start/1,
-	flora_logforest_start/2,
-	flora_logforest_end/0,
-	flora_convert_ctrace_to_flora/2.
+	flora_logforest_end/0.
 
 :- dynamic hide_this_ctrace_pred/1.
 
 ?- assert(hide_this_ctrace_pred(flora_storage_module)),
    assert(hide_this_ctrace_pred(flora_is_fdb_storage)).
 
-flora_logforest_start :-
+flora_logforestlow_start :-
 	flora_set_switch(logforest_low),
 	log_all_forest_start.
 
-flora_logforest_start(File) :-
+flora_logforestlow_start(File) :-
 	flora_set_switch(logforest_low),
  	log_all_forest_start([file(File)]). 
 
-%% dump ctrace logforest to File in Flora queriable format
-flora_logforest_start(File,log) :-
+%% print ctrace logforest in Flora queriable format to
+%% current output stream
+flora_logforest_start :-
 	flora_set_switch(logforest),
 	%% put ctrace from xsb into TmpFile
-	%% when logforest stops, convert TmpFile as File
+	%% when logforest stops, print TmpFile in 
+	%% flora queriable format to current output stream
+	flora_file_op(tmpfilename,TmpFile),
+	assert(logforest_tmp_file(TmpFile)),
+ 	log_all_forest_start([file(TmpFile)]).
+
+%% dump ctrace logforest to File in Flora queriable format
+flora_logforest_start(File) :-
+	flora_set_switch(logforest),
+	%% put ctrace from xsb into TmpFile
+	%% when logforest stops, convert TmpFile to File
 	%% File is in flora queriable format
 	flora_file_op(tmpfilename,TmpFile),
 	assert(logforest_tmp_file(TmpFile)),
@@ -180,15 +191,14 @@ flora_logforest_end :-
 		log_all_forest_end,
 		flora_clear_switch(logforest),
 		logforest_tmp_file(TmpFile),
-		logforest_final_file(File),
 		see(TmpFile),
-		tell(File),
+		(logforest_final_file(File) -> tell(File) ; true),
 		convert_to_flora,
 		seen,
-		told,
+		(logforest_final_file(File) -> told	; true),
 		flora_file_op(rm,TmpFile),
 		retractall(logforest_tmp_file(TmpFile)),
-		retractall(logforest_final_file(File))
+		(retractall(logforest_final_file(File)) ; true)
 	;
 		true
 	).
@@ -269,10 +279,12 @@ convert_to_flora :-
 				abort(('[Debugger] Error while processing ctrace '))
 			)
 		; Wrapper == err ->
-			ArgList = [Counter],
+			ArgList = [S,Counter],
 			write(error),write('('),
 			write(Counter),
-			write(')')
+			write(')[goal->'),
+			flora_write_goal(S),
+			write('].')
 		; 
 			abort(('[Debugger] Error while processing ctrace '))
 		),
