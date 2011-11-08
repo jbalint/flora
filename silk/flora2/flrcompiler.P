@@ -2972,7 +2972,8 @@ compile_user_defined_function(Function,_Body,_ReturnValue,CodeList-CodeList,Fact
 
 compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactList-FactTail,Status) :-
 	set_context(compiling_udf),
-	( is_flterm(Function,Funct,N,Args),flora_get_flatomvar_name(Funct,Name) ->
+	( is_flterm(Function,Funct,N,Args),
+	    flora_get_flatomvar_name(Funct,Name) ->
 	    ( Body==NULL ->
 		new_udf_args(Args,NewArgs)
 	    ;
@@ -3081,6 +3082,12 @@ compile_rule(Head,Body,Annotation,RuleList-RuleTail,Facts-Facts,Status) :-
 	( no_errors_found(HeadStatus) ->
 	    compile_body(Body,BCode1,BodyStatus),
 	    collect_prdatatypevars([HeadCodeList,BCode1],DTVarsCode),
+	    /*
+	    acyclicity_check_for_head(HeadCode,HeadAcyclicityCheckCode),
+	    append(DTVarsCode, %% DTVarsCode - datatype code for variables
+		   [HeadAcyclicityCheckCode,H2BCodeHead,BCode1,H2BCodeTail],
+		   BCodeList),
+	    */
 	    append(DTVarsCode,[H2BCodeHead,BCode1,H2BCodeTail],BCodeList),
 	    conjunct_code(BCodeList,BCode),
             get_dynrule_varlist(L),
@@ -8195,6 +8202,16 @@ compile_fldynrule(Op,R,RCode,Status) :-
 	    %%(BodyStatus==[] ->
 	    ( no_errors_found(BodyStatus) -> 
 	        collect_prdatatypevars([HeadCode,BodyCode1],DTVarsCode),
+		/*
+		%% Note: important to use HeadCode1 here, not HeadCode.
+		%% HeadCode is a list, while HeadCode1 a conjunct.
+		%% HeadCode is not a valid body literal.
+		acyclicity_check_for_head(HeadCode1,HeadAcyclicityCheckCode),
+		append(DTVarsCode, %% DTVarsCode - datatype code for variables
+		       [HeadAcyclicityCheckCode,H2BCodeHead,BodyCode1,
+			H2BCodeTail],
+		       BCodeList),
+		*/
 		append(DTVarsCode,[H2BCodeHead,BodyCode1,H2BCodeTail],BCodeList),
 		conjunct_code(BCodeList,BodyCodeSansDelay),
 
@@ -8572,6 +8589,14 @@ delay_literals_checking_code(Head,Body,Code) :-
 			   FLDELAYSUPPORTMOD,
 			   Code,_OidCode,_ACode,_Status)
 	).
+
+/*
+%% Input: compiled Head code
+%% Output: acyclicity check for Head
+acyclicity_check_for_head(HeadCode,HeadAcyclicityCheckCode) :-
+	atomobj_struct(is_acyclic,IsCyclicStruct),
+	prologterm_struct(IsCyclicStruct,1,[HeadCode],HeadAcyclicityCheckCode).
+*/
 
 no_mixed_sensor_nonsensor_heads(CompiledHead,ParsedHead,Status) :-
 	(no_mixed_sensor_nonsensor_heads(CompiledHead) -> Status = []
