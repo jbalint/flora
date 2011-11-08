@@ -2626,8 +2626,8 @@ compile_fact(Head,RuleList-RuleTail,FactList-FactTail,Status) :-
 	%%( S == [] ->
 	( no_errors_found(S) ->
 	    ( H2BCodeHead == NULL, H2BCodeTail == NULL ->
-		compile_factlist(HeadCode,FactList-FactTail),
-		RuleList = RuleTail, %% empty rule diff list
+		compile_factlist(HeadCode,RuleList-RuleTail,FactList-FactTail),
+		%%RuleList = RuleTail, %% empty rule diff list
 		(has_context(compiling_udf) ->
 		    %% for UDFs checking variables is done separately
 		    S2 = []
@@ -2663,20 +2663,27 @@ compile_fact(Head,RuleList-RuleTail,FactList-FactTail,Status) :-
 
 
 /****************************************************************************
-  compile_factlist(+Code,-CodeDifferenceList)
+  compile_factlist(+Code,-RuleDifferenceList,-FactDifferenceList)
 
   This procedure takes a conjucntion of atoms and splits into a
   difference list.
-****************************************************************************/
-compile_factlist(NULL,CodeList-CodeList) :- !.
 
-compile_factlist(ConjunctCode,CodeList-ListTail) :-
+  If a fact is declared as a prolog term, it is put into the rule list,
+  so that it would be dumped as is rather than put into a trie.
+****************************************************************************/
+compile_factlist(NULL,RuleList-RuleList,FactList-FactList) :- !.
+
+compile_factlist(ConjunctCode,RuleList-RuleListTail,FactList-FactListTail) :-
 	conjunct_struct(F1,F2,ConjunctCode),
 	!,
-	compile_factlist(F1,CodeList-T),
-	compile_factlist(F2,T-ListTail).
+	compile_factlist(F1,RuleList-RT,FactList-FT),
+	compile_factlist(F2,RT-RuleListTail,FT-FactListTail).
 
-compile_factlist(F,[FCode|ListTail]-ListTail) :-
+compile_factlist(F,[FCode|ListTail]-ListTail,FL-FL) :-
+	is_prologterm(F),
+	!,
+	fact_struct(F,FCode).
+compile_factlist(F,RL-RL,[FCode|ListTail]-ListTail) :-
 	!,
         collect_prvars(F,FVars),
         get_dynrule_varlist(FVars,L),
