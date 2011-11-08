@@ -6396,7 +6396,7 @@ exactly one literal such as {\tt insert\{p(a)\}} but not {\tt insert\{p(a),p(b)\
 \index{dependency checking!\_warnings(compiler)}
 %%
 We should also mention here that executing the command
-\texttt{\_warnings(compiler)} in the FLORA-2 shell will turn the dependency
+\texttt{\_warnings(compiler)} in the \FLORA shell will turn the dependency
 checking off globally. In some cases, this can drastically
 reduce the compilation time.
 
@@ -10116,7 +10116,7 @@ is harmless, use the {\tt ignore\_depchk} directive to suppress the warning.
 \subsection{Examining Tables}
 
 Sometimes it is useful to be able to examine the tables that XSB has
-generated while answering queries. To this end, FLORA-2 provides 
+generated while answering queries. To this end, \FLORA provides 
 the following library predicates:
 %% 
 \begin{verbatim}
@@ -10128,7 +10128,7 @@ These are prolog predicates in the module \texttt{flrtabledump} and so they
 must be called using the module specification \texttt{\_plg(flrtabledump)} or
 \texttt{\_prolog(flrtabledump)}.
 The \texttt{File} argument specifies the file in which to place the results.
-The results are in the FLORA-2 format, as explained below.
+The results are in the \FLORA format, as explained below.
 If \texttt{File} is \texttt{userout} then the results go to the standard
 output.  \texttt{AtomocGoal} is a HiLog predicate or an atomic molecule
 (e.g., \texttt{?[?->foo]}). It specifies the subgoals for which tables are
@@ -10200,130 +10200,171 @@ ${p(2,?A)}[total_subgoals->1,
 \end{verbatim}
 %% 
 
-\subsection{Tracing Tabled Evaluations through Forest Logging}
+\subsection{Tracing Tabled Calls via Forest Logging}
 
-The \FLORA forest logging approach ({\tt logforest}) to trace tabled evaluations is 
-implemented as a presentation layer on top of that in XSB, so familiarity with the
-latter is highly recommended (XSB Manual, Part I). Since {\tt logforest} is 
-implemented in C, it can be used to produce logs for very large evaluations with
-little overhead. These logs can then be used to analyze program correctness, 
-performance and nontermination etc. 
+While the regular Call-Redo-Exit-Fail logging is useful in many cases, it
+is extremely slow and generates large amounts of output. A program that
+runs mere 10 seconds can take hours to execute under tracing and it may
+generate hundreds of megabytes worth of trace output. Clearly, it is hard
+to use the regular tracing facility under such conditions.
+On top of this, even though the regular trace is capable of producing
+queriable output, such trace does not supply parent-child 
+relationships between calls, and, due to this, programmatic analysis of
+such trace is very hard.
 
+Fortunately, there is an alternative: \emph{forest logging}.
+Forest logging is a kind of tracing that keeps track only of tabled
+predicate calls. It is very fast (time overhead is less than 80\% compared
+to orders of magnitude for the regular trace), it generates
+drastically smaller trace logs, and it preserves the parent-child
+relationship between the calls. The drawback is that logforest
+traces track tabled calls
+only, but in \FLORA this is not a serious problem since most calls that
+are of interest to the user are
+tabled (except for transactional predicates and methods).
+
+\FLORA's forest logging is 
+implemented as a presentation layer on top of XSB's forest logging.
+Its format and other details are described next.
+
+\index{forest logging}
 \paragraph{Forest logging.}
-To start {\tt logforest}, you can issue the command {\tt \_logforest} at the \FLORA
-prompt or put the subgoal {\tt \_logforest} in the middle of a program. 
-In the latter case, {\tt logforest} will start after this subgoal gets executed. 
-It is useful when you know where exactly you would like to start {\tt logforest}. 
-To stop {\tt logforest}, issue the command {\tt \_nologforest}. 
+To start forest logging, the user
+must issue the command {\tt \_logforest} at the \FLORA
+prompt or include the query {\tt ?- \_logforest} in the middle of a program. 
+In the latter case, logging will start after this subgoal gets
+executed. 
+To stop forest logging, issue the command {\tt \_nologforest}. 
 
-Forest logging in XSB generates an ordinal number $Counter$ for each log entry, and
-we adopt it here. Currently, {\tt logforest} in \FLORA captures the following actions.
+Every call in a forest log has an Id, which is a non-negative integer.
+The entries in the log represent the following actions that occur during
+tabled evaluation of queries.
+%%
 \begin{itemize}
-\item \emph{A call to a tabled subgoal}. When a call to a tabled subgoal $S_1$ is
-  made from a SLG tree for $S_2$, {\tt logforest} logs a \FLORA readable fact of 
+\item \emph{A call to a tabled subgoal}. When a call to a tabled subgoal $\tt S_1$ is
+  made from a derivation tree for $\tt S_2$, a \FLORA molecule is recorded in
   the following format:
 %%
 \begin{verbatim}
-   call(Counter)[goal->S1, stage->Stage, parent->S2].
+   call(Id)[goal->S1, stage->Stage, parent->S2].
 \end{verbatim}
-%%
-  where $Counter$ is the XSB generated ordinal number of the fact, and $Stage$ is
+  %% 
+  where $Id$ is the generated Id of the call and $Stage$ is
   \begin{itemize}
-  \item {\tt new} if $S_1$ is a new subgoal.
-  \item {\tt comp} if $S_1$ is a not new subgoal but has been completed
-  \item {\tt incmp} if $S_1$ is a not new subgoal but has \emph{not} been completed.
+  \item {\tt new} if $\tt S_1$ is a new subgoal.
+  \item {\tt comp} if $\tt S_1$ is an old \emph{completed} subgoal.
+  \item {\tt incmp} if $\tt S_1$ is an old \emph{incomplete} subgoal (i.e., it
+    has not been fully evaluated yet).
   \end{itemize}
-  If $S_1$ is the first tabled subgoal in an evaluation, $S_2$ is the atom {\tt null}.
-
+  %% 
+  If $\tt S_1$ is the first tabled subgoal in an evaluation, $\tt S_2$ is
+  represented by the atom {\tt null}.
+  
 \item \emph{Derivation of a new answer}. When a new answer $A$ is derived for 
-  subgoal $S$ and added to the table, the following fact is logged:
+  subgoal \texttt{S}  and added to the table, the following fact is logged:
 %%
 \begin{verbatim}
-   answered(Counter)[goal->S, answer->A].
+   answer(Id)[goal->S, answer->A].
 \end{verbatim}
-%%   
+%%
+  As before, \emph{Id} is the identity number generated for this particular
+  action. 
 
 \item \emph{Return of an answer to a consuming subgoal}. When an answer $A$ is
-  returned to a consuming subgoal $S$ in a SLG tree for $ST$ and the table for $S$
-  is incomplete, {\tt logforest} logs a fact of the format:
+  computed and
+  returned to a consumer subgoal \texttt{S} in a derivation tree for
+  \texttt{ST}  and the
+  table for \texttt{S}
+  is incomplete, the following fact is recorded:
 %%
 \begin{verbatim}  
-   answered_to_consumer(Counter)[goal->S, answer->A, consumer->ST].
+   answer_to_consumer(Id)[goal->S, answer->A, consumer->ST].
 \end{verbatim}  
 %% 
 
-\item \emph{Subgoal completion}. When a set ${\cal S}$ of subgoals are 
-  completely evaluated, for each $S \in {\cal S}$ a fact of the following
-  format is logged:
+\item \emph{Subgoal completion}. When a set ${\cal S}$ of subgoals is 
+  completely evaluated, for each $\texttt{S} \in {\cal S}$ a fact of the following
+  format is logged for each \texttt{S}: 
 %%
 \begin{verbatim}  
-   completed(Counter)[goal->S, sccnum->SCCNum].
+   completed(Id)[goal->S, sccnum->SCCNum].
 \end{verbatim}  
 %% 
-  where $SCCNum$ is a XSB generated ordinal number used to group subgoals into
-  SCCs. If a subgoal $S$ is early completed, $SCCNum$ is the atom {\tt ec}. 
+  Here $SCCNum$ is an Id generated for the set of subgoals ${\cal S}$.
+  If \texttt{S}  is completed early, $SCCNum$ is the atom {\tt ec}. 
   
 \item \emph{Table abolishes}. There are three occasions where tables are abolished.
   \begin{itemize}
-  \item When a tabled subgoal $S$ is abolished, {\tt logforest} logs a fact of 
-    the format:
+  \item When a tabled subgoal \texttt{S} is abolished, a fact of 
+    the following form is logged:
 %%
 \begin{verbatim}
-   table_abolished(Counter)[type->subg, goal->S].
+   table_abolished(Id)[type->subg, goal->S].
 \end{verbatim}  
 %% 
   \item When all tables for a predicate $p/n$ are abolished, a fact of the 
-    following format is logged:
+    following form is logged:
 %%
 \begin{verbatim}
-   table_abolished(Counter)[type->pred, goal->[p/n]].
+   table_abolished(Id)[type->pred, goal->[p/n]].
 \end{verbatim}  
 %% 
-  \item When all tables are abolished, {\tt logforest} logs a fact of 
-    the format:
+  \item When all tables are abolished, the following fact is logged:
 %%
 \begin{verbatim}
-   table_abolished(Counter)[type->all].
+   table_abolished(Id)[type->all].
 \end{verbatim}  
 %% 
   \end{itemize}
 
-\item \emph{Location of errors}. Whenever an error is thrown and the execution
-  is in a SLG tree for subgoal $S$, {\tt logforest} records a log of the following
-  format:
+\item \emph{Recording of errors}. If an error is thrown and the execution
+  is in a derivation tree for subgoal $\tt S$, forest logging records 
+  the following fact:
 %%
 \begin{verbatim}
-   error(Counter)[goal->S].
+   error(Id)[goal->S].
 \end{verbatim}  
 %% 
 \end{itemize}
 
-In default, {\tt logforest} dumps logs to current output stream. \FLORA also
-provides a command to dump logs to a file: {\tt \_logforest(File)}. For instance,
+By default, logs are sent to the current output stream. However, it is
+usually more convenient
+to dump the logs to a file using the following command:
+{\tt \_logforest(File)}. For instance,
 executing
 %%
 \begin{verbatim}
    ?- _logforest('foobar.txt').
 \end{verbatim}
 %% 
-will direct \FLORA to dump the entire forest logging to file {\tt foobar.txt}. 
-\emph{Note that command {\tt \_nologforest} has to be executed in order for the
-  logs to be dumped current output stream or flushed to disk.}
+will direct \FLORA to dump the entire forest log into the file {\tt foobar.txt}.
+
+It is important to keep in mind, however, that \emph{no} output
+is produced (to the file or output stream) unless the user issues the command
+{\tt \_nologforest}. In other words, forest logging can be obtained only
+\emph{after} the evaluation is finished. 
+If you expect the query to throw an error, it is a good idea to use the
+\FLORA \texttt{catch{...}} primitive. If the query does not terminate,
+you should also wrap the query with the \texttt{timed\_call/3} XSB predicate.\footnote{
+  \texttt{timed\_call/3} is described in the XSB Manual, Part 1. Do not
+  forget to reify the query argument to  \texttt{timed\_call/3}.
+  }
 
 \paragraph{Low-level forest logging.}
-The \FLORA  {\tt logforest} also supports low-level forest logging via command
-{\tt \_logforestlow}. With this command, \FLORA displays the forest logging 
-generated by XSB without representation, i.e. in their original Prolog fact
-format. As with {\tt \_logforest}, \FLORA also provides a command to dump 
-low-level forest logging into a file. For instance, executing
+Sometimes it is necessary to look into the guts of forest logging without
+converting it into the \FLORA format. Typically this is needed for
+low-level debugging of \FLORA itself.
+The command for this is
+{\tt \_logforestlow};t directs \FLORA to display forest logs 
+directly in the XSB format.
+There is also a version of this command for saving the log in a file:
 %%
 \begin{verbatim}
    ?- _logforestlow('foobar.txt').
 \end{verbatim}
 %% 
-will dump logs into file {\tt foobar.txt} in Prolog fact format. 
-\emph{Note that one has to execute command {\tt \_nologforest} or exits \FLORA
-  in order for the logs to be flushed to disk.}
+As before, one should remember to issue the command \texttt{\_nologforest}
+in order to flush the log to the output. 
 
 \section{Optimizations}
 
@@ -10680,7 +10721,7 @@ of keeping the syntax object-oriented.
 \item {\tt \%tell(?Filename), ?Filename[\%tell]} --- opens {\tt ?Filename} as the current output
   stream. The file can live remotely at some URL. In that case, {\tt ?Filename}
   must be instantiated to the form {\tt url(...)}.
-  In that case, FLORA-2 will attempt to use the HTTP POST request to store
+  In that case, \FLORA will attempt to use the HTTP POST request to store
   the file remotely.
 \item {\tt \verb|%|telling(?Stream)} --- binds {\tt ?Stream} to the current output
   stream. 
