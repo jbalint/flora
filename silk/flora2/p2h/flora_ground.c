@@ -49,6 +49,13 @@ DllExport xsbBool call_conv flrground (CTXTdecl)
   return ground((CPtr) pterm);
 }
 
+DllExport xsbBool call_conv flrnonground (CTXTdecl)
+{
+  prolog_term pterm = extern_reg_term(1);
+
+  return !ground((CPtr) pterm);
+}
+
 int ground(CPtr pterm)
 {
   int j, arity;

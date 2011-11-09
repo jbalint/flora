@@ -89,6 +89,7 @@
 	flora_change_module/5,
 
 	flora_is_transactional_wrapper/1,
+	flora_is_transactional_call/1,
 	flora_is_neg_wrapper/1,
 	flora_funct_arity/2.
 
