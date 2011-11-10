@@ -80,12 +80,12 @@ public class PrologFlora extends FloraConstants
     void executeInitCommands()
     {
         if(commands == null)
-            throw new FlrException("\n*** Java-FLORA-2 interface: System bug, please report\n");
+            throw new FlrException("System bug, please report");
 
 	for(int i = 0; i < commands.length; i++) {
 	    boolean cmdsuccess = simplePrologCommand(commands[i]);
 	    if(!cmdsuccess)
-		throw new FlrException("\n*** Java-FLORA-2 interface: FLORA-2 startup failed\n");
+		throw new FlrException("FLORA-2 startup failed");
 	}
     }
 
@@ -104,7 +104,7 @@ public class PrologFlora extends FloraConstants
 	    //cmdsuccess = engine.command(cmd);
 	}
 	catch(IPException e) {
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Command "+ cmd + " failed\n", e);
+	    throw new FlrException("Command "+ cmd + " failed", e);
 	}
         return cmdsuccess;
     }
@@ -124,7 +124,7 @@ public class PrologFlora extends FloraConstants
 	    //cmdsuccess = engine.command(cmd);
 	}
 	catch(IPException e) {
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Command "+ cmd + " failed\n", e);
+	    throw new FlrException("Command "+ cmd + " failed", e);
 	}
         return cmdsuccess;
     }
@@ -143,7 +143,7 @@ public class PrologFlora extends FloraConstants
 	    //cmdsuccess = engine.command(cmd);
 	}
 	catch(IPException e) {
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Command "+ cmd + " failed\n", e);
+	    throw new FlrException("Command "+ cmd + " failed", e);
 	}
         return cmdsuccess;
     }
@@ -162,7 +162,7 @@ public class PrologFlora extends FloraConstants
 	    //cmdsuccess = engine.command(cmd);
 	}
 	catch(IPException e) {
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Command "+ cmd + " failed\n", e);
+	    throw new FlrException("Command "+ cmd + " failed", e);
 	}
         return cmdsuccess;
     }
@@ -187,11 +187,11 @@ public class PrologFlora extends FloraConstants
     	for (int i=0; i<vars.size(); i++) {
     		String floravar = vars.elementAt(i);
     		if (!floravar.startsWith("?"))
-    			throw new FlrException("\n*** Java-FLORA-2 interface: Illegal variable name "
+    			throw new FlrException("Illegal variable name "
     					+ floravar
     					+ ". Variables passed to ExecuteQuery "
     					+ "must be FLORA-2 variables and "
-    					+ "start with a `?'\n");
+    					+ "start with a `?'");
     		if (i > 0)
     			varsString += ",";
     		if (floravar.equals("?XWamState"))
@@ -227,7 +227,7 @@ public class PrologFlora extends FloraConstants
 	    return solutions;
 	}
 	catch(Exception e) {
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in query "+cmd+"\n", e);
+	    throw new FlrException("Error in query "+cmd, e);
 	    //return null;
 	}
     }
@@ -256,7 +256,7 @@ public class PrologFlora extends FloraConstants
 	    return engine.deterministicGoal(sb.toString());
 	}
 	catch(IPException e) {
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Command " + cmd + " failed\n", e);
+	    throw new FlrException("Command " + cmd + " failed", e);
 	}
     }
 
@@ -341,11 +341,11 @@ public class PrologFlora extends FloraConstants
 	String PrologBinDir = PrologRootDir + File.separator + "xsb";
 
         if(PrologRootDir == null || PrologRootDir.trim().length() == 0)
-            throw new FlrException("\n*** Java-FLORA-2 interface: Must define PROLOGDIR property\n");
+            throw new FlrException("Must define PROLOGDIR property");
         
         String FloraRootDir;	
 	if (CmdFloraRootDir == null || CmdFloraRootDir.trim().length() == 0) {
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Must define FLORADIR property\n");
+	    throw new FlrException("Must define FLORADIR property");
 	    }
 	else
 	    FloraRootDir = CmdFloraRootDir;
@@ -366,7 +366,7 @@ public class PrologFlora extends FloraConstants
 		isNative = true;
 	    }
 	    catch(Throwable e) {
-		throw new FlrException("\n*** Java-FLORA-2 interface: InterProlog failed to start its Native Engine\n", e);
+		throw new FlrException("InterProlog failed to start its Native Engine", e);
 	    }
 	} else {
 	    try {
@@ -409,7 +409,7 @@ public class PrologFlora extends FloraConstants
 		    }
 	    }
 	    catch(Exception e2) {
-		throw new FlrException("\n*** Java-FLORA-2 interface: InterProlog failed to start its SubProcess Engine\n", e2);
+		throw new FlrException("InterProlog failed to start its SubProcess Engine", e2);
 	    }
 	}
 	initCommandStrings(FloraRootDir);
