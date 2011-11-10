@@ -38,7 +38,8 @@ exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
     	      depcheck_control.flr \
               encap_mod1.flr encap_mod2.flr encap_syntax_check.flr \
               error_invalidsym.flr error_dynmod.flr \
-              error_nonvar.flr error_nonvar2.flr error_nonvar3.flr"
+              error_nonvar.flr error_nonvar2.flr error_nonvar3.flr \
+	      test_func_modulebar.flr"
 
 
 # Test if element is a member of exclude list
