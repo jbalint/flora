@@ -120,6 +120,7 @@ flora_defeat_condition_wrapper(+File,+Line,+DefeatCond,+VarList,+VarnameList,+Dy
 	  If DynHead != NULL, then VarList and VarnameList are vars
 	  in the static head.
 *****************************************************************************/
+/*
 flora_defeat_condition_wrapper(File,Line,DefeatCond,VarList,VarnameList,DynHead) :-
 	(ground(VarList) -> true
 	; issue_nongroundedness_error(File,Line,VarList,VarnameList)
@@ -127,6 +128,25 @@ flora_defeat_condition_wrapper(File,Line,DefeatCond,VarList,VarnameList,DynHead)
 	check_dynamic_rule_head_for_groundedness(File,Line,DynHead),
 	!,
 	DefeatCond.
+*/
+/* This version of flora_defeat_condition_wrapper takes a new approach:
+   If undefeated is true DefeatCond), then nongroundedness does not
+   matter - the answer is correct since the meaning is 
+         not exists varsOf(rule-tag) defeated(rule-tag))
+   If DefeatCond is false, there exist values for varsOf(rule-tag) such that
+   defeated(rule-tag) is true. In this case, we cannot return a correct answer,
+   so we issue an error.
+*/
+flora_defeat_condition_wrapper(File,Line,DefeatCond,VarList,VarnameList,DynHead) :-
+	%% Note: for safety should be DefeatCond->true,
+	%% but this cuts over tables. Somehow it works without the ->true.
+	(DefeatCond
+	; check_dynamic_rule_head_for_groundedness(File,Line,DynHead),
+	    (ground(VarList) -> true
+	    ; issue_nongroundedness_error(File,Line,VarList,VarnameList)
+	    ),
+	    fail
+	).
 
 issue_nongroundedness_error(_,_,[],[]) :- !.
 issue_nongroundedness_error(File,Line,[Var|VarList],[VarName|VarnameList]) :-
