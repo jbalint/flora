@@ -19,11 +19,22 @@
 
 :- compiler_options([xpp_on]).
 #include "flora_terms.flh"
+#include "flora_exceptions.flh"
 
 %% These wrappers do HiLog/Prolog conversion.
 
-:- export FLLIBCATCH/3, FLLIBTHROW/1.
 :- import P2H_PREDICATE/4 from prolog2hilog.
+:- import flora_decode_goal_as_atom/2 from flrdecode.
+:- import
+	flora_abort/2
+   from flrporting.
+:- import flora_runtime_limits_registry/3 from flrregistry.
+
+:- export FLLIBCATCH/3, FLLIBTHROW/1.
+
+:- export
+	flora_clear_timeout/0,
+	flora_set_timeout/2.
 
 
 FLLIBCATCH(Goal, Error, Handler) :-
@@ -33,3 +44,35 @@ FLLIBCATCH(Goal, Error, Handler) :-
 FLLIBTHROW(Error) :-
 	P2H_CONVERSION(ErrorPrlg,Error),
 	throw(ErrorPrlg).
+
+:- import '_$_$_flora_in_timed_call'/1 from usermod.
+
+fail_on_timeout(_) :- fail.
+abort_on_timeout(Goal) :-
+	(retract('_$_$_flora_in_timed_call'(true)),! ; true),
+	flora_decode_goal_as_atom(Goal,GAtom),
+	flora_runtime_limits_registry(timeout,Time,_),
+	SecTime is round(Time/1000),
+	flora_abort(['timeout (',Time,' seconds) in query ', GAtom],
+		    FLORA_ABORT_NOTRACE).
+
+
+flora_set_timeout(Time,_) :-
+	\+number(Time),
+	!,
+	flora_abort(['nonnumber passed as a timeout value, ', Time],
+		    FLORA_ABORT_NOTRACE).
+flora_set_timeout(Time,fail) :-
+	flora_clear_timeout,
+	MSecTime is round(Time*1000),
+	assert(flora_runtime_limits_registry(timeout,MSecTime,fail_on_timeout(_))).
+flora_set_timeout(Time,abort) :-
+	flora_clear_timeout,
+	MSecTime is round(Time*1000),
+	assert(flora_runtime_limits_registry(timeout,MSecTime,abort_on_timeout(_))).
+flora_set_timeout(_,Action) :-
+	flora_abort(['unsupported timeout action, ', Action,
+		     '; supported actions are fail or abort'],
+		    FLORA_ABORT_NOTRACE).
+flora_clear_timeout :-
+	retractall(flora_runtime_limits_registry(_,_,_)).

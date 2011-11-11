@@ -75,6 +75,9 @@
 	flora_switch/1
    from flrdebugger.
 
+:- import
+	flora_runtime_limits_registry/3
+   from flrregistry.
 
 
 /********************************************************************/
@@ -233,9 +236,19 @@ flora_write_Yes_or_Unknown(XWamState) :-
 %% flora_call is a wrapper around XSB call
 %% Used only in top-level queries
 %% If XWamState = 0, the answer is true. Otherwise: undefined
+:- dynamic '_$_$_flora_in_timed_call'/1.
 flora_call(Goal,NVs,XWamState) :- 
     	flora_handle_trace,
-    	call(Goal),
+	(\+('_$_$_flora_in_timed_call'(true)),
+	  flora_runtime_limits_registry(timeout,Time,Handler)
+	->
+	    arg(1,Handler,Goal),
+	    assert('_$_$_flora_in_timed_call'(true)),
+	    timed_call(Goal,Time,Handler),
+	    (retract('_$_$_flora_in_timed_call'(true)),! ; true)
+	;
+	    call(Goal)
+	),
 	FL_SILENT_ISACYCLIC(Goal),
 	xwam_state(DELAY_REG,XWamState),
 	FLDELAYSUPPORTMOD:FLORA_DELAY_CHECKER(NVs,[]),
@@ -243,6 +256,7 @@ flora_call(Goal,NVs,XWamState) :-
 	flora_handle_end_of_call.
 
 flora_call(_Goal,_NVs,_XWamState) :-
+	(retract('_$_$_flora_in_timed_call'(true)),! ; true),
 	flora_handle_notrace,
 	fail.
 
