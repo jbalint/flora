@@ -21,20 +21,41 @@
 #include "flora_terms.flh"
 #include "flora_exceptions.flh"
 
+#include "flag_defs_xsb.h"
+
 %% These wrappers do HiLog/Prolog conversion.
 
 :- import P2H_PREDICATE/4 from prolog2hilog.
 :- import flora_decode_goal_as_atom/2 from flrdecode.
 :- import
+	%%flora_abort/1,
 	flora_abort/2
    from flrporting.
 :- import flora_runtime_limits_registry/3 from flrregistry.
+
+:- import
+	current_prolog_flag/2,
+	set_prolog_flag/2
+   from curr_sym.
+
+:- import
+	stat_flag/2,
+	stat_set_flag/2
+   from machine.
 
 :- export FLLIBCATCH/3, FLLIBTHROW/1.
 
 :- export
 	flora_clear_timeout/0,
 	flora_set_timeout/2.
+
+:- export
+	flora_set_subgoal_depth/3,
+	flora_subgoal_depth/3,
+	flora_set_answer_depth/3,
+	flora_answer_depth/3,
+	flora_set_unification_mode/1,
+	flora_unification_mode/1.
 
 
 FLLIBCATCH(Goal, Error, Handler) :-
@@ -45,6 +66,8 @@ FLLIBTHROW(Error) :-
 	P2H_CONVERSION(ErrorPrlg,Error),
 	throw(ErrorPrlg).
 
+
+/***************** timeout handling ****************************************/
 :- import '_$_$_flora_in_timed_call'/1 from usermod.
 
 fail_on_timeout(_) :-
@@ -55,7 +78,7 @@ abort_on_timeout(Goal) :-
 	flora_decode_goal_as_atom(Goal,GAtom),
 	flora_runtime_limits_registry(timeout,Time,_),
 	SecTime is round(Time/1000),
-	flora_abort(['timeout (',Time,' seconds) in query ', GAtom],
+	flora_abort(['timeout (',SecTime,' seconds) in query ', GAtom],
 		    FLORA_ABORT_NOTRACE).
 
 
@@ -78,3 +101,76 @@ flora_set_timeout(_,Action) :-
 		    FLORA_ABORT_NOTRACE).
 flora_clear_timeout :-
 	retractall(flora_runtime_limits_registry(_,_,_)).
+
+
+/***************** termdepth handling *************************************/
+
+%% Number 0 means maximum_integer
+%% so, to clear call flora_set_subgoal_depth(0,0,_).
+flora_set_subgoal_depth(TermDepth,ListDepth,abort) :-
+	!,
+	convert_depth_args(TermDepth,ListDepth,TermDepthOut,_ListDepthOut),
+	set_prolog_flag(max_table_subgoal_depth, TermDepthOut),
+	%%set_prolog_flag(max_table_subgoal_list_depth, ListDepthOut),
+	set_prolog_flag(max_table_subgoal_action,error).
+flora_set_subgoal_depth(TermDepth,ListDepth,fail) :-
+	convert_depth_args(TermDepth,ListDepth,TermDepthOut,_ListDepthOut),
+	set_prolog_flag(max_table_subgoal_depth, TermDepthOut),
+	%%set_prolog_flag(max_table_subgoal_list_depth, ListDepthOut),
+	set_prolog_flag(max_table_subgoal_action,failure),
+	!.
+flora_set_subgoal_depth(_,_,Action) :-
+	flora_abort(['unsupported subgoal depth limit action, ', Action,
+		     '; supported actions are fail or abort'],
+		    FLORA_ABORT_NOTRACE).
+
+flora_subgoal_depth(TermDepth,_ListDepth,Action) :-
+	current_prolog_flag(max_table_subgoal_depth,TermDepth),
+	%%current_prolog_flag(max_table_subgoal_list_depth,ListDepth),
+	current_prolog_flag(max_table_subgoal_action,Action).
+
+flora_set_answer_depth(TermDepth,ListDepth,error) :-
+	!,
+	convert_depth_args(TermDepth,ListDepth,TermDepthOut,ListDepthOut),
+	set_prolog_flag(max_table_answer_depth, TermDepthOut),
+	set_prolog_flag(max_table_answer_list_depth, ListDepthOut),
+	set_prolog_flag(max_table_answer_action,error).
+flora_set_answer_depth(TermDepth,ListDepth,failure) :-
+	convert_depth_args(TermDepth,ListDepth,TermDepthOut,ListDepthOut),
+	set_prolog_flag(max_table_answer_depth, TermDepthOut),
+	set_prolog_flag(max_table_answer_list_depth, ListDepthOut),
+	set_prolog_flag(max_table_answer_action,failure).
+flora_set_answer_depth(_,_,Action) :-
+	flora_abort(['unsupported answer depth limit action, ', Action,
+		     '; supported actions are fail or abort'],
+		    FLORA_ABORT_NOTRACE).
+
+flora_answer_depth(TermDepth,ListDepth,Action) :-
+	current_prolog_flag(max_table_answer_depth,TermDepth),
+	current_prolog_flag(max_table_answer_list_depth,ListDepth),
+	current_prolog_flag(max_table_answer_action,Action).
+
+convert_depth_args(TermDepth,ListDepth,TermDepthOut,ListDepthOut) :-
+	((\+number(TermDepth) ; TermDepth<0)
+	-> flora_abort(['invalid maximum term depth requested, ',TermDepth],
+		       FLORA_ABORT_NOTRACE)
+	; (\+number(ListDepth) ; ListDepth<0)
+	-> flora_abort(['invalid maximum list lenght requested, ',ListDepth],
+		       FLORA_ABORT_NOTRACE)
+	; true
+	),
+	(TermDepth==0 -> TermDepthOut=maximum_integer; TermDepthOut=TermDepth),
+	(ListDepth==0 -> ListDepthOut=maximum_integer; ListDepthOut=ListDepth).
+
+
+/***************** occurs check handling *************************************/
+flora_set_unification_mode(correct) :-
+	stat_set_flag(UNIFY_WITH_OCCURS_CHECK_FLAG,1).
+flora_set_unification_mode(fast) :-
+	stat_set_flag(UNIFY_WITH_OCCURS_CHECK_FLAG,0).
+
+flora_unification_mode(X) :-
+	stat_flag(UNIFY_WITH_OCCURS_CHECK_FLAG,F),
+	(F==1 -> X=correct
+	; X=fast
+	).
