@@ -141,6 +141,7 @@
 	logforest_final_file/1.
 
 :- export
+	flora_manual_converter/2,
 	flora_logforestlow_start/0,
 	flora_logforest_start/0,
 	flora_logforestlow_start/1,
@@ -150,7 +151,9 @@
 :- dynamic hide_this_ctrace_pred/1.
 
 ?- assert(hide_this_ctrace_pred(flora_storage_module)),
-   assert(hide_this_ctrace_pred(flora_is_fdb_storage)).
+	assert(hide_this_ctrace_pred(flora_is_fdb_storage)),
+	assert(hide_this_ctrace_pred(op_synonym)).
+
 
 flora_logforestlow_start :-
 	flora_set_switch(logforest_low),
@@ -203,88 +206,71 @@ flora_logforest_end :-
 		true
 	).
 
+%% defined to manually convert the ctrace to flora format
+%% in case of failure or error
+flora_manual_converter(CFile,File) :-
+	see(CFile),
+	tell(File),
+	convert_to_flora,
+	seen,
+	told.
+
 convert_to_flora :-
 	repeat,
-	(read(Term) ->
-		true
-	;
-		abort(('[Debugger] Error while processing a log-forest trace term ', Term))
-	),
+	read(Term),
 	(Term == end_of_file, !
 	;
-		flora_decode_predicate(Term,_CallType,_ModuleName,_WrapPrefix,Wrapper,ArgList),
+		Term =.. [Pred|ArgList],
 		hide_this_ctrace(ArgList),
-		(Wrapper == tc ->
+		(Pred == tc ->
 			ArgList = [S1,S2,Stage,Counter],
-			write(call),
-			write('('),
-			write(Counter),
-			write(')[goal->${'),
+			write_list(['call(',Counter,')[goal->${']),
 			flora_write_goal(S1),
-			write('}, stage->'),
-			write(Stage),
-			write(', parent->'),
+			write_list(['}, stage->',Stage,', parent->${']),
 			flora_write_goal(S2),
-			write('].')
-		; Wrapper == na ->
+			write('}].')
+		; Pred == na ->
 			ArgList = [A,S,Counter],
-			write(answer),
-			write('('),
-			write(Counter),
-			write(')[goal->${'),
+			write_list(['answer(',Counter,')[goal->${']),
 			flora_write_goal(S),
-			write('}, answer->'),
-			write(A),
-			write('].')
-		; Wrapper == ar ->
+			write('}, answer->${'),
+			flora_write_goal(A),
+			write('}].')
+		; Pred == ar ->
 			ArgList = [A,S,ST,Counter],
-			write(answer_to_consumer),
-			write('('),
-			write(Counter),
-			write(')[goal->${'),
+			write_list(['answer_to_consumer(',Counter,')[goal->${']),
 			flora_write_goal(S),
-			write('}, answer->'),
-			write(A),
-			write(', consumer->{'),
+			write('}, answer->${'),
+			flora_write_goal(A),
+			write('}, consumer->${'),
 			flora_write_goal(ST),
 			write('}].')
-		; Wrapper == cmp ->
+		; Pred == cmp ->
 			ArgList = [S,SCCNum,Counter],
-			write(completed),
-			write('('),
-			write(Counter),
-			write(')[goal->${'),
+			write_list(['completed(',Counter,')[goal->${']),
 			flora_write_goal(S),
-			write('}, sccnum->'),
-			write(SCCNum),
-			write('].')
-		; Wrapper == ta ->
+			write_list(['}, sccnum->',SCCNum,'].'])
+		; Pred == ta ->
 			ArgList = [Goal,Counter],
-			flora_decode_predicate(Goal,_,_,_,GoalWrapper,GoalArgList),
-			write(table_abolished),write('('),
-			write(Counter),
-			write(')[type->'),
-			(GoalWrapper == all ->
-				write('all].')
-			; GoalWrapper == pred ->
-				write('pred, predicate->'),
-				write(GoalArgList),
+			Goal =.. [GoalPred|GoalArgList],
+			write_list(['table_abolished(',Counter,')[type->',GoalPred]),
+			(GoalPred == all ->
 				write('].')
-			; GoalWrapper == subg ->
-				write('subg, goal->'),
+			; GoalPred == pred ->
+				write_list([', predicate->',GoalArgList,'].'])
+			; GoalPred == subg ->
+				write(', goal->${'),
 				GoalArgList = [GoalToAbolish],
 				flora_write_goal(GoalToAbolish),
-				write('].')
+				write('}].')
 			;
 				abort(('[Debugger] Error while processing log-forest trace '))
 			)
-		; Wrapper == err ->
+		; Pred == err ->
 			ArgList = [S,Counter],
-			write(error),write('('),
-			write(Counter),
-			write(')[goal->'),
+			write_list(['error(',Counter,')[goal->${']),
 			flora_write_goal(S),
-			write('].')
+			write('}].')
 		; 
 			abort(('[Debugger] Error while processing log-forest trace '))
 		),
@@ -294,11 +280,15 @@ convert_to_flora :-
 	!.
 convert_to_flora.
 
-%% check whether this log-forest trace should be converted into flora queriable format
+%% write a list of Prolog terms
+write_list([]).
+write_list([H|T]) :- write(H), write_list(T).
+
+%% check whether log-forest trace should be hidden
 hide_this_ctrace([]).
 hide_this_ctrace([H|T]) :-
-	flora_decode_predicate(H,_CallType,_Module,_WrapPrefix,Wrapper,_Args),
-	(hide_this_ctrace_pred(Wrapper) ->
+	H =.. [Pred|_],
+	(hide_this_ctrace_pred(Pred) ->
 		fail
 	;
 		hide_this_ctrace(T)
