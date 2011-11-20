@@ -148,11 +148,10 @@
 	flora_logforest_start/1,
 	flora_logforest_end/0.
 
-:- dynamic hide_this_ctrace_pred/1.
 
-?- assert(hide_this_ctrace_pred(flora_storage_module)),
-	assert(hide_this_ctrace_pred(flora_is_fdb_storage)),
-	assert(hide_this_ctrace_pred(op_synonym)).
+hide_this_ctrace_pred(flora_storage_module,2).
+hide_this_ctrace_pred(flora_is_fdb_storage,1).
+hide_this_ctrace_pred(op_synonym,2).
 
 
 flora_logforestlow_start :-
@@ -220,62 +219,60 @@ convert_to_flora :-
 	read(Term),
 	(Term == end_of_file, !
 	;
-		Term =.. [Pred|ArgList],
-		hide_this_ctrace(ArgList),
-		(Pred == tc ->
-			ArgList = [S1,S2,Stage,Counter],
-			write_list(['call(',Counter,')[goal->${']),
-			flora_write_goal(S1),
-			write_list(['}, stage->',Stage,', parent->${']),
-			flora_write_goal(S2),
+		(Term = tc(S1,S2,Stage,Counter) ->
+		    hide_this_ctrace([S1,S2]),
+		    write_list(['call(',Counter,')[goal->${']),
+		    flora_write_goal(S1),
+		    write_list(['}, stage->',Stage,', parent->${']),
+		    flora_write_goal(S2),
+		    write('}].')
+		; Term = na(A,S,Counter) ->
+		    hide_this_ctrace([A,S]),
+		    write_list(['answer(',Counter,')[goal->${']),
+		    flora_write_goal(S),
+		    write('}, answer->${'),
+		    flora_write_goal(A),
+		    write('}].')
+		; Term = ar(A,S,ST,Counter) ->
+		    hide_this_ctrace([A,S,ST]),
+		    write_list(['answer_to_consumer(',Counter,')[goal->${']),
+		    flora_write_goal(S),
+		    write('}, answer->${'),
+		    flora_write_goal(A),
+		    write('}, consumer->${'),
+		    flora_write_goal(ST),
+		    write('}].')
+		; Term = cmp(S,SCCNum,Counter) ->
+		    hide_this_ctrace([S]),
+		    write_list(['completed(',Counter,')[goal->${']),
+		    flora_write_goal(S),
+		    write_list(['}, sccnum->',SCCNum,'].'])
+		; Term = ta(Goal,Counter) ->
+		    hide_this_ctrace([Goal]),
+		    Goal =.. [GoalPred|GoalArgList],
+		    write_list(['table_abolished(',Counter,')[type->',GoalPred]),
+		    (GoalPred == all ->
+			write('].')
+		    ; GoalPred == pred ->
+			write_list([', predicate->',GoalArgList,'].'])
+		    ; GoalPred == subg ->
+			write(', goal->${'),
+			GoalArgList = [GoalToAbolish],
+			flora_write_goal(GoalToAbolish),
 			write('}].')
-		; Pred == na ->
-			ArgList = [A,S,Counter],
-			write_list(['answer(',Counter,')[goal->${']),
-			flora_write_goal(S),
-			write('}, answer->${'),
-			flora_write_goal(A),
-			write('}].')
-		; Pred == ar ->
-			ArgList = [A,S,ST,Counter],
-			write_list(['answer_to_consumer(',Counter,')[goal->${']),
-			flora_write_goal(S),
-			write('}, answer->${'),
-			flora_write_goal(A),
-			write('}, consumer->${'),
-			flora_write_goal(ST),
-			write('}].')
-		; Pred == cmp ->
-			ArgList = [S,SCCNum,Counter],
-			write_list(['completed(',Counter,')[goal->${']),
-			flora_write_goal(S),
-			write_list(['}, sccnum->',SCCNum,'].'])
-		; Pred == ta ->
-			ArgList = [Goal,Counter],
-			Goal =.. [GoalPred|GoalArgList],
-			write_list(['table_abolished(',Counter,')[type->',GoalPred]),
-			(GoalPred == all ->
-				write('].')
-			; GoalPred == pred ->
-				write_list([', predicate->',GoalArgList,'].'])
-			; GoalPred == subg ->
-				write(', goal->${'),
-				GoalArgList = [GoalToAbolish],
-				flora_write_goal(GoalToAbolish),
-				write('}].')
-			;
-				abort(('[Debugger] Error while processing log-forest trace '))
-			)
-		; Pred == err ->
-			ArgList = [S,Counter],
-			write_list(['error(',Counter,')[goal->${']),
-			flora_write_goal(S),
-			write('}].')
+		    ;
+			abort(['[Debugger] invalid answer type in log-forest trace ', Goal])
+		    )
+		; Term = err(S,Counter) ->
+		    hide_this_ctrace([S]),
+		    write_list(['error(',Counter,')[goal->${']),
+		    flora_write_goal(S),
+		    write('}].')
 		; 
-			abort(('[Debugger] Error while processing log-forest trace '))
+		    abort(['[Debugger] invalid entry type in log-forest trace ', Term])
 		),
-		nl,
-		fail
+	    nl,
+	    fail
 	),
 	!.
 convert_to_flora.
@@ -287,8 +284,8 @@ write_list([H|T]) :- write(H), write_list(T).
 %% check whether log-forest trace should be hidden
 hide_this_ctrace([]).
 hide_this_ctrace([H|T]) :-
-	H =.. [Pred|_],
-	(hide_this_ctrace_pred(Pred) ->
+	functor(H,Pred,Arity),
+	(hide_this_ctrace_pred(Pred,Arity) ->
 		fail
 	;
 		hide_this_ctrace(T)
