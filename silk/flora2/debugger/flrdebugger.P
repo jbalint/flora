@@ -22,6 +22,7 @@
 #include "flag_defs_xsb.h"
 
 #include "flrheader.flh"
+#include "flora_exceptions.flh"
 #include "flora_terms.flh"
 
 
@@ -46,6 +47,7 @@
 :- import '_isloaded'/1 from flora2.
 
 :- import
+	flora_abort/2,
 	flora_concat_atoms/2,
 	flora_slash/1,
 	flora_set_counter/2,
@@ -203,7 +205,7 @@ flora_logforest_end :-
 		retractall(logforest_tmp_file(TmpFile)),
 		(retractall(logforest_final_file(File)) ; true)
 	;
-		true
+		fail
 	).
 
 %% defined to manually convert the ctrace to flora format
@@ -261,7 +263,7 @@ convert_to_flora :-
 			flora_write_goal(GoalToAbolish),
 			write('}].')
 		    ;
-			abort(['[Debugger] invalid answer type in log-forest trace ', Goal])
+			flora_abort(['[Debugger] invalid answer type in log-forest trace ', Goal], FLORA_ABORT_NOTRACE)
 		    )
 		; Term = err(S,Counter) ->
 		    hide_this_ctrace([S]),
@@ -269,7 +271,7 @@ convert_to_flora :-
 		    flora_write_goal(S),
 		    write('}].')
 		; 
-		    abort(['[Debugger] invalid entry type in log-forest trace ', Term])
+		    flora_abort(['[Debugger] invalid entry type in log-forest trace ', Term], FLORA_ABORT_NOTRACE)
 		),
 	    nl,
 	    fail
@@ -474,7 +476,9 @@ flora_handle_notrace :-
 %% by the debugger and avoid traicing inside 
 %% assert(flora_switch(low_level_trace))
 flora_set_switch(Switch) :-
-	assert(flora_switch(Switch)).
+	(flora_switch(Switch) -> fail
+	; assert(flora_switch(Switch))
+	).
 flora_clear_switch(Switch) :-
 	retractall(flora_switch(Switch)).
 
@@ -514,7 +518,7 @@ flora_read_debugger_data(WS,Datafile) :-
 	    ),
 	process_control(CPP_process, wait(ExitStatus)),
 	(ExitStatus==0, !
-	; abort(('[Debugger] Error while preprocessing ', Datafile))
+	; flora_abort(['[Debugger] Error while preprocessing ',Datafile],FLORA_ABORT_NOTRACE)
 	),
 	flora_clear_xpp_options,
 	close(IOportFromCPP),
