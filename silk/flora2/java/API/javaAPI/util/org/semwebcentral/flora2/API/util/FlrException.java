@@ -24,6 +24,9 @@
 **
 ** 
 */
+// TODO:  consider adding fields for error, floraMessage, and backtrace
+// TODO:  move to org.semwebcentral.flora2.API package
+// TODO:  make this a real Exception
 
 package org.semwebcentral.flora2.API.util;
 
