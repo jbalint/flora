@@ -280,7 +280,7 @@ public class PrologFlora extends FloraConstants
     		TermModel tm = (TermModel)solutions[0];
     		objName = PrologFlora.findValue(tm,"?Ex");
     		if (objName == null)
-    			throw new FlrException("Flora returned no exception info - probably a bug ");
+    			throw new FlrException("Flora returned no exception info - probably a bug");
     		else if (objName.node instanceof String) {
     			if (objName.toString().equals("normal"))
     			    {}  //no exception
@@ -290,10 +290,10 @@ public class PrologFlora extends FloraConstants
     				throw (FlrException) ex;
     			}
     			else
-    				throw new FlrException(objName.toString());
+    				throw new FlrException(objName.node + ": " + ((TermModel) objName.getChild(0)).node); // skip getChild(1) XSB backtrace (list of list of large integers)
     		}
     		else
-    			throw new FlrException("Flora returned non- standard exception info - probably a bug - " + objName.toString());
+    			throw new FlrException("Flora returned non-standard exception info - probably a bug - " + objName.toString());
     	}
     }
     
