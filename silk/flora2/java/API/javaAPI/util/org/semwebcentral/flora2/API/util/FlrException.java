@@ -34,7 +34,7 @@ package org.semwebcentral.flora2.API.util;
  * This includes exceptions returned by Flora of the form error(Error, Message, Backtrace).
  */
 public class FlrException extends RuntimeException{
-    private static final long serialVersionUID = 1;
+    private static final long serialVersionUID = 2;
 
     /**
      * Flora error.
