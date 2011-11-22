@@ -24,15 +24,32 @@
 **
 ** 
 */
-// TODO:  consider adding fields for error, floraMessage, and backtrace
 // TODO:  move to org.semwebcentral.flora2.API package
 // TODO:  make this a real Exception
 
 package org.semwebcentral.flora2.API.util;
 
-/** An Exception related to Flora processing in general */
+/** 
+ * An Exception related to Flora processing in general.
+ * This includes exceptions returned by Flora of the form error(Error, Message, Backtrace).
+ */
 public class FlrException extends RuntimeException{
     private static final long serialVersionUID = 1;
+
+    /**
+     * Flora error.
+     */
+    Object error;
+
+    /**
+     * Flora message.
+     */
+    Object floraMessage;
+
+    /**
+     * XSB backtrace (a list of list of large integers).
+     */
+    Object backtrace;
     
     public FlrException(String message){
 	super(message);
@@ -41,5 +58,33 @@ public class FlrException extends RuntimeException{
     public FlrException(String message, Throwable cause){
 	super(message, cause);
     }
-}
 
+    /**
+     * Constructs a FlrException from the components of an exception returned by Flora.
+     * @param error
+     * @param floraMessage
+     * @param backtrace
+     */
+    public FlrException(Object error, Object floraMessage, Object backtrace)
+    {
+    	super(error + ": " + floraMessage);
+    	this.error = error;
+    	this.floraMessage = floraMessage;
+    	this.backtrace = backtrace;
+    }
+
+    public Object getError()
+    {
+    	return error;
+    }
+
+    public Object getFloraMessage()
+    {
+    	return floraMessage;
+    }
+    
+    public Object getBacktrace()
+    {
+    	return backtrace;
+    }
+}

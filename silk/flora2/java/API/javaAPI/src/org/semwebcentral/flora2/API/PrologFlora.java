@@ -290,7 +290,9 @@ public class PrologFlora extends FloraConstants
     				throw (FlrException) ex;
     			}
     			else
-    				throw new FlrException(objName.node + ": " + ((TermModel) objName.getChild(0)).node); // skip getChild(1) XSB backtrace (list of list of large integers)
+				throw new FlrException(objName.node,
+						       ((TermModel) objName.getChild(0)).node,
+						       ((TermModel) objName.getChild(1)).node);
     		}
     		else
     			throw new FlrException("Flora returned non-standard exception info - probably a bug - " + objName.toString());
