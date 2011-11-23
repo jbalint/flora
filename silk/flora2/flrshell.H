@@ -124,6 +124,8 @@
 	flora_logforest_start/0,
 	flora_logforestlow_start/1,
 	flora_logforest_start/1,
+	flora_logforestlow_start/2,
+	flora_logforest_start/2,
 	flora_logforest_end/0
    from flrdebugger.
 
