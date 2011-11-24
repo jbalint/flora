@@ -5656,6 +5656,445 @@ cutting across tables will still be prohibited, it will provide an
 alternative mechanism that achieves many of the goals a cut is currently  used for.
 
 
+\section{User Defined Functions} \label{sec:udf}
+
+
+\index{user defined functions}
+\index{equality with user defined functions}
+%%
+User-defined functions (abbr., UDF) is syntactic sugar that permits the users to enjoy
+certain aspects of functional programming in the framework of a logic-based
+language.
+ 
+
+\subsection{Syntax}\label{sec-udf}
+\index{function}
+\index{if}
+\index{:=}
+%%
+To define a UDF in
+\FLORA, one uses the following syntax:
+
+%%
+\begin{alltt}
+    function foo(t1,...,tn):=Expr if Body.
+\end{alltt}
+%%
+
+\noindent
+\texttt{Expr} is a term, and \texttt{Body} can be any formula that can be
+used as a rule body.
+The ``\texttt{if Body}'' part is optional.
+The arguments of the UDF \texttt{foo} are
+terms, which usually are distinct variables.
+
+\texttt{Expr} and Body can contain occurrences of other UDFs, but those
+UDFs must be defined previously. At first, this suggests that
+mutually-recursive UDFs cannot be defined. However, this is not the case,
+as will be explained shortly.
+
+\paragraph{Example.}
+The following simple example defines \texttt{father/1} as a function.
+%%
+\begin{alltt}
+    function father(?x):=?y if father(?x,?y).
+    father(mary,tom).
+    father(john,sam).
+\end{alltt}
+%%
+
+So, instead of writing \texttt{father(John,?y)}  and then using \texttt{?y}
+one can simply write \texttt{father(?John)}:  
+%%
+\begin{alltt}
+    ?- ?y=father(?x)
+\end{alltt}
+%%
+will return
+%%
+\begin{alltt}
+    ?x=mary
+    ?y=tom
+
+    ?x=john
+    ?y=sam
+\end{alltt}
+%%
+The query
+%%
+\begin{alltt}
+    ?- %writeln(father(mary))@_io.
+\end{alltt}
+%%
+will output
+%%
+\begin{alltt}
+    tom
+\end{alltt}
+%%
+
+\paragraph{Mutual recursion in UDF definitions.}
+It was mentioned that any UDF that occur in a definition of another UDF
+must be defined previously. However, this does not mean that mutually
+recursive UDFs cannot be defined: one should just exercise care.
+
+First, we should make it clear that recursive UDFs by themselves do not
+pose problems and can be used freely.  For example, in
+%% 
+\begin{verbatim}
+    function foo(...) := Expr if Body.
+\end{verbatim}
+%% 
+A more complex situation arises when we have mutual recursion, as in
+%% 
+\begin{verbatim}
+    function foo(...) := Expr-cannot-contain-bar if Body-contains-bar.
+    function bar(...) := Expr-can-contain-foo if Body-might-contain-foo.
+\end{verbatim}
+%% 
+This is not allowed, because \texttt{bar} is used in
+\texttt{Body-contains-bar} before it was defined.
+But there is a simple workaround: we can introduce a
+temporary predicate as follows:
+%% 
+\begin{verbatim}
+    function foo(...) := Expr-cannot-contain-bar if tempfoo(...).
+    function bar(...) := Expr-can-contain-foo if Body-can-contain-foo.
+    tempfoo(...) :- Body-contains-bar.
+\end{verbatim}
+%% 
+In this latter case, all uses of UDFs are defined previously, and UDFs are
+still mutually recursive. If \texttt{foo} has more than one
+\texttt{function}-clause and one of the clauses does not involve
+\texttt{bar} then one does not even need to introduce temporary predicates. For
+instance, the following is legal:   
+%% 
+\begin{verbatim}
+    function foo(...) := Expr-does-not-contain-bar if Body-does-not-contain-bar.
+    function bar(...) := Expr-can-contain-foo if Body-can-contain-foo.
+    function foo(...) := Expr-can-contain-bar if Body-can-contain-bar.
+\end{verbatim}
+%% 
+Here the first clause declares \texttt{foo} as a UDF, so the compiler is
+able to handle \texttt{foo} correctly in the second clause despite the fact
+that \texttt{foo} has not been fully defined yet at that point. 
+
+\paragraph{UDFs and modules.}
+A UDF definition is a purely compile-time directive. It has an effect from
+the moment the function is defined till the end of the file (which extends
+through to
+all the files included using the \texttt{\#include} preprocessor
+directive). This implies that UDFs that occur inside calls to other FLORA-2
+modules are subject to the directives of the module where the functions
+occur, not in the module that is being called. For instance, 
+%%
+\begin{alltt}
+    function func1(?x) := ?y if pred1(?x,?y).
+    p(?x) :- q(func1(?x))@bar.
+    pred1(c,a).
+\end{alltt}
+%%
+Here \texttt{func1} will be compiled according to the function definition
+shown above. If the module \texttt{bar} has another definition for
+\texttt{func1}, that definition has no effect on the above occurrence of
+\texttt{func1(?x)}.   Thus, the query
+%%
+\begin{alltt}
+?- p(c).
+\end{alltt}
+%%
+results in a call to q(func1(c))@bar, and since \texttt{func1(c)} is
+defined to be \texttt{a} this is tantamount to executing the query  
+%%
+\begin{alltt}
+?- q(a).
+\end{alltt}
+%%
+Note that, since function definitions can contain anything that constitutes
+a function body, calls to other modules are allowed. For instance, 
+%%
+\begin{alltt}
+    function foo(?x):=?y if pred(?x,?y)@bar, pred(?x,?y,?z)@moo, q(?z).
+\end{alltt}
+%%
+
+\paragraph{Advanced examples.}
+One of the most interesting examples of the use of UDFs arises when we
+define arithmetic operations as functions. For instance, normally one would
+write
+%% 
+\begin{verbatim}
+    ?- ?x is 1+2, %writeln(?x)@_io.
+\end{verbatim}
+%% 
+but with UDFs we can define ``+'' as a function:
+%% 
+\begin{verbatim}
+    function ?x+?y := ?z if ?z is ?x+?y.
+\end{verbatim}
+%% 
+and then issue the following query:
+%% 
+\begin{verbatim}
+    ?- %writeln(1+2)@_io.
+\end{verbatim}
+%% 
+The following example shows how we can define the Fibonacci function:
+%% 
+\begin{verbatim}
+    function ?x+?y := ?z if ?z is ?x+?y.
+    function ?x-?y := ?z if ?z is ?x-?y.
+    function fib(0) := 0.
+    function fib(1) := 1.
+    function fib(?x) := fib(?x-1)+fib(?x-2) if ?x>1.
+\end{verbatim}
+%% 
+
+We can now ask the query
+%% 
+\begin{verbatim}
+    ?- %writeln(fib(34))@_io.
+\end{verbatim}
+%% 
+Note that the above example also illustrates that a definition of a UDF can
+consist of multiple \texttt{function}-statements---just like a definition
+of a predicate can have multiple rules. 
+
+
+\subsection{How It Works}
+
+The functional notation is just a syntactic sugar. A function definition
+of the form
+%%
+\begin{alltt}
+    function foo(t1,...,tn) := Expr if Body
+\end{alltt}
+%%
+is converted into the rule
+%% 
+\begin{verbatim}
+    newpred_foo(t1,...,tn,Expr) :- Body.
+\end{verbatim}
+%% 
+Then every occurrence of the function in a rule head
+%% 
+\begin{verbatim}
+    head(...,foo(s1,...,sn),...) :- rulebody.
+\end{verbatim}
+%% 
+is rewritten into
+%% 
+\begin{verbatim}
+    head(...,?newvar,...) :- newpred_foo(s1,...,sn,?newvar), rulebody.
+\end{verbatim}
+%% 
+In the rule body, the occurrences of foo(s1,...,sn) are rewritten as
+follows:
+%% 
+\begin{verbatim}
+    ... :- ..., pred(...,foo(s1,...,sn),...), ...
+\end{verbatim}
+%% 
+is changed to
+%% 
+\begin{verbatim}
+    ... :- ..., newpred_foo(s1,...,sn,?newvar), pred(...,?newvar,...), ...
+\end{verbatim}
+%% 
+
+
+\subsection{Representing equality with user defined functions}
+\index{equality}
+
+An important application of UDFs is simulation of certain cases of
+equality.
+Simulating equality using UDFs is \emph{orders of magnitude more
+  efficient}.  
+The equality that can be simulated in this way must be such
+that all terms that one wants to equate must be explicitly given at
+compile time. For instance, a term or its main function symbol cannot be
+represented by a variable (e.g., \texttt{?X} or \texttt{?X(?y,?z)})  and
+determined only at run time.
+Also, if the system of UDF definitions is not \emph{confluent} 
+(confluence is also known as the Church-Rosser property) then
+the fundamental property of
+substitutivity of equals by equals cannot be guaranteed.
+
+
+For instance, equality of the following kind $\tt ?x=abc, ?x(pqr) :=: cde$
+cannot be simulated because the term \texttt{abc(pqr)} that is equated to
+\texttt{cde} here is not explicitly given at compile time.  
+
+To illustrate the cases where simulation is possible, suppose we want to
+state that any occurrence of \texttt{foo(?x)} should be equated to (rewritten
+into) \texttt{bar(?x)} if \texttt{pred(?x)} is true and \texttt{?x>2}: 
+%%
+\begin{alltt}
+    function foo(?x):=bar(?x) if  pred(?x), ?x>2.
+    pred(1).
+    pred(2).
+    pred(3).
+    pred(5).
+\end{alltt}
+%%
+
+If we ask query
+%%
+\begin{alltt}
+    ?- foo(?x)=bar(?x)
+\end{alltt}
+%%
+The answers will be
+%%
+\begin{alltt}
+    ?x=2
+    ?x=3
+\end{alltt}
+%%
+
+
+Here are some very simple, but useful examples of equality: rather than
+writing things like
+%% 
+\begin{verbatim}
+    foo(1) :=: 3.
+    foo(4) :=: 7.
+\end{verbatim}
+%% 
+we can instead define
+%%
+\begin{alltt}
+    function foo(1):=3.
+    function foo(4):=7.
+\end{alltt}
+%%
+The latter does not involve complex equality maintenance and is much more
+efficient.
+
+The following example illustrates the issue of non-confluence of the
+equality through UDFs. Consider the following definitions:
+%% 
+\begin{verbatim}
+    function a := b.
+    function c := d.
+    function a := c.
+\end{verbatim}
+%% 
+and suppose \texttt{p(d)} is true. Then we can derive that \texttt{p(a)}
+and \texttt{p(c)} is true, but not that \texttt{p(b)} is true.    
+
+Note that if instead of \texttt{p(d)} we had \texttt{p(a)} then all these
+would be true: \texttt{p(b)}, \texttt{p(c)}, \texttt{p(d)}.
+This shows that one can go a long way
+with simulation of equality through UDFs, but care must be exercised.
+For example, if the set of UDF definitions is not confluent then
+substitution of equals by equals is not always guaranteed.
+
+
+\section{Controlling Context of Symbols} \label{sec:symbol}
+
+\index{symbol}
+\index{symbol_context}
+
+Using the same symbol in different contexts in the same program can be
+useful, but often can be the result of a typo, and such errors is very hard
+to catch. Examples of different contexts include the use of the same symbol
+as a function symbol and as a predicate, as a regular function symbol and a
+UDF, and even the uses of the same symbol with different arities.
+
+\FLORA checks if the same symbol appears in different contexts
+and issues warnings if it finds such uses. For instance, in
+%%
+\begin{alltt}
+	p(?x,?y,?z):-q(?x,?y,?z).
+	p(?x):-t(?x).
+\end{alltt}
+%%
+the predicate \texttt{p} is used with arity 3 and 1, which may or may not be a
+mistake. In the following,
+%%
+\begin{alltt}
+	p(?x):-q(?x).
+	f(p(?x,?y)):-t(?x).
+\end{alltt}
+%%
+\texttt{p} occurs both as a predicate and a function symbol, and with
+different arities on top. In the next example we encounter the symbol
+\texttt{f} in the role of a UDF and also as a predicate:  
+%%
+\begin{alltt}
+	function f(?x):=?y if ff(?x,?y).
+	t(?x):-f(?x).
+\end{alltt}
+%%
+and, in the next example, \texttt{tp} has both transactional and
+non-transactional occurrences. 
+%%
+\begin{alltt}
+	%tp(?x,?y):-s(?x,?y).
+	tp(?x,?y,?z):-q(?x,?y,?z).
+\end{alltt}
+%%
+UDFs are also not allowed to have the same name as FLORA-2 builtins, such
+as \texttt{atom/1}, \texttt{ground/1} and the like.  
+
+
+\index{symbol_context}
+In all these cases, warnings will be issued. However, the user can turn off
+the warnings that she believes not to indicate an error. This is done with
+the help of the directive
+\texttt{symbol\_context}.  The syntax is the following
+%%
+\begin{alltt}
+:- symbol_context \textnormal{\emph{comma-separated-list-of-terms}}
+\end{alltt}
+%%
+
+The terms in the aforementioned list can be function symbols, predicates,
+or UDFs. For each type there is a separate idiom to indicate what is to be
+permitted.
+The legal specifications are as follows:
+\begin{enumerate}
+\item {\tt termName(?,...,?)@moduleName } --- indicates that
+  \texttt{termName} is a predicate in module \texttt{moduleName}.  
+\item {\tt termName(?,...,?) } --- indicates that \texttt{termName} is a
+  term (not a predicate).
+\item {\tt udf termName(?,...,?) } --- indicates that \texttt{termName}
+  is a UDF.
+\end{enumerate}
+%%
+In the above, the arguments must be anonymous variables
+and \texttt{moduleName} can be either a module name or an anonymous variable.
+Examples:
+%%
+\begin{alltt}
+    :- symbol_context p(?,?), q(?)@?, r(?,?)@bar, udf foo(?).
+\end{alltt}
+%%
+Once this directive is issued, the compiler will no longer warn about the
+occurrences of \texttt{p} as a term with two arguments, \texttt{q} as a
+predicate with one argument in \emph{any} module, \texttt{r} as a binary
+predicate in module \texttt{bar}, and \texttt{foo} as a unary UDF.      
+
+Note that FLORA-2 issues warnings only on finding a \emph{second}
+inconsistent use of the same symbol. Since most symbols are used in just
+one context, there is no need to supply the above directive  
+in most cases. For instance, in the following
+%%
+\begin{alltt}
+    :- symbol_context p(?,?).
+    p(?x):-q(?x), t(?x).
+    f(p(?x,?y)):-t(?x).
+\end{alltt}
+%%
+one needs to notify the compiler only about \texttt{p(?,?)}, since other
+symbols  are used consistently.
+%%
+\begin{alltt}
+\end{alltt}
+%%
+
+
 \section{Updating the Knowledge Base}\label{sec-updates}
 
 
