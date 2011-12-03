@@ -45,6 +45,8 @@ CLEAN:
 	-@if exist *$(OBJEXT) erase *$(OBJEXT)
 	-@if exist *.flh erase *.fdb
 	-@if exist *.fld erase *.fld
+	-@if exist *.flt erase *.flt
+	-@if exist *.fls erase *.fls
 	-@if exist *~ erase *~
 	-@if exist *.bak erase *.bak
 	-@if exist .#* erase .#*

@@ -81,4 +81,4 @@ finish:
 	echo Done
 
 clean:
-	/bin/rm -f *${PROLOGEXT} *${PROLOGEXT}_gpp *${OBJEXT} *.O *.bak *.fdb *.fld *.con *~ .*~ .#* cmd*
+	/bin/rm -f *${PROLOGEXT} *${PROLOGEXT}_gpp *${OBJEXT} *.O *.bak *.fdb *.fld *.flt *.fls *.con *~ .*~ .#* cmd*
