@@ -50,7 +50,7 @@
 :- dynamic COMPILATION_CONTEXT(_).
 :- dynamic DYNRULE_VARLIST(_,_).
 :- dynamic user_defined_function_var_substitute(_,_,_,_,_).
-:- dynamic symbol(_,_,_,_,_,_).
+:- dynamic symbol(_,_,_,_,_,_,_).
 :- dynamic nowarn_symbol(_,_,_,_,_).
 
 
@@ -167,6 +167,9 @@ is_fltransactionalterm(FLTERM(Term,Arity,Args),Term,Arity,Args) :-
 	!.
 is_fltransactionalterm(FLTERM(F,Arity,Args),F,Arity,Args) :-
 	is_fltransactionalatom(F,_).
+
+is_flterm_or_flatom(Term,Funct,Arity,Args) :- is_flterm(Term,Funct,Arity,Args),!.
+is_flterm_or_flatom(Atom,Atom,0,[]) :- is_flatom(Atom,_),!.
 
 is_flarith(FLARITH(Expr),Expr).
 
@@ -553,6 +556,16 @@ not_struct(Goal,Code) :-
 	%% this never gives out errors, so no need for file/nline args
 	prologterm_struct(FLLIBDELAYEDLITERAL,4,
 			  [FL_DEFLTNEG,NULL,NULL,PureNotCodeList],
+			  FLDELAYSUPPORTMOD,
+			  Code).
+
+%% delay struct
+delay_struct(Args,Code) :-
+	%% delay default negation
+	list_struct(Args,[],CodeList),
+	%% this never gives out errors, so no need for file/nline args
+	prologterm_struct(FLLIBDELAYEDLITERAL,4,
+			  [FL_DELAYOP,NULL,NULL,CodeList],
 			  FLDELAYSUPPORTMOD,
 			  Code).
 
@@ -2155,48 +2168,55 @@ flora_reset_compiler :-
 
 
 /****************************************************************************
-  flora_compile_add(+ParserTerm,-RuleDiffList,-FactDiffList,-OptionList,-Status)
+  flora_compile_add(+ParserTerm,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-OptionList,-Status)
 
   This is the top level predicate that is called to compile code for
   adding code to module.
 
-  RuleDiffList is a difference list in the form of [...|T]-T. Diff lists
+  RuleDiffList is a difference list in the form of [...|R]-R. Diff lists
   are used for optimization of append.
+  FactDiffList is the same for facts
+  UDFPredsDiffList is the same for the list of tabled predicates
 ****************************************************************************/
-flora_compile_add(NULL,X-X,F-F,[],[]) :- !.
+flora_compile_add(NULL,R-R,F-F,U-U,[],[]) :- !.
 	
-flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,OptionList,Status) :-
+flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,OptionList,Status) :-
 	compile_add_internal(ParserTerm,(NULL,NULL),
-			     RuleDiffList,FactDiffList,OptionList,Status).
+			     RuleDiffList,FactDiffList,UDFPredsDiffList,OptionList,Status).
 	
 %% This rule is for debugging.
-flora_compile_add(_ParserTerm,[],[],[],[error(UNKNOWN_ERROR)]).
+flora_compile_add(_ParserTerm,[],[],[],[],[error(UNKNOWN_ERROR)]).
 
-compile_add_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,OptionList,Status) :-
+compile_add_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,OptionList,Status) :-
 	%% extract the rule number
 	flora_increment_counter(RULE_NUM,1,_,_),
 	initialize_work,
 	!,
 	( is_flrule(ParserTerm,Head,Body) ->
+	    UDFPreds=UDFPredsTail,
 	    compile_rule_add(Head,Body,LabelCode,RuleDiffList,FactDiffList,Status)
 
 	; is_flfact(ParserTerm,Head) ->
+	    UDFPreds=UDFPredsTail,
 	    compile_fact(Head,RuleDiffList,FactDiffList,Status)
 
 	; is_flquery(ParserTerm,Body) ->
+	    UDFPreds=UDFPredsTail,
 	    compile_query(Body,RuleDiffList,FactDiffList,Status)
 
 	; is_fldirective(ParserTerm,DirectList,DirctIdx) ->
+	    UDFPreds=UDFPredsTail,
 	    compile_directive_add(DirectList,DirctIdx,RuleDiffList,FactDiffList,Status)
 
 	; is_fllabeled_construct(ParserTerm,Label,Contents) ->
+	    UDFPreds=UDFPredsTail,
 	    compile_labeled_construct_add(Label,Contents,RuleDiffList,FactDiffList,Status)
 
 	; is_fludfunction(ParserTerm,Function,Body,ReturnValue) ->
-	    compile_user_defined_function(Function,Body,ReturnValue,RuleDiffList,FactDiffList,Status)
+	    compile_user_defined_function(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status)
 
 	; is_fludfunctionfact(ParserTerm,Function,Value) ->
-	    compile_user_defined_function(Function,NULL,Value,RuleDiffList,FactDiffList,Status)
+	    compile_user_defined_function(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status)
         ),
 	!,
 	get_options(OptionList),
@@ -2208,7 +2228,7 @@ compile_add_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,OptionList,S
   LabelCode has the form (LblCode, MetaCode). LblCode is NULL or an atom-object.
   MetaCode is a NULL or a list of codes.
 
-  RuleDiffList is a difference list in the form of [...|T]-T.
+  RuleDiffList is a difference list in the form of [...|R]-R.
   FactDiffList is Facts-Facts == empty diff list
   It is for the optimization of append.
 ****************************************************************************/
@@ -2226,7 +2246,7 @@ compile_rule_add(Head,Body,Label,RuleList-RuleTail,Facts-Facts,Status):-
 	%%append([Code],RuleTail,Tail).
 	RuleList = [Code|RuleTail].
 
-compile_directive_add([],_,T-T,F-F,[]) :- !.
+compile_directive_add([],_,R-R,F-F,[]) :- !.
 
 %% Facts-Facts = empty diff list
 compile_directive_add([D|L],DirIdx,RuleList-RuleTail,Facts-Facts,Status) :-
@@ -2254,34 +2274,35 @@ compile_labeled_construct_add(Label,Contents,RuleList-RuleTail,Facts,Status) :-
 	%%(Status1 == [] -> 
 	( no_errors_found(Status1) -> 
 	    compile_add_internal(Contents,(LblCode,MetaCode),
-				 RuleList1-[],Facts,_OptionList,Status),
+				 RuleList1-[],Facts,_UDFPreds,_OptionList,Status),
 	    append(RuleList1,RuleTail,RuleList)
 	;  Status = Status1
 	).
 
 
 /****************************************************************************
-  flora_compile(+ParserTerm,-RuleDiffList,-FactDiffList,-OptionList,-Status)
+  flora_compile(+ParserTerm,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-OptionList,-Status)
 
   This is the top level procedure that is called to compile code.
 
-  RuleDiffList is a rule difference list in the form of [...|T]-T.
+  RuleDiffList is a rule difference list in the form of [...|R]-R.
       It is used in order to optimize append.
   FactDiffList is the same for facts
+  UDFPredsDiffList is the same for the list of tabled predicates
 ****************************************************************************/
-flora_compile(NULL,X-X,F-F,[],[]) :- !.
+flora_compile(NULL,R-R,F-F,U-U,[],[]) :- !.
 
-flora_compile(ParserTerm,RuleDiffList,FactDiffList,OptionList,Status) :-
-	compile_internal(ParserTerm,(NULL,NULL),RuleDiffList,FactDiffList,OptionList,Status).
+flora_compile(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,OptionList,Status) :-
+	compile_internal(ParserTerm,(NULL,NULL),RuleDiffList,FactDiffList,UDFPredsDiffList,OptionList,Status).
 	
 %% This rule is for debugging.
-flora_compile(_ParserTerm,[],[],[],[error(UNKNOWN_ERROR)]).
+flora_compile(_ParserTerm,[],[],[],[],[error(UNKNOWN_ERROR)]).
 
 
 %% This does the main work
 %% LabelCode has the form (LblCode, MetaCode). LblCode is NULL or atom-object.
 %% MetaCode is a NULL or a list of codes.
-compile_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,OptionList,Status) :-
+compile_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,OptionList,Status) :-
 /*
 	writeln('------------compile_internal-----------------'),
 	writeln(ParserTerm),
@@ -2292,28 +2313,33 @@ compile_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,OptionList,Statu
 	initialize_work,
 	!,
 	( is_flrule(ParserTerm,Head,Body) ->
+	    UDFPreds=UDFPredsTail,
 	    compile_rule(Head,Body,LabelCode,RuleDiffList,FactDiffList,S),
 	    %% check whether singleton numbered anon oid exists
 	    (ruleoid(_,_,1) -> referenced_once(S,Status);  Status=S)
 
 	; is_flfact(ParserTerm,Head) ->
+	    UDFPreds=UDFPredsTail,
 	    compile_fact(Head,RuleDiffList,FactDiffList,S),
 	    (ruleoid(_,_,1) -> referenced_once(S,Status);  Status=S)
 
 	; is_flquery(ParserTerm,Body) ->
+	    UDFPreds=UDFPredsTail,
 	    compile_query(Body,RuleDiffList,FactDiffList,Status)
 
 	; is_fldirective(ParserTerm,DirectList,DirctIdx) ->
+	    UDFPreds=UDFPredsTail,
 	    compile_directive(DirectList,DirctIdx,RuleDiffList,FactDiffList,Status)
 
 	; is_fllabeled_construct(ParserTerm,Label,Contents) ->
+	    UDFPreds=UDFPredsTail,
 	    compile_labeled_construct(Label,Contents,RuleDiffList,FactDiffList,Status)
 
 	; is_fludfunction(ParserTerm,Function,Body,ReturnValue) ->
-	    compile_user_defined_function(Function,Body,ReturnValue,RuleDiffList,FactDiffList,Status)
+	    compile_user_defined_function(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status)
 
 	; is_fludfunctionfact(ParserTerm,Function,Value) ->
-	    compile_user_defined_function(Function,NULL,Value,RuleDiffList,FactDiffList,Status)
+	    compile_user_defined_function(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status)
         ),
 	!,
 	get_options(OptionList),
@@ -2344,7 +2370,7 @@ singleton_oid_warning([Index|L],WarnList,WarnTail) :-
   compile_directive(+DirectList,+DirctIdx,-RuleDiffList,-FactDiffList,-Status)
   compile_direct(+DirectTerm,+DirctIdx,-RuleList,-Status)
 ****************************************************************************/
-compile_directive([],_,T-T,F-F,[]) :- !.
+compile_directive([],_,R-R,F-F,[]) :- !.
 
 %% Facts-Facts = empty diff list
 compile_directive([D|L],DirIdx,RuleList-RuleTail,Facts-Facts,Status) :-
@@ -2614,7 +2640,7 @@ compile_sensor(SensCall,DelayCond,Code,Status) :-
 /****************************************************************************
   compile_fact(+Head,-RuleDiffList,-FactDiffList,-Status)
 
-  RuleDiffList is a difference list in the form of [...|T]-T.
+  RuleDiffList is a difference list in the form of [...|R]-R.
 		It is used to optimize append
   FactDiffList is a difference list of facts
 
@@ -2657,7 +2683,8 @@ compile_fact(Head,RuleList-RuleTail,FactList-FactTail,Status) :-
 		    check_head_vars_for_safety(Head,[],S2)
 		)
 	    ),
-	    merge_status([S,S2],Status)
+	    %%merge_status([S,S2],Status)
+	    append(S,S2,Status)
         ;
 	  Status=S
 	),
@@ -2731,7 +2758,7 @@ attrvar_code_delayed(Var,Val,AttrName,Code) :-
 /****************************************************************************
   compile_query(+Body,-RuleDiffList,-FactDiffList,-Status)
 
-  RuleDiffList is a difference list in the form of [...|T]-T.
+  RuleDiffList is a difference list in the form of [...|R]-R.
 	It is used to optimize append/3
   FactDiffList = Facts-Facts: the empty diff list
 ****************************************************************************/
@@ -2767,7 +2794,7 @@ compile_query(Body,RuleList-RuleTail,Facts-Facts,Status) :-
 /****************************************************************************
   compile_labeled_construct(+Label,Contents,-RuleDiffList,-FactDiffList,-Status)
 
-  RuleDiffList is a difference list in the form of [...|T]-T.
+  RuleDiffList is a difference list in the form of [...|R]-R.
 		It is used for append/3 optimization
   FactDiffList = Facts-Facts: the empty diff list
 ****************************************************************************/
@@ -2776,7 +2803,7 @@ compile_labeled_construct(Label,Contents,RuleList-RuleTail,Facts,Status) :-
 	%%(Status1 == [] -> 
 	( no_errors_found(Status1) -> 
 	    compile_internal(Contents,(LblCode,MetaCode),
-			     RuleList1-[],Facts,_OptionList,Status),
+			     RuleList1-[],Facts,_UDFPreds,_OptionList,Status),
 	    append(RuleList1,RuleTail,RuleList)
 	;  Status = Status1
 	).
@@ -2949,16 +2976,17 @@ construct_export_struct(TermCode,WSCode,IsUpdatableCode,ModuleListCode,Code) :-
 
 
 /****************************************************************************
-  compile_user_defined_function(+Function,+Body,+ReturnValue,-RuleDiffList,-FactDiffList,-Status)
+  compile_user_defined_function(+Function,+Body,+ReturnValue,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-Status)
 
   RuleDiffList is a difference list in the form of [...|T]-T. It is for
   the optimization of append.
-  FactDiffList = Facts-Facts: the empty diff list
+  FactDiffList is the same for facts
+  UDFPredsDiffList is the same for the list of tabled predicates
 ****************************************************************************/
-compile_user_defined_function(Function,_Body,_ReturnValue,CodeList-CodeList,FactList-FactList,[Err]) :-
-	is_flterm(Function,Funct,N,_Args),
+compile_user_defined_function(Function,_Body,_ReturnValue,CodeList-CodeList,FactList-FactList,U-U,[Err]) :-
+	is_flterm_or_flatom(Function,Funct,N,_Args),
 	flora_get_flatomvar_name(Funct,Name),
-	has_symbol(Name,Arity,_I,_L,BUILTIN_SYMBOL,_),
+	has_symbol(Name,Arity,_,_I,_L,BUILTIN_SYMBOL,_),
 	\+ has_nowarn_symbol(Name,N,_WS,UDF_SYMBOL,_),
 	!,
 	approx_flindex(Function,Index),
@@ -2968,34 +2996,32 @@ compile_user_defined_function(Function,_Body,_ReturnValue,CodeList-CodeList,Fact
 	    compiling_warning(Index,WARNING_BUILTIN_ARITY_SYMBOL,Err)
 	).
 
-compile_user_defined_function(Function,_Body,_ReturnValue,CodeList-CodeList,FactList-FactList,[Err]) :-
-	is_flterm(Function,Funct,N,_),
+compile_user_defined_function(Function,_Body,_ReturnValue,CodeList-CodeList,FactList-FactList,U-U,[Err]) :-
+	is_flterm_or_flatom(Function,Funct,N,_),
 	flora_get_flatomvar_name(Funct,Name),
-	has_symbol(Name,N,_,_,Context,_),
+	has_symbol(Name,N,_,_,_,Context,_),
 	Context \= UDF_SYMBOL, %% symbol was used in different context before
 	\+ has_nowarn_symbol(Name,N,_WS,UDF_SYMBOL,_),
-%%	\+ has_symbol(Name,N,_,_,UDF_SYMBOL,_), %% and function was not defined earlier
+%%	\+ has_symbol(Name,N,_,_,_,UDF_SYMBOL,_), %% and function was not defined earlier
 	!,
 	approx_flindex(Function,Index),
 	compiling_error(Index,ERROR_UDF_SYMBOL,Err).
 
-compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactList-FactTail,Status) :-
+compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactList-FactTail,UDFPreds-UDFPredsTail,Status) :-
 	set_context(compiling_udf),
-	( is_flterm(Function,Funct,N,Args),
+	( is_flterm_or_flatom(Function,Funct,N,Args),
 	    flora_get_flatomvar_name(Funct,Name) ->
-	    ( Body==NULL ->
-		new_udf_args(Args,NewArgs)
-	    ;
-		NewArgs=Args
-	    ),
-	    new_udf_predicate(Name,N,NewArgs,NewPredicate,NewReturnValue),
+	    new_udf_args(Args,NewArgs),
+	    new_udf_predicate(Name,N,Args,NewArgs,NewPredicate,NewPredicateOrigArgs,NewPredName,NewPredArity,NewReturnValue),
 	    ( \+ has_permaoption(user_defined_function(Name,N,_,_,_)) ->
+		UDFPreds = [(NewPredName,NewPredArity),UDFPredsTail],
 		set_permaoption(user_defined_function(Name,N,NewArgs,NewPredicate,NewReturnValue)),
 		approx_flindex(Function,FIndex),
 		get_index_line(FIndex,FLine),
-		add_symbol(Name,N,FIndex,FLine,UDF_SYMBOL,NONTRANSACTIONAL_SYMBOL),
+		add_symbol(Name,N,NULL,FIndex,FLine,UDF_SYMBOL,NONTRANSACTIONAL_SYMBOL),
 		CodeList=[UDFCodeList|RuleList]
 	    ;
+		UDFPreds = UDFPredsTail,
 		HasUDF=1,
 		CodeList=RuleList
 	    ),
@@ -3008,7 +3034,7 @@ compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactLi
 		approx_flindex(Funct,FunctIndex),
 		new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody),
 		set_context(compile_udf),
-		compile_rule([NewPredicate],NewBody,NULL,RuleList-ListTail,FactList-FactTail,S)
+		compile_rule([NewPredicateOrigArgs],NewBody,NULL,RuleList-ListTail,FactList-FactTail,S)
 	    ),
 	    ( var(HasUDF) ->
 		%% or has_permaoption(udf...) - i.e. already have function defn
@@ -3042,13 +3068,15 @@ new_udf_args([_|Args],[Var|NewArgs]):-
 	prvar_to_flvar_struct(VarObj,Var),
 	new_udf_args(Args,NewArgs).
 
-new_udf_predicate(Name,N,Args,NewPredicateCode,NewReturnValue):-
-	new_udf_predicate_funct(Name,NPFunct),
+new_udf_predicate(Name,N,OrigArgs,Args,NewPredicateCode,NewPredicateOrigArgs,NPName,NPN,NewReturnValue):-
+	new_udf_predicate_funct(Name,NPFunct,NPName),
 	new_prvariable(NO_INDEX,NewReturnValueObj),
 	prvar_to_flvar_struct(NewReturnValueObj,NewReturnValue),
 	append(Args,[NewReturnValue],NPArgs),
+	append(OrigArgs,[NewReturnValue],NPOrigArgs),
 	NPN is N+1,
-	flterm_struct(NPFunct,NPN,NPArgs,NewPredicateCode).
+	flterm_struct(NPFunct,NPN,NPArgs,NewPredicateCode),
+	flterm_struct(NPFunct,NPN,NPOrigArgs,NewPredicateOrigArgs).
 
 new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody):-
 	%% Form body for the new rule.
@@ -3057,15 +3085,15 @@ new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody):-
 	flvar_struct_change_index(NewReturnValue,FunctIndex,NewReturnValueInBody), 
 	flatom_struct(FL_UNIVEQ,NO_INDEX,ExprFunct),
 	flterm_struct(ExprFunct,2,[NewReturnValueInBody,ReturnValue],ExprCode),
-	flconjunct_struct(ExprCode,Body,NewBody).
+	flconjunct_struct(Body,ExprCode,NewBody).
 
 new_udffact(FuncName,N,Args,ReturnValue,Fact):-
-	new_udf_predicate_funct(FuncName,NPFunct),
+	new_udf_predicate_funct(FuncName,NPFunct,_),
 	append(Args,[ReturnValue],NPArgs),
 	NPN is N+1,
 	flterm_struct(NPFunct,NPN,NPArgs,Fact).
 
-new_udf_predicate_funct(Name,NewPredicateFunct):-
+new_udf_predicate_funct(Name,NewPredicateFunct,NewName):-
 	flora_concat_atoms([NEWUDFPREDICATENAME,Name],NewName),
 	flatom_struct(NewName,NO_INDEX,NewPredicateFunct).
 
@@ -3523,6 +3551,41 @@ compile_body(ParserTerm,Code,Status) :-
 	    true
 	).
 
+compile_body(ParserTerm,Code,Status) :-
+	is_flquantifier(ParserTerm,Quantifier,QuantVarNames,Formula,Idx),
+	\+ has_context(compiling_default_negation),
+	is_delayquant(Quantifier),
+	!,
+	%% no quantified don't care vars (?,?_) 
+	(member(FL_UNDERSCORE,QuantVarNames) ->
+	    compiling_error(Idx,NO_QUANTIFIED_ANONVARS,Err1),
+	    S1 = [Err1]
+	; S1 = []
+	),
+
+	compile_body(Formula,FormCode,S2),
+	%% We use prvars so that newly introduced vars will be accounted for
+	collect_prvars(FormCode,FormVarList),
+	vars_to_var_names(FormVarList,FormVarNames),
+	%% quantified vars must occur in Formula
+	(subset(QuantVarNames,FormVarNames) -> S3 = []
+	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
+	    S3 = [Err3]
+	),
+	subtract_vars(FormVarList,QuantVarNames,FreeVarObjs_aux),
+	remove_prdontcare_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
+	remove_caller_vars(FreeVarObjs_aux2,FreeVarObjs),
+
+	rename_prvariables(QuantVarNames,FormCode,
+			   RenamedFormCode,_RenamedQuantVars),
+	merge_status([S1,S2,S3],Status),
+	%%(Status == [] ->
+	( no_errors_found(Status) ->
+	    %% Create the code for compiled quantification.
+	    delay_struct([Quantifier,RenamedFormCode,FreeVarObjs],Code)
+	;
+	    true
+	).
 
 compile_body(ParserTerm,Code,Status) :-
 	is_flhypothetical(ParserTerm,Op,Goal,Index),
@@ -3587,8 +3650,7 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	*/
 
         ; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
-	    BodyHeadList = [],
-	    compile_fltransactionaltermlit(Funct,N,Args,OidCode,SpecCode,Status)
+	    compile_fltransactionaltermlit(Funct,N,Args,Nesting,OidCode,SpecCode,BodyHeadList,Status)
 
         ; is_flterm(ParserTerm,Funct,N,Args) ->
 	    compile_fltermlit(Funct,N,Args,Nesting,OidCode,SpecCode,BodyHeadList,Status)
@@ -3616,23 +3678,19 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 
 	%% prolog call withOUT prolog module
 	; is_flplib(ParserTerm,P) ->
-	    BodyHeadList = [],
-	    compile_prologliblit(P,OidCode,SpecCode,Status)
+	    compile_prologliblit(P,Nesting,OidCode,SpecCode,BodyHeadList,Status)
 
 	%% prolog call WITH prolog module
 	; is_flplib(ParserTerm,P,Module) ->
-	    BodyHeadList = [],
-	    compile_prologliblit(P,Module,OidCode,SpecCode,Status)
+	    compile_prologliblit(P,Module,Nesting,OidCode,SpecCode,BodyHeadList,Status)
 
 	%% prologALL call withOUT prolog module
 	; is_flpliball(ParserTerm,P) ->
-	    BodyHeadList = [],
-	    compile_prologallliblit(P,OidCode,SpecCode,Status)
+	    compile_prologallliblit(P,Nesting,OidCode,SpecCode,BodyHeadList,Status)
 
 	%% prologALL call WITH prolog module
 	; is_flpliball(ParserTerm,P,Module) ->
-	    BodyHeadList = [],
-	    compile_prologallliblit(P,Module,OidCode,SpecCode,Status)
+	    compile_prologallliblit(P,Module,Nesting,OidCode,SpecCode,BodyHeadList,Status)
 
 	; is_flfloralib(ParserTerm,P,Module) ->
 	    compile_floraliblit(P,Module,Nesting,OidCode,SpecCode,BodyHeadList,Status)
@@ -3992,10 +4050,7 @@ compile_pathexp(ParserTerm,Object,OidCode,Code,BodyHeadList,Status) :-
 compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	set_context(compiling_body_pathexp),
 	( is_flatom(ParserTerm,_A) ->
-	    check_symbol_name(ParserTerm,0,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
-	    BodyHeadList=[],
-	    atomobj_struct(ParserTerm,Object)
-	    %%Status=[]
+	    compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status)
 
 	; is_fltransactionalatom(ParserTerm,_A) ->
 	    check_symbol_name(ParserTerm,0,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,Status),
@@ -4133,18 +4188,14 @@ compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	    Code=NULL
 
 	; is_flplib(ParserTerm,P) ->
-	    BodyHeadList=[],
-	    compile_prologlibobj(P,Object,OidCode,Code,Status)
+	    compile_prologlibobj(P,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 	; is_flplib(ParserTerm,P,Module) ->
-	    BodyHeadList=[],
-	    compile_prologlibobj(P,Module,Object,OidCode,Code,Status)
+	    compile_prologlibobj(P,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 
 	; is_flpliball(ParserTerm,P) ->
-	    BodyHeadList=[],
-	    compile_prologalllibobj(P,Object,OidCode,Code,Status)
+	    compile_prologalllibobj(P,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 	; is_flpliball(ParserTerm,P,Module) ->
-	    BodyHeadList=[],
-	    compile_prologalllibobj(P,Module,Object,OidCode,Code,Status)
+	    compile_prologalllibobj(P,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 	
 	; is_flfloralib(ParserTerm,P,Module) ->
 	    BodyHeadList=[],
@@ -4179,7 +4230,7 @@ check_symbol_name(Funct,_Arity,_WS,_SymbolContext,_Transactional,[]):-
 %% If we already checked symbol, do not check again
 check_symbol_name(Funct,Arity,_WS,SymbolContext,Transactional,[]):-
 	flora_get_flatomvar_name(Funct,Name),
-	has_symbol(Name,Arity,_SIndex,_SLine,SymbolContext,Transactional),!.
+	has_symbol(Name,Arity,_,_SIndex,_SLine,SymbolContext,Transactional),!.
 
 check_symbol_name(_Funct,_Arity,_WS,_SymbolContext,_Transactional,[]):-
 	has_context(compiling_term_name),!.
@@ -4188,15 +4239,15 @@ check_symbol_name(_Funct,_Arity,_WS,_SymbolContext,_Transactional,[]):-
 	has_context(no_symbol_check),!.
 
 %% do not check workspace for function symbol
-check_symbol_name(Funct,Arity,_WS,FUNCTION_SYMBOL,Transactional,[]):-
+check_symbol_name(Funct,Arity,WS,FUNCTION_SYMBOL,Transactional,[]):-
 	flora_get_flatomvar_name(Funct,Name),
 	has_nowarn_symbol(Name,Arity,_,FUNCTION_SYMBOL,Transactional),
   	approx_flindex(Funct,Index),
 	get_index_line(Index,Line),
-	add_symbol(Name,Arity,Index,Line,FUNCTION_SYMBOL,Transactional),
+	add_symbol(Name,Arity,WS,Index,Line,FUNCTION_SYMBOL,Transactional),
 	!.
 
-check_symbol_name(Funct,Arity,_WS,SymbolContext,Transactional,[]):-
+check_symbol_name(Funct,Arity,WS,SymbolContext,Transactional,[]):-
 	flora_get_flatomvar_name(Funct,Name),
 	has_nowarn_symbol(Name,Arity,StoredWS,SymbolContext,Transactional),
 	%% If StoredWS is anonymous variable - then ignore warnings
@@ -4204,7 +4255,7 @@ check_symbol_name(Funct,Arity,_WS,SymbolContext,Transactional,[]):-
 	VarName == FL_UNDERSCORE,
   	approx_flindex(Funct,Index),
 	get_index_line(Index,Line),
-	add_symbol(Name,Arity,Index,Line,SymbolContext,Transactional),
+	add_symbol(Name,Arity,WS,Index,Line,SymbolContext,Transactional),
 	!.
 
 check_symbol_name(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
@@ -4214,7 +4265,7 @@ check_symbol_name(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
 	has_nowarn_symbol(Name,Arity,NULL,SymbolContext,Transactional),
   	approx_flindex(Funct,Index),
 	get_index_line(Index,Line),
-	add_symbol(Name,Arity,Index,Line,SymbolContext,Transactional),
+	add_symbol(Name,Arity,NULL,Index,Line,SymbolContext,Transactional),
 	!.
 
 check_symbol_name(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
@@ -4225,7 +4276,7 @@ check_symbol_name(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
 	is_fltoken(StoredWS,FL_THISMODULE,_),
   	approx_flindex(Funct,Index),
 	get_index_line(Index,Line),
-	add_symbol(Name,Arity,Index,Line,SymbolContext,Transactional),
+	add_symbol(Name,Arity,NULL,Index,Line,SymbolContext,Transactional),
 	!.
 
 check_symbol_name(Funct,Arity,WS,SymbolContext,Transactional,[]):-
@@ -4238,21 +4289,21 @@ check_symbol_name(Funct,Arity,WS,SymbolContext,Transactional,[]):-
 	is_fltoken(StoredWS,WSName,_),
   	approx_flindex(Funct,Index),
 	get_index_line(Index,Line),
-	add_symbol(Name,Arity,Index,Line,SymbolContext,Transactional),
+	add_symbol(Name,Arity,WS,Index,Line,SymbolContext,Transactional),
 	!.
 
-check_symbol_name(Funct,Arity,_WS,SymbolContext,Transactional,SymbolContextStatus):-
+check_symbol_name(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextStatus):-
 	flora_get_flatomvar_name(Funct,Name),
 	!,
   	approx_flindex(Funct,Index),
         %% Check if symbol was used before in different context
-	( has_symbol(Name,SArity,_SIndex,_SLine,SContext,STransactional) ->
+	( has_symbol(Name,SArity,_,_SIndex,_SLine,SContext,STransactional) ->
 		form_symbol_context_status(SContext,STransactional,SArity,Arity,Index,SymbolContext,Transactional,SymbolContextStatus)
 	 ;
                	SymbolContextStatus=[]
          ),
 	get_index_line(Index,Line),
-	add_symbol(Name,Arity,Index,Line,SymbolContext,Transactional).
+	add_symbol(Name,Arity,WS,Index,Line,SymbolContext,Transactional).
 
 check_symbol_name(_Funct,_Arity,_WS,_SymbolContext,_Transactional,[]).
 
@@ -4309,6 +4360,7 @@ form_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,
 	;
 		ContextStatus=[]
 	).
+
 
 /****************************************************************************
   compile_pathexplist(+ParserTermList,Nesting,-ObjectList,-OidCode,-Code,?BodyHeadList,-Status)
@@ -4411,6 +4463,45 @@ compile_fltransactionalvar(Name,Index,VarObject) :-
 	;
 	  transactionalvar_struct(Name,Index,VarObject)
         ).
+
+/****************************************************************************
+  compile_flatomobj(+ParserTerm,+Nesting,-Object,?BodyHeadList,-Status)
+
+  +Nesting - needed for nested user defined functions
+  ?BodyHeadList - code to add at the beginning of the body
+                  (mostly for user defined fnctions),
+		  it is output argument, but if it is initialized to empty ([])
+		  ignores user defined functions
+****************************************************************************/
+compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status):-
+	var(BodyHeadList),
+	\+ has_context(compiling_arithmetics),
+    	flora_get_flatomvar_name(ParserTerm,Name),
+	has_user_defined_function(Name,0,[],Predicate,ReturnValue),
+	!,
+	check_symbol_name(ParserTerm,0,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
+	new_prvariable(NO_INDEX,Object),
+	prvar_to_flvar_struct(Object,Var),
+	approx_flindex(ParserTerm,Index),
+	formUDFVarSubstitute([Var],[ReturnValue],Nesting,Index),
+	( has_context(compile_udf) -> Has=1; Has=0),
+	set_context(compile_udf),
+	compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,S),
+	( Has==0 -> clear_context(compile_udf) ; true ),
+	clearUDFVarSubstitute(Nesting),
+	( no_errors_found(S) -> 
+		append(PBodyHeadList,[PCode],BodyHeadList),
+		Status = []
+	;
+		approx_flindex(ParserTerm,Index),
+		compiling_error(Index,ERROR_UDF_COMPILE,Err),
+		Status = [Err|S]
+	).
+
+compile_flatomobj(ParserTerm,_Nesting,Object,[],Status):-
+	check_symbol_name(ParserTerm,0,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
+	atomobj_struct(ParserTerm,Object).
+
 
 /****************************************************************************
   compile_fltermobj(+FunctorTerm,+Arity,+ArgList,+Nesting,-Object,-OidCode,-Code,?BodyHeadList,-Status)
@@ -4534,10 +4625,10 @@ compile_fltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) 
 	),
 	merge_status([SymbolStatus,Status],CompileStatus).
 
-compile_fltransactionaltermlit(Funct,N,Args,OidCode,Code,CompileStatus) :-
+compile_fltransactionaltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) :-
 	check_symbol_name(Funct,N,PREDICATE_SYMBOL,TRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
-	compile_pathexplist([Funct|Args],[FObj|AObj],OidCode,ObjCode,Status),
+	compile_pathexplist([Funct|Args],Nesting,[FObj|AObj],OidCode,ObjCode,BodyHeadList,Status),
 	%%( Status == [] ->
 	( no_errors_found(Status) ->
 	    transactionaltermlit_struct(BODYLITERAL,FObj,N,AObj,TCode),
@@ -4801,6 +4892,45 @@ compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
 	    true
 	).
 
+compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
+	is_flquantifier(SpecTerm,Quantifier,QuantVarNames,Formula,Idx),
+	\+ has_context(compiling_default_negation),
+	is_delayquant(Quantifier),
+	!,
+	%% no quantified don't care vars (?,?_) 
+	(member(FL_UNDERSCORE,QuantVarNames) ->
+	    compiling_error(Idx,NO_QUANTIFIED_ANONVARS,Err1),
+	    S1 = [Err1]
+	; S1 = []
+	),
+
+	compile_flspecbody(Object,Formula,OidCode,FormCode,BodyHeadList,S2),
+	%% We use prvars so that newly introduced vars will be accounted for
+	collect_prvars([Object,OidCode,FormCode],AllVarList),
+	vars_to_var_names(AllVarList,AllVarList_names),
+	%% quantified vars must occur in Formula
+	(subset(QuantVarNames,AllVarList_names) -> S3 = []
+	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
+	    S3 = [Err3]
+	),
+
+	subtract_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
+	%% remove don't care vars, since no need to delay because of them
+	remove_prdontcare_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
+	remove_caller_vars(FreeVarObjs_aux2,FreeVarObjs),
+
+	rename_prvariables(QuantVarNames,FormCode,
+			   RenamedFormCode,_RenamedQuantVars),
+
+	merge_status([S1,S2,S3],Status),
+	%%(Status == [] ->
+	( no_errors_found(Status) -> 
+	    %% Create the code for compiled quantification.
+	    conjunct_code([OidCode,RenamedFormCode],CombinedCode),
+	    delay_struct([Quantifier,CombinedCode,FreeVarObjs],Code)
+	;
+	    true
+	).
 
 
 %% F-molecule with attribute specification.
@@ -5399,12 +5529,7 @@ compile_head_pathexplist([T|L],[TObj|LObj],Code,H2BCodeHead,H2BCodeTail,Status) 
   Note: It is for skolemization.
 ****************************************************************************/
 compile_head_pathexp(ParserTerm,Object,NULL,NULL,NULL,Status) :-
-	( is_flatom(ParserTerm,_A) ->
-	    check_symbol_name(ParserTerm,0,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
-	    atomobj_struct(ParserTerm,Object)
-	    %%Status=[]
-
-        ; is_fltransactionalatom(ParserTerm,_A) ->
+        ( is_fltransactionalatom(ParserTerm,_A) ->
 	    check_symbol_name(ParserTerm,0,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,Status),
             transactionalatomobj_struct(ParserTerm,Object)
 	    %%Status=[]
@@ -5450,7 +5575,16 @@ compile_head_pathexp(ParserTerm,Object,NULL,NULL,NULL,Status) :-
 	!.
 
 compile_head_pathexp(ParserTerm,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	( 
+	( is_flatom(ParserTerm,_A) ->
+	    Code=NULL,
+	    H2BCodeTail=NULL,
+	    compile_flatomobj(ParserTerm,0,Object,BodyHeadList,Status),
+	    (BodyHeadList==[] ->
+		    H2BCodeHead=NULL
+	    ;
+		    conjunct_code(BodyHeadList,H2BCodeHead)
+	    )
+	; 
 	  is_flbirelate(ParserTerm,OT1,RelType,OT2) ->
 	    compile_head_flbirelate(OT1,RelType,OT2,Object,Code,H2BCodeHead,H2BCodeTail,Status)
 
@@ -6506,6 +6640,46 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	    true
 	).
 
+compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
+	is_flquantifier(SpecTerm,Quantifier,QuantVarNames,Formula,Idx),
+	\+ has_context(compiling_default_negation),
+	is_delayquant(Quantifier),
+	!,
+	%% no quantified don't care vars (?,?_) 
+	(member(FL_UNDERSCORE,QuantVarNames) ->
+	    compiling_error(Idx,NO_QUANTIFIED_ANONVARS,Err1),
+	    S1 = [Err1]
+	; S1 = []
+	),
+
+	compile_wsflspecbody(Object,Formula,WS,OidCode,FormCode,BodyHeadList,S2),
+	%% We use prvars so that newly introduced vars will be accounted for
+	collect_prvars([Object,OidCode,FormCode],AllVarList),
+	vars_to_var_names(AllVarList,AllVarList_names),
+	%% quantified vars must occur in Formula
+	(subset(QuantVarNames,AllVarList_names) -> S3 = []
+	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
+	    S3 = [Err3]
+	),
+
+	subtract_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
+	%% remove don't care vars, since no need to delay because of them
+	remove_prdontcare_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
+	remove_caller_vars(FreeVarObjs_aux2,FreeVarObjs),
+	
+	rename_prvariables(QuantVarNames,FormCode,
+			   RenamedFormCode,_RenamedQuantVars),
+
+	merge_status([S1,S2,S3],Status),
+	%%(Status == [] ->
+	( no_errors_found(Status) -> 
+	    %% Create the code for compiled quantification.
+	    conjunct_code([OidCode,RenamedFormCode],CombinedCode),
+	    delay_struct([Quantifier,CombinedCode,FreeVarObjs],Code)
+	;
+	    true
+	).
+
 %% OidCodeList below gets bound to code needed to produce
 %% the attribute (M) and the value (V). We conjunct this code in front of the
 %% code for the molecule
@@ -6937,13 +7111,13 @@ compile_prefixprimitive(Prefix,Expansion,Module,Code,Status) :-
 
 
 /****************************************************************************
-  compile_prologliblit(+ParserTerm,-OidCode,-Code,-Status)
+  compile_prologliblit(+ParserTerm,+Nesting,-OidCode,-Code,?BodyHeadList,-Status)
 
   Compiles Prolog library call @_prolog
 ****************************************************************************/
-compile_prologliblit(ParserTerm,OidCode,Code,Status) :-
+compile_prologliblit(ParserTerm,Nesting,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_prlgterm(Funct,N,Args,TCode,OidCode,ACode,Status),
+	    compile_prlgterm(Funct,N,Args,Nesting,TCode,OidCode,ACode,BodyHeadList,Status),
 	    %%(Status == [] ->
 	    ( no_errors_found(Status) -> 
 		conjunct_code([ACode,TCode],Code); true)
@@ -6958,14 +7132,14 @@ compile_prologliblit(ParserTerm,OidCode,Code,Status) :-
 
 
 /****************************************************************************
-  compile_prologliblit(+ParserTerm,+Module,-OidCode,-Code,-Status)
+  compile_prologliblit(+ParserTerm,+Module,Nesting,-OidCode,-Code,?BodyHeadList,-Status)
 
   Compiles Prolog library call @_prolog(module)
 ****************************************************************************/
-compile_prologliblit(ParserTerm,Module,OidCode,Code,Status) :-
+compile_prologliblit(ParserTerm,Module,Nesting,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
 	    is_flatom(Funct,FAtom),
-	    compile_prlgterm(Funct,N,Args,Module,TCode,OidCode,ACode,Status)
+	    compile_prlgterm(Funct,N,Args,Module,Nesting,TCode,OidCode,ACode,BodyHeadList,Status)
 	;
 	    is_flatom(ParserTerm,FAtom),
 	    atomobj_struct(ParserTerm,FObj),
@@ -6973,6 +7147,7 @@ compile_prologliblit(ParserTerm,Module,OidCode,Code,Status) :-
 	    prologterm_struct(FObj,0,[],Module,TCode),
 	    ACode=NULL,
 	    OidCode=NULL,
+	    BodyHeadList = [],
 	    Status=[]
 	),
 	%%( Status == [] ->
@@ -6987,12 +7162,12 @@ compile_prologliblit(ParserTerm,Module,OidCode,Code,Status) :-
 
 
 /****************************************************************************
-  compile_prologallliblit(+ParserTerm,-OidCode,-Code,-Status)
+  compile_prologallliblit(+ParserTerm,+Nesting,-OidCode,-Code,-BodyHeadList,-Status)
 
   Compiles Prolog library call @_prologall
 ****************************************************************************/
-compile_prologallliblit(ParserTerm,OidCode,Code,Status) :-
-	compile_prologliblit(ParserTerm,OidCode,PrelimCode,Status),
+compile_prologallliblit(ParserTerm,Nesting,OidCode,Code,BodyHeadList,Status) :-
+	compile_prologliblit(ParserTerm,Nesting,OidCode,PrelimCode,BodyHeadList,Status),
 	( % here PrelimCode is bound and we decompose it
 	  conjunct_struct(ACode,PrelimTermCode,PrelimCode), !
 	; PrelimCode = PrelimTermCode, ACode=NULL
@@ -7007,12 +7182,12 @@ compile_prologallliblit(ParserTerm,OidCode,Code,Status) :-
 
 
 /****************************************************************************
-  compile_prologallliblit(+ParserTerm,+Module,-OidCode,-Code,-Status)
+  compile_prologallliblit(+ParserTerm,+Module,+Nesting,-OidCode,-Code,-BodyHeadList,-Status)
 
   Compiles Prolog library call @_prologall(module)
 ****************************************************************************/
-compile_prologallliblit(ParserTerm,Module,OidCode,Code,Status) :-
-	compile_prologliblit(ParserTerm,Module,OidCode,PrelimCode,Status),
+compile_prologallliblit(ParserTerm,Module,Nesting,OidCode,Code,BodyHeadList,Status) :-
+	compile_prologliblit(ParserTerm,Module,Nesting,OidCode,PrelimCode,BodyHeadList,Status),
 	( % here PrelimCode is bound and we decompose it
 	  conjunct_struct(ACode,PrelimTermLitCode,PrelimCode), !
 	; PrelimCode = PrelimTermLitCode, ACode=NULL
@@ -7030,35 +7205,36 @@ compile_prologallliblit(ParserTerm,Module,OidCode,Code,Status) :-
 
 
 /****************************************************************************
-  compile_prologlibobj(+ParserTerm,-Object,-OidCode,-Code,-Status)
+  compile_prologlibobj(+ParserTerm,+Nesting,-Object,-OidCode,-Code,?BodyHeadList,-Status)
 
   Compiles Prolog library call @_prolog in the arguments position
   E.g., f(member(X,[a])@_prolog)
   This feature might be useful for meta-programming.  
 ****************************************************************************/
-compile_prologlibobj(ParserTerm,Object,OidCode,Code,Status) :-
+compile_prologlibobj(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_prlgterm(Funct,N,Args,Object,OidCode,Code,Status)
+	    compile_prlgterm(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 	;
 	    atomobj_struct(ParserTerm,FObj),
 	    N=0,
 	    prologterm_struct(FObj,0,[],Object),
 	    Code=NULL,
 	    OidCode=NULL,
+	    BodyHeadList=[],
 	    Status=[]
 	),
 	!.
 
 
 /****************************************************************************
-  compile_prologlibobj(+ParserTerm,+Module,-Object,-OidCode,-Code,-Status)
+  compile_prologlibobj(+ParserTerm,+Module,+Nesting,-Object,-OidCode,-Code,?BodyHeadList,-Status)
 
   Compiles Prolog library call @_prolog(module) in the arguments position
 ****************************************************************************/
-compile_prologlibobj(ParserTerm,Module,Object,OidCode,Code,Status) :-
+compile_prologlibobj(ParserTerm,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
 	    is_flatom(Funct,FAtom),
-	    compile_prlgterm(Funct,N,Args,Module,Object,OidCode,Code,Status)
+	    compile_prlgterm(Funct,N,Args,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 	;
 	    is_flatom(ParserTerm,FAtom),
 	    atomobj_struct(ParserTerm,FObj),
@@ -7066,18 +7242,19 @@ compile_prologlibobj(ParserTerm,Module,Object,OidCode,Code,Status) :-
 	    prologterm_struct(FObj,0,[],Module,Object),
 	    Code=NULL,
 	    OidCode=NULL,
+	    BodyHeadList=[],
 	    Status=[]
 	),
 	!.
 
 
 /****************************************************************************
-  compile_prologalllibobj(+ParserTerm,-Object,-OidCode,-Code,-Status)
+  compile_prologalllibobj(+ParserTerm,+Nesting,-Object,-OidCode,-Code-,?BodyHeadList,-Status)
 
   Compiles @_prologall in argument position, e.g., foo(f(...)@_prologall
 ***************************************************************************/
-compile_prologalllibobj(ParserTerm,Object,OidCode,Code,Status) :-
-	compile_prologlibobj(ParserTerm,PrelimObject,PrelimOidCode,PrelimCode,Status),
+compile_prologalllibobj(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
+	compile_prologlibobj(ParserTerm,Nesting,PrelimObject,PrelimOidCode,PrelimCode,BodyHeadList,Status),
 	%% PrelimObject is bound and we decompose it
 	prologterm_struct(FunctCode,N,ArgsCode,PrelimObject),
 	new_prvarlist(N,NewVarList),
@@ -7088,13 +7265,13 @@ compile_prologalllibobj(ParserTerm,Object,OidCode,Code,Status) :-
 	conjunct_code([FromPrologCode,PrelimCode],Code).
 
 /****************************************************************************
-  compile_prologalllibobj(+ParserTerm,+Module,-Object,-OidCode,-Code,-Status)
+  compile_prologalllibobj(+ParserTerm,+Module,+Nesting,-Object,-OidCode,-Code,?BodyHeadList,-Status)
 
   Compiles @_prologall(module) in argument position,
   e.g., foo(f(...)@_prologall(module)
 ***************************************************************************/
-compile_prologalllibobj(ParserTerm,Module,Object,OidCode,Code,Status) :-
-	compile_prologlibobj(ParserTerm,Module,PrelimObject,PrelimOidCode,PrelimCode,Status),
+compile_prologalllibobj(ParserTerm,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
+	compile_prologlibobj(ParserTerm,Module,Nesting,PrelimObject,PrelimOidCode,PrelimCode,BodyHeadList,Status),
 	%% PrelimObject is bound and we decompose it
 	prologterm_struct(FunctCode,N,ArgsCode,PrelimObject),
 	new_prvarlist(N,NewVarList),
@@ -7115,8 +7292,10 @@ compile_prologalllibobj(ParserTerm,Module,Object,OidCode,Code,Status) :-
 		 it is output argument, but if it is initialized to
 		 empty ([]) ignores user defined functions
 ****************************************************************************/
+/*
 compile_prlgterm(Funct,N,Args,Object,OidCode,Code,Status) :-
 	compile_prlgterm(Funct,N,Args,0,Object,OidCode,Code,[],Status).
+*/
 compile_prlgterm(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	atomobj_struct(Funct,FObj),
 	prologterm_struct(FObj,N,AObj,Object),
@@ -8747,8 +8926,8 @@ get_index_line(Index,Line) :- flora_token_index_to_line(Index,Line).
 
 
 /****************************************************************************
- add_symbol(+Name,+N,+Index,+LineNumber,+Context)
- has_symbol(+Name,+N,+Index,+LineNumber,+Context)
+ add_symbol(+Name,+N,+WS,+Index,+LineNumber,+Context)
+ has_symbol(+Name,+N,+WS,+Index,+LineNumber,+Context)
  flora_clear_compilation_symbols
  add_nowarn_symbol(+Name,+N,+Context)
  has_nowarn_symbol(+Name,+N,+Context)
@@ -8757,19 +8936,19 @@ Predicates for checking usage of symbols with the same name and arity
 The goal is to generate warnings/errors if the same symbol is used in different
 contexts or user defined function is used before it is declared, etc. 
 ****************************************************************************/
-add_symbol(Name,N,Index,LineNumber,Context,Transactional) :-
-	assert(symbol(Name,N,Index,LineNumber,Context,Transactional)).
-has_symbol(Name,Arity,NO_INDEX,-1,BUILTIN_SYMBOL,_) :-
+add_symbol(Name,N,WS,Index,LineNumber,Context,Transactional) :-
+	assert(symbol(Name,N,WS,Index,LineNumber,Context,Transactional)).
+has_symbol(Name,Arity,_,NO_INDEX,-1,BUILTIN_SYMBOL,_) :-
 	flora_nodefp(Name,Arity),!.
-has_symbol(Name,Arity,NO_INDEX,-1,BUILTIN_SYMBOL,_) :-
+has_symbol(Name,Arity,_,NO_INDEX,-1,BUILTIN_SYMBOL,_) :-
 	flora_delayed_literal(Name,Arity),!.
-has_symbol(Name,N,Index,LineNumber,Context,Transactional) :-
-	symbol(Name,N,Index,LineNumber,Context,Transactional),!.
+has_symbol(Name,N,WS,Index,LineNumber,Context,Transactional) :-
+	symbol(Name,N,WS,Index,LineNumber,Context,Transactional),!.
 add_nowarn_symbol(Name,N,WS,Context,Transactional) :-
 	assert(nowarn_symbol(Name,N,WS,Context,Transactional)).
 has_nowarn_symbol(Name,N,WS,Context,Transactional) :-
 	nowarn_symbol(Name,N,WS,Context,Transactional),!.
-flora_clear_compilation_symbols:-retractall(symbol(_,_,_,_,_,_)),retractall(nowarn_symbol(_,_,_,_,_)).
+flora_clear_compilation_symbols:-retractall(symbol(_,_,_,_,_,_,_)),retractall(nowarn_symbol(_,_,_,_,_)).
 
 
 /****************************************************************************

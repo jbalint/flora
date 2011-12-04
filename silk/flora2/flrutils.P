@@ -398,8 +398,9 @@ flora_compile_then_prolog_compile_add(FlrFile,ModuleName) :-
 	util_addFDB_filename(FlrFile,FDBFile),
 	util_addFLD_filename(FlrFile,FLDFile),
 	util_addFLS_filename(FlrFile,FLSFile),
+	util_addFLT_filename(FlrFile,FLTFile),
 	flora_set_xpp_options_for_compile(ModuleName),
-	util_compile_file_add(FlrFile,AddPFile,FDBFile,FLDFile,FLSFile,Status),
+	util_compile_file_add(FlrFile,AddPFile,FDBFile,FLDFile,FLSFile,FLTFile,Status),
 	( Status == FLORA_FAILURE ->
 	    flora_clear_xpp_options,
 	    !,
@@ -448,8 +449,9 @@ flora_compile_then_prolog_compile(FlrFile,ModuleName) :-
 	util_FDB_filename(FlrFile,FDBFile),
 	util_FLD_filename(FlrFile,FLDFile),
 	util_FLS_filename(FlrFile,FLSFile),
+	util_FLT_filename(FlrFile,FLTFile),
 	flora_set_xpp_options_for_compile(ModuleName),
-	util_compile_file(FlrFile,MPFile,FDBFile,FLDFile,FLSFile,Status),
+	util_compile_file(FlrFile,MPFile,FDBFile,FLDFile,FLSFile,FLTFile,Status),
 	( Status == FLORA_FAILURE ->
 	    flora_clear_xpp_options,
 	    !,
@@ -579,6 +581,7 @@ flora_fladd(FlrFile,Workspace) :-
 	%% support for undefinedness
 	util_addFLD_filename(FlrFile,FLDFile),
 	util_addFLS_filename(FlrFile,FLSFile),
+	util_addFLT_filename(FlrFile,FLTFile),
 
 	util_addWSXWAM_filename(FlrFile,Workspace,WSXWAMFile),
 	!,
@@ -589,7 +592,7 @@ flora_fladd(FlrFile,Workspace) :-
 	-> flora_loader_msg_nl,
 	    true
 	;
-	  util_compile_file_add(FlrFile,AddPFile,FDBFile,FLDFile,FLSFile,Status),
+	  util_compile_file_add(FlrFile,AddPFile,FDBFile,FLDFile,FLSFile,FLTFile,Status),
 	  ( Status == FLORA_FAILURE ->
 	      flora_clear_xpp_options,
 	      !,
@@ -647,6 +650,7 @@ flora_flload(FlrFile,Workspace) :-
 	%% support for undefinedness
 	util_FLD_filename(FlrFile,FLDFile),
 	util_FLS_filename(FlrFile,FLSFile),
+	util_FLT_filename(FlrFile,FLTFile),
 
 	util_WSXWAM_filename(FlrFile,Workspace,WSXWAMFile),
 	!,
@@ -657,7 +661,7 @@ flora_flload(FlrFile,Workspace) :-
 	-> flora_loader_msg_nl,
 	    true
 	;
-	  util_compile_file(FlrFile,MPFile,FDBFile,FLDFile,FLSFile,Status),
+	  util_compile_file(FlrFile,MPFile,FDBFile,FLDFile,FLSFile,FLTFile,Status),
 	  ( Status == FLORA_FAILURE ->
 	      flora_clear_xpp_options,
 	      !,
@@ -878,6 +882,10 @@ util_addFLS_filename(File,FLSFile) :-
 	parse_filename(File,Dir,Base,_),
 	flora_concat_atoms([Dir,Base,'#for_add.',FLORA_FLS_EXT],FLSFile).
 
+util_addFLT_filename(File,FLTFile) :-
+	parse_filename(File,Dir,Base,_),
+	flora_concat_atoms([Dir,Base,'#for_add.',FLORA_FLT_EXT],FLTFile).
+
 
 /*************************************************************************
   util_mainP_filename(+File,-MPFile)
@@ -930,6 +938,10 @@ util_FLR_filename(File,FlrFile) :-
 util_FLS_filename(File,FLSFile) :-
 	parse_filename(File,Dir,Base,_),
 	flora_concat_atoms([Dir,Base,'.',FLORA_FLS_EXT],FLSFile).
+
+util_FLT_filename(File,FLTFile) :-
+	parse_filename(File,Dir,Base,_),
+	flora_concat_atoms([Dir,Base,'.',FLORA_FLT_EXT],FLTFile).
 
 /*************************************************************************
   utilities
@@ -1058,6 +1070,7 @@ insert_code_for_loaddyn_data(FileName) :-
 	parse_filename(FileName,_Dir,Base,Ext),
 	( Ext == FLORA_FDB_EXT, DataCat='FDB'
 	; Ext == FLORA_FLD_EXT, DataCat='FLD'
+	; Ext == FLORA_FLS_EXT, DataCat='FLS'
 	),
 	%% The above choice of FLORA_FDB_FILENAME and FLORA_FLD_FILENAME,
 	%% controls whether FLD or FDB is used.
@@ -1082,7 +1095,11 @@ insert_code_for_loaddyn_data(FileName) :-
 	flora_current_out_line('#if !defined(FLORA_READ_CANONICAL_AND_INSERT)'),
 	flora_current_out_line('#define FLORA_READ_CANONICAL_AND_INSERT'),
 	flora_current_out_line('#endif'),
-	flora_current_out_line("?- flrutils:flora_read_canonical_and_insert(FLORA_~w_FILENAME,FLORA_THIS_~w_STORAGE).",[DataCat,DataCat]),
+	( Ext == FLORA_FLS_EXT ->
+		flora_current_out_line("?- flrutils:flora_read_symbols_canonical_and_insert(FLORA_~w_FILENAME,FLORA_THIS_~w_STORAGE).",[DataCat,DataCat])
+	;
+		flora_current_out_line("?- flrutils:flora_read_canonical_and_insert(FLORA_~w_FILENAME,FLORA_THIS_~w_STORAGE).",[DataCat,DataCat])
+	),
 	flora_current_out_line('#endif'),
 	flora_current_out_nl.
 
@@ -1148,13 +1165,13 @@ reset_modules_for_shell :-
 
 
 /*************************************************************************
-  util_compile_file_add(+InputFile,+OutputPFile,+OutputDBFile,+OutputFLDFile,+OutputFLSFile,-FileStatus)
+  util_compile_file_add(+InputFile,+OutputPFile,+OutputDBFile,+OutputFLDFile,+OutputFLSFile,+OutputFLTFile,-FileStatus)
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 
         The appropriate GPP options must be set before this predicate is called.
 *************************************************************************/
-util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
+util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FLSFile,FLTFile,FileStatus) :-
 	flora_maxerr(MaxErrNum),
 	flora_loader_msg_nl,
 	flora_loader_message('Compiling ~w for addition to modules',[InputFile]),
@@ -1168,6 +1185,7 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
 	flora_measure_time(
 			   util_rpc_file_add(MaxErrNum,0,
 					     CompiledRuleList,CompiledFactList,
+					     UDFPredsList,
 					     FileOptionList,
 					     RuleStatus,CompileStatus),
 			   ['<Compiler> Compile time for adding to modules of ',
@@ -1200,9 +1218,9 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
 	    ;
 		(check_custom_trailer_file(TrailerOptions)
 		->
-		    generate_code_add(CompiledRuleList,CompiledFactList,
+		    generate_code_add(CompiledRuleList,CompiledFactList,UDFPredsList,
 				      StrippedFileOptions,TrailerOptions,
-				      PFile,DBFile,FLDFile,FLSFile,FileStatus)
+				      PFile,DBFile,FLDFile,FLSFile,FLTFile,InputFile,FileStatus)
 		; 
 		    FileStatus=FLORA_FAILURE
 		)
@@ -1229,25 +1247,27 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
 	!.
 
 %% Catch a failure
-util_compile_file_add(_InputFile,_PFile,_DBFile,_FLDFile,_FLSFile,FLORA_FAILURE).
+util_compile_file_add(_InputFile,_PFile,_DBFile,_FLDFile,_FLSFile,_FLTFile,FLORA_FAILURE).
 
 /*************************************************************************
-  generate_code_add(+CompiledRuleList,+CompiledFactList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,+FLSFile,-FileStatus)
+  generate_code_add(+CompiledRuleList,+CompiledFactList,+UDFPredsList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,+FLSFile,+FLTFile,+InputFile,-FileStatus)
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 *************************************************************************/
-generate_code_add(CompiledRuleList,CompiledFactList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
+generate_code_add(CompiledRuleList,CompiledFactList,UDFPredsList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FLSFile,FLTFile,InputFile,FileStatus) :-
 	%% Generate FLD file for undefinedness checking
 	flora_debug_code(CompiledRuleList,CompiledFactList,FLDFile),
 	%% Generate symbol file - fls
-	flora_symbol_context_info(FLSFile),
+	flora_symbol_context_info(FLSFile,InputFile),
+	%% Generate file with tabled predicates - flt
+	flora_save_tabled_udf_predicates(FLTFile,UDFPredsList),
 	%%flora_divide_program(CompiledRuleList,RuleList,FactList),
 	sort(FileOptionList,FileOptions),
 	flora_measure_time(
 			   generate_Pfile_add(PFile,
 					      FileOptions,TrailerOptions,
 					      CompiledRuleList,CompiledFactList,
-					      DBFile,FLDFile,PFileStatus),
+					      DBFile,FLDFile,FLSFile,FLTFile,PFileStatus),
 			   '<Coder> Generating .P file for adding to modules'
 			   ),
 	( PFileStatus == FLORA_FAILURE ->
@@ -1268,7 +1288,7 @@ generate_code_add(CompiledRuleList,CompiledFactList,FileOptionList,TrailerOption
 /*************************************************************************
   generate_Pfile_add(+PFileName,+FileOptionList,+TrailerOptions,
                        +RuleList,+FactList,
-                       +DBFile,+FLDFile,-FileStatus)
+                       +DBFile,+FLDFile,+FLSFile,+FLTFile,-FileStatus)
 
   Things to do:
   (1) include .flh file directive.
@@ -1278,7 +1298,7 @@ generate_code_add(CompiledRuleList,CompiledFactList,FileOptionList,TrailerOption
   (5) program.
   (6) trailer.
 *************************************************************************/
-generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBFile,FLDFile,FileStatus) :-
+generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBFile,FLDFile,FLSFile,FLTFile,FileStatus) :-
 	telling(PreOutFile),
 	tell(PFileName),
 	findall(LibOption,member(FLSYSLIB(LibOption),FileOptionList),SysLibOptionList),
@@ -1288,6 +1308,8 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBF
 	; flora_current_out_line(':- compiler_options([spec_off]).')
 	),
 	util_include_file([FLHEADER],FLHeaderStatus),
+	flora_print_define_filename_statement(FLTFile,'FLORA_FLT_FILENAME'),
+	%%util_include_file([FLHEADER3],FLHeaderStatus3),
 	%% we must abolish tables when adding rules, since old tables
 	%% may no longer be valid
 	flora_concat_atoms(['?- catch(abolish_all_tables,_,flora_warning_line(''',
@@ -1296,6 +1318,8 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBF
 			   AbolishCommand),
 	flora_current_out_line(AbolishCommand),
 	%%
+	%%flora_print_include_statement(FLSFile),
+	%%flora_print_include_statement(FLTFile),
 	( FLHeaderStatus == FLORA_FAILURE -> FileStatus=FLORA_FAILURE
 	;
 	    findall((Arity,Pos),member(FLINDEX(Arity,Pos),FileOptionList),IndexList),
@@ -1308,6 +1332,7 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBF
 		    insert_code_for_loaddyn_data(DBFile)
 		),
 		insert_code_for_loaddyn_data(FLDFile),
+		insert_code_for_loaddyn_data(FLSFile),
 		flora_extern_code(RuleList,CoderStatus),
 		( CoderStatus == [] ->
 		    %% util_include_file([FLTRAILER,FLDYNZLIB,FLPREDDEF],
@@ -1325,13 +1350,13 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBF
 
 
 /*************************************************************************
-  util_compile_file(+InputFile,+OutputPFile,+OutputDBFile,+OutputFLDFile,OutputFLSFile,-FileStatus)
+  util_compile_file(+InputFile,+OutputPFile,+OutputDBFile,+OutputFLDFile,OutputFLSFile,OutputFLTFile,-FileStatus)
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 
         The appropriate GPP options must be set before this predicate is called.
 *************************************************************************/
-util_compile_file(InputFile,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
+util_compile_file(InputFile,PFile,DBFile,FLDFile,FLSFile,FLTFile,FileStatus) :-
 	flora_maxerr(MaxErrNum),
 	flora_loader_msg_nl,
 	flora_loader_message('Compiling ~w',[InputFile]),
@@ -1345,6 +1370,7 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
 	flora_measure_time(
 			   util_rpc_file(MaxErrNum,0,
 					 CompiledRuleList,CompiledFactList,
+					 UDFPredsList,
 					 FileOptionList,
 					 RuleStatus,CompileStatus),
 			   ['<Compiler> Compile time for ', InputFile, ':']
@@ -1377,9 +1403,9 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
 	    ;
 		(check_custom_trailer_file(TrailerOptions)
 		->
-		    generate_code(CompiledRuleList,CompiledFactList,
+		    generate_code(CompiledRuleList,CompiledFactList,UDFPredsList,
 				  StrippedFileOptions,TrailerOptions,
-				  PFile,DBFile,FLDFile,FLSFile,FileStatus)
+				  PFile,DBFile,FLDFile,FLSFile,FLTFile,InputFile,FileStatus)
 		; 
 		    FileStatus=FLORA_FAILURE
 		)
@@ -1406,26 +1432,28 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
 	!.
 
 %% Catch a failure situation.
-util_compile_file(_InputFile,_PFile,_DBFile,_FLDFile,_FLSFile,FLORA_FAILURE).
+util_compile_file(_InputFile,_PFile,_DBFile,_FLDFile,_FLSFile,_FLTFile,FLORA_FAILURE).
 
 
 /*************************************************************************
-  generate_code(+CompiledRuleList,+CompiledFactList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,+FLSFile,-FileStatus)
+  generate_code(+CompiledRuleList,+CompiledFactList,+UDFPredsList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,+FLSFile,+FLTFile,+InputFile,-FileStatus)
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 *************************************************************************/
-generate_code(CompiledRuleList,CompiledFactList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FLSFile,FileStatus) :-
+generate_code(CompiledRuleList,CompiledFactList,UDFPredsList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FLSFile,FLTFile,InputFile,FileStatus) :-
 	%% Generate FLD file for undefinedness checking
 	flora_debug_code(CompiledRuleList,CompiledFactList,FLDFile),
 	%% Generate symbol file - fls
-	flora_symbol_context_info(FLSFile),
+	flora_symbol_context_info(FLSFile,InputFile),
+	%% Generate file with tabled predicates - flt
+	flora_save_tabled_udf_predicates(FLTFile,UDFPredsList),
 	%%flora_divide_program(CompiledRuleList,RuleList,FactList),
 	sort(FileOptionList,FileOptions),
 	flora_measure_time(
 			   generate_Pfile(PFile,
 					  FileOptions,TrailerOptions,
 					  CompiledRuleList,CompiledFactList,
-					  DBFile,FLDFile,PFileStatus),
+					  DBFile,FLDFile,FLSFile,FLTFile,PFileStatus),
 			   '<Coder> Generating .P file'
 			   ),
 	( PFileStatus == FLORA_FAILURE ->
@@ -1446,7 +1474,7 @@ generate_code(CompiledRuleList,CompiledFactList,FileOptionList,TrailerOptions,PF
 /*************************************************************************
   generate_Pfile(+PFileName,+FileOptionList,+TrailerOptions,
                        +RuleList,+FactList,
-                       +DBFile,+FLDFile,-FileStatus)
+                       +DBFile,+FLDFile,+FLSFile,FLTFile,-FileStatus)
 
   Things to do:
   (1) include .flh file directive.
@@ -1456,7 +1484,7 @@ generate_code(CompiledRuleList,CompiledFactList,FileOptionList,TrailerOptions,PF
   (5) program.
   (6) trailer.
 *************************************************************************/
-generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBFile,FLDFile,FileStatus) :-
+generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBFile,FLDFile,FLSFile,FLTFile,FileStatus) :-
 	telling(PreOutFile),
 	tell(PFileName),
 	findall(LibOption,member(FLSYSLIB(LibOption),FileOptionList),SysLibOptionList),
@@ -1472,8 +1500,11 @@ generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBFile,
 	  will affect the tabling definitions included from FLHEADER2
 	*/
 	include_xpp_control_variables(TrailerOptions),
+	flora_print_define_filename_statement(FLTFile,'FLORA_FLT_FILENAME'),
 	util_include_file([FLHEADER,FLHEADER2,FLDYNDECLARE,FLINDEX_P],
 			  FLHeaderStatus),
+	%%flora_print_include_statement(FLSFile),
+	%%flora_print_include_statement(FLTFile),
 	( FLHeaderStatus == FLORA_FAILURE -> FileStatus=FLORA_FAILURE
 	;
 	    findall((Arity,Pos),
@@ -1490,6 +1521,7 @@ generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBFile,
 	    ;
 		(FactList == [] -> true; insert_code_for_loaddyn_data(DBFile)),
 		insert_code_for_loaddyn_data(FLDFile),
+		insert_code_for_loaddyn_data(FLSFile),
 		flora_extern_code(RuleList,CoderStatus),
 		( CoderStatus == [] ->
 		    util_include_file([FLTRAILER,FLDYNZLIB,FLPREDDEF],
@@ -1591,7 +1623,7 @@ flora_generate_DBfile(DBFileName,FactList,FileStatus) :-
 /*************************************************************************
   flora_loaddyn_data(+InFile,+ModuleName,+Ext)
 
-  This predicate reads a Flora DB/FLD file that contains facts in canonical
+  This predicate reads a Flora DB/FLD/FLS file that contains facts in canonical
   form and inserts them into the storage trie for the module. The module
   could be either a Flora user module, or a Flora system module. In the
   latter case, it is structured term.
@@ -1619,12 +1651,18 @@ flora_loaddyn_data(OrigInFile,ModuleName,Ext) :-
 		flora_fdb_storage_name(ModuleName,StorageName)
 	    ; Ext==FLORA_FLD_EXT,
 		flora_fld_storage_name(ModuleName,StorageName)
+	    ; Ext==FLORA_FLS_EXT,
+		flora_fls_storage_name(ModuleName,StorageName)
 	    ),
 	    flora_cputime(T0),
 	    seeing(PreInFile),
 	    (util_file_newerthan(PostGppFile,File) ->
 		see(PostGppFile),
-		flora_read_canonical_and_insert(StorageName),
+	    	( Ext==FLORA_FLS_EXT ->
+			flora_read_symbols_canonical_and_insert(StorageName)
+		;
+			flora_read_canonical_and_insert(StorageName)
+		),
 		seen
 	    ;
 		flora_set_xpp_options_for_read(ModuleName),
@@ -1639,7 +1677,11 @@ flora_loaddyn_data(OrigInFile,ModuleName,Ext) :-
 		close(IOportFromProc),
 		%% Now insert data to trie
 		see(PostGppFile),
-		flora_read_canonical_and_insert(StorageName),
+	    	( Ext==FLORA_FLS_EXT ->
+			flora_read_symbols_canonical_and_insert(StorageName)
+		;
+			flora_read_canonical_and_insert(StorageName)
+		),
 		%% Wait, not to leave zombies.
 		check_xpp_process_status(File,XPP_process),
 		seen,
@@ -1671,6 +1713,92 @@ flora_read_canonical_and_insert(StorageName) :-
 	    fail
 	),
 	incr_flora_update_counter.
+
+/*************************************************************************
+  flora_read_symbols_canonical_and_insert(+StorageName)
+
+  Read the current input in canonical form and insert all facts
+  into the storage trie. Checks for symbols usage
+*************************************************************************/
+flora_read_symbols_canonical_and_insert(StorageName) :-
+	flora_set_counter(flora_load_errors,0),
+	flora_set_counter(flora_load_warnings,0),
+	repeat,
+	read_canonical(Term),
+	( Term == end_of_file, !
+	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,SymbolContext,SymbolTransactional,FileName),
+	  flora_storage_find_fact(StorageName,flora_symbol(SymbolName,UsedArity,_,_UsedIndex,_UsedLine,UsedContext,UsedTransactional,_)) ->
+	    form_symbol_context_load_status(StorageName,UsedContext,UsedTransactional,UsedArity,SymbolName,SymbolArity,WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus),
+	    util_load_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
+	    flora_increment_counter(flora_load_errors,ErrNum,_,_),
+	    util_load_warn(ContextStatus,SymbolLine,SymbolName,FileName,WarnNum),
+	    flora_increment_counter(flora_load_warnings,WarnNum,_,_),
+            storage_insert_fact(StorageName,Term,_Inserted),
+	    fail
+	;
+            storage_insert_fact(StorageName,Term,_Inserted),
+	    fail
+	),
+	flora_get_counter(flora_load_errors,ErrNum),
+	flora_get_counter(flora_load_warnings,WarnNum),
+	print_warn_count(WarnNum),
+	print_error_count(ErrNum),
+	incr_flora_update_counter.
+
+form_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,FUNCTION_SYMBOL,SymbolTransactional,[]) :-
+	flora_storage_find_fact(StorageName,has_nowarn_symbol(SymbolName,SymbolArity,_,FUNCTION_SYMBOL,SymbolTransactional)),
+	!.
+
+form_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
+	flora_storage_find_fact(StorageName,has_nowarn_symbol(SymbolName,SymbolArity,StoredWS,PREDICATE_SYMBOL,SymbolTransactional)),
+	!,
+	%% If StoredWS is anonymous variable - then ignore warnings
+	is_flvariable(StoredWS,VarName,_VarIndex),
+	VarName == FL_UNDERSCORE.
+
+form_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
+	flora_storage_find_fact(StorageName,has_nowarn_symbol(SymbolName,SymbolArity,NULL,PREDICATE_SYMBOL,SymbolTransactional)),
+	!.
+
+form_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
+	flora_storage_find_fact(StorageName,has_nowarn_symbol(SymbolName,SymbolArity,StoredWS,PREDICATE_SYMBOL,SymbolTransactional)),
+	is_fltoken(StoredWS,FL_THISMODULE,_),
+	!.
+
+form_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
+	flora_storage_find_fact(StorageName,has_nowarn_symbol(SymbolName,SymbolArity,StoredWS,PREDICATE_SYMBOL,SymbolTransactional)),
+	is_fltoken(WS,WSName,_),
+	is_fltoken(StoredWS,WSName,_),
+	!.
+
+form_symbol_context_load_status(_StorageName,UsedContext,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,PREDICATE_SYMBOL,_SymbolTransactional,ContextStatus) :-
+	( UsedContext==UDF_SYMBOL, UsedArity==SymbolArity ->
+		!,
+		compiling_warning(SymbolIndex,WARNING_PREDICATE_UDF_SYMBOL,Err),
+		ContextStatus=[Err]
+	; UsedContext==UDF_SYMBOL, UsedArity\=SymbolArity ->
+		!,
+		compiling_warning(SymbolIndex,WARNING_PREDICATE_UDF_ARITY_SYMBOL,Err),
+		ContextStatus=[Err]
+	;
+		fail	
+	).
+form_symbol_context_load_status(_StorageName,UsedContext,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,FUNCTION_SYMBOL,_SymbolTransactional,ContextStatus) :-
+	( UsedContext==UDF_SYMBOL, UsedArity\=SymbolArity ->
+		!,
+        	compiling_warning(SymbolIndex,WARNING_FUNC_UDF_ARITY_SYMBOL,Err),
+                ContextStatus=[Err]
+	; UsedContext==UDF_SYMBOL, UsedArity==SymbolArity ->
+		!,
+        	compiling_warning(SymbolIndex,WARNING_FUNC_UDF_SYMBOL,Err),
+                ContextStatus=[Err]
+	;
+		fail
+	).
+
+form_symbol_context_load_status(_StorageName,UsedContext,UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus) :- form_symbol_context_status(UsedContext,UsedTransactional,UsedArity,SymbolArity,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus).
+
+
 
 %% Attach attribute FLSYSRULEUPDATE before inserting fact into trie
 %% The only possible case is that there is FLSYSRULEUPDATE (ie, a rule)
@@ -1824,6 +1952,19 @@ flora_read_canonical_and_insert(File,StorageName) :-
 	see(OldF).
 
 /*************************************************************************
+  flora_read_symbols_canonical_and_insert(+File,+StorageName)
+  Same as flora_read_symbols_canonical_and_insert/1, but reads a file
+*************************************************************************/
+flora_read_symbols_canonical_and_insert(File,StorageName) :-
+	flora_loader_message('Dynamically loading ~w into storage ~w',
+			     [File,StorageName]),
+	seeing(OldF),
+	see(File),
+	flora_read_symbols_canonical_and_insert(StorageName),
+	seen,
+	see(OldF).
+
+/*************************************************************************
  Commit all backtrackable updates to Flora storage
 **************************************************************************/
 
@@ -1847,15 +1988,16 @@ flora_reclaim_storage_space :-
 
 
 /*************************************************************************
-util_rpc_file_add(+MaxErr,+ErrNum,-CompiledRuleList,-CompiledFactList,-FileOptionList,-RuleStatus,-FileStatus),
+util_rpc_file_add(+MaxErr,+ErrNum,-CompiledRuleList,-CompiledFactList,-UDFPredsList,-FileOptionList,-RuleStatus,-FileStatus),
 
   util_rpc_file_add/7 calls the lexer/composer/parser/compiler rule-by-rule.
       Each time checks if there were errors. 
 *************************************************************************/
-util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,FileOptionList,RuleStatus,FileStatus) :-
+util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,UDFPredsList,FileOptionList,RuleStatus,FileStatus) :-
 	read_parse_compile_add(FLORA_FILE, Tokens,
 			       CompiledRuleList-NewCompiledRuleList,
 			       CompiledFactList-NewCompiledFactList,
+			       UDFPredsList-NewUDFPredsList,
 			       RuleOptions, RuleStatus1),
 	member(error(EN),RuleStatus1),
 	NewErrNum is ErrNum+EN,
@@ -1869,7 +2011,7 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,FileOptionList
 		member(RuleDelimeterToken,Tokens)
 	    ->
 	        util_rpc_file_add(MaxErr,NewErrNum,
-				  _CompiledRuleList,_CompiledFactList,
+				  _CompiledRuleList,_CompiledFactList,_UDFPredsList,
 				  _FileOptionList,
 				  RuleStatus2,FileStatus),
 		merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
@@ -1877,7 +2019,7 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,FileOptionList
 	    ; flora_not_end_of_input(RuleStatus1), discard_tokens
 	    ->
 	        util_rpc_file_add(MaxErr,NewErrNum,
-				  _CompiledRuleList,_CompiledFactList,
+				  _CompiledRuleList,_CompiledFactList,_UDFPredsList,
 				  _FileOptionList,
 				  RuleStatus2,FileStatus),
 		merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
@@ -1894,7 +2036,7 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,FileOptionList
 	  ( flora_not_end_of_input(RuleStatus1)
 	  ->
 	      util_rpc_file_add(MaxErr,NewErrNum,
-				NewCompiledRuleList,NewCompiledFactList,
+				NewCompiledRuleList,NewCompiledFactList,NewUDFPredsList,
 				NewFileOptionList,
 				RuleStatus2,FileStatus),
 	      merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
@@ -1915,7 +2057,7 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,FileOptionList
 
 
 /*************************************************************************
-  read_parse_compile_add(+Option,-Tokens,-RulesCode,-FactsCode,-OptionList,-Status)
+  read_parse_compile_add(+Option,-Tokens,-RulesCode,-FactsCode,-UDFPredsCode,-OptionList,-Status)
 
   Note: This predicate can be used to read both file and command line.
         For reading file, Option is FLORA_FILE. For reading command line,
@@ -1927,21 +2069,23 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,FileOptionList
         the end of the list.
 	FactsCode is the same for facts.
 *************************************************************************/
-read_parse_compile_add(Option,Tokens,RulesCode,FactsCode,OptionList,Status) :-
+read_parse_compile_add(Option,Tokens,RulesCode,FactsCode,UDFPredsCode,OptionList,Status) :-
 	%% get InputTokens
 	flora_tokens(InputTokens,LexerStatus), 
 	count_errors(LexerStatus,LexErrNum),
 	( LexErrNum > 0 ->
 	    Tokens=InputTokens,
-	    RulesCode=T-T,
+	    RulesCode=R-R,
 	    FactsCode=F-F,
+	    UDFPredsCode=U-U,
 	    OptionList=[],
 	    ErrNum=LexErrNum
 
 	; flora_blank_line(InputTokens) ->
 	    Tokens=InputTokens,
-	    RulesCode=T-T,
+	    RulesCode=R-R,
 	    FactsCode=F-F,
+	    UDFPredsCode=U-U,
 	    OptionList=[],
 	    ErrNum=0
 	;
@@ -1953,21 +2097,23 @@ read_parse_compile_add(Option,Tokens,RulesCode,FactsCode,OptionList,Status) :-
 	    flora_compose(Tokens,ComposerTerm,ComposerStatus),
 	    count_errors(ComposerStatus,CompoErrNum),
 	    ( CompoErrNum > 0 ->
-		RulesCode=T-T,
+		RulesCode=R-R,
 		FactsCode=F-F,
+	    	UDFPredsCode=U-U,
 		OptionList=[],
 		ErrNum=CompoErrNum
 	    ;
 		flora_parse(ComposerTerm,ParserTerm,ParserStatus),
 		count_errors(ParserStatus,ParErrNum),
 		( ParErrNum > 0 ->
-		    RulesCode=T-T,
+		    RulesCode=R-R,
 		    FactsCode=F-F,
+		    UDFPredsCode=U-U,
 		    OptionList=[],
 		    ErrNum=ParErrNum
 		;
 		    %% compile, and get RulesCode,OptionList
-		    flora_compile_add(ParserTerm,RulesCode,FactsCode,OptionList,CompileStat),
+		    flora_compile_add(ParserTerm,RulesCode,FactsCode,UDFPredsCode,OptionList,CompileStat),
 		    count_errors(CompileStat,CompiErrN),
 		    ErrNum=CompiErrN
 		)
@@ -1991,7 +2137,7 @@ read_parse_compile_add(Option,Tokens,RulesCode,FactsCode,OptionList,Status) :-
 
 
 /*************************************************************************
-  util_rpc_file(+MaxErr,+ErrNum,-CompiledRuleList,-CompiledFactList,-FileOptionList,-RuleStatus,-FileStatus)
+  util_rpc_file(+MaxErr,+ErrNum,-CompiledRuleList,-CompiledFactList,-UDFPredsList,-FileOptionList,-RuleStatus,-FileStatus)
   util_tailappend(+L1,+L2,-Result)
 
   util_rpc_file/7 calls the lexer/composer/compiler rule-by-rule.
@@ -2008,10 +2154,11 @@ util_tailappend(V,[],V) :- !.
 util_tailappend([H|V],[H|L],T) :- util_tailappend(V,L,T).
 
 
-util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,FileOptionList,RuleStatus,FileStatus) :-
+util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,UDFPredsList,FileOptionList,RuleStatus,FileStatus) :-
 	util_read_parse_compile(FLORA_FILE,Tokens,
 				CompiledRuleList-NewCompiledRuleList,
 				CompiledFactList-NewCompiledFactList,
+				UDFPredsList-NewUDFPredsList,
 				RuleOptions,RuleStatus1),
 	member(error(EN),RuleStatus1),
 	NewErrNum is ErrNum+EN,
@@ -2026,7 +2173,7 @@ util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,FileOptionList,Rul
 	    ->
 		%% continue collecting errors, ignore compiled code
 	        util_rpc_file(MaxErr,NewErrNum,
-			      _CompiledRuleList,_CompiledFactList,
+			      _CompiledRuleList,_CompiledFactList,_UDFPredsList,
 			      _FileOptionList,
 			      RuleStatus2,FileStatus),
 		merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
@@ -2036,7 +2183,7 @@ util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,FileOptionList,Rul
 		%% continue collecting errors, ignore compiled code
 		%% here we are reading next rule while ignoring compiled code
 	        util_rpc_file(MaxErr,NewErrNum,
-			      _CompiledRuleList,_CompiledFactList,
+			      _CompiledRuleList,_CompiledFactList,_UDFPredsList,
 			      _FileOptionList,
 			      RuleStatus2,FileStatus),
 		merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
@@ -2053,7 +2200,7 @@ util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,FileOptionList,Rul
 	    ( flora_not_end_of_input(RuleStatus1)
 	    ->
 		util_rpc_file(MaxErr,NewErrNum,
-			      NewCompiledRuleList,NewCompiledFactList,
+			      NewCompiledRuleList,NewCompiledFactList,NewUDFPredsList,
 			      NewFileOptionList,
 			      RuleStatus2,FileStatus),
 		merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
@@ -2096,7 +2243,7 @@ discard_tokens :-
 
 
 /*************************************************************************
-  util_read_parse_compile(+Option,-Tokens,-RulesCode,-FactsCode,-OptionList,-Status)
+  util_read_parse_compile(+Option,-Tokens,-RulesCode,-FactsCode,-UDFPredsCode,-OptionList,-Status)
 
         Read file or command line, then parse and compile.
 
@@ -2109,21 +2256,23 @@ discard_tokens :-
         returns and so it should be set to [] later accordingly to close
         the end of the list.
 *************************************************************************/
-util_read_parse_compile(Option,Tokens,RulesCode,FactsCode,OptionList,Status) :-
+util_read_parse_compile(Option,Tokens,RulesCode,FactsCode,UDFPredsCode,OptionList,Status) :-
 	flora_tokens(InputTokens,LexerStatus), 
 	%% get InputTokens
 	count_errors(LexerStatus,LexErrNum),
 	( LexErrNum > 0 ->
 	    Tokens=InputTokens,
-	    RulesCode=T-T,
+	    RulesCode=R-R,
 	    FactsCode=F-F,
+	    UDFPredsCode=U-U,
 	    OptionList=[],
 	    ErrNum=LexErrNum
 
 	; flora_blank_line(InputTokens) ->
 	    Tokens=InputTokens,
-	    RulesCode=T-T,
+	    RulesCode=R-R,
 	    FactsCode=F-F,
+	    UDFPredsCode=U-U,
 	    OptionList=[],
 	    ErrNum=0
 	;
@@ -2137,8 +2286,9 @@ util_read_parse_compile(Option,Tokens,RulesCode,FactsCode,OptionList,Status) :-
 	    flora_compose(Tokens,ComposerTerm,ComposerStatus),
 	    count_errors(ComposerStatus,CompoErrNum),
 	    ( CompoErrNum > 0 ->
-		RulesCode=T-T,
+		RulesCode=R-R,
 		FactsCode=F-F,
+	    	UDFPredsCode=U-U,
 		OptionList=[],
 		ErrNum=CompoErrNum
 	    ;
@@ -2146,13 +2296,14 @@ util_read_parse_compile(Option,Tokens,RulesCode,FactsCode,OptionList,Status) :-
 		flora_parse(ComposerTerm,ParserTerm,ParserStatus),
 		count_errors(ParserStatus,ParErrNum),
 		( ParErrNum > 0 ->
-		    RulesCode=T-T,
+		    RulesCode=R-R,
 		    FactsCode=F-F,
+		    UDFPredsCode=U-U,
 		    OptionList=[],
 		    ErrNum=ParErrNum
 		;
 		    %% compile, and get RulesCode,FactsCode,OptionList
-		    flora_compile(ParserTerm,RulesCode,FactsCode,OptionList,CompileStat),
+		    flora_compile(ParserTerm,RulesCode,FactsCode,UDFPredsCode,OptionList,CompileStat),
 		    count_errors(CompileStat,CompiErrN),
 		    ErrNum=CompiErrN
 		)
@@ -2284,7 +2435,7 @@ construct_rest_query_term([T|Ts],[T|L]) :-
 flora_shell_command_line(Code,Options,Status) :-
 	reset_modules_for_shell,
 	util_read_parse_compile(FLORA_COMMANDLINE,Tokens,
-				Rules-[],Facts-[],
+				Rules-[],Facts-[],_UDFPredsCode,
 				RuleOptions,RuleStatus),
 	%% Trailer options will always be empty list in the shell
 	strip_indices_from_options_and_split(RuleOptions,StrippedOptions,_TrailerOptions),
@@ -2807,6 +2958,42 @@ util_compiler_warn([_|L],WarmNum) :- util_compiler_warn(L,WarmNum).
 
 
 /*************************************************************************
+  util_load_error(+CompileStat,+ErrorLine,+SymbolName,+FileName,-ErrNum)
+  util_load_warn(+CompileStat,+WarnLine,+SymbolName,+FileName,-WarnNum)
+*************************************************************************/
+util_load_error([],_,_,_,0) :- !.
+
+util_load_error([error(_Indx,Msg)|_L],Line,SymbolName,FileName,1) :-
+	!,
+	flora_stdwarn_nl,
+	flora_error_line('[~w] <Loader> near line(~w)/symbol(~w)',
+                             [FileName,Line,SymbolName]),
+	flora_error_indentline,
+	flora_stderr_string('~w~n',[Msg])/*,
+	util_load_error(L,Line,SymbolName,FileName,EN),
+	ErrNum is EN+1*/.
+
+%% Skip errors
+util_load_error([_|L],Line,SymbolName,FileName,ErrNum) :- util_load_error(L,Line,SymbolName,FileName,ErrNum).
+
+
+util_load_warn([],_,_,_,0) :- !.
+
+util_load_warn([warning(_Indx,Msg)|_L],Line,SymbolName,FileName,1) :-
+	!,
+	flora_stdwarn_nl,
+	flora_warning_line('[~w] <Loader> near line(~w)/symbol(~w)',
+                               [FileName,Line,SymbolName]),
+	flora_warning_indentline,
+	flora_stdwarn_string("~w~n",[Msg])/*,
+	util_load_warn(L,Line,SymbolName,FileName,WN),
+	WarnNum is WN+1*/.
+
+%% Skip warnings
+util_load_warn([_|L],Line,SymbolName,FileName,WarmNum) :- util_load_warn(L,Line,SymbolName,FileName,WarmNum).
+
+
+/*************************************************************************
   flora_coder_error(+CoderStatus)
 *************************************************************************/
 flora_coder_error([]) :- !.
@@ -2906,12 +3093,13 @@ dump_file_internal(OrigInFile,Workspace,SquashingOption) :-
 	util_FDB_filename(FlrFile,FDBFile),
 	util_FLD_filename(FlrFile,FLDFile),
 	util_FLS_filename(FlrFile,FLSFile),
+	util_FLT_filename(FlrFile,FLTFile),
 	util_dump_filename(PFile,DumpPFile),
 	util_dump_filename(FDBFile,DumpFDBFile),
 	util_dump_filename(FLDFile,DumpFLDFile),
 
 	flora_set_xpp_options_for_compile,
-	util_compile_file(FlrFile,PFile,FDBFile,FLDFile,FLSFile,Status),
+	util_compile_file(FlrFile,PFile,FDBFile,FLDFile,FLSFile,FLTFile,Status),
 	( Status == FLORA_FAILURE -> flora_clear_xpp_options, !, fail
 	; true
 	),
@@ -3546,28 +3734,32 @@ util_remove_file_carefully(File) :-
   flora_symbol_context_info(+File)
   Save symbols that are used in a flora program into and .fls File
 **********************************************************************/
-flora_symbol_context_info(File) :-
+flora_symbol_context_info(File,FlrFile) :-
         telling(PreOut),
         tell(File),
-	write_symbols,
-	write_nowarn_symbols,
+	write_nowarn_symbols(FlrFile),
+	write_symbols(FlrFile),
         told,
         tell(PreOut).
 
-write_symbols:-
-	findall(symbol(Name,N,Index,Line,Context,Transactional),
-		symbol(Name,N,Index,Line,Context,Transactional),
+write_symbols(FlrFile):-
+	%% add last dummy arg [] because it is trimmed before adding to trie
+	findall(flora_symbol(Name,N,WS,Index,Line,Context,Transactional,FlrFile),
+		symbol(Name,N,WS,Index,Line,Context,Transactional),
 		List),
 	!,
 	write_symbols_list(List).
 
-write_symbols.
+write_symbols(_).
 
-write_nowarn_symbols :-
-	findall(nowarn_symbol(Name,N,WS,Context,Transactional),
+write_nowarn_symbols(FlrFile) :-
+	%% add last dummy arg [] because it is trimmed before adding to trie
+	findall(flora_nowarn_symbol(Name,N,WS,Context,Transactional,FlrFile),
 		nowarn_symbol(Name,N,WS,Context,Transactional),
 		List),
+	!,
 	write_symbols_list(List).
+write_nowarn_symbols(_).
 
 write_symbols_list([H|T]):-
 	write_canonical(H),
@@ -3578,7 +3770,42 @@ write_symbols_list([H|T]):-
 write_symbols_list([]).
 
 
+/*********************************************************************
+  flora_save_tabled_udf_predicates(File)
+  Save symbols that are used in a flora program into an .fls File
+**********************************************************************/
+flora_save_tabled_udf_predicates(File,UDFPreds):-
+        telling(PreOut),
+        tell(File),
+	write_tabled_udf_predicates(UDFPreds),
+        told,
+        tell(PreOut).
 
+write_tabled_udf_predicates(T):-var(T),!.
+
+write_tabled_udf_predicates([(PredName,PredArity),UDFPreds]):-
+	flora_write_atom('#if defined(FLORA_UDF_DYNAMIC_TABLING)'),
+	nl,
+	flora_write_atom(':- dynamic FLORA_THIS_WORKSPACE('),
+	write(PredName),
+	flora_write_atom(')'),
+	flora_write_atom('/'),
+	write(PredArity),
+	flora_write_atom(' as FLORA_DYNAMICS_TYPE.'),
+	nl,
+	flora_write_atom('#endif'),
+	nl,
+	flora_write_atom('TABLING_CONNECTIVE table FLORA_THIS_WORKSPACE('),
+	write(PredName),
+	flora_write_atom(')'),
+	flora_write_atom('/'),
+	write(PredArity),
+	flora_write_atom(' as AUXILIARY_TABLING_TYPE.'),
+	nl,
+	write_tabled_udf_predicates(UDFPreds),
+	!.
+
+write_tabled_udf_predicates(_).
 
 %% This is used because retractall/1 is either slow by itself
 %% or is prone to invoke garbage collection too often
@@ -3605,3 +3832,20 @@ flora_when(Cond,Call) :-
 	; constraintLib:when(Cond,Call)
 	).
 flora_experimenting_with(no_attr_vars) :- disable_attributed_vars(true).
+
+
+/*********************************************************************
+  flora_print_include_statement(+FilePath)
+**********************************************************************/
+/*flora_print_include_statement(FilePath):-
+	parse_filename(FilePath,_Dir,Base,Ext),
+	flora_concat_atoms(['#include "',Base,'.',Ext,'"'],IncludeCommand),
+	flora_current_out_line(IncludeCommand).*/
+	
+/*********************************************************************
+  flora_print_define_filename_statement(+FilePath,+DefName),
+**********************************************************************/
+flora_print_define_filename_statement(FilePath,DefName):-
+	parse_filename(FilePath,_Dir,Base,Ext),
+	flora_concat_atoms(['#define ',DefName,' "',Base,'.',Ext,'"'],DefCommand),
+	flora_current_out_line(DefCommand).

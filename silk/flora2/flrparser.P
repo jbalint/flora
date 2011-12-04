@@ -634,18 +634,49 @@ is_labeled_construct(CANOTERM(Funct,2,FL_PARENTHESIS,[Label,Construct],_If,_Ip),
 
 is_user_defined_function(CANOTERM(Funct,1,FL_PARENTHESIS,[CANOTERM(Funct2,2,FL_PARENTHESIS,[CANOTERM(Funct3,2,FL_PARENTHESIS,[Function,ReturnValue],_,_),Body],_,_)],_If,_Ip),Function,Body,ReturnValue) :-
 	get_name(Funct,FL_UDFF),
-	get_name(Funct2,FL_UDFIF),
+	(get_name(Funct2,FL_UDFIF) ; get_name(Funct2,FL_IMPLYOP)),
 	get_name(Funct3,FL_UDFEQ).
 
 %% Error: definition of UDF but the third functor is not :=
 is_user_defined_function_typo(CANOTERM(Funct,1,FL_PARENTHESIS,[CANOTERM(Funct2,2,FL_PARENTHESIS,[CANOTERM(Funct3,2,FL_PARENTHESIS,[_Function,_ReturnValue],_,_),_Body],_,_)],_If,_Ip),_Function,_Body,_ReturnValue,Funct3) :-
 	get_name(Funct,FL_UDFF),
-	get_name(Funct2,FL_UDFIF),
+	(get_name(Funct2,FL_UDFIF) ; get_name(Funct2,FL_IMPLYOP)),
 	!.
 
+%% Error: definition of UDF but the second functor is :=
+%% Can be due to wrong 3rd functor and priorities
+is_user_defined_function_typo(CANOTERM(Funct,1,FL_PARENTHESIS,[CANOTERM(Funct2,2,FL_PARENTHESIS,[_H,CANOTERM(Funct3,_N3,_P3,_Args3,_,_)|_Args2],_,_)],_If,_Ip),_Function,_Body,_ReturnValue,Funct3) :-
+	get_name(Funct,FL_UDFF),
+	get_name(Funct2,FL_UDFEQ).
+
 %% Error: definition of UDF but the second functor is not if
-is_user_defined_function_typo(CANOTERM(Funct,1,FL_PARENTHESIS,[CANOTERM(Funct2,2,FL_PARENTHESIS,[CANOTERM(_Funct3,2,FL_PARENTHESIS,[_Function,_ReturnValue],_,_),_Body],_,_)],_If,_Ip),_Function,_Body,_ReturnValue,Funct2) :-
+is_user_defined_function_typo(CANOTERM(Funct,1,FL_PARENTHESIS,[CANOTERM(Funct2,_N,_P,_Args,_,_)],_If,_Ip),_Function,_Body,_ReturnValue,Funct2) :-
 	get_name(Funct,FL_UDFF).
+
+%% Error: definition of UDF but the first functor is not fucntion
+%% and one of the arguments functor is function 
+%% Can be due to operators priorities
+is_user_defined_function_inside_typo(CANOTERM(Funct,_,_,[CANOTERM(Funct2,_,_P,_Args,_,_)|_],_If,_Ip),_Function,_Body,_ReturnValue,Funct) :-
+	get_name(Funct,FName),
+	FName\=FL_UDFF,
+	get_name(Funct2,FL_UDFF).
+is_user_defined_function_inside_typo(CANOTERM(Funct,_,_,[CANOTERM(_Funct2,_,_,[CANOTERM(Funct3,1,_P,_Args,_,_)|_],_,_)|_],_If,_Ip),_Function,_Body,_ReturnValue,Funct) :-
+	get_name(Funct,FName),
+	FName\=FL_UDFF,
+	get_name(Funct3,FL_UDFF).
+is_user_defined_function_inside_typo(CANOTERM(Funct,_,_,[CANOTERM(Funct2,2,_,[_,CANOTERM(Funct3,_,_,_,_,_)],_,_)|_],_If,_Ip),_Function,_Body,_ReturnValue,Funct3) :-
+	get_name(Funct,FL_UDFF),
+	get_name(Funct2,FL_UDFEQ),
+	(
+		get_name(Funct3,FL_LEFTNAFIMPLY) ;
+		get_name(Funct3,FL_RIGHTNAFIMPLY) ;
+		get_name(Funct3,FL_LEFTNEGIMPLY) ;
+		get_name(Funct3,FL_RIGHTNEGIMPLY) ;
+		get_name(Funct3,FL_MVDSIGARROW) ;
+		get_name(Funct3,FL_MVDARROW) ;
+		get_name(Funct3,FL_LT) ;
+		get_name(Funct3,FL_GT) 
+	).
 
 is_user_defined_function_fact(CANOTERM(Funct,1,FL_PARENTHESIS,[CANOTERM(Funct2,2,FL_PARENTHESIS,[Function,Value],_,_)],_If,_Ip),Function,Value) :-
 	get_name(Funct,FL_UDFF),
@@ -1190,7 +1221,10 @@ flora_parse(_ComposerTerm,_Code,[error(UNKNOWN_ERROR)]).
 
 
 parse_canonical(CanoniTerm,Code,Status) :-
-	( is_rule(CanoniTerm,Head,Body) ->
+	( is_user_defined_function_inside_typo(CanoniTerm,_Function,_Body,_ReturnValue,ErrorTerm) ->
+	    parsing_error(ErrorTerm,ERROR_UDF,Status)
+
+	; is_rule(CanoniTerm,Head,Body) ->
 	    flora_parse_rule(Head,Body,Code,Status)
 
 	; is_directive(CanoniTerm,Directive) ->
@@ -1205,11 +1239,11 @@ parse_canonical(CanoniTerm,Code,Status) :-
 	; is_user_defined_function(CanoniTerm,Function,Body,ReturnValue) ->
 	    flora_parse_user_defined_function(Function,Body,ReturnValue,Code,Status)
 
-	; is_user_defined_function_typo(CanoniTerm,Function,Body,ReturnValue,ErrorTerm) ->
-	    parsing_error(ErrorTerm,ERROR_UDF,Status)
-
 	; is_user_defined_function_fact(CanoniTerm,Function,ReturnValue) ->
 	    flora_parse_user_defined_function_fact(Function,ReturnValue,Code,Status)
+
+	; is_user_defined_function_typo(CanoniTerm,_Function,_Body,_ReturnValue,ErrorTerm) ->
+	    parsing_error(ErrorTerm,ERROR_UDF,Status)
 
 	; %% flora_parse_fact must be the last one to call.
 	  flora_parse_fact(CanoniTerm,Code,Status)
@@ -2633,85 +2667,23 @@ parse_gpp_markup(CANOTERM(Funct,3,FL_PARENTHESIS,[Arg1,Arg2,Arg3],_If,_Ip),Statu
 ****************************************************************************/
 %%parse_udf_function(CanoniTerm,CodeList,Status):-parse_rule_body(CanoniTerm,CodeList,Status).
 
-/*
-parse_udf_function(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),Code,Status) :-
-	parse_body_term(Funct,N,Args,DISALLOW_TRANS,NULL,UDF_TERM_PARSE,Code,Status).
-*/
+parse_udf_function(CANOTERM(Funct,2,FL_PARENTHESIS,[_L,_R],_If,_Ip),_Code,Status) :-
+	get_atom(Funct,FL_AT),
+	!,
+	parsing_error(Funct,ERROR_UDF,Status).
 
 parse_udf_function(CanoniTerm,Code,Status) :-
-	%%parse_rule_body(CanoniTerm,UDF_TERM_PARSE,Code,Status).
-	%%parse_body_literal(CanoniTerm,NULL,UDF_TERM_PARSE,Code,Status).
-	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,NULL,UDF_TERM_PARSE,Code,Status).
-
-/*
-parse_udf_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
-	parse_body_pathexp(Funct,TransFlag,DWS,F,S), %% not parse_udf_pathexp, since it would parse only variable
-	( S == [] ->
-	    parse_udf_pathexplist(Args,DWS,AList,Status), %% parses only variables
-	    (Status == [] -> 
-                flterm_struct(F,N,AList,Code)
-            ;
-		true
-            )
-	;
-	  Status=S
-        ).
-*/
-
+	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,NULL,Code,Status).
 
 parse_udf_body(CanoniTerm,Code,Status) :-
-	%%parse_rule_body(CanoniTerm,NO_UDF_PARSE,Code,Status). %% do not restrict udf body
 	parse_rule_body(CanoniTerm,Code,Status). %% do not restrict udf body
-	%%parse_rule_body(CanoniTerm,UDF_TERM_PARSE,Code,Status).
-	%%parse_body_literal(CanoniTerm,NULL,UDF_TERM_PARSE,Code,Status).
-	%%parse_body_pathexp(CanoniTerm,ALLOW_TRANS,NULL,UDF_TERM_PARSE,Code,Status).
-
-/*
-parse_udf_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),Code,Status) :-
-	parse_body_term(Funct,N,Args,ALLOW_TRANS,NULL,UDF_TERM_PARSE,Code,Status).
-*/
-
-/*
-parse_udf_return_value(ObjectTerm,Code,[]) :-
-	is_variable(ObjectTerm,_,_),
-	flobject_struct(ObjectTerm,Code),
-	!.
-*/
 
 parse_udf_return_value(ObjectTerm,Code,Status) :-
-	parse_body_pathexp(ObjectTerm,DISALLOW_TRANS,NULL,NO_UDF_PARSE,Code,Status),
-	%%parse_rule_body(ObjectTerm,UDF_TERM_PARSE,Code,Status),
+	parse_body_pathexp(ObjectTerm,DISALLOW_TRANS,NULL,Code,Status),
 	!.
 
 parse_udf_return_value(ObjectTerm,_,Status):-
 	parsing_error(ObjectTerm,ERROR_UDF_RETURN_VALUE,Status).
-
-
-/****************************************************************************
-  parse_udf_pathexplist(+ListOfCanoniTerms,+DWS,-ListOfPathExpressions,-Status)
-
-  parses a list of path expressions that are supposed to represent oids.
-  checks if arguments of function or predicate are only variables
-****************************************************************************/
-/*
-parse_udf_pathexplist([],_DWS,[],[]) :- !.
-
-parse_udf_pathexplist([T|L],DWS,[TCode|LCode],Status) :-
-	parse_udf_pathexp(T,DISALLOW_TRANS,DWS,TCode,S),
-	( S == [] ->
-	    parse_udf_pathexplist(L,DWS,LCode,Status)
-	;
-	  Status=S
-        ).
-
-parse_udf_pathexp(ObjectTerm,_TransFlag,_DWS,Code,[]) :-
-	is_variable(ObjectTerm,_,_), 
-	flobject_struct(ObjectTerm,Code),
-	!.
-
-parse_udf_pathexp(ObjectTerm,_TransFlag,_DWS,_Code,Status) :-
-	parsing_error(ObjectTerm,ERROR_UDF_ARGUMENTS,Status).
-*/
 
 
 /****************************************************************************
@@ -2926,7 +2898,7 @@ parse_head_literal_list([First|List],DWS,[FirstCode|ListCode],Status) :-
   is a list containing some error message.
 
 
-  parse_rule_body(+CanoniTerm,+WorkSpace,+DefaultWorkSpace,+UDF,-Goal,-Status)
+  parse_rule_body(+CanoniTerm,+WorkSpace,+DefaultWorkSpace,-Goal,-Status)
 
   Note: Module name specification is distributive over negation, conjunction
         and disjunction in the rule body. WorkSpace is the inner-most module
@@ -2991,8 +2963,10 @@ parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[G],If,_Ip),WS,DWS,Code,Status) 
         ).
 
 %% Parsing quantifiers.
-%% QF: quantified formula. We allow only one quantifier here: existential.
-%% And only once, under \+ or not/naf.
+%% QF: quantified formula. We allow only the following quantifiers here:
+%%    existential, mustground,wishground,mustbound,withbound.
+%% And only once, existential is allowed under \+ or not/naf,
+%% others are not allowed under negation.
 %% This would have to be generalized for Lloyd-Topor
 parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[QF],If,_Ip),WS,DWS,Code,Status) :-
 	get_atom(Funct,F),
@@ -4813,22 +4787,14 @@ parse_prlgterm(CanoniTerm,_DWS,_Code,Status) :-
 
 
 /****************************************************************************
-  parse_body_term(+Funct,+Arity,+Args,+TransFlag,+DSW,+UDF,-Code,-Status)
+  parse_body_term(+Funct,+Arity,+Args,+TransFlag,+DSW,-Code,-Status)
 
   Parse a term Funct-spec(Args). Arguments are parsed according to
   the argument spec in flora_argdef. The final parsed term is composed
   using flterm_struct
 
-  +UDF - parse for user defined function definition, check if term has only variables as arguments
-	 NO_UDF_PARSE - do not check
-	 UDF_TERM_PARSE - parse term, i.e. call parsing of arguments with UDF flag set to 2
-	 UDF_ARG_PARSE - parse arguments, i.e. check if they are variables only
-
 ****************************************************************************/
-parse_body_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
-	parse_body_term(Funct,N,Args,TransFlag,DWS,0,Code,Status).
-
-parse_body_term(Funct,N,Args,_TransFlag,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_term(Funct,N,Args,_TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,FAtom),
 	flora_argdef(FAtom,N,ArgTypes,DWS),
 	!, 
@@ -4840,38 +4806,20 @@ parse_body_term(Funct,N,Args,_TransFlag,DWS,NO_UDF_PARSE,Code,Status) :-
 	    true
 	).
 
-parse_body_term(Funct,N,_Args,_TransFlag,DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,FAtom),
-	flora_argdef(FAtom,N,_ArgTypes,DWS),
-	!, 
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
-parse_body_term(Funct,_N,Args,_TransFlag,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_term(Funct,_N,Args,_TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_datatypeop(F),
 	!,
 	get_index(Funct,If),
 	parse_composer_datatype(Args,If,DWS,Code,Status).
 
-parse_body_term(Funct,_N,_Args,_TransFlag,_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,F),
-	is_datatypeop(F),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
-parse_body_term(Funct,2,Args,TransFlag,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_term(Funct,2,Args,TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_curi_op(F),
 	!,
 	parse_curi(Args,TransFlag,DWS,Code,Status).
 
-parse_body_term(Funct,2,_Args,_TransFlag,_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,F),
-	is_curi_op(F),
-	!,
-	parsing_error(Funct,ERROR_UDF_TERM,Status).
-
-parse_body_term(Funct,N,Args,TransFlag,DWS,UDF,Code,Status) :-
+parse_body_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
         fltransactionalobject_struct(Funct,F),
         !,
         ( TransFlag == ALLOW_TRANS ->
@@ -4879,32 +4827,23 @@ parse_body_term(Funct,N,Args,TransFlag,DWS,UDF,Code,Status) :-
 		flora_argdef(FAtom,N,ArgTypes,DWS)
 	    -> parse_body_argpathexplist(Args,ArgTypes,DWS,AList,Status)
 	    ;
-		parse_body_pathexplist(Args,DWS,UDF,AList,Status)
+		parse_body_pathexplist(Args,DWS,AList,Status)
 	    ),
             (Status == [] -> fltransactionalterm_struct(F,N,AList,Code) ; true)
         ;
             parsing_error(Funct,ERROR_TRANSACTIONAL_SYMBOL,Status)
         ).
 
-parse_body_term(Funct,N,Args,TransFlag,DWS,UDF,Code,Status) :-
-	parse_body_pathexp(Funct,TransFlag,DWS,NO_UDF_PARSE,F,S),
-	%%parse_body_pathexp(Funct,TransFlag,DWS,UDF,F,S),
+parse_body_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
+	parse_body_pathexp(Funct,TransFlag,DWS,F,S),
 	( S == [] ->
-	    %% set UDF2 for parsing term arguments, i.e., UDF_ARG_PARSE
-	    %% (check if the arguments are variables only), if the context
-	    %% UDF is set to UDF_TERM_PARSE
-	    form_udf_flag_for_args(Funct,UDF,UDF2),
-	    parse_body_pathexplist(Args,DWS,UDF2,AList,Status),
+	    parse_body_pathexplist(Args,DWS,AList,Status),
 	    (Status == [] -> 
                 ((is_fltransactionalterm_struct(F)
 		 ; is_fltransactionalatom_struct(F)
 		 )
 		->
-		    ( UDF=NO_UDF_PARSE ->
                     	fltransactionalterm_struct(F,N,AList,Code)
-		    ;
-			parsing_error(F,ERROR_UDF_TERM,Status)
-		    )
                 ;
                     flterm_struct(F,N,AList,Code)
                 )
@@ -4913,32 +4852,6 @@ parse_body_term(Funct,N,Args,TransFlag,DWS,UDF,Code,Status) :-
 	;
 	  Status=S
         ).
-
-/****************************************************************************
-form_udf_flag_for_args(+Funct,+UDF,-UDF2)
-
-form flag UDF for parsing arguments of the term
-
-  +UDF - parse for user defined function definition, check if term has only variables as arguments
-	 NO_UDF_PARSE - do not check
-	 UDF_TERM_PARSE - parse term, i.e.
-                          parsing arguments with UDF flag set to UDF_ARG_PARSE
-	 UDF_ARG_PARSE - parse arguments, i.e. check if they are variables only
-
-****************************************************************************/
-form_udf_flag_for_args(_Funct,_UDF,UDF2):-
-	has_context(parsing_udf_fact),
-	!,
-	UDF2=NO_UDF_PARSE.
-form_udf_flag_for_args(Funct,UDF_TERM_PARSE,UDF2):-
-	get_atom(Funct,FL_AT),
-	!,
-	UDF2=UDF_TERM_PARSE.
-form_udf_flag_for_args(_Funct,UDF_TERM_PARSE,UDF2):-
-	!,
-	UDF2=UDF_ARG_PARSE.
-form_udf_flag_for_args(_Funct,_UDF,UDF2):-
-	UDF2=NO_UDF_PARSE.
 
 /****************************************************************************
   parse_pure_term(+Canoterm,+DWS,-Code,-Status)
@@ -5139,26 +5052,17 @@ parse_list(L,T,Index,DWS,Code,Status) :-
 
 
 /****************************************************************************
-  parse_body_pathexplist(+ListOfCanoniTerms,+DWS,+UDF,-ListOfPathExpressions,-Status)
+  parse_body_pathexplist(+ListOfCanoniTerms,+DWS,-ListOfPathExpressions,-Status)
 
   parses a list of path expressions that are supposed to represent oids.
 
-  +UDF - parse for user defined function definition, check if term has only variables as arguments
-	 NO_UDF_PARSE - do not check
-	 UDF_TERM_PARSE - do parse term, i.e.,
-	                  parse arguments with UDF flag set to UDF_ARG_PARSE
-	 UDF_ARG_PARSE - parse arguments, i.e. check if they are variables only
-
 ****************************************************************************/
-parse_body_pathexplist(List,DWS,Code,Status) :-
-	parse_body_pathexplist(List,DWS,NO_UDF_PARSE,Code,Status).
+parse_body_pathexplist([],_DWS,[],[]) :- !.
 
-parse_body_pathexplist([],_DWS,_UDF,[],[]) :- !.
-
-parse_body_pathexplist([T|L],DWS,UDF,[TCode|LCode],Status) :-
-	parse_body_pathexp(T,DISALLOW_TRANS,DWS,UDF,TCode,S),
+parse_body_pathexplist([T|L],DWS,[TCode|LCode],Status) :-
+	parse_body_pathexp(T,DISALLOW_TRANS,DWS,TCode,S),
 	( S == [] ->
-	    parse_body_pathexplist(L,DWS,UDF,LCode,Status)
+	    parse_body_pathexplist(L,DWS,LCode,Status)
 	;
 	  Status=S
         ).
@@ -5204,23 +5108,15 @@ parse_body_argpathexplist([T|L],[FL_ARITH|Arguments],DWS,[TACode|LCode],Status) 
 
 
 /****************************************************************************
-  parse_body_pathexp(+CanoniTerm,+TransFlag,+DWS,+UDF,-PathExpression,-Status)
+  parse_body_pathexp(+CanoniTerm,+TransFlag,+DWS,-PathExpression,-Status)
 
   Parse path expression represented by CanoniTerm. A path expression is
   oid[molecule].oid[molecule]. ... .oid[molecule]
   (molecules are optional)
   Also term:term, term::term, and lists
 
-  +UDF - parse for user defined function definition, check if term has only variables as arguments
-	 NO_UDF_PARSE - do not check
-	 UDF_TERM_PARSE - parse term, i.e. call parsing of arguments with UDF flag set to 2
-	 UDF_ARG_PARSE - parse arguments, i.e. check if they are variables only
-
 ****************************************************************************/
-parse_body_pathexp(CanoniTerm,TransFlag,DWS,Code,Status) :-
-	parse_body_pathexp(CanoniTerm,TransFlag,DWS,NO_UDF_PARSE,Code,Status).
-
-parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_TransFlag,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	(is_birelop(F); is_objrefop(F)),
 	!,
@@ -5235,43 +5131,25 @@ parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_TransFlag,DWS,
 	  true
         ).
 
-parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_TransFlag,_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,F),
-	(is_birelop(F); is_objrefop(F)),
-	!,
-	parsing_error(Funct,ERROR_UDF,Status).
-
 %% To handle CURI structure like prefix#suffix
-parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_curi_op(F),
 	!,
 	parse_curi(Args,TransFlag,DWS,Code,Status).
 
-parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_TransFlag,_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,F),
-	is_curi_op(F),
-	!,
-	parsing_error(Funct,ERROR_UDF,Status).
-
 % To handle literal^^sort 
-parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),_TransFlag,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),_TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_datatypeop(F),
 	!,
 	parse_composer_datatype(Args,If,DWS,Code,Status).
 
-parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),_TransFlag,_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,F),
-	is_datatypeop(F),
-	!,
-	parsing_error(Funct,ERROR_UDF,Status).
-
 %% This clause handles module specification @_prolog() and @_prologall()
 %% in the argument position.
 %% Note that @module (for FLORA modules) is deprecated in the argument position.
 %% But aggregate{ ... atom@module} and update{atom@module} are allowed.
-parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,FL_AT),
 	!,
 	parse_workspace(R,WSCode,S1),
@@ -5316,29 +5194,21 @@ parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,DWS,N
 	  Status=S1
         ).
 
-parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,[_L,_R],_If,_Ip),_TransFlag,_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,FL_AT),
+parse_body_pathexp(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,Code,Status) :-
 	!,
-	parsing_error(Funct,ERROR_UDF,Status).
+	parse_body_term(Funct,N,Args,TransFlag,DWS,Code,Status).
 
-parse_body_pathexp(CANOTERM(Funct,_N,FL_PARENTHESIS,_Args,_If,_Ip),_TransFlag,_DWS,UDF_ARG_PARSE,_Code,Status) :-
-	!,
-	parsing_error(Funct,ERROR_UDF_ARGUMENTS,Status).
-
-parse_body_pathexp(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,UDF,Code,Status) :-
-	!,
-	parse_body_term(Funct,N,Args,TransFlag,DWS,UDF,Code,Status).
-
-parse_body_pathexp(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),_TransFlag,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),_TransFlag,DWS,Code,Status) :-
 	!,
 	parse_body_objspec(Funct,N,Args,DWS,Code,Status).
 
-parse_body_pathexp(CANOLIST(L,T,_N,I,_Ib),_TransFlag,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_pathexp(CANOLIST(L,T,_N,I,_Ib),_TransFlag,DWS,Code,Status) :-
 	!,
 	parse_list(L,T,I,DWS,Code,Status).
 
+
 %% ${...} - reification
-parse_body_pathexp(CANOTERM(Funct,N,FL_BRACE,[Arg|Rest],If,Ip),_TransFlag,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,N,FL_BRACE,[Arg|Rest],If,Ip),_TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,Atom),
 	is_reifyop(Atom),
 	!,
@@ -5349,44 +5219,28 @@ parse_body_pathexp(CANOTERM(Funct,N,FL_BRACE,[Arg|Rest],If,Ip),_TransFlag,DWS,NO
 	    parse_reify(Arg,DWS,Code,Status)
 	).
 	
-parse_body_pathexp(CANOTERM(Funct,_N,FL_BRACE,_Args,_If,_Ip),_TransFlag,_DWS,_UDF,_Code,Status) :-
-	get_atom(Funct,Atom),
-	is_reifyop(Atom),
-	!,
-	parsing_error(Funct,ERROR_UDF,Status).
-
-parse_body_pathexp(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,NO_UDF_PARSE,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code,Status) :-
 	!,
 	parse_aggregt(Funct,N,Args,If,Ip,DWS,Code,Status).
 
-parse_body_pathexp(ObjectTerm,_TransFlag,_DWS,NO_UDF_PARSE,_Code,Status) :-
+parse_body_pathexp(ObjectTerm,_TransFlag,_DWS,_Code,Status) :-
 	%% New oid directive is only allowed in rule heads or reified formulas.
 	get_spectoken(ObjectTerm,FL_NEWOID),
 	\+ has_context(reifying),
 	!,
 	parsing_error(ObjectTerm,ERROR_NEWOID,Status).
 
-%%parse_body_pathexp(ObjectTerm,_TransFlag,_DWS,NO_UDF_PARSE,Code,[]) :-
-parse_body_pathexp(ObjectTerm,_TransFlag,_DWS,_UDF,Code,[]) :-
+parse_body_pathexp(ObjectTerm,_TransFlag,_DWS,Code,[]) :-
 	flobject_struct(ObjectTerm,Code),
 	!.
 
-parse_body_pathexp(ObjectTerm,_TransFlag,_DWS,UDF_ARG_PARSE,Code,[]) :-
-	%% UDF_ARG_PARSE - check that term is a variable
-	is_variable(ObjectTerm,_,_), 
-	flobject_struct(ObjectTerm,Code),
-	!.
-
-parse_body_pathexp(CANOBRACE(_L,_N,I),_TransFlag,_DWS,NO_UDF_PARSE,_Code,Status) :-
+parse_body_pathexp(CANOBRACE(_L,_N,I),_TransFlag,_DWS,_Code,Status) :-
 	!,
 	parsing_error(I,ERROR_SETNOTE,Status).
 
-parse_body_pathexp(CanoniTerm,_TransFlag,_DWS,NO_UDF_PARSE,_Code,Status) :-
+parse_body_pathexp(CanoniTerm,_TransFlag,_DWS,_Code,Status) :-
 	!,
 	parsing_error(CanoniTerm,ERROR_PATHEXP,Status).
-
-parse_body_pathexp(CanoniTerm,_TransFlag,_DWS,_UDF,_Code,Status) :-
-	parsing_error(CanoniTerm,ERROR_UDF_ARGUMENTS,Status).
 
 %% Define which type of arguments should not have module specification.
 nowspathexp(S) :- is_fllist_struct(S), !.

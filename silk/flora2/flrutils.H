@@ -37,6 +37,7 @@
 	flora_slash/1,
 	flora_cputime/1,
 	flora_set_counter/2,
+	flora_get_counter/2,
 	flora_increment_counter/4,
 	flora_concat_atoms/2,
 	flora_concat_items/2,
@@ -70,6 +71,10 @@
 	flora_db_reclaim_space/1,
 	flora_storage_find_fact/2
    from flrstoragebase.
+
+:- import
+	storage_insert_fact/3
+   from storage.
 
 :- import incr_flora_update_counter/0 from flrnegation.
 
@@ -111,11 +116,15 @@
 	flora_clear_compilation_permaoptions/0,
 	flora_reset_compiler/0,
 	flora_compile_pathexp/3,
-	flora_compile/5,
-        flora_compile_add/5,
+	flora_compile/6,
+        flora_compile_add/6,
         flora_clear_compilation_symbols/0,
-	symbol/6,
-	nowarn_symbol/5
+	symbol/7,
+	nowarn_symbol/5,
+	form_symbol_context_status/8,
+	compiling_warning/3,
+	is_fltoken/3,
+	is_flvariable/3
    from flrcompiler.
 
 :- import
@@ -188,7 +197,8 @@
 	flora_fdb_storage_name/2,
 	flora_module_name_error/1,
 	%% support for undefinedness
-	flora_fld_storage_name/2
+	flora_fld_storage_name/2,
+	flora_fls_storage_name/2
    from flrwrapper.
 
 :- import      
@@ -260,6 +270,7 @@
 	flora_experimenting_with/1,
 
 	flora_read_canonical_and_insert/2,
+	flora_read_symbols_canonical_and_insert/2,
 	flora_load_system_module_util/1,
 	flora_measure_time/2,
 	

@@ -87,4 +87,5 @@
 	fldirective_struct/3,
 	flatom_struct/3,
 	flterm_struct/4,
-	flconjunct_struct/3.
+	flconjunct_struct/3,
+	is_delayquant/1.
