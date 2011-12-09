@@ -87,7 +87,8 @@
 	is_prdatatypelist/2,
         is_prtransactionalnumber/3,
         is_prstring/1,
-        is_prfact/2
+        is_prfact/2,
+	is_prfloralib/3
    from flrcoder.
 
 :- import flora_delayed_literal/2 from FLDELAYSUPPORTMOD.

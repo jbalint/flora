@@ -123,7 +123,6 @@
 	nowarn_symbol/5,
 	form_symbol_context_status/8,
 	compiling_warning/3,
-	is_fltoken/3,
 	is_flvariable/3
    from flrcompiler.
 

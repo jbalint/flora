@@ -4272,25 +4272,23 @@ check_symbol_name(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
 	flora_get_flatomvar_name(Funct,Name),
 	%% if workspace for symbol is NULL then we ignore warnings
 	%% only if StoredWS is current module or NULL
-	has_nowarn_symbol(Name,Arity,StoredWS,SymbolContext,Transactional),
-	is_fltoken(StoredWS,FL_THISMODULE,_),
+	has_nowarn_symbol(Name,Arity,FL_THISMODULE,SymbolContext,Transactional),
+	!,
   	approx_flindex(Funct,Index),
 	get_index_line(Index,Line),
-	add_symbol(Name,Arity,NULL,Index,Line,SymbolContext,Transactional),
-	!.
+	add_symbol(Name,Arity,NULL,Index,Line,SymbolContext,Transactional).
 
 check_symbol_name(Funct,Arity,WS,SymbolContext,Transactional,[]):-
 	flora_get_flatomvar_name(Funct,Name),
-	has_nowarn_symbol(Name,Arity,StoredWS,SymbolContext,Transactional),
 	%% if workspace for symbol is not NULL then we ignore warnings
 	%% only if StoredWS has the same name as WS
 	WS \=NULL,
-	is_fltoken(WS,WSName,_),
-	is_fltoken(StoredWS,WSName,_),
+	flora_get_flatomvar_name(WS,WSName),
+	has_nowarn_symbol(Name,Arity,WSName,SymbolContext,Transactional),
+	!,
   	approx_flindex(Funct,Index),
 	get_index_line(Index,Line),
-	add_symbol(Name,Arity,WS,Index,Line,SymbolContext,Transactional),
-	!.
+	add_symbol(Name,Arity,WS,Index,Line,SymbolContext,Transactional).
 
 check_symbol_name(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextStatus):-
 	flora_get_flatomvar_name(Funct,Name),
@@ -6076,15 +6074,15 @@ compile_wsliteral(ParserTerm,WS,Nesting,OidCode,WSCode,BodyHeadList,Status) :-
 	    attach_workspace(WS,
 			     atomlit_struct(BODYLITERAL,ParserTerm,Code),
 			     Code,WSCode),
-	    OidCode=NULL,
-	    Status=[]
+	    check_symbol_name(ParserTerm,0,WS,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
+	    OidCode=NULL
 	;
 	    BodyHeadList = [],
 	    attach_workspace(WS,
 			     transactionalatomlit_struct(BODYLITERAL,ParserTerm,Code),
 			     Code,WSCode),
-	    OidCode=NULL,
-	    Status=[]
+	    check_symbol_name(ParserTerm,0,WS,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,Status),
+	    OidCode=NULL
 	).
 
 
@@ -7458,16 +7456,16 @@ compile_head_wsliteral(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    attach_workspace(WS,
 			     atomlit_struct(HEADLITERAL,ParserTerm,ACode),
 			     ACode,Code),
+	    check_symbol_name(ParserTerm,0,WS,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
 	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL,
-	  Status=[]
+	    H2BCodeTail=NULL
 	;
 	    attach_workspace(WS,
 			     transactionalatomlit_struct(HEADLITERAL,ParserTerm,ACode),
 			     ACode,Code),
+	    check_symbol_name(ParserTerm,0,WS,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,Status),
 	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL,
-	  Status=[]
+	    H2BCodeTail=NULL
 	).
 
 
@@ -8936,18 +8934,46 @@ Predicates for checking usage of symbols with the same name and arity
 The goal is to generate warnings/errors if the same symbol is used in different
 contexts or user defined function is used before it is declared, etc. 
 ****************************************************************************/
+add_symbol(Name,N,NULL,Index,LineNumber,Context,Transactional) :-
+	!,
+	assert(symbol(Name,N,NULL,Index,LineNumber,Context,Transactional)).
 add_symbol(Name,N,WS,Index,LineNumber,Context,Transactional) :-
+	is_flvariable(WS,_VarName,_VarIndex),
+	!,
 	assert(symbol(Name,N,WS,Index,LineNumber,Context,Transactional)).
+add_symbol(Name,N,WS,Index,LineNumber,Context,Transactional) :-
+	is_prfloralib(WS,WSName,_),
+	!,
+	assert(symbol(Name,N,WSName,Index,LineNumber,Context,Transactional)).
+add_symbol(Name,N,WS,Index,LineNumber,Context,Transactional) :-
+	flora_get_flatomvar_name(WS,WSName),
+	assert(symbol(Name,N,WSName,Index,LineNumber,Context,Transactional)).
+
 has_symbol(Name,Arity,_,NO_INDEX,-1,BUILTIN_SYMBOL,_) :-
 	flora_nodefp(Name,Arity),!.
 has_symbol(Name,Arity,_,NO_INDEX,-1,BUILTIN_SYMBOL,_) :-
 	flora_delayed_literal(Name,Arity),!.
 has_symbol(Name,N,WS,Index,LineNumber,Context,Transactional) :-
 	symbol(Name,N,WS,Index,LineNumber,Context,Transactional),!.
+
+add_nowarn_symbol(Name,N,NULL,Context,Transactional) :-
+	!,
+	assert(nowarn_symbol(Name,N,NULL,Context,Transactional)).
 add_nowarn_symbol(Name,N,WS,Context,Transactional) :-
+	is_flvariable(WS,_VarName,_VarIndex),
+	!,
 	assert(nowarn_symbol(Name,N,WS,Context,Transactional)).
+add_nowarn_symbol(Name,N,WS,Context,Transactional) :-
+	is_prfloralib(WS,WSName,_),
+	!,
+	assert(nowarn_symbol(Name,N,WSName,Context,Transactional)).
+add_nowarn_symbol(Name,N,WS,Context,Transactional) :-
+	flora_get_flatomvar_name(WS,WSName),
+	assert(nowarn_symbol(Name,N,WSName,Context,Transactional)).
+
 has_nowarn_symbol(Name,N,WS,Context,Transactional) :-
 	nowarn_symbol(Name,N,WS,Context,Transactional),!.
+
 flora_clear_compilation_symbols:-retractall(symbol(_,_,_,_,_,_,_)),retractall(nowarn_symbol(_,_,_,_,_)).
 
 

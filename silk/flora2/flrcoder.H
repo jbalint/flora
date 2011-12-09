@@ -102,4 +102,5 @@
 	is_primvdcondef/6,
 	is_prreify/2,
 	is_flogic/4,
-	is_fllibdb/1.
+	is_fllibdb/1,
+	is_prfloralib/3.
