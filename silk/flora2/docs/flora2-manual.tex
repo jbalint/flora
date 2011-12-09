@@ -7972,10 +7972,15 @@ definition could look like this:
         writeln(z=Z).
 \end{verbatim}
 %% 
-The sensor \texttt{sens2/4} is, on the other hand, defined using a
+Since \texttt{sens1/4}  is defined in an external Prolog module, it must be
+referenced using the \texttt{@\_prolog(sensorfoo)} idiom.
+
+The sensor \texttt{sens2/4} is different from \texttt{sens1/4} in that it
+is declared using a
 two-argument sensor-directive, so its definition is expected to be in a
-\texttt{.flr} file. However, as noted before, all sensors are required to
-be Prolog predicates, so \FLORA requires a \texttt{prolog} declaration for sens2/4:
+\texttt{.flr} file. As noted before, all sensors are 
+Prolog predicates, so \FLORA will declare \texttt{sens2/4} as as a
+prolog as if the user issued an explicit directive
 %% 
 \index{prolog directive}
 %% 
@@ -7983,7 +7988,7 @@ be Prolog predicates, so \FLORA requires a \texttt{prolog} declaration for sens2
    :- prolog sens2/4.
 \end{verbatim}
 %% 
-Both the sensor declaration and the Prolog declaration must appear in the
+The sensor declaration must appear in the
 the \FLORA module where the sensor is actually defined by rules.
 For sens2/4, a definition could look like this:
 %% 
@@ -10833,6 +10838,82 @@ in order to flush the log to the output.
 \FLORA also provides {\tt \_logforestlow(HideOptions)} and 
 {\tt \_logforestlow(File, HideOptions)} to skip certain types of low-level 
 log entries. 
+
+\subsection{Call and Answer Depth, Timeouts, Unification Mode}
+
+\index{call depth}
+\index{answer depth}
+\index{timeout}
+%%
+Sometimes it is useful to be able to control the term-depth of the calls
+that can be generated during evaluation and the depth of the answers
+returned. The former is useful if the user knowledge base has recursive
+rules in which the depth of the body literals is greater than the depth of
+the head. The latter is useful when a query has an infinite number of
+answers. In both cases, limiting the depth can terminate a run-away
+computation.
+Timeouts are useful when it is desirable to stop the computation if it does
+not finish within a preset amount of time.
+To control these features, \FLORA provides the following predicates:
+
+\index{flora\_set\_timeout}
+\index{flora\_clear\_timeout}
+%% 
+\begin{alltt}
+    ?- flora_set_timeout(\emph{Time},fail)@_prolog(flrerrhandler).
+    ?- flora_set_timeout(\emph{Time},abort)@_prolog(flrerrhandler).
+    ?- flora_clear_timeout@_prolog(flrerrhandler).
+\end{alltt}
+%% 
+where \emph{Time} is an integer that specifies the number of seconds after
+which queries should be terminated. The first form will cause long-running
+queries to fail and the second will abort them. Note that once one of these
+commands is issued, it applies to all subsequent queries.
+The last command resets the timeout to infinity.
+
+\index{flora\_set\_subgoal\_depth}
+%% 
+\begin{alltt}
+    ?- flora_set_subgoal_depth(\emph{TermDepth},\emph{ListDepth},fail)@_prolog(flrerrhandler).
+    ?- flora_set_subgoal_depth(\emph{TermDepth},\emph{ListDepth},abort)@_prolog(flrerrhandler).
+\end{alltt}
+%% 
+The \texttt{flora\_set\_subgoal\_depth} command controls the maximum depth
+of calls during the evaluation. \emph{TermDepth} specifies the depth of
+nesting of all function symbols except lists (lists are considered to be of
+depth 1) and \emph{ListDepth} specifies the maximum length of lists. Number
+0 means infinity. The first form of the above command will fail any subgoal
+whose depth exceeds one of the specified limits. The second form will abort
+the query.  
+
+\index{flora\_set\_answer\_depth}
+%% 
+\begin{alltt}
+    ?- flora_set_answer_depth(\emph{TermDepth},\emph{ListDepth},fail)@_prolog(flrerrhandler).
+    ?- flora_set_answer_depth(\emph{TermDepth},\emph{ListDepth},abort)@_prolog(flrerrhandler).
+\end{alltt}
+%% 
+This command controls the depth of the returned answers. The meaning of the
+arguments in the same as in the case of \texttt{flora\_set\_subgoal\_depth}.
+
+\index{flora\_set\_unification\_mode}
+%% 
+\begin{alltt}
+    ?- flora_set_unification_mode(fast)@_prolog(flrerrhandler).
+    ?- flora_set_unification_mode(correct)@_prolog(flrerrhandler).
+\end{alltt}
+%% 
+This command controls the experimental feature of unification mode.
+The default unification mode is \texttt{fast}. This is a logically unsound
+mode: it does not do the occurs-check and so the unification
+\texttt{?X = f(?X)} will succeed even though the two terms are not
+unifiable in the classical sense. The \texttt{correct} mode would fail such a
+unification.
+
+Unifying in the fast mode can lead to hard-to-find errors, although \FLORA
+makes attempts to limit the damage and the probability of serious problems
+occurring due to this mode of unification is low.
+
 
 \section{Optimizations}
 
