@@ -42,8 +42,15 @@
 	flora_fld_storage_name/2
    from flrwrapper.
 
-%% Undefinedness support
-:- dynamic using_debug_prefix(_).
+%% making is_flogic/4 dynamic and indexing on 1+2 makes the coder a bit faster
+:- dynamic is_flogic(_,_,_,_).
+:- index(is_flogic/4,1+2).
+
+:- index(is_pratomlit/5,2).
+:- index(is_prtermlit/5,2).
+:- index(is_prtransactionaltermlit/5,2).
+:- index(is_prtransactionalatomlit/5,2).
+
 
 :- import flora_parse_datatype/4 from flrdatatype_parse.
 :- import

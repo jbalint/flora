@@ -82,7 +82,7 @@ is_prdyncallerargsvar(PRDYNCALLERARGSVAR(PRDYNCALLERARGSVAR)).
 is_prworkspaceterm(PRWORKSPACETERM(WSTerm),WSTerm).
 
 %% with textual information
-is_pratom(PRATOM(Atom,_I),Atom) :- !.
+is_pratom(PRATOM(Atom,_I),Atom).
 is_pratom(PRATOM(Atom,I),Atom,I) :- !.
 is_pratom(Atom,Atom,NO_INDEX) :- atom(Atom), Atom \= [].
 is_prwsatom(PRWSATOM(Atom),Atom) :- !.
@@ -147,6 +147,7 @@ is_goallogic(PRCUT(_I),FL_CUT,0,[]) :- !.
 is_prcall(PRCALL(Var),Var).
 
 
+%% indexed on 2
 %% Positive atomic formula, rule body
 %% List is [Atom] or [Atom,Caller]
 is_pratomlit(PRATOMLIT(List,I),CODER_BODY_CONTEXT,FLBodyPREFIX(WRAP_TABLED_HILOG),List,I).
@@ -162,6 +163,7 @@ is_pratomlit(PRATOMLIT(List,I),CODER_HEAD_CONTEXT,FLHEADPREFIX(WRAP_TABLED_HILOG
 is_pratomlit(PRNEG(PRATOMLIT(List,I)),CODER_HEAD_CONTEXT,FLNEGHEADPREFIX(WRAP_TABLED_HILOG),List,I).
 
 
+%% indexed on arg 2
 %% transactional atomic formula, rule body
 is_prtransactionalatomlit(PRTRANSACTIONALATOMLIT(List,I),CODER_BODY_CONTEXT,FLBodyPREFIX(WRAP_NONTABLED_HILOG),List,I).
 %% facts for transactional atom, dynamic rule heads
@@ -170,6 +172,7 @@ is_prtransactionalatomlit(PRTRANSACTIONALATOMLIT(List,I),CODER_GENERIC_CONTEXT,W
 is_prtransactionalatomlit(PRTRANSACTIONALATOMLIT(List,I),CODER_HEAD_CONTEXT,FLHEADPREFIX(WRAP_NONTABLED_HILOG),List,I).
 
 
+%% indexed on 2
 %% Positive tabled HiLog atomic formula, body
 is_prtermlit(PRTERMLIT(FObj,_N,Args),CODER_BODY_CONTEXT,FLBodyPREFIX(WRAP_TABLED_HILOG),FObj,Args).
 %% NEGATED tabled HiLog, body
@@ -184,6 +187,7 @@ is_prtermlit(PRTERMLIT(FObj,_N,Args),CODER_HEAD_CONTEXT,FLHEADPREFIX(WRAP_TABLED
 is_prtermlit(PRNEG(PRTERMLIT(FObj,_N,Args)),CODER_HEAD_CONTEXT,FLNEGHEADPREFIX(WRAP_TABLED_HILOG),FObj,Args).
 
 
+%% indexed on arg 2
 %% For nontabled HiLog, body
 is_prtransactionaltermlit(PRTRANSACTIONALTERMLIT(FObj,_N,Args),CODER_BODY_CONTEXT,FLBodyPREFIX(WRAP_NONTABLED_HILOG),FObj,Args).
 %% For nontabled HiLog facts, dynamic rule heads
@@ -212,6 +216,7 @@ is_prnewpred(PRNEWPRED(Name,_N,Vars),Name,Vars).
 is_prnewoid(PRNEWOID(Oid,I),Oid,I).
 
 
+%% is_flogic/4 is dynamic & indexed on 1+2 (in flrcoder.H) to make things faster
 %% Positive body literals
 is_flogic(PRISA(Obj1,Obj2,Caller),CODER_BODY_CONTEXT,FLBodyPREFIX(WRAP_ISA),[Obj1,Obj2,Caller]).
 is_flogic(PRSUB(Obj1,Obj2,Caller),CODER_BODY_CONTEXT,FLBodyPREFIX(WRAP_SUB),[Obj1,Obj2,Caller]).
@@ -641,6 +646,183 @@ flora_write_struct(Term,_Context,[]) :-
 	!,
 	flora_write_quoted_atom(Atom).
 
+flora_write_struct(Term,_Context,[]) :-
+	is_prbuiltin_identifier(Term,Identifier,_Index),
+	!,
+	flora_write_quoted_atom(Identifier).
+
+flora_write_struct(Term,_Context,[]) :-
+	is_prvariable(Term,Name,_Index),
+	!,
+	coder_write_variable(Name).
+
+%% Transactional vars are used in LIBMODLIT. We take care of the
+%% difference with vars in coder_write_syslib
+flora_write_struct(Term,_Context,[]) :-
+        is_prtransactionalvariable(Term,Name,_Index),
+        !,
+        %%flora_write_quoted_atom(FL_TRANSACTIONAL),
+        %%put(CH_LPAREN),
+	%%coder_write_variable(Name),
+        %%put(CH_RPAREN).
+	coder_write_variable(Name).
+
+flora_write_struct(Term,Context,Status) :-
+	is_prterm(Term,FObj,N,ObjList),
+	!,
+	coder_write_hilog(FObj,N,ObjList,Context,Status).
+
+flora_write_struct(Term,_Context,[]) :-
+	is_prnumber(Term,Number,_Index),
+	!,
+	write(Number).
+
+flora_write_struct(Term,_Context,[]) :-
+	%% transactional numbers are used only in :- index %arity-argument
+	is_prtransactionalnumber(Term,Number,_Index),
+	!,
+        flora_write_quoted_atom(FL_TRANSACTIONAL),
+        put(CH_LPAREN),
+	write(Number),
+        put(CH_RPAREN).
+
+flora_write_struct(Term,Context,Status) :- 
+	is_pratomlit(Term,Context,Wrap,[A|CallerList],_Index),
+	!,
+	coder_write_wsliteral(THISMODULE,Wrap,[A|CallerList],Context,Status).
+
+flora_write_struct(Term,Context,Status) :-
+	is_prtransactionalatomlit(Term,Context,Wrap,List,_Index),
+	!,
+	coder_write_wsliteral(THISMODULE,Wrap,List,Context,Status).
+
+flora_write_struct(Term,Context,Status) :-
+	is_prtermlit(Term,Context,Wrap,FObj,Args),
+	!,
+	coder_write_wsliteral(THISMODULE,Wrap,[FObj|Args],Context,Status).
+
+flora_write_struct(Term,Context,Status) :-
+	is_prtransactionaltermlit(Term,Context,Wrap,FObj,Args),
+	!,
+	coder_write_wsliteral(THISMODULE,Wrap,[FObj|Args],Context,Status).
+
+flora_write_struct(Term,Context,Status) :-
+	is_flogic(Term,Context,F,Args),
+	!,
+	coder_write_wsliteral(THISMODULE,F,Args,Context,Status).
+
+flora_write_struct(Term,Context,Status) :-
+	is_prologterm(Term,Funct,N,Args),
+	!,
+	coder_write_prolog(Funct,N,Args,Context,Status).
+
+flora_write_struct(Term,Context,Status) :-
+	is_prologterm(Term,Funct,N,Args,Module),
+	!,
+	flora_write_quoted_atom(FL_PROLOG_MODULE_TIE),
+	put(CH_LPAREN),
+	flora_write_struct(Module,Context,[]),
+	put(CH_COMMA),
+	coder_write_prolog(Funct,N,Args,Context,Status),
+	put(CH_RPAREN).
+
+flora_write_struct(Term,Context,Status) :-
+	is_prologliblit(Term,Funct,N,Args),
+	!,
+	coder_write_prolog(Funct,N,Args,Context,Status).
+
+flora_write_struct(Term,Context,Status) :-
+	is_prologliblit(Term,Funct,N,Args,Module),
+	!,
+	flora_write_quoted_atom(FL_PROLOG_MODULE_TIE),
+	put(CH_LPAREN),
+	flora_write_struct(Module,Context,[]),
+	put(CH_COMMA),
+	coder_write_prolog(Funct,N,Args,Context,Status),
+	put(CH_RPAREN).
+
+flora_write_struct(Term,Context,Status) :-
+	is_prlist(Term,L,T,_Index),
+	!,
+	( L == [] ->
+	    flora_write_atom('[]'),
+	    Status = []
+	;
+	  put(CH_LBRACKET),
+	  coder_write_structlist(L,Context,SL),
+	  ( ( T == []; SL \== []) ->
+	      Status = SL
+	  ;
+	    put(CH_BAR),
+	    flora_write_struct(T,Context,Status)
+	  ),
+	  put(CH_RBRACKET)
+        ).
+
+
+flora_write_struct(Term,_Context,[]) :-
+	is_prcallervar(Term),
+	!,
+	flora_write_atom(FLORA_HEADLIT_CALLER_VAR_NAME).
+
+flora_write_struct(Term,_Context,[]) :-
+	is_prdyncallervar(Term),
+	!,
+	flora_write_atom(FLORA_DYNRULE_HEADLIT_CALLER_VAR_NAME).
+
+flora_write_struct(Term,Context,Status) :-
+	is_prcallerargsterm(Term,CallerVars),
+	!,
+	flora_write_struct(CallerVars,Context,Status).
+
+flora_write_struct(Term,_Context,[]) :-
+	is_prcallerargsvar(Term),
+	!,
+	flora_write_atom(FLORA_HEADLIT_CALLER_ARGS_VAR_NAME).
+
+flora_write_struct(Term,_Context,[]) :-
+	is_prdyncallerargsvar(Term),
+	!,
+	flora_write_atom(FLORA_DYNRULE_HEADLIT_CALLER_ARGS_VAR_NAME).
+
+flora_write_struct(Term,_Context,Status) :-
+	is_prreify(Term,Term1),
+	!,
+	flora_write_struct(Term1,CODER_BODY_CONTEXT,Status).
+
+
+%% ascii list: "..."
+flora_write_struct(Term,_Context,[]) :-
+	is_prstring(Term,String,_Index),
+	!,
+	write(String).
+
+%% executable XSB tabling directive
+%% This is a bit dirty, but simple: we don't have any other
+%% executable XSB directives
+flora_write_struct(Term,_Context,[]) :-
+	is_prtable(Term,PredSpecList),
+	!,
+	write_canonical(table(PredSpecList)).
+
+flora_write_struct(Term,_Context,[]) :-
+	is_prprolog(Term,PredArityPairs),
+	!,
+	write_canonical(flrprolog:flora_define_prolog(PredArityPairs)).
+
+flora_write_struct(Term,Context,Status) :-
+	is_goallogic(Term,F,N,Args),
+	!,
+	flora_write_quoted_atom(F),
+	( N == 0 ->
+	    true,
+	    Status = []
+	;
+	  put(CH_LPAREN),
+	  coder_write_structlist(Args,Context,Status),
+	  put(CH_RPAREN)
+        ).
+
 flora_write_struct(Term,_Context,Status) :-
 	is_prdatatype(Term,Sort,Literal,Index),
 	!,
@@ -688,146 +870,10 @@ flora_write_struct(Term,_Context,Status) :-
 	).
 
 
-flora_write_struct(Term,_Context,[]) :-
-	is_prbuiltin_identifier(Term,Identifier,_Index),
-	!,
-	flora_write_quoted_atom(Identifier).
-
-flora_write_struct(Term,_Context,[]) :-
-	is_prnumber(Term,Number,_Index),
-	!,
-	write(Number).
-
-flora_write_struct(Term,_Context,[]) :-
-	%% transactional numbers are used only in :- index %arity-argument
-	is_prtransactionalnumber(Term,Number,_Index),
-	!,
-        flora_write_quoted_atom(FL_TRANSACTIONAL),
-        put(CH_LPAREN),
-	write(Number),
-        put(CH_RPAREN).
-
-flora_write_struct(Term,_Context,[]) :-
-	is_prvariable(Term,Name,_Index),
-	!,
-	coder_write_variable(Name).
-
-%% Transactional vars are used in LIBMODLIT. We take care of the
-%% difference with vars in coder_write_syslib
-flora_write_struct(Term,_Context,[]) :-
-        is_prtransactionalvariable(Term,Name,_Index),
-        !,
-        %%flora_write_quoted_atom(FL_TRANSACTIONAL),
-        %%put(CH_LPAREN),
-	%%coder_write_variable(Name),
-        %%put(CH_RPAREN).
-	coder_write_variable(Name).
-
-flora_write_struct(Term,_Context,[]) :-
-	is_prcallervar(Term),
-	!,
-	flora_write_atom(FLORA_HEADLIT_CALLER_VAR_NAME).
-
-flora_write_struct(Term,_Context,[]) :-
-	is_prdyncallervar(Term),
-	!,
-	flora_write_atom(FLORA_DYNRULE_HEADLIT_CALLER_VAR_NAME).
-
-flora_write_struct(Term,Context,Status) :-
-	is_prcallerargsterm(Term,CallerVars),
-	!,
-	flora_write_struct(CallerVars,Context,Status).
-
-flora_write_struct(Term,_Context,[]) :-
-	is_prcallerargsvar(Term),
-	!,
-	flora_write_atom(FLORA_HEADLIT_CALLER_ARGS_VAR_NAME).
-
-flora_write_struct(Term,_Context,[]) :-
-	is_prdyncallerargsvar(Term),
-	!,
-	flora_write_atom(FLORA_DYNRULE_HEADLIT_CALLER_ARGS_VAR_NAME).
-
-
-%% ascii list: "..."
-flora_write_struct(Term,_Context,[]) :-
-	is_prstring(Term,String,_Index),
-	!,
-	write(String).
-
-flora_write_struct(Term,Context,Status) :-
-	is_prlist(Term,L,T,_Index),
-	!,
-	( L == [] ->
-	    flora_write_atom('[]'),
-	    Status = []
-	;
-	  put(CH_LBRACKET),
-	  coder_write_structlist(L,Context,SL),
-	  ( ( T == []; SL \== []) ->
-	      Status = SL
-	  ;
-	    put(CH_BAR),
-	    flora_write_struct(T,Context,Status)
-	  ),
-	  put(CH_RBRACKET)
-        ).
-
-flora_write_struct(Term,Context,Status) :-
-	is_prterm(Term,FObj,N,ObjList),
-	!,
-	coder_write_hilog(FObj,N,ObjList,Context,Status).
-
-%% executable XSB tabling directive
-%% This is a bit dirty, but simple: we don't have any other
-%% executable XSB directives
-flora_write_struct(Term,_Context,[]) :-
-	is_prtable(Term,PredSpecList),
-	!,
-	write_canonical(table(PredSpecList)).
-
-flora_write_struct(Term,_Context,[]) :-
-	is_prprolog(Term,PredArityPairs),
-	!,
-	write_canonical(flrprolog:flora_define_prolog(PredArityPairs)).
-
-flora_write_struct(Term,Context,Status) :-
-	is_goallogic(Term,F,N,Args),
-	!,
-	flora_write_quoted_atom(F),
-	( N == 0 ->
-	    true,
-	    Status = []
-	;
-	  put(CH_LPAREN),
-	  coder_write_structlist(Args,Context,Status),
-	  put(CH_RPAREN)
-        ).
-
 flora_write_struct(Term,Context,Status) :-
 	is_prcall(Term,VarTerm),
 	!,
 	flora_write_struct(VarTerm,Context,Status).
-
-flora_write_struct(Term,Context,Status) :- 
-	is_pratomlit(Term,Context,Wrap,[A|CallerList],_Index),
-	!,
-	coder_write_wsliteral(THISMODULE,Wrap,[A|CallerList],Context,Status).
-
-flora_write_struct(Term,Context,Status) :-
-	is_prtransactionalatomlit(Term,Context,Wrap,List,_Index),
-	!,
-	coder_write_wsliteral(THISMODULE,Wrap,List,Context,Status).
-
-flora_write_struct(Term,Context,Status) :-
-	is_prtermlit(Term,Context,Wrap,FObj,Args),
-	!,
-	coder_write_wsliteral(THISMODULE,Wrap,[FObj|Args],Context,Status).
-
-flora_write_struct(Term,Context,Status) :-
-	is_prtransactionaltermlit(Term,Context,Wrap,FObj,Args),
-	!,
-	coder_write_wsliteral(THISMODULE,Wrap,[FObj|Args],Context,Status).
 
 flora_write_struct(Term,Context,Status) :-
 	is_prworkspace(Term,P,WS),
@@ -849,51 +895,11 @@ flora_write_struct(Term,Context,Status) :-
 	coder_write_wsliteral(THISMODULE,F,Args,Context,Status).
 	%%coder_write_wsliteral(THISMODULE,WRAP_NONTABLED_HILOG,[F|Args],Context,Status).
 
-flora_write_struct(Term,_Context,Status) :-
-	is_prreify(Term,Term1),
-	!,
-	flora_write_struct(Term1,CODER_BODY_CONTEXT,Status).
-
 flora_write_struct(Term,_Context,[]) :-
 	is_prnewoid(Term,Oid,_Index),
 	!,
 	flora_write_atom('FLORA_THIS_COMPILATION('),
 	coder_write_newoid(Oid),
-	put(CH_RPAREN).
-
-flora_write_struct(Term,Context,Status) :-
-	is_flogic(Term,Context,F,Args),
-	!,
-	coder_write_wsliteral(THISMODULE,F,Args,Context,Status).
-
-flora_write_struct(Term,Context,Status) :-
-	is_prologterm(Term,Funct,N,Args),
-	!,
-	coder_write_prolog(Funct,N,Args,Context,Status).
-
-flora_write_struct(Term,Context,Status) :-
-	is_prologterm(Term,Funct,N,Args,Module),
-	!,
-	flora_write_quoted_atom(FL_PROLOG_MODULE_TIE),
-	put(CH_LPAREN),
-	flora_write_struct(Module,Context,[]),
-	put(CH_COMMA),
-	coder_write_prolog(Funct,N,Args,Context,Status),
-	put(CH_RPAREN).
-
-flora_write_struct(Term,Context,Status) :-
-	is_prologliblit(Term,Funct,N,Args),
-	!,
-	coder_write_prolog(Funct,N,Args,Context,Status).
-
-flora_write_struct(Term,Context,Status) :-
-	is_prologliblit(Term,Funct,N,Args,Module),
-	!,
-	flora_write_quoted_atom(FL_PROLOG_MODULE_TIE),
-	put(CH_LPAREN),
-	flora_write_struct(Module,Context,[]),
-	put(CH_COMMA),
-	coder_write_prolog(Funct,N,Args,Context,Status),
 	put(CH_RPAREN).
 
 flora_write_struct(Term,Context,Status) :-

@@ -1793,7 +1793,8 @@ form_symbol_context_load_status(_StorageName,UsedContext,_UsedTransactional,Used
 		fail
 	).
 
-form_symbol_context_load_status(_StorageName,UsedContext,UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus) :- form_symbol_context_status(UsedContext,UsedTransactional,UsedArity,SymbolArity,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus).
+form_symbol_context_load_status(_StorageName,UsedContext,UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus) :-
+	form_symbol_context_status(UsedContext,UsedTransactional,UsedArity,SymbolArity,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus).
 
 
 
@@ -2537,6 +2538,7 @@ print_warnings(_StatusList) :-
 	flora_warnings_level(nocompiler),
 	!.
 print_warnings(StatusList) :-
+	flora_maxwarn(MaxWarn),
 	(member(composer(ComposerList),StatusList)
 	->
 	    (count_warnings(ComposerList,0), ! ; flora_stdwarn_nl),
@@ -2545,9 +2547,12 @@ print_warnings(StatusList) :-
 	),
 	(member(compiler(CompilerList),StatusList)
 	-> 
-	    ((count_warnings(CompilerList,0) ; ComposerNum>0), !
-	    ; flora_stdwarn_nl),
-	    util_compiler_warn(CompilerList,CompilerNum)
+	    count_warnings(CompilerList,CompilerNum),
+	    ((CompilerNum==0 ; ComposerNum>0), !
+	    ; flora_stdwarn_nl
+	    ),
+	    SkippedCompilerWarns is CompilerNum-MaxWarn,
+	    util_compiler_warn(CompilerList,MaxWarn,SkippedCompilerWarns)
 	; CompilerNum = 0
 	),
 	(member(depend(DependList),StatusList)
@@ -2836,24 +2841,24 @@ check_for_dependencies_warn([warning(HTK,BTK,(MH,MB))|L],WarnNum) :-
 	(
 	  flora_compile_filename_by_token(HTK,HFileName),
 	  flora_compile_filename_by_token(BTK,BFileName) ->
-	  %%flora_warning_line('[Dependency check] ~w in [~w]~w in [~w]', [MH,HFileName,MB,BFileName])
-	  flora_warning_line('[~w] [Dependency check]', [HFileName]),
+	  %%flora_warning_line('<Dependency check> ~w in [~w]~w in [~w]', [MH,HFileName,MB,BFileName])
+	  flora_warning_line('[~w] <Dependency check>', [HFileName]),
 	  flora_warning_indentline,
 	  flora_stdwarn_string('~w ~w in [~w]~n', [MH,MB,BFileName])
         ;
 	  flora_compile_filename_by_token(HTK,HFileName),
-	  %%flora_warning_line('[Dependency check] ~w in [~w] depends on ~w', [MH,HFileName,MB])
-	  flora_warning_line('[~w] [Dependency check]', [HFileName]),
+	  %%flora_warning_line('<Dependency check> ~w in [~w] depends on ~w', [MH,HFileName,MB])
+	  flora_warning_line('[~w] <Dependency check>', [HFileName]),
 	  flora_warning_indentline,
 	  flora_stdwarn_string('~w depends on ~w~n', [MH,MB])
         ;
 	  flora_compile_filename_by_token(BTK,BFileName),
-	  %%flora_warning_line('[Dependency check] ~w depends on ~w in [~w]', [MH,MB,BFileName])
-	  flora_warning_line('[Dependency check]'),
+	  %%flora_warning_line('<Dependency check> ~w depends on ~w in [~w]', [MH,MB,BFileName])
+	  flora_warning_line('<Dependency check>'),
 	  flora_stdwarn_string('~w depends on ~w in [~w]~n', [MH,MB,BFileName])
         ;
-	  %%flora_warning_line('[Dependency check] ~w depends on ~w', [MH,MB])
-	  flora_warning_line('[Dependency check]'),
+	  %%flora_warning_line('<Dependency check] ~w depends on ~w', [MH,MB])
+	  flora_warning_line('<Dependency check>'),
 	  flora_warning_indentline,
 	  flora_warning_line('~w depends on ~w~n', [MH,MB])
 	),
@@ -2883,7 +2888,7 @@ check_for_dependencies_error([_|L],ErrNum) :-
 
 /*************************************************************************
   util_compiler_error(+CompileStat,-ErrNum)
-  util_compiler_warn(+CompileStat,-WarnNum)
+  util_compiler_warn(+CompileStat,+MaxWarnNum,+SkippedCompilerWarns)
 *************************************************************************/
 util_compiler_error([],0) :- !.
 
@@ -2925,9 +2930,22 @@ util_compiler_error([error(Msg)|L],ErrNum) :-
 util_compiler_error([_|L],ErrNum) :- util_compiler_error(L,ErrNum).
 
 
-util_compiler_warn([],0) :- !.
+util_compiler_warn([],_,_) :- !.
 
-util_compiler_warn([warning(Indx,Msg)|L],WarnNum) :-
+util_compiler_warn([warning(Indx,_Msg)|_L],WarnNum,SkippedWarns) :-
+	WarnNum =< 0,
+	!,
+	(SkippedWarns>0 ->
+	    (flora_compile_filename_by_token(Indx,FileName) ->
+		flora_warning_line('[~w] <Compiler> ~w warnings skipped',
+				   [FileName,SkippedWarns])
+	    ; flora_warning_line('<Compiler> ~w warnings skipped',
+				 [SkippedWarns])
+	    )
+	; true
+	).
+
+util_compiler_warn([warning(Indx,Msg)|L],WarnNum,SkippedWarns) :-
 	!,
 	flora_nth_token(Indx,Tk),
 	atom_codes(A,[CH_UNDERSCORE]),
@@ -2947,11 +2965,12 @@ util_compiler_warn([warning(Indx,Msg)|L],WarnNum) :-
 	),
 	flora_warning_indentline,
 	flora_stdwarn_string("~w~n",[Msg]),
-	util_compiler_warn(L,WN),
-	WarnNum is WN+1.
+	WN is WarnNum - 1,
+	util_compiler_warn(L,WN,SkippedWarns).
 
 %% Skip errors
-util_compiler_warn([_|L],WarmNum) :- util_compiler_warn(L,WarmNum).
+util_compiler_warn([_|L],WarmNum,SkippedWarns) :-
+	util_compiler_warn(L,WarmNum,SkippedWarns).
 
 
 /*************************************************************************
@@ -3043,19 +3062,27 @@ flora_list2conjunct([G|L],(G,LG)) :-
   Controls how many compile errors to show.
   No longer advertized to the user (not important)
 *************************************************************************/
-:- flora_set_maxerrors(8).
+:- flora_set_maxerrors(7).
+:- flora_set_maxwarnings(7).
 
 flora_set_maxerrors(X) :-
-	( var(X) ->
-	    flora_maxerr(X)
-
-	; X \== FLORA_ALL, (not integer(X); X < 1) ->
-	    flora_error_line('Invalid argument to maxerr'),
+	(X \== FLORA_ALL, (not integer(X); X < 1)
+	  -> flora_error_line('Invalid argument to flora_set_maxerrors'),
 	    fail
 	;
-	  retractall(flora_maxerr(_)),
+	  (retract(flora_maxerr(_)), ! ; true),
 	  assert(flora_maxerr(X))
 	).
+
+flora_set_maxwarnings(X) :-
+	((\+integer(X); X < 1)
+	  -> flora_error_line('Invalid argument to flora_set_maxwarnings'),
+	    fail
+	;
+	  (retract(flora_maxwarn(_)), ! ; true),
+	  assert(flora_maxwarn(X))
+	).
+flora_get_maxwarnings(X) :- flora_maxwarn(X).
 
 
 /*************************************************************************

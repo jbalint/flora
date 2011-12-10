@@ -215,8 +215,9 @@
 
 :- dynamic flora_xpp_extra_options/1.
 
-:- dynamic flora_maxerr(_).
+:- dynamic flora_maxerr(_), flora_maxwarn(_).
 :- index(flora_maxerr/1,0).
+:- index(flora_maxwarn/1,0).
 
 :- dynamic flora_compiler_environment(_,_).
 
@@ -224,6 +225,8 @@
 
 :- export
 	flora_set_maxerrors/1,
+	flora_set_maxwarnings/1,
+	flora_get_maxwarnings/1,
 	checkCallerInfo/3,
 	flora_retractall_substitute/1,
 

@@ -1587,8 +1587,9 @@ reset_newoid :- flora_set_counter(NEWOID_COUNT,1).
 
 new_oidobj(Index,OidObject) :-
 	flora_increment_counter(NEWOID_COUNT,1,OldVal,_NewVal),
-	number_codes(OldVal,OldValLst),
-	atom_codes(OldValAtm,OldValLst),
+	%%number_codes(OldVal,OldValLst),
+	%%atom_codes(OldValAtm,OldValLst),
+	flrporting:flora_term_to_atom(OldVal,OldValAtm),
 	flora_concat_atoms([NEWOID,OldValAtm],Name),
 	newoid_struct(Name,Index,OidObject).
 
@@ -1599,11 +1600,12 @@ new_oidobj(RuleNum,OidNumStr,Index,OidObject) :-
 	( ruleoid(OidNumStr,_,Count)
 	-> Count_new is Count+1,
 	  retract(ruleoid(OidNumStr,_,Count)),
-	  assert(ruleoid(OidNumStr,Index,Count_new))
-	;  assert(ruleoid(OidNumStr,Index,1))
+	  asserta(ruleoid(OidNumStr,Index,Count_new))
+	;  asserta(ruleoid(OidNumStr,Index,1))
 	), 
-	number_codes(RuleNum,RuleNumLst),
-	atom_codes(RuleNumAtm,RuleNumLst),
+	%%number_codes(RuleNum,RuleNumLst),
+	%%atom_codes(RuleNumAtm,RuleNumLst),
+	flrporting:flora_term_to_atom(RuleNum,RuleNumAtm),
         flora_concat_atoms([NEWOID,RuleNumAtm,'|',OidNumStr],Name),
 	newoid_struct(Name,Index,OidObject).
 
@@ -1626,11 +1628,11 @@ reset_rulenum :- flora_set_counter(RULE_NUM,1).
 collect_prvars(Term,Vars) :-
 	collect_prvars(Term,Vs,[]),
 	sort(Vs,Vars).
+
+collect_prvars([],Vars,Vars) :- !.
 collect_prvars(Term,Vars,Vars) :-
 	(var(Term); atomic(Term)),
 	!.
-collect_prvars([],Vars,Vars) :- !.
-
 collect_prvars([H|L],Vars,TVars) :-
 	!,
 	collect_prvars(H,Vars,LVars),
@@ -1643,6 +1645,14 @@ collect_prvars(Term,[Head|Vars],Vars) :-
 	!,
         is_prvariable(Head,Name,Index).
 
+collect_prvars(Term,Vars,Vars) :-
+	( is_pratom(Term,_);
+	  is_prnumber(Term);
+	  is_prstring(Term);
+	  is_prbuiltin_identifier(Term,_);
+	  is_prtransactionalnumber(Term,_,_)
+        ),
+	!.
 collect_prvars(Term,NewVars,Vars) :-
 	is_prdatatype(Term,_Sort,Lit,_),
 	!,
@@ -1657,14 +1667,6 @@ collect_prvars(Term,NewVars,Vars) :-
 	    append(AddlVars,Vars,NewVars)
 	; NewVars=Vars
 	).
-collect_prvars(Term,Vars,Vars) :-
-	( is_pratom(Term,_);
-	  is_prnumber(Term);
-	  is_prstring(Term);
-	  is_prbuiltin_identifier(Term,_);
-	  is_prtransactionalnumber(Term,_,_)
-        ),
-	!.
 collect_prvars(Term,Vars,TVars) :-
 	Term =.. [_F|L],
 	collect_prvars(L,Vars,TVars).
@@ -1688,16 +1690,13 @@ compiling_warning(Index,Msg,warning(Index,Msg)).
 collect_flvars(ParserTermOrList,Vars) :-
 	collect_flvars(ParserTermOrList,Vars,[]).
 
+collect_flvars([],Vars,Vars) :- !.
 collect_flvars(ParserTerm,Vars,Vars) :-
 	var(ParserTerm),
 	!.
-
 collect_flvars(ParserTerm,Vars,Vars) :-
 	atomic(ParserTerm),
 	!.
-
-collect_flvars([],Vars,Vars) :- !.
-
 collect_flvars([H|L],Vars,TVars) :-
 	!,
 	collect_flvars(H,Vars,LVars),
@@ -1712,18 +1711,6 @@ collect_flvars(ParserTerm,[NewParserTerm|Vars],Vars) :-
 	!,
         is_flvariable(NewParserTerm,Name,Index).
 
-collect_flvars(ParserTerm,NewVars,Vars) :-
-	is_fldatatype(ParserTerm,_Sort,Lit,_Index),
-	!,
-        (is_flvariable(Lit,_Name,_Indx)
-	-> NewVars = [Lit|Vars]
-	; is_list(Lit)
-	-> collect_flvars(Lit,NewVars,Vars)
-	; is_fldatatypelist(Lit,ListLit)
-	-> collect_flvars(ListLit,NewVars,Vars)
-	;  NewVars=Vars
-	).
-
 collect_flvars(ParserTerm,Vars,Vars) :-
 	( is_flatom(ParserTerm,_Atom);
 	  is_flnumber(ParserTerm,_Number);
@@ -1736,6 +1723,18 @@ collect_flvars(ParserTerm,Vars,Vars) :-
 	  is_fltoken(ParserTerm,_Token,_Num,_I) 
         ),
 	!.
+
+collect_flvars(ParserTerm,NewVars,Vars) :-
+	is_fldatatype(ParserTerm,_Sort,Lit,_Index),
+	!,
+        (is_flvariable(Lit,_Name,_Indx)
+	-> NewVars = [Lit|Vars]
+	; is_list(Lit)
+	-> collect_flvars(Lit,NewVars,Vars)
+	; is_fldatatypelist(Lit,ListLit)
+	-> collect_flvars(ListLit,NewVars,Vars)
+	;  NewVars=Vars
+	).
 
 collect_flvars(ParserTerm,Vars,TVars) :-
 	ParserTerm =.. [_F|L],
@@ -2098,22 +2097,22 @@ vars_to_var_names([V|VarList],[Name|NameList]) :-
 %% Not used any more. Instead of import we use the module:pred notation
 %%clear_directive :- flora_retractall_substitute(TMPDIRECT(_)).
 %%get_directive(L) :- findall(D,TMPDIRECT(D),L).
-%%report_directive(Direct) :- assert(TMPDIRECT(Direct)).
+%%report_directive(Direct) :- asserta(TMPDIRECT(Direct)).
 
 
 clear_options :- flora_retractall_substitute(TMPOPTION(_,_)).
 get_options(L) :- findall((O,Idx),TMPOPTION(O,Idx),L).
-report_option(Option,Idx) :-
-	asserta(TMPOPTION(Option,Idx)).
+report_option(Option,Idx) :- asserta(TMPOPTION(Option,Idx)).
 
 %% Do not(!) check for \+ PERMAOPTION(X) here!
 %% We rely on duplicates if multiple declarations of argumentation theories
 set_permaoption(X) :- asserta(PERMAOPTION(X)).
 has_permaoption(X) :- PERMAOPTION(X).
-flora_clear_compilation_permaoptions :- flora_retractall_substitute(PERMAOPTION(_)).
-clear_permaoption(X) :- (retract(PERMAOPTION(X)) ; true).
+flora_clear_compilation_permaoptions :- retractall(PERMAOPTION(_)).
+clear_permaoption(X) :- (retract(PERMAOPTION(X)), ! ; true).
 
-clear_context(X) :- (retract(COMPILATION_CONTEXT(X)) ; true).
+/*
+clear_context(X) :- (retract(COMPILATION_CONTEXT(X)), ! ; true).
 clear_contextall(X) :- flora_retractall_substitute(COMPILATION_CONTEXT(X)).
 set_context(X) :-
 	(\+has_context(X)
@@ -2121,6 +2120,39 @@ set_context(X) :-
 	; true
 	).
 has_context(X) :- COMPILATION_CONTEXT(X).
+*/
+
+set_context(X) :-
+	atom(X),
+	!,
+	flora_set_counter(X,1).
+set_context(X) :-
+	compound(X),
+	\+COMPILATION_CONTEXT(X),
+	!,
+	asserta(COMPILATION_CONTEXT(X)).
+set_context(X) :-
+	compound(X),
+	!.
+set_context(X) :-
+	abort([X, ': FLORA-2 compiler BUG!! Invalid compiler context.']).
+
+has_context(X) :-
+	compound(X),
+	!,
+	COMPILATION_CONTEXT(X).
+has_context(X) :-
+	flora_get_counter(X,1).
+
+clear_context(X) :-
+	atom(X),
+	!,
+	flora_set_counter(X,0).
+clear_context(X) :-
+	retract(COMPILATION_CONTEXT(X)),
+	!.
+clear_context(_).
+clear_contextall(X) :- flora_retractall_substitute(COMPILATION_CONTEXT(X)).
 
 %% this one is exported
 flora_compilation_context(X) :- has_context(X).
@@ -3154,7 +3186,6 @@ compile_rule(Head,Body,Annotation,RuleList-RuleTail,Facts-Facts,Status) :-
 					    (LblCode,MetaCode),
 					    %%Tail-RuleTail, Status1),
 					    RuleList-RuleTail, Status1),
-		%%(Status1 == [], \+ has_context(compiling_udf)
 		( no_errors_found(Status1), \+ has_context(compiling_udf)
 		%% for UDFS checking variables is done separately
 		->
@@ -4593,7 +4624,7 @@ formUDFVarSubstitute([A|Args],[FA|FArgs],Nesting,Index):-
 	asserta(user_defined_function_var_substitute(Nesting,Name,FA,A,Index)),
 	formUDFVarSubstitute(Args,FArgs,Nesting,Index).
 clearUDFVarSubstitute(Nesting) :-
-	retractall(user_defined_function_var_substitute(Nesting,_,_,_,_)).
+	flora_retractall_substitute(user_defined_function_var_substitute(Nesting,_,_,_,_)).
 
 
 /****************************************************************************
@@ -8981,7 +9012,9 @@ add_nowarn_symbol(Name,N,WS,Context,Transactional) :-
 has_nowarn_symbol(Name,N,WS,Context,Transactional) :-
 	nowarn_symbol(Name,N,WS,Context,Transactional),!.
 
-flora_clear_compilation_symbols:-retractall(symbol(_,_,_,_,_,_,_)),retractall(nowarn_symbol(_,_,_,_,_)).
+flora_clear_compilation_symbols :-
+	retractall(symbol(_,_,_,_,_,_,_)),
+	retractall(nowarn_symbol(_,_,_,_,_)).
 
 
 /****************************************************************************

@@ -27,6 +27,8 @@
    from basics.
 
 :- import
+	flora_set_counter/2,
+	flora_get_counter/2,
 	flora_concat_items/2,
 	flora_concat_atoms/2
    from flrporting.
@@ -56,9 +58,11 @@
 	flora_prlgdef/2
    from flrprolog.
 
+/*
 :- import
 	flora_retractall_substitute/1
    from flrutils.
+*/
 
 :- import flora_argdef/4 from flrarguments.
 
