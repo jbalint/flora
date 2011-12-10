@@ -400,6 +400,7 @@ static int is_special_form(prolog_term term)
   if (is_scalar(term) || is_list(term)) return FALSE;
 
   functor = extern_p2c_functor(term);
+  if (strcmp(functor,":-") == 0) return TRUE; // rules are also protected
   if (strlen(functor)==1) {
     switch (*functor) {
     case ',':
