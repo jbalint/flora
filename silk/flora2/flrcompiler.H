@@ -27,6 +27,8 @@
 	flora_set_counter/2,
 	flora_get_counter/2,
 	flora_concat_atoms/2,
+	flora_concat_items/2,
+	flora_term_to_atom/2,
         flora_match_substring/3
     from flrporting.
 

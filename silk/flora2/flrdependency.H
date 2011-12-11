@@ -21,7 +21,7 @@
 
 :- import flora_abolish_table_predicate/1 from flrtables.
 
-:- import flora_decode_goal_as_atom/2 from flrdecode.
+:- import flora_decode_goal_as_atom_substitute_vars/2 from flrdecode.
 
 :- import flora_get_maxwarnings/1 from flrutils.
 

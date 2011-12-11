@@ -66,6 +66,8 @@
 	flora_unwrap_negation/2
    from flrnegation.
 
+:- import term_variables/2 from constraintLib.
+
 %%:- import flora_warning_line/2 from flrprint.
 
 :- import flrtrim_last/2 from flora_ground.
@@ -73,6 +75,7 @@
 :- export 
 	flora_decode_goal_as_list/2,
 	flora_decode_goal_as_atom/2,
+	flora_decode_goal_as_atom_substitute_vars/2,
 	flora_decode_oid_as_list/2,
 	flora_decode_oid_as_atom/2,
 	flora_write_goal/1,
@@ -212,6 +215,12 @@ flora_decode_goal_as_atom(Goal,CodeAtom) :-
 	flora_decode_goal_as_list(Goal,Code),
 	flora_concat_items(Code,CodeAtom).
 
+flora_decode_goal_as_atom_substitute_vars(Goal,CodeAtom) :-
+	copy_term(Goal,Goal1),
+	term_variables(Goal1,Vars),
+	bind_vars_meaningfully(Vars),
+	flora_decode_goal_as_atom(Goal1,CodeAtom).
+
 %%%%%%%%%%%%%%%%%%%%%%%% flora_decode_goal_as_list/2 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 flora_decode_goal_as_list(Goal,FlatCode) :-
 	flora_decode_goal(Goal,Code,0),
@@ -256,8 +265,8 @@ flora_decode_fact(CallIn,Code,Depth) :-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 flora_decode_goal(CallIn,[FL_VARSYM,CallIn],_Depth) :-
-	var(CallIn), !.
-
+	var(CallIn),
+	!.
 flora_decode_goal(CallIn,Code,Depth) :-
 	%% goal_cut_untrans gets rid of various irregularities like ';;'/2
 	goal_cut_untrans(CallIn,Call),
@@ -917,6 +926,8 @@ decode_literal_internal(Call,Code,_Level,_Depth) :-
 	;   escape(Call,EscCall), Code = [EscCall]
 	).
 
+decode_literal_internal('_$VAR'(VarName),[VarName],_Level,_Depth) :-
+	!.
 
 %% data types
 decode_literal_internal(FL_DATATYPE(Term,Type), Code, Level,Depth) :-
@@ -1602,3 +1613,21 @@ display_datatype_name(FL_DOUBLE,silk,'xsd:double') :- !.
 display_datatype_name(FL_BOOL,silk,'xsd:bool') :- !.
 display_datatype_name(FL_DECIMAL,silk,'xsd:decimal') :- !.
 display_datatype_name(Type,silk,Type) :- !.
+
+
+%% bind variables to ?A,?B,?C, etc.
+bind_vars_meaningfully(L) :-
+	bind_vars_meaningfully(L,0).
+
+bind_vars_meaningfully([],_) :- !.
+bind_vars_meaningfully([X|R],N) :-
+	atom(X),
+	!,
+	bind_vars_meaningfully(R,N).
+bind_vars_meaningfully([X|R],N) :-
+	Code is N mod 26 + 0'A,
+	atom_codes(Xname,[0'?,Code]),
+	X = '_$VAR'(Xname),
+	N1 is N+1,
+	bind_vars_meaningfully(R,N1).
+
