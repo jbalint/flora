@@ -154,6 +154,8 @@ is_flcontrolconstruct(FLDOUNTIL(Cond,Action),FLLIBDOUNTIL,Cond,Action).
 is_flcontrolconstruct(FLLOOPUNTIL(Cond,Action),FLLIBLOOPUNTIL,Cond,Action).
 is_flcontrolconstruct(FLUNLESSDO(Cond,Action),FLLIBUNLESSDO,Cond,Action).
 
+is_fldelayquant(FLDELAYQUANTIFIER(Quant,Condition,Goal),Quant,Condition,Goal).
+
 is_flterm(FLTERM(Funct,Arity,Args),Funct,Arity,Args) :-
 	\+is_fltransactionalatom(Funct,_),
 	\+is_fltransactionalterm(Funct,_,_,_),
@@ -3072,13 +3074,13 @@ compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactLi
 	    ),
 	    ( Body=NULL ->
 		new_udffact(Name,N,Args,ReturnValue,Fact),
-		set_context(compile_udf),
+		set_context(compile_udf_as_prolog),
 		compile_fact([Fact],RuleList-ListTail,FactList-FactTail,S),
-		clear_context(compile_udf)
+		clear_context(compile_udf_as_prolog)
 	    ;
 		approx_flindex(Funct,FunctIndex),
 		new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody),
-		set_context(compile_udf),
+		set_context(compile_udf_as_prolog),
 		compile_rule([NewPredicateOrigArgs],NewBody,NULL,RuleList-ListTail,FactList-FactTail,S)
 	    ),
 	    ( var(HasUDF) ->
@@ -3156,7 +3158,7 @@ new_udf_predicate_funct(Name,NewPredicateFunct,NewName):-
 ****************************************************************************/
 compile_rule(Head,Body,Annotation,RuleList-RuleTail,Facts-Facts,Status) :-
 	compile_head(Head,HeadCode,H2BCodeHead,H2BCodeTail,HeadStatusPre),
-	clear_context(compile_udf),
+	clear_context(compile_udf_as_prolog),
 	compile_conjunct2list(HeadCode,HeadCodeList),
 	no_mixed_sensor_nonsensor_heads(HeadCodeList,Head,DelayStatus),
 	merge_status([HeadStatusPre,DelayStatus],HeadStatus),
@@ -3692,6 +3694,15 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    OidCode=NULL,
 	    Status=[]
 	*/
+
+        ; is_fldelayquant(ParserTerm,Quant,Condition,Goal) ->
+	    is_flatom(Quant,_,Index),
+	    code_line_and_file_by_index(Index,Line,CurrFileName),
+	    is_flatom(CurrFileParserObj,CurrFileName,NO_INDEX),
+	    is_flatom(QuantAtom,FL_DELAYQUANT,NO_INDEX),
+	    compile_prlgterm(FLLIBDELAYEDLITERAL,4,[QuantAtom,CurrFileParserObj,Line,[Quant,Condition,Goal]],
+			     FLDELAYSUPPORTMOD,
+			     Nesting,SpecCode,OidCode,_ACode,BodyHeadList,Status)
 
         ; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_fltransactionaltermlit(Funct,N,Args,Nesting,OidCode,SpecCode,BodyHeadList,Status)
@@ -4526,10 +4537,13 @@ compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status):-
 	prvar_to_flvar_struct(Object,Var),
 	approx_flindex(ParserTerm,Index),
 	formUDFVarSubstitute([Var],[ReturnValue],Nesting,Index),
-	( has_context(compile_udf) -> Has=1; Has=0),
-	set_context(compile_udf),
+	( has_context(compile_udf_as_prolog) ->
+		Has=1
+	;
+		set_context(compile_udf_as_prolog)
+	),
 	compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,S),
-	( Has==0 -> clear_context(compile_udf) ; true ),
+	( Has==1,! ; clear_context(compile_udf_as_prolog)),
 	clearUDFVarSubstitute(Nesting),
 	( no_errors_found(S) -> 
 		append(PBodyHeadList,[PCode],BodyHeadList),
@@ -4572,10 +4586,13 @@ compile_fltermobj(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,CompileS
 	    prvar_to_flvar_struct(Object,Var),
 	    approx_flindex(Funct,Index),
 	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],Nesting,Index),
-	    ( has_context(compile_udf) -> Has=1; Has=0),
-	    set_context(compile_udf),
+	    ( has_context(compile_udf_as_prolog) ->
+		Has=1
+	    ;
+	    	set_context(compile_udf_as_prolog)
+	    ),
 	    compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,S),
-	    ( Has==0 -> clear_context(compile_udf) ; true ),
+	    ( Has==1,! ; clear_context(compile_udf_as_prolog)),
 	    clearUDFVarSubstitute(Nesting),
 	    %%( S==[] ->
 	    ( no_errors_found(S) -> 
@@ -4647,7 +4664,7 @@ clearUDFVarSubstitute(Nesting) :-
 	
 compile_fltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) :-
 	check_symbol_name(Funct,N,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,SymbolStatus),
-	( has_context(compile_udf) ->
+	( has_context(compile_udf_as_prolog) ->
 	    compile_pathexplist(Args,Nesting,AObj,OidCode,ObjCode,BodyHeadList,Status),
 	    ( no_errors_found(Status) ->
 		flora_get_flatomvar_name(Funct,Name),
@@ -5443,10 +5460,13 @@ compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,CompileS
 	    prvar_to_flvar_struct(Object,Var),
 	    approx_flindex(Funct,Index),
 	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],0,Index),
-	    ( has_context(compile_udf) -> Has=1; Has=0),
-	    set_context(compile_udf),
+	    ( has_context(compile_udf_as_prolog) ->
+		Has=1
+	    ;
+	    	set_context(compile_udf_as_prolog)
+	    ),
 	    compile_body_literal(Predicate,0,PCode,PH2BCodeHead,S),
-	    ( Has==0 -> clear_context(compile_udf) ; true ),
+	    ( Has==1,! ; clear_context(compile_udf_as_prolog)),
 	    clearUDFVarSubstitute(0),
 	    %%( S==[] ->
 		( no_errors_found(S) -> 
@@ -5475,7 +5495,7 @@ compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,CompileS
 ****************************************************************************/
 compile_head_fltermlit(Funct,N,Args,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
 	check_symbol_name(Funct,N,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,SymbolStatus),
-	( has_context(compile_udf) ->
+	( has_context(compile_udf_as_prolog) ->
 	    compile_head_pathexplist(Args,AObj,ObjCode,H2BCodeHead,H2BCodeTail,Status),
 	    ( no_errors_found(Status) ->
 		flora_get_flatomvar_name(Funct,Name),
@@ -6358,10 +6378,13 @@ compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,BodyHeadList,Tra
 	    prvar_to_flvar_struct(Object,Var),
 	    approx_flindex(Funct,Index),
 	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],Nesting,Index),
-	    ( has_context(compile_udf) -> Has=1; Has=0),
-	    set_context(compile_udf),
+	    ( has_context(compile_udf_as_prolog) ->
+		Has=1
+	    ;
+	    	set_context(compile_udf_as_prolog)
+	    ),
 	    compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,S),
-	    ( Has==0 -> clear_context(compile_udf) ; true ),
+	    ( Has==1,! ; clear_context(compile_udf_as_prolog)),
 	    clearUDFVarSubstitute(Nesting),
 	    %%( S==[] ->
 	    ( no_errors_found(S) -> 
@@ -7638,10 +7661,13 @@ compile_head_wsfltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Com
 	    prvar_to_flvar_struct(Object,Var),
 	    approx_flindex(Funct,Index),
 	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],0,Index),
-	    ( has_context(compile_udf) -> Has=1; Has=0),
-	    set_context(compile_udf),
+	    ( has_context(compile_udf_as_prolog) ->
+		Has=1
+	    ;
+	    	set_context(compile_udf_as_prolog)
+	    ),
 	    compile_body_literal(Predicate,0,PCode,PH2BCodeHead,S),
-	    ( Has==0 -> clear_context(compile_udf) ; true ),
+	    ( Has==1,! ; clear_context(compile_udf_as_prolog)),
 	    clearUDFVarSubstitute(0),
 	    %%( S==[] ->
 	    ( no_errors_found(S) -> 

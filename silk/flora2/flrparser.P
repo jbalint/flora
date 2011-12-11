@@ -996,6 +996,8 @@ flneg_struct(Goal,Index,FLNEG(Goal,Index)).
 flquantifier_struct(Quant,VarNames,FormulaCode,Idx,
 		    FLQUANTIFIER(Quant,VarNames,FormulaCode,Idx)).
 
+fldelayquant_struct(Quant,Cond,Goal,FLDELAYQUANTIFIER(Quant,Cond,Goal)).
+
 flhypothetical_struct(Op,Goal,Index,FLHYPOTHETICAL(Op,Goal,Index)).
 
 flload_struct(List,FLLOAD(List)).
@@ -2211,8 +2213,8 @@ sensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,[Code],Status) :-
 	;   parsing_error(Ip,INVALID_SENSOR_MOD, S1)
 	),
 	parse_pure_prolog_term(SensorCall,SensorModName,SensorCallCode,VarNameList1-Tail1,S2),
-	%% parse_pure_prolog_term returns its own error codes,
-	%% so we change them to a more appropriate one for this particular case
+	%% parse_pure_prolog_term returns its own error codes, so
+	%% we change them to a more appropriate error for this particular case
 	(S2 == [] -> S22 = []
 	; parsing_error(Ip,INVALID_SENSOR_CALL,S22)
 	),
@@ -2983,7 +2985,7 @@ parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[G],If,_Ip),WS,DWS,Code,Status) 
 
 %% Parsing quantifiers.
 %% QF: quantified formula. We allow only the following quantifiers here:
-%%    existential, mustground,wishground,mustbound,withbound.
+%%    existential
 %% And only once, existential is allowed under \+ or not/naf,
 %% others are not allowed under negation.
 %% This would have to be generalized for Lloyd-Topor
@@ -3013,6 +3015,31 @@ parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,_,If,_Ip),_WS,_DWS,_,Status) :-
 	is_quantifier(F),
 	!,
 	parsing_error(If,NO_QUANTIFIERS,Status).
+
+%% Parsing delay quantifiers.
+%% Is not allowed under \+ or not/naf
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(_Quant,1,FL_PARENTHESIS,[_Cond],_,_),_Goal],If,_Ip),_WS,_DWS,_Code,Status) :-
+	get_atom(Funct,FL_QUANTVARCONNECTOR),
+	has_context(parsing_default_negation),
+	!,
+	parsing_error(If,DELAY_QUANT_UNDER_NEGATION,Status).
+
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,1,FL_PARENTHESIS,[Cond],_,_),Goal],_If,_Ip),_WS,_DWS,Code,[]) :-
+	get_atom(Funct,FL_QUANTVARCONNECTOR),
+	!,
+	parse_rule_body(Cond,NULL,NULL,CondCode,S1),
+	(S1==[] ->
+		parse_rule_body(Goal,NULL,NULL,GoalCode,S2),
+		(S2==[] ->
+			get_atom(Quant,FAtom,Index),
+			flatom_struct(FAtom,Index,QuantCode),
+			fldelayquant_struct(QuantCode,CondCode,GoalCode,Code)
+		;
+			Status = S2
+		)
+	;
+		Status = S1
+	).
 
 parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_atom(Funct,F),
