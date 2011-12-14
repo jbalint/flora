@@ -2,7 +2,7 @@
 
     # Create a FLORA-2 tarball 
 
-    # RUN this in ./admin/ directory!
+    # RUN this in the ./admin/ directory!
 
 files="./flora2/INSTALLATION \
         ./flora2/Makefile ./flora2/NMakefile.mak \
@@ -44,6 +44,10 @@ files="./flora2/INSTALLATION \
     	./flora2/syslib/Makefile ./flora2/syslib/NMakefile.mak \
     	./flora2/syslibinc/*.flh  \
 	./flora2/Misc/*.pl ./flora2/Misc/README \
+    	./flora2/platforms/unix \
+    	./flora2/platforms/windows \
+    	./flora2/platforms/cygwin \
+    	./flora2/binary-distribution.txt \
         ./flora2/java "
 
 curdir=`pwd`
@@ -73,6 +77,9 @@ CVS
 *.bak
 *-sv
 *-old
+platforms/unix/*
+platforms/windows/*
+platforms/cygwin/*
 EOF
 
 tar cvf flora2/flora2.tar --exclude-from=$EXCLUDEFILE $files

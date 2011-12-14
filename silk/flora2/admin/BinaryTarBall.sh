@@ -2,7 +2,7 @@
 
     # Create a FLORA-2 tarball 
 
-    # RUN this in ./admin/ directory!
+    # RUN this in the ./admin/ directory!
 
 files=" ./flora2/Makefile ./flora2/NMakefile.mak \
     	./flora2/makeflora ./flora2/makeflora.bat \
@@ -12,6 +12,7 @@ files=" ./flora2/Makefile ./flora2/NMakefile.mak \
     	./flora2/datatypes/*.xwam ./flora2/datatypes/*.sh \
     	./flora2/datatypes/Makefile ./flora2/datatypes/NMakefile.mak \
     	./flora2/debugger/*.in ./flora2/debugger/*.xwam \
+    	./flora2/debugger/*.dat \
     	./flora2/debugger/Makefile ./flora2/debugger/NMakefile.mak \
     	./flora2/demos/*.flr ./flora2/demos/*.sh \
     	./flora2/demos/sgml/*.flr ./flora2/demos/sgml/expectedoutput \
@@ -35,8 +36,10 @@ files=" ./flora2/Makefile ./flora2/NMakefile.mak \
     	./flora2/p2h/flora_ground.* \
         ./flora2/p2h/Makefile \
 	./flora2/p2h/NMakefile.mak ./flora2/p2h/NMakefile64.mak \
-        ./flora2/p2h/windows/*.dll \
-        ./flora2/p2h/windows64/*.dll \
+        ./flora2/p2h/windows/*.dll ./flora2/p2h/windows/*.exp \
+    	./flora2/p2h/windows/*.lib \
+        ./flora2/p2h/windows64/*.dll ./flora2/p2h/windows64/*.exp \
+    	./flora2/p2h/windows64/*.lib \
     	./flora2/pkgs/Makefile ./flora2/pkgs/NMakefile.mak \
         ./flora2/pkgs/*.flr ./flora2/pkgs/prolog/*.P \
 	./flora2/pkgs/include/*.flh \
@@ -44,6 +47,9 @@ files=" ./flora2/Makefile ./flora2/NMakefile.mak \
     	./flora2/syslib/Makefile ./flora2/syslib/NMakefile.mak \
     	./flora2/syslibinc/*.flh  \
 	./flora2/Misc/*.pl ./flora2/Misc/README \
+    	./flora2/platforms/unix \
+    	./flora2/platforms/windows \
+    	./flora2/platforms/cygwin \
     	./flora2/binary-distribution.txt \
         ./flora2/java "
 
@@ -74,6 +80,9 @@ CVS
 *.bak
 *-sv
 *-old
+platforms/unix/*
+platforms/windows/*
+platforms/cygwin/*
 EOF
 
 touch flora2/binary-distribution.txt
