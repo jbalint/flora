@@ -65,6 +65,12 @@ rm -f gpmanager/*.P gpmanager/*${OBJEXT} gpmanager/*.fld gpmanager/*.fdb
 rm -f $basedir/datafiles/*.P    $basedir/datafiles/*${OBJEXT}  $basedir/datafiles/*.fld  $basedir/datafiles/*.fdb
 rm -f $basedir/exporttest/*.P    $basedir/exporttest/*${OBJEXT}  $basedir/exporttest/*.fld  $basedir/exporttest/*.fdb
 rm -f $basedir/general_tests/prolog/*${OBJEXT}
+rm -f $basedir/functions/*${OBJEXT} $basedir/functions/*.P
+rm -f $basedir/functions/equality/*${OBJEXT} $basedir/functions/equality/*.P
+rm -f $basedir/functions/errors_warnings_tests/*${OBJEXT} $basedir/functions/errors_warnings_tests/*.P
+rm -f $basedir/symbols/*${OBJEXT} $basedir/symbols/*.P
+rm -f $basedir/symbols/tests/*${OBJEXT} $basedir/symbols/tests/*.P
+rm -f $basedir/symbols/test_load/*${OBJEXT} $basedir/symbols/test_load/*.P
 
 
 # run the tests
