@@ -7922,28 +7922,14 @@ either using \FLORA rules in a \texttt{.flr} file or Prolog rules in a
 \texttt{sensor/3} directive as follows:
 %% 
 \begin{verbatim}
-:- sensor(sens1(?,?,?Y,?X), sensorfoo, (nonvar(?X),ground(?Y))).
-:- sensor(sens2(?,?,?Y,?X), (ground(?X),ground(?Y))).
+:- sensor(sens1(?Y,?X), sensorfoo, (nonvar(?X),ground(?Y))).
+:- sensor(sens2(?Y,?X), (ground(?X),ground(?Y))).
 \end{verbatim}
 %% 
 The \texttt{sensor/2} directive is used for sensors defined in \FLORA and
 \texttt{sensor/3} is used for sensors defined in \texttt{Prolog}.  In the
-above, \texttt{sens1/4} and \texttt{sens2/4} are declared as sensors: the
+above, \texttt{sens1/2} and \texttt{sens2/2} are declared as sensors: the
 first in a Prolog file and the second in a \FLORA file.
-
-The first argument of the \texttt{sensor} directive is the invocation call for the sensor
-being declared.
-In an invocation call, the first argument is \emph{always} bound (by
-\FLORA) to the
-file name in which that particular instance of the sensor resides (in some
-rule or a query); the
-second argument is always bound to the line number where the call
-resides. This is useful in case the sensor needs to issue an error
-message, since the user will be able to quickly locate the offending call. 
-This is why the first two arguments in any sensor must be represented by
-don't-care variables and their implementation should expect them to be bound
-by \FLORA.
-The remaining arguments are under user's control.
 
 The last argument is a \emph{guard}: a Boolean expression consisting of
 \texttt{nonvar/1} and \texttt{ground/1} predicates applied to the input
@@ -7953,10 +7939,36 @@ satisfied).
 
 In the \texttt{sensor/3} directive, the middle argument is the name of the
 Prolog module in which the Prolog sensor is defined. 
-In our case, \texttt{sens1/4} is declared as a sensor defined by 
+In our case, \texttt{sens1/2} is declared as a sensor defined by 
 rules in a Prolog module, \texttt{sensorfoo}. In that case, \FLORA
-will expect those rules to be in a file named \texttt{sensorfoo.P}. The
-definition could look like this:
+will expect those rules to be in a file named \texttt{sensorfoo.P}.
+
+From the perspective of the \emph{user} of a sensor,
+the above sensors are binary predicates. However, 
+from the perspective of a \emph{developer} of a sensor, sensors have two
+extra ``hidden'' arguments. These arguments 
+are automatically prepended by the compiler to the list of the arguments
+that the user specified in a \texttt{sensor} directive. 
+
+In any actual call to a sensor, the first argument will be \emph{always}
+bound (at compile time) to the
+file in which the sensor is used (note: where it is
+used, not where it is defined) and the second 
+argument will be bound to the line number
+on which the call to the sensor occurs.
+This is useful in case the sensor needs to issue an error
+message to enable the user to quickly locate the offending call. 
+Thus, in the actual rules that define sensors,
+the first two arguments  of the sensors must be
+variables.
+The remaining arguments are up to the developer of the sensor's rules.
+
+The upshot of the above is that,
+to define \texttt{sens1/2} and \texttt{sens2/2}, one has to use
+predicates of arity 4.  
+Here is an example of a definition for \texttt{sens1/2}. As we just
+explained, the actual predicate to be defined here must be \texttt{sens1/4}
+and its first two arguments are reserved for file names and line numbers.  
 %% 
 \begin{verbatim}
    :- export sens1/4.
@@ -7973,35 +7985,53 @@ definition could look like this:
 \end{verbatim}
 %% 
 
-The sensor \texttt{sens2/4} is different from \texttt{sens1/4} in that it
+The sensor \texttt{sens2/2} is different from \texttt{sens1/2} in that it
 is declared using a
 two-argument sensor-directive, so its definition is expected to be in a
-\texttt{.flr} file.
+\texttt{.flr} file. As before, the actual predicate to be defined must
+be \texttt{sens2/4}, however. 
 %% 
 \begin{verbatim}
+   sens2(?F,?L,abc,cde) :- !, %writeln(details=?F+?L)@_io.
    sens2(?F,?L,?X,?Y) :-
         if \+ground(?X) // only ?X must be ground
         then
            %abort(['In file ', ?F, ', line ', ?L, ': ',
                    'Instantiation error in arg 3 in sens2'])@_sys,
         ?Y is ?X/2,
-        writeln(Y=?Y)@_prolog.
+        writeln(Y=?Y)@_prolog,
+        sens2(?F,?L,abc,cde).
 \end{verbatim}
 %%
+The last line in the above definition is not intended to be meaningful. Its
+point is to emphasize the fact
+that in a sensor definition for \texttt{sens2} the
+sensor developer must be aware of the hidden arguments, so \texttt{sens2/4}
+must be used when calling \texttt{sens2} recursively. However, when sensors are
+used in the rest of the program, they must be referred to without the
+hidden arguments. For instance,
+%% 
+\begin{verbatim}
+   ?- sens1(?X,?Y), ?X=123, ?Y=aaaaa, sens2(?X,?Y), ?Y=345, ?X=bbbbb.
+\end{verbatim}
+%% 
+There is no need to add the \texttt{@\_prolog} specification, since the
+compiler knows how to properly render sensor calls. 
 
-Several things need to be noted regarding sensors:
+
+The following points should be kept in mind when declaring, using, and
+developing sensors:
 %% 
 \begin{itemize}
-\item  A sensor directive is required for each sensor \emph{used}
-  (called) in the given file.
-\item For each sensor \emph{defined} (by rules) in a .flr file, either an appropriate
-  sensor directive or a prolog directive is required like so:
-  %% 
-\index{prolog directive}
-\begin{verbatim}
-  :- prolog sens1/4.
-\end{verbatim}
-  %% 
+\item Sensors are declared by the \texttt{sensor} directive with the same
+  number of arguments with which sensors are \emph{called} by user programs.
+  However, when a sensor is \emph{defined} by a rule, two hidden arguments must be
+  added. They are bound at runtime to the file name and line argument,
+  respectively.
+\item  Appropriate sensor directives are required in any file in which a
+  sensor is \emph{defined} (by rules)
+  or \emph{used} (called).
+\item 
   If the definition of a sensor is recursive (either in a .P or a .flr
   file) then a table directive might be required, e.g., 
   %% 
@@ -8010,16 +8040,21 @@ Several things need to be noted regarding sensors:
    :- table sens1/4.
 \end{verbatim}
   %% 
-\item Sensors are intended to be used for non-logical predicates such as
+Note that this table declaration is part of the definition of a sensor, so
+the hidden arguments must be taken into account. This is why
+\texttt{sens1} is declared here as a 4-ary predicate.
+\item Sensors are intended to be used as non-logical predicates such as
   builtins or predicates that interact with the environment. As such,
   sensors are not visible to HiLog queries (and internally they are
-  represented by Prolog predicates). For instance,
+  represented by Prolog predicates). For instance, neither
 %% 
-\begin{verbatim}
+\begin{alltt}
    ?- ?X(?,?,?,?).
-\end{verbatim}
+\textnormal{nor}
+   ?- ?X(?,?).
+\end{alltt}
 %% 
-will bind \texttt{?X}  neither to \texttt{sens1} nor to \texttt{sens2}.
+will bind \texttt{?X}  to \texttt{sens1} or \texttt{sens2}.
 \item As mentioned, sensors are treated as Prolog predicates but the
   details are taken care of by the compiler. So, when
   used, sensors do not need the \texttt{@\_prolog}  specifier.

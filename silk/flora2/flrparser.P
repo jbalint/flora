@@ -2202,9 +2202,7 @@ sensor_directive(CANOTERM(Funct,_,FL_PARENTHESIS,_,_If,Ip),_,Status) :-
 
 sensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,[Code],Status) :-
 	%% first two args must be anon vars: will e substituted by File, Line
-	(check_sensor_first_two_args(SensorCall) -> S0 = []
-	; parsing_error(Ip,SENSOR_FILE_LINE_VARS,S0)
-	),
+	prepend_two_anon_args(SensorCall,SensorCall2),
 	%% XSB module is an atom
 	(fixup_object(SensorXSBMod,SensorModObj),
 	    get_name(SensorModObj,SensorModName)
@@ -2212,7 +2210,7 @@ sensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,[Code],Status) :-
 	    S1 = []
 	;   parsing_error(Ip,INVALID_SENSOR_MOD, S1)
 	),
-	parse_pure_prolog_term(SensorCall,SensorModName,SensorCallCode,VarNameList1-Tail1,S2),
+	parse_pure_prolog_term(SensorCall2,SensorModName,SensorCallCode,VarNameList1-Tail1,S2),
 	%% parse_pure_prolog_term returns its own error codes, so
 	%% we change them to a more appropriate error for this particular case
 	(S2 == [] -> S22 = []
@@ -2227,12 +2225,13 @@ sensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,[Code],Status) :-
 	(subset(VarNameList2,VarNameList1) -> S4 = []
 	; parsing_error(Ip,SENSOR_VARS_ERROR,S4)
 	),
-	merge_status([S0,S1,S22,S33,S4],Status),
+	merge_status([S1,S22,S33,S4],Status),
 	flsensor_struct(SensorCallCode,DelayCondCode,Code).
 
-check_sensor_first_two_args(CANOTERM(_Funct,_N,FL_PARENTHESIS,[File,Line|_],_If,_Ip)) :-
-	is_anonymous_variable(File,_),
-	is_anonymous_variable(Line,_).
+prepend_two_anon_args(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),
+		      CANOTERM(Funct,N2,FL_PARENTHESIS,[AnonArg,AnonArg|Args],If,Ip)) :-
+	is_anonymous_variable(AnonArg,NO_INDEX),
+	N2 is N+2.
 
 /****************************************************************************
   setsemantics_directive(+CanoniTerm,-CodeList,-Status)
@@ -3129,19 +3128,22 @@ parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) 
 %% Delayed sensors
 parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,Atom),
-	( flora_delayed_sensor_literal(Atom,N), ! %% call sensor defined in .flr
+	N2 is N+2,
+	(flora_delayed_sensor_literal(Atom,N2), ! %% call sensor defined in .flr
 	; (flora_get_module_from_spec(WS,PROLOGMODULE,Mod) %% sensor@_plg(Mod)
 	  ; flora_get_module_from_spec(WS,PROLOGALLMODULE,Mod)
 	  ),
 	    is_flatom_struct(Mod,ModAtm)
 	->
-	    flora_delayed_sensor_literal(ModAtm:Atom,N)
-	; flora_delayed_sensor_literal(Mod:Atom,N) %% call sensor in a .P mod
+	    flora_delayed_sensor_literal(ModAtm:Atom,N2)
+	; flora_delayed_sensor_literal(Mod:Atom,N2) %% call sensor in a .P mod
 	),
 	!,
 	flatom_struct(Atom,If,OpCode),
 	parse_body_pathexplist(Args,DWS,ACode,Status),
-	fllist_struct(ACode,[],Ip,ArgsCode),
+	is_anonymous_flvar_struct(AnonCode,NO_INDEX),
+	ACode2 = [AnonCode,AnonCode|ACode],
+	fllist_struct(ACode2,[],Ip,ArgsCode),
 	(var(Mod) -> fldelayedliteral_struct(OpCode,ArgsCode,Code)
 	; fldelayedliteral_struct(OpCode,ArgsCode,Mod,Code)
 	).
