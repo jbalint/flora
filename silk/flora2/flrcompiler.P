@@ -729,7 +729,12 @@ atomlit_struct(_Context,FLATOM(Atom,I),Code) :-
 	atomobj_struct(FLATOM(Atom,I),AtomCode),
 	prologterm_struct(AtomCode,0,[],Code).
 atomlit_struct(_Context,FLATOM(Atom,I),Code) :-
-	flora_prlgdef(Atom,0,ReplacementAtm,Mod),
+	flora_prlgdef(Atom,0,Mod),
+	!,
+	atomobj_struct(FLATOM(Atom,I),AtomCode),
+	prologterm_struct(AtomCode,0,[],Mod,Code).
+atomlit_struct(_Context,FLATOM(Atom,I),Code) :-
+	flora_prlgdef_repl(Atom,0,ReplacementAtm,Mod),
 	!,
 	atomobj_struct(FLATOM(ReplacementAtm,I),AtomCode),
 	prologterm_struct(AtomCode,0,[],Mod,Code).
@@ -739,7 +744,12 @@ atomlit_struct(_Context,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
 	builtin_identifier_struct(FLBUILTIN_IDENTIFIER(Atom,I),AtomCode),
 	prologterm_struct(AtomCode,0,[],Code).
 atomlit_struct(_Context,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
-	flora_prlgdef(Atom,0,ReplacementAtm,Mod),
+	flora_prlgdef(Atom,0,Mod),
+	!,
+	builtin_identifier_struct(FLBUILTIN_IDENTIFIER(Atom,I),AtomCode),
+	prologterm_struct(AtomCode,0,[],Mod,Code).
+atomlit_struct(_Context,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
+	flora_prlgdef_repl(Atom,0,ReplacementAtm,Mod),
 	!,
 	builtin_identifier_struct(FLBUILTIN_IDENTIFIER(ReplacementAtm,I),AtomCode),
 	prologterm_struct(AtomCode,0,[],Mod,Code).
@@ -909,18 +919,20 @@ termlit_struct(_Context,FObj,N,ObjList,Code) :-
 	(is_pratom(FObj,AtomName)
 	; is_prbuiltin_identifier(FObj,AtomName)
 	),
-	flora_prlgdef(AtomName,N),
-	!,
-	prologterm_struct(FObj,N,ObjList,Code).
+	(flora_prlgdef(AtomName,N)
+	-> prologterm_struct(FObj,N,ObjList,Code)
+	; flora_prlgdef(AtomName,N,Mod)
+	-> prologterm_struct(FObj,N,ObjList,Mod,Code)
+	).
 termlit_struct(_Context,FObj,N,ObjList,Code) :-
 	is_pratom(FObj,AtomName,Idx),
-	flora_prlgdef(AtomName,N,ReplacementAtm,Mod),
+	flora_prlgdef_repl(AtomName,N,ReplacementAtm,Mod),
 	!,
 	is_pratom(ReplFObj,ReplacementAtm,Idx),
 	prologterm_struct(ReplFObj,N,ObjList,Mod,Code).
 termlit_struct(_Context,FObj,N,ObjList,Code) :-
 	is_prbuiltin_identifier(FObj,AtomName,Idx),
-	flora_prlgdef(AtomName,N,ReplacementAtm,Mod),
+	flora_prlgdef_repl(AtomName,N,ReplacementAtm,Mod),
 	!,
 	is_prbuiltin_identifier(ReplFObj,ReplacementAtm,Idx),
 	prologterm_struct(ReplFObj,N,ObjList,Mod,Code).
@@ -1084,6 +1096,9 @@ is_prologterm(Term) :- prologterm_atom_arity(Term,_,_).
 prologterm_atom_arity(Term,Atom,Arity) :- is_prologterm(Term,Atom,Arity,_).
 prologterm_atom_arity(Term,Atom,Arity) :- is_prologterm(Term,Atom,Arity,_,_).
 
+prologliblit_atom_arity_mod(Term,Atom,Arity,Mod) :-
+	is_prologliblit(Term,Atom,Arity,_,Mod).
+
 %% Not all Flora system libraries encode textual information. Only
 %% the ones for aggregates and DB updates
 florasyslib_struct(F,N,Args,FLORASYSLIB(NO_INDEX,F,N,Args)) :-
@@ -1097,18 +1112,20 @@ termobj_struct(FObj,N,ObjList,Code) :-
 	(is_pratom(FObj,AtomName)
 	; is_prbuiltin_identifier(FObj,AtomName)
 	),
-	flora_prlgdef(AtomName,N),
-	!,
-	prologterm_struct(FObj,N,ObjList,Code).
+	(flora_prlgdef(AtomName,N)
+	-> prologterm_struct(FObj,N,ObjList,Code)
+	; flora_prlgdef(AtomName,N,Mod)
+	-> prologterm_struct(FObj,N,ObjList,Mod,Code)
+	).
 termobj_struct(FObj,N,ObjList,Code) :-
 	is_pratom(FObj,AtomName,Idx),
-	flora_prlgdef(AtomName,N,ReplacementAtm,Mod),
+	flora_prlgdef_repl(AtomName,N,ReplacementAtm,Mod),
 	!,
 	is_pratom(ReplFObj,ReplacementAtm,Idx),
 	prologterm_struct(ReplFObj,N,ObjList,Mod,Code).
 termobj_struct(FObj,N,ObjList,Code) :-
 	is_prbuiltin_identifier(FObj,AtomName,Idx),
-	flora_prlgdef(AtomName,N,ReplacementAtm,Mod),
+	flora_prlgdef_repl(AtomName,N,ReplacementAtm,Mod),
 	!,
 	is_prbuiltin_identifier(ReplFObj,ReplacementAtm,Idx),
 	prologterm_struct(ReplFObj,N,ObjList,Mod,Code).
@@ -2142,7 +2159,7 @@ set_context(X) :-
 	compound(X),
 	!.
 set_context(X) :-
-	abort([X, ': FLORA-2 compiler BUG!! Invalid compiler context.']).
+	abort([X, ': FLORA-2 compiler BUG!! Invalid compiler context']).
 
 has_context(X) :-
 	compound(X),
@@ -2494,12 +2511,10 @@ compile_direct(DirectTerm,_,[Code],[]) :-
 compile_direct(DirectTerm,_,[Code],Status) :-
 	is_flsensor(DirectTerm,SensCall,DelayCond),
 	!,
-	compile_sensor(SensCall,DelayCond,Direct,Stat1),
+	compile_sensor_direct(SensCall,DelayCond,Direct,Stat1),
 	query_struct(Direct,QueryCode),
-	%%(Stat1 == [] ->
 	( no_errors_found(Stat1) -> 
-	   flrcoder:flora_intern_code([QueryCode],NULL,PrologCode,Status),
-	    %%(Status == [] ->
+	    flora_intern_code([QueryCode],NULL,PrologCode,Status),
 	    ( no_errors_found(Status) -> 
 		call(PrologCode)
 	    ; true
@@ -2662,11 +2677,11 @@ compile_flatomvar(T,Code) :-
 	    ).
 
 /****************************************************************************
-        compile_sensor(+SensCall,+DelayCond,-Direct,-Status)
+        compile_sensor_direct(+SensCall,+DelayCond,-Direct,-Status)
 
    Compile a sensor directive.
 ****************************************************************************/
-compile_sensor(SensCall,DelayCond,Code,Status) :-
+compile_sensor_direct(SensCall,DelayCond,Code,Status) :-
 	atomobj_struct(flora_register_sensor,FunctCode),
 	compile_body_literal(SensCall,SensCode,S1),
 	( no_errors_found(S1) -> 
@@ -2679,9 +2694,13 @@ compile_sensor(SensCall,DelayCond,Code,Status) :-
 	    is_pratom(SensNameCode,SensName)
 	->
 	    flora_define_prolog(SensName,SensArity)
-	; true
+	; prologliblit_atom_arity_mod(SensCode,SensNameCode,SensArity,ModCode),
+	    is_pratom(SensNameCode,SensName),
+	    is_pratom(ModCode,ModName),
+	    flora_define_prolog(SensName,SensArity,ModName)
 	),
-	prologterm_struct(FunctCode,2,[SensCode,DelayCode], FLDELAYSUPPORTMOD,Code).
+	prologterm_struct(FunctCode,2,[SensCode,DelayCode],FLDELAYSUPPORTMOD,Code).
+	
 
 
 /****************************************************************************
@@ -3074,13 +3093,10 @@ compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactLi
 	    ),
 	    ( Body=NULL ->
 		new_udffact(Name,N,Args,ReturnValue,Fact),
-		set_context(compile_udf_as_prolog),
-		compile_fact([Fact],RuleList-ListTail,FactList-FactTail,S),
-		clear_context(compile_udf_as_prolog)
+		compile_fact([Fact],RuleList-ListTail,FactList-FactTail,S)
 	    ;
 		approx_flindex(Funct,FunctIndex),
 		new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody),
-		set_context(compile_udf_as_prolog),
 		compile_rule([NewPredicateOrigArgs],NewBody,NULL,RuleList-ListTail,FactList-FactTail,S)
 	    ),
 	    ( var(HasUDF) ->
@@ -3123,7 +3139,8 @@ new_udf_predicate(Name,N,OrigArgs,Args,NewPredicateCode,NewPredicateOrigArgs,NPN
 	append(OrigArgs,[NewReturnValue],NPOrigArgs),
 	NPN is N+1,
 	flterm_struct(NPFunct,NPN,NPArgs,NewPredicateCode),
-	flterm_struct(NPFunct,NPN,NPOrigArgs,NewPredicateOrigArgs).
+	flterm_struct(NPFunct,NPN,NPOrigArgs,NewPredicateOrigArgs),
+	flora_define_prolog(NPName,NPN).
 
 new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody):-
 	%% Form body for the new rule.
@@ -3158,7 +3175,6 @@ new_udf_predicate_funct(Name,NewPredicateFunct,NewName):-
 ****************************************************************************/
 compile_rule(Head,Body,Annotation,RuleList-RuleTail,Facts-Facts,Status) :-
 	compile_head(Head,HeadCode,H2BCodeHead,H2BCodeTail,HeadStatusPre),
-	clear_context(compile_udf_as_prolog),
 	compile_conjunct2list(HeadCode,HeadCodeList),
 	no_mixed_sensor_nonsensor_heads(HeadCodeList,Head,DelayStatus),
 	merge_status([HeadStatusPre,DelayStatus],HeadStatus),
@@ -3696,13 +3712,7 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	*/
 
         ; is_fldelayquant(ParserTerm,Quant,Condition,Goal) ->
-	    is_flatom(Quant,_,Index),
-	    code_line_and_file_by_index(Index,Line,CurrFileName),
-	    is_flatom(CurrFileParserObj,CurrFileName,NO_INDEX),
-	    is_flatom(QuantAtom,FL_DELAYQUANT,NO_INDEX),
-	    compile_prlgterm(FLLIBDELAYEDLITERAL,4,[QuantAtom,CurrFileParserObj,Line,[Quant,Condition,Goal]],
-			     FLDELAYSUPPORTMOD,
-			     Nesting,SpecCode,OidCode,_ACode,BodyHeadList,Status)
+		compile_fldelayquant(Quant,Condition,Goal,SpecCode,BodyHeadList,Status)
 
         ; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_fltransactionaltermlit(Funct,N,Args,Nesting,OidCode,SpecCode,BodyHeadList,Status)
@@ -4206,7 +4216,10 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 
 compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	set_context(compiling_body_pathexp),
-	( is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
+        ( is_fldelayquant(ParserTerm,Quant,Condition,Goal) ->
+		compile_fldelayquant(Quant,Condition,Goal,OidCode,BodyHeadList,Status)
+
+	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_fltermobj(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 
 	; is_flterm(ParserTerm,Funct,N,Args) ->
@@ -4537,13 +4550,7 @@ compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status):-
 	prvar_to_flvar_struct(Object,Var),
 	approx_flindex(ParserTerm,Index),
 	formUDFVarSubstitute([Var],[ReturnValue],Nesting,Index),
-	( has_context(compile_udf_as_prolog) ->
-		Has=1
-	;
-		set_context(compile_udf_as_prolog)
-	),
 	compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,S),
-	( Has==1,! ; clear_context(compile_udf_as_prolog)),
 	clearUDFVarSubstitute(Nesting),
 	( no_errors_found(S) -> 
 		append(PBodyHeadList,[PCode],BodyHeadList),
@@ -4586,13 +4593,7 @@ compile_fltermobj(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,CompileS
 	    prvar_to_flvar_struct(Object,Var),
 	    approx_flindex(Funct,Index),
 	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],Nesting,Index),
-	    ( has_context(compile_udf_as_prolog) ->
-		Has=1
-	    ;
-	    	set_context(compile_udf_as_prolog)
-	    ),
 	    compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,S),
-	    ( Has==1,! ; clear_context(compile_udf_as_prolog)),
 	    clearUDFVarSubstitute(Nesting),
 	    %%( S==[] ->
 	    ( no_errors_found(S) -> 
@@ -4664,23 +4665,13 @@ clearUDFVarSubstitute(Nesting) :-
 	
 compile_fltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) :-
 	check_symbol_name(Funct,N,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,SymbolStatus),
-	( has_context(compile_udf_as_prolog) ->
-	    compile_pathexplist(Args,Nesting,AObj,OidCode,ObjCode,BodyHeadList,Status),
-	    ( no_errors_found(Status) ->
-		flora_get_flatomvar_name(Funct,Name),
-		wsatom_struct(Name,FunCode),
-		prologterm_struct(FunCode,N,AObj,TCode),
-		conjunct_code([TCode,ObjCode],Code)
-	    ; true)
-	;
-	    set_context(compiling_term_name),
-	    compile_pathexplist([Funct|Args],Nesting,[FObj|AObj],OidCode,ObjCode,BodyHeadList,Status),
-	    ( no_errors_found(Status) ->
+	set_context(compiling_term_name),
+	compile_pathexplist([Funct|Args],Nesting,[FObj|AObj],OidCode,ObjCode,BodyHeadList,Status),
+	( no_errors_found(Status) ->
 		termlit_struct(BODYLITERAL,FObj,N,AObj,TCode),
 		conjunct_code([TCode,ObjCode],Code)
-	    ;
+	;
 		true
-	    )
 	),
 	merge_status([SymbolStatus,Status],CompileStatus).
 
@@ -4696,6 +4687,40 @@ compile_fltransactionaltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,Co
 	  true
         ),
 	merge_status([SymbolStatus,Status],CompileStatus).
+
+
+/****************************************************************************
+  compile_fldelayquant(+Quant,+Condition,+Goal,-SpecCode,-BodyHeadList,-Status)
+****************************************************************************/
+compile_fldelayquant(Quant,Condition,Goal,SpecCode,BodyHeadList,Status):-
+	    is_flatom(Quant,_,Index),
+	    code_line_and_file_by_index(Index,Line,CurrFileName),
+	    is_flatom(QuantAtom,FL_DELAYQUANT,NO_INDEX),
+	    /*is_flatom(CurrFileParserObj,CurrFileName,NO_INDEX),
+	    is_fllist(DelayArgs,[Quant,Condition,Goal],[],NO_INDEX),
+	    compile_prlgterm(FLLIBDELAYEDLITERAL,4,[QuantAtom,CurrFileParserObj,Line,DelayArgs],
+			     FLDELAYSUPPORTMOD,
+			     Nesting,SpecCode,OidCode,_ACode,BodyHeadList,Status)*/
+	    compile_body_literal(Condition,Nesting,ConditionCode,BodyHeadList1,S1),
+	    ( no_errors_found(S1) ->
+		compile_body_literal(Goal,Nesting,GoalCode,BodyHeadList2,S2),
+	    	( no_errors_found(S2) ->
+		    merge_status([S1,S2],Status),
+		    append(BodyHeadList1,BodyHeadList2,BodyHeadList),
+		    atomobj_struct(Quant,QuantCode),
+		    list_struct([QuantCode,ConditionCode,GoalCode],[],AObj),
+		    atomobj_struct(QuantAtom,QuantAtomCode),
+		    atomobj_struct(CurrFileName,CurrFileNameObj),
+		    prologterm_struct(FLLIBDELAYEDLITERAL,4,
+	    		      [QuantAtomCode,CurrFileNameObj,Line,AObj],
+			      FLDELAYSUPPORTMOD,
+			      SpecCode)
+		;
+		    Status = S2
+		)
+	    ;
+		Status = S1
+	    ).
 
 
 /****************************************************************************
@@ -5460,13 +5485,7 @@ compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,CompileS
 	    prvar_to_flvar_struct(Object,Var),
 	    approx_flindex(Funct,Index),
 	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],0,Index),
-	    ( has_context(compile_udf_as_prolog) ->
-		Has=1
-	    ;
-	    	set_context(compile_udf_as_prolog)
-	    ),
 	    compile_body_literal(Predicate,0,PCode,PH2BCodeHead,S),
-	    ( Has==1,! ; clear_context(compile_udf_as_prolog)),
 	    clearUDFVarSubstitute(0),
 	    %%( S==[] ->
 		( no_errors_found(S) -> 
@@ -5495,24 +5514,14 @@ compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,CompileS
 ****************************************************************************/
 compile_head_fltermlit(Funct,N,Args,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
 	check_symbol_name(Funct,N,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,SymbolStatus),
-	( has_context(compile_udf_as_prolog) ->
-	    compile_head_pathexplist(Args,AObj,ObjCode,H2BCodeHead,H2BCodeTail,Status),
-	    ( no_errors_found(Status) ->
-		flora_get_flatomvar_name(Funct,Name),
-		wsatom_struct(Name,FunCode),
-		prologterm_struct(FunCode,N,AObj,TObj),
-		conjunct_struct(ObjCode,TObj,Code)
-	    ; true)
-	;
-	    set_context(compiling_term_name),
-	    compile_head_pathexplist([Funct|Args],[FObj|AObj],ObjCode,H2BCodeHead,H2BCodeTail,Status),
-	    ( no_errors_found(Status) -> 
+	set_context(compiling_term_name),
+	compile_head_pathexplist([Funct|Args],[FObj|AObj],ObjCode,H2BCodeHead,H2BCodeTail,Status),
+	( no_errors_found(Status) -> 
 		termlit_struct(HEADLITERAL,FObj,N,AObj,TObj),
 		conjunct_struct(ObjCode,TObj,Code)
-	    ;
+	;
 		true
-	    )	
-	),
+	),	
 	merge_status([SymbolStatus,Status],CompileStatus).
 
 compile_head_fltransactionaltermlit(Funct,N,Args,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
@@ -6378,13 +6387,7 @@ compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,BodyHeadList,Tra
 	    prvar_to_flvar_struct(Object,Var),
 	    approx_flindex(Funct,Index),
 	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],Nesting,Index),
-	    ( has_context(compile_udf_as_prolog) ->
-		Has=1
-	    ;
-	    	set_context(compile_udf_as_prolog)
-	    ),
 	    compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,S),
-	    ( Has==1,! ; clear_context(compile_udf_as_prolog)),
 	    clearUDFVarSubstitute(Nesting),
 	    %%( S==[] ->
 	    ( no_errors_found(S) -> 
@@ -7661,15 +7664,8 @@ compile_head_wsfltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Com
 	    prvar_to_flvar_struct(Object,Var),
 	    approx_flindex(Funct,Index),
 	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],0,Index),
-	    ( has_context(compile_udf_as_prolog) ->
-		Has=1
-	    ;
-	    	set_context(compile_udf_as_prolog)
-	    ),
 	    compile_body_literal(Predicate,0,PCode,PH2BCodeHead,S),
-	    ( Has==1,! ; clear_context(compile_udf_as_prolog)),
 	    clearUDFVarSubstitute(0),
-	    %%( S==[] ->
 	    ( no_errors_found(S) -> 
 		append(PH2BCodeHead,[PCode],List),
 		conjunct_code(List,H2BCodeHead),
@@ -8713,7 +8709,7 @@ compile_execdirect(DirectTerm,WS,Code,Status) :-
 	    Status = []
 
 	; is_flsensor(DirectTerm,SensCall,DelayCond) ->
-	    compile_sensor(SensCall,DelayCond,Direct,Status),
+	    compile_sensor_direct(SensCall,DelayCond,Direct,Status),
 	    directive_struct(Direct,Code)
 
 	;  is_flprolog_directive(DirectTerm,PairList) ->

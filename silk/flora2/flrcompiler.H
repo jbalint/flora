@@ -21,6 +21,7 @@
 #include "flora_porting.flh"
 #include "flora_terms.flh"
 
+:- index atomlit_struct/3-2.
 
 :- import
 	flora_increment_counter/4,
@@ -51,7 +52,9 @@
 :- import
 	flora_define_prolog/1,
 	flora_define_prolog/2,
-	flora_prlgdef/4,
+	flora_define_prolog/3,
+	flora_prlgdef_repl/4,
+	flora_prlgdef/3,
 	flora_prlgdef/2
    from flrprolog.
 
@@ -75,8 +78,10 @@
    from flrutils.
 
 :- import
+	flora_intern_code/4,
 	is_prologterm/4,
 	is_prologterm/5,
+	is_prologliblit/5,
         is_prvariable/1,
         is_prvariable/3,
         is_prtransactionalvariable/3,

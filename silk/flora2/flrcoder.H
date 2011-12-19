@@ -103,6 +103,7 @@
 	is_prologterm/4,
 	is_prologterm/5,
 	is_prologliblit/4,
+	is_prologliblit/5,
 	is_prnewpred/4,
 	is_prnewoid/3,
         is_prmvdcondef/6,

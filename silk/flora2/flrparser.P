@@ -3129,13 +3129,14 @@ parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) 
 %% Delayed sensors
 parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,Atom),
-	((flora_get_module_from_spec(WS,PROLOGMODULE,Mod)
-	 ; flora_get_module_from_spec(WS,PROLOGALLMODULE,Mod)
-	 ),
-	 is_flatom_struct(Mod,ModAtm)
+	( flora_delayed_sensor_literal(Atom,N), ! %% call sensor defined in .flr
+	; (flora_get_module_from_spec(WS,PROLOGMODULE,Mod) %% sensor@_plg(Mod)
+	  ; flora_get_module_from_spec(WS,PROLOGALLMODULE,Mod)
+	  ),
+	    is_flatom_struct(Mod,ModAtm)
 	->
 	    flora_delayed_sensor_literal(ModAtm:Atom,N)
-	; flora_delayed_sensor_literal(Atom,N)
+	; flora_delayed_sensor_literal(Mod:Atom,N) %% call sensor in a .P mod
 	),
 	!,
 	flatom_struct(Atom,If,OpCode),
@@ -6511,7 +6512,12 @@ parse_stripped_dbliteral(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,
 
 parse_stripped_dbliteral(Mode,CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,_Ip),DWS,Code,Status) :-
 	!,
-	( get_atom(Funct,F), (flora_prlgdef(F,N) ; flora_prlgdef(F,N,_,_)) ->
+	( get_atom(Funct,F),
+	    (flora_prlgdef(F,N)
+	    ; flora_prlgdef(F,N,_) 
+	    ; flora_prlgdef_repl(F,N,_,_)
+	    )
+	->
 	    parsing_error(If,NO_PROLOG,Status)
 	;
 	  parse_db_term(Mode,Funct,N,Args,ALLOW_TRANS,DWS,Code,Status)
@@ -6534,7 +6540,11 @@ parse_stripped_dbliteral(Mode,CanoniTerm,_DWS,Code,Status) :-
               parsing_error(CanoniTerm,ERROR_BUILTIN,Status)
 	    )
 
-	; (flora_prlgdef(A,0) ; flora_prlgdef(A,0,_,_)) ->
+	; (flora_prlgdef(A,0)
+	  ; flora_prlgdef(A,0,_)
+	  ; flora_prlgdef_repl(A,0,_,_)
+	  )
+	->
 	    parsing_error(CanoniTerm,NO_PROLOG,Status)
 	;
 	  flobject_struct(CanoniTerm,Code),

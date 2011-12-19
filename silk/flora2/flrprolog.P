@@ -220,7 +220,9 @@ flora_prlgdef(P,A) :-
 
 flora_prlgdef(P,A) :- flora_dynprlg(P,A).
 
-flora_prlgdef(P,A,NP,Mod) :-
+flora_prlgdef(P,Mod,A) :- flora_dynprlg(P,Mod,A).
+
+flora_prlgdef_repl(P,A,NP,Mod) :-
 	flora_prlg(P,A,NP,Mod),
 	!.
 
@@ -228,26 +230,39 @@ flora_prlgdef(P,A,NP,Mod) :-
 /****************************************************************************
   flora_reset_prolog/0
 ****************************************************************************/
-flora_reset_prolog :- retractall(flora_dynprlg(_,_)).
+flora_reset_prolog :-
+	retractall(flora_dynprlg(_,_,_)),
+	retractall(flora_dynprlg(_,_)).
 
 
 /****************************************************************************
   flora_define_prolog(+Op,+Arity)
+  flora_define_prolog(+Op,+Arity,+Mod)
   flora_define_prolog(+List)
 ****************************************************************************/
+%% Any arity or any op? Probably should remove this case
 flora_define_prolog(Op,Arity) :-
 	(var(Op); var(Arity)),
 	!,
 	assert(flora_dynprlg(Op,Arity)).
 
 flora_define_prolog(Op,Arity) :-
-	( flora_prlg(Op,Arity) ->
-	    true
+	( flora_prlg(Op,Arity) -> true
 	;
 	  assert(flora_dynprlg(Op,Arity))
+	).
+
+%% This is used only dynamically by the compiler
+flora_define_prolog(Op,Arity,Mod) :-
+	( flora_dynprlg(Op,Arity,Mod) -> true
+	;
+	  assert(flora_dynprlg(Op,Arity,Mod))
 	).
 
 flora_define_prolog([]) :- !.
 flora_define_prolog([(Op,Arity)|Rest]) :-
 	flora_define_prolog(Op,Arity),
+	flora_define_prolog(Rest).
+flora_define_prolog([(Op,Arity,Mod)|Rest]) :-
+	flora_define_prolog(Op,Arity,Mod),
 	flora_define_prolog(Rest).

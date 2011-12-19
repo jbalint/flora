@@ -20,17 +20,16 @@
 %% is handled in foo@_prolog(mod). In this case, FLORA inserts
 %% a dynamic declaration that foo is a prolog predicate.
 :- dynamic flora_dynprlg(_,_).
+:- dynamic flora_dynprlg(_,_,_).
 
-%%:- dynamic flora_shprlg(_,_).
 
 /*
+:- dynamic flora_shprlg(_,_).
 :- index 
 	flora_dynprlg/2-1,
 	%%flora_shprlg/2-1,
 	flora_prlg/2-1.
 */
-
-%%:- import flora_get_counter/2 from gensym.
 
 :- import flora_compilation_context/1 from flrcompiler.
 
@@ -38,6 +37,8 @@
           flora_reset_prolog/0,
 	  flora_define_prolog/1,
 	  flora_define_prolog/2,
-	  flora_prlgdef/4,
+	  flora_define_prolog/3,
+	  flora_prlgdef_repl/4,
+	  flora_prlgdef/3,
 	  flora_prlgdef/2.
 
