@@ -38,6 +38,9 @@
 	flora_module_predicate/4,
 	flora_fdb_storage_name/2,
 	flora_fdb_storage_name/2,
+
+	flora_modularize_atom/3,
+
 	%% Storage for skeletons of defined predicates
 	flora_fld_storage_name/2
    from flrwrapper.

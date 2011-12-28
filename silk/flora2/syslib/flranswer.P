@@ -34,7 +34,10 @@
 #define FLRANSWER_FUNCTOR     answer
 
 
-:- import cputime/1 from standard.
+:- import
+	timed_call/4,
+	cputime/1
+   from standard.
 
 :- import windows_os/0 from xsb_configuration.
 
@@ -131,7 +134,14 @@ flora_print_all(Gs,NVs) :-
 	    ),
 	    fail
 	;
-	    flora_write_No
+	    cputime(T1),
+	    T is T1-T0,
+	    ( flora_switch(chatter) ->
+		flora_stdfdbk_string('~nElapsed time ~w seconds~n', [T])
+	    ; true
+	    ),
+	    flora_write_No,
+	    fail
 	).
 
 flora_print_all(Gs,NVs) :-
@@ -167,7 +177,15 @@ flora_print_all(Gs,NVs) :-
 	flora_reclaim_storage_space,
 	abolish(FL_QUERY_PREDICATE/QueryArity),
 	sort(TempL,L),
-	( L = [] -> flora_write_No, fail
+	( L = [] ->
+	    ( flora_switch(chatter) ->
+		flora_stdfdbk_string('~nElapsed time ~w seconds~n', [T])
+	    ;
+		true
+	    ),
+	    flora_write_No,
+	    !,
+	    fail
 	;
 	    flora_write_matches(L),
 	    ( flora_switch(chatter) ->
@@ -236,16 +254,12 @@ flora_write_Yes_or_Unknown(XWamState) :-
 %% flora_call is a wrapper around XSB call
 %% Used only in top-level queries
 %% If XWamState = 0, the answer is true. Otherwise: undefined
-:- dynamic '_$_$_flora_in_timed_call'/1.
 flora_call(Goal,NVs,XWamState) :- 
     	flora_handle_trace,
-	(\+('_$_$_flora_in_timed_call'(true)),
-	  flora_runtime_limits_registry(timeout,Time,Handler)
+	( flora_runtime_limits_registry(timeout,Time,Handler)
 	->
 	    arg(1,Handler,Goal),
-	    assert('_$_$_flora_in_timed_call'(true)),
-	    timed_call(Goal,Time,Handler),
-	    (retract('_$_$_flora_in_timed_call'(true)),! ; true)
+	    timed_call(Goal,Time,Handler,nesting)
 	;
 	    call(Goal)
 	),
@@ -257,7 +271,6 @@ flora_call(Goal,NVs,XWamState) :-
 
 flora_call(_Goal,_NVs,_XWamState) :-
 	flora_handle_notrace,
-	retract('_$_$_flora_in_timed_call'(true)),
 	fail.
 
 FL_SILENT_ISACYCLIC(X) :- is_acyclic(X).

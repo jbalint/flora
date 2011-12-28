@@ -40,11 +40,15 @@
 
 :- import
 	flora_decode_predicate/6,
+	flora_unscramble_atom/2,
         is_flora_callable_literal/1
     from flrwrapper.
 :- import flora_prlgdef/2 from flrprolog.
 :- import flora_opdef/3 from flroperator.
-:- import flora_delayed_literal/2 from FLDELAYSUPPORTMOD.
+:- import
+	flora_delayed_builtin_literal/2,
+	flora_delayed_sensor_literal/3
+   from FLDELAYSUPPORTMOD.
 
 :- import
 	flora_printable_type_representation/2,
@@ -497,7 +501,7 @@ decode_hilog_term(HiLogPred,Args,Code,Level,Depth) :-
 
 %% flora prolog-style builtin: declared as flora_prlg in flrprolog.P
 decode_prolog_call([F,Args,Arity],Code,Depth) :-
-	(flora_prlgdef(F,Arity) ; flora_delayed_literal(F,Arity)),
+	flora_prlgdef(F,Arity),
 	!,
 	Depth1 is Depth+1,
 	decode_builtin(F,Arity,Args,Code,Depth1).
@@ -505,15 +509,26 @@ decode_prolog_call([FLLIBDELAYEDLITERAL,[FL_DEFLTNEG,_,_,[Call|_]],4],Code,Depth
 	!,
 	Depth1 is Depth+1,
 	decode_literal_internal(Call,Code,1,Depth1).
-decode_prolog_call([FLLIBDELAYEDLITERAL,[FL_UNDEFEATED,_,_,[Call|_]],4],Code,Depth) :-
+decode_prolog_call([FLLIBDELAYEDLITERAL,[FL_UNDEFEATED,_,_,[Call|_]],4],[Code, ' /* testing defeasibility of rule */'],Depth) :-
 	!,
 	decode_literal_internal(Call,Code,0,Depth).
 %% other cases of FLLIBDELAYEDLITERAL
 decode_prolog_call([FLLIBDELAYEDLITERAL,[F,_,_,Args],4],Code,Depth) :-
 	length(Args,N),
+	flora_delayed_builtin_literal(F,N),
 	!,
 	Depth1 is Depth+1,
 	decode_builtin(F,N,Args,Code,Depth1).
+decode_prolog_call([FLLIBDELAYEDLITERAL,[F,_,_,Args],4],[Code, ' /* sensor */'],Depth) :-
+	length(Args,N),
+	N2 is N-2,
+	(F = _:F2, flora_delayed_sensor_literal((F2,_),N2,_)
+	; flora_unscramble_atom(F,F2), flora_delayed_sensor_literal(F2,N2,_)
+	),
+	!,
+	Args = [_,_|Args2],
+	Depth1 is Depth+1,
+	decode_builtin(F2,N2,Args2,Code,Depth1).
 decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],Code,Depth) :-
 	Term =.. [FLLIBDELAYEDLITERAL|Args],
 	Args = [FL_DEFLTNEG,_,_,[Call|_]],
@@ -525,7 +540,17 @@ decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],Code,Depth) :-
 	!,
 	Args = [F,_,_,Args1],
 	Depth1 is Depth+1,
-	decode_builtin(F,2,Args1,Code,Depth1).
+	decode_builtin(F,2,Args1,Code1,Depth1),
+	(flora_delayed_builtin_literal(F,2) -> Code = Code1
+	; Code = [Code1, ' /* delayed literal */']
+	).
+%% ignore flora_execute_delayed_literals
+decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],[],_Depth) :-
+	Term =.. [FLORA_DELAY_CHECKER|_],
+	!.
+%% ignore FL_SILENT_EQUAL
+decode_prolog_call([FL_SILENT_EQUAL,_,2],[],_Depth) :-
+	!.
 %% prolog call mod:p(args) 
 decode_prolog_call([':',[Module,Term],2],Code,Depth) :-
 	!,
@@ -559,6 +584,7 @@ decode_builtin(F,1,[Arg],Code,Depth) :-
 	((flora_opdef(_,fx,F); flora_opdef(_,fy,F))
 	%% This deals with unary ops and prints them as op arg
 	-> Code = [EscF,' ',ArgCode]
+	; standard_FLORA_prolog_functor(F,1) -> Code = [EscF,'(',ArgCode,')']
 	; Code = [EscF,'(',ArgCode,')', '@_prolog']
 	).
 %% This deals with binary ops
@@ -576,6 +602,8 @@ decode_builtin(F,_,Args,[EscF,'(',ArgsCode,')', '@_prolog'],Depth) :-
 	Depth1 is Depth+1,
         escape(F,EscF),
 	decode_list_add_separator(Args,ArgsCode,decode_literal_internal(_,_,1,Depth1),',').
+
+standard_FLORA_prolog_functor(P,A) :- flora_prlgdef(P,A).
 
 
 %%%%%%%%%%%%%%%%%%%%%% IF %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1270,6 +1298,12 @@ decode_literal_internal((X FL_METAUNIV _List, call(X)),
 	decode_literal_internal(X,Code,0,Depth1).
 
 %% Aggregates should be handled before commalists
+decode_literal_internal(Call,Code,Level,_Depth) :-
+	compound(Call),
+	Call =.. [AggLib,AggVar,GrpVarList,Query,AggResultVar],
+	is_aggregate_call(AggLib,AggName),
+	!,
+	decode_aggregate(AggName,AggVar,GrpVarList,Query,AggResultVar,Code,Level).
 decode_literal_internal((Call, AggResultVar=InterimResultVar),Code,Level,_Depth) :-
 	compound(Call),
 	Call =.. [AggLib,AggVar,GrpVarList,Query,InterimResultVar],
@@ -1278,13 +1312,17 @@ decode_literal_internal((Call, AggResultVar=InterimResultVar),Code,Level,_Depth)
 	decode_aggregate(AggName,AggVar,GrpVarList,Query,AggResultVar,Code,Level).
 
 %% commalist
-decode_literal_internal((L,R),[ReifyStart,'(',[LCode,', '|RCode],')',ReifyEnd],Level,Depth) :-
+decode_literal_internal((L,R),Code,Level,Depth) :-
 	!,
 	%%(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	ReifyStart='',ReifyEnd='',
 	Depth1 is Depth+1,
 	decode_literal_internal(L,LCode,Level,Depth1),
-	decode_literal_internal(R,RCode,Level,Depth1).
+	decode_literal_internal(R,RCode,Level,Depth1),
+	(RCode == [] -> Code = [ReifyStart,LCode,ReifyEnd]
+	; LCode == [] -> Code = [ReifyStart,RCode,ReifyEnd]
+	; Code = [ReifyStart,'(',[LCode,', '|RCode],')',ReifyEnd]
+	).
 
 %% list
 decode_literal_internal(Call,['[', ']'],_Level,_Depth) :-
@@ -1300,13 +1338,17 @@ decode_literal_internal('.'(H,T),['[',Code,']'],Level,Depth) :-
 	!,
 	Depth1 is Depth+1,
 	decode_list_add_separator('.'(H,T),Code,decode_literal_internal(_,_,Level,Depth1),', ').
-decode_literal_internal(';'(L,R),[ReifyStart,'(',LCode,'; ',RCode,')',ReifyEnd],Level,Depth) :-
+decode_literal_internal(';'(L,R),Code,Level,Depth) :-
 	!,
 	Depth1 is Depth+1,
 	%%(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	ReifyStart='',ReifyEnd='',
 	decode_literal_internal(L,LCode,Level,Depth1),
-	decode_literal_internal(R,RCode,Level,Depth1).
+	decode_literal_internal(R,RCode,Level,Depth1),
+	(RCode == [] -> Code = [ReifyStart,LCode,ReifyEnd]
+	; LCode == [] -> Code = [ReifyStart,RCode,ReifyEnd]
+	; Code = [ReifyStart,'(',LCode,'; ',RCode,')',ReifyEnd]
+	).
 
 /*
 %% This is no longer necessary, since goal_cut_untrans/2 gets rid of ;;/2

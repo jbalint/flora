@@ -50,7 +50,7 @@
 :- import flora_define_operator/3 from flroperator.
 
 :- import
-	flora_define_prolog/1,
+	%%flora_define_prolog/1,
 	flora_define_prolog/2,
 	flora_define_prolog/3,
 	flora_prlgdef_repl/4,
@@ -64,6 +64,7 @@
    from flrprefixdef.
 
 :- import
+	flora_current_compile_filename/1,
 	flora_token_text/6
     from flrlexer.
 
@@ -79,9 +80,10 @@
 
 :- import
 	flora_intern_code/4,
+	%%is_prscrambled_atom/3,
+	%%is_prmodularized_atom/3,
 	is_prologterm/4,
 	is_prologterm/5,
-	is_prologliblit/5,
         is_prvariable/1,
         is_prvariable/3,
         is_prtransactionalvariable/3,
@@ -98,7 +100,15 @@
 	is_prfloralib/3
    from flrcoder.
 
-:- import flora_delayed_literal/2 from FLDELAYSUPPORTMOD.
+:- import
+	%%flora_modularize_atom/3,
+	flora_scramble_atom/2
+   from flrwrapper.
+
+:- import
+	flora_delayed_sensor_literal/3,
+	flora_delayed_literal/3
+   from FLDELAYSUPPORTMOD.
         
 :- import flora_error_line/2 from flrprint.
 
@@ -126,9 +136,10 @@
 	flora_compile_add/6,
 	flora_compile/6,
 	flora_clear_compilation_symbols/0,
+	%%flora_compiler_permaoption/1,
 	symbol/7,
 	nowarn_symbol/5,
-	form_symbol_context_status/8,
+	make_symbol_context_status/8,
 	compiling_warning/3,
 	is_fltoken/3,
 	is_flvariable/3.

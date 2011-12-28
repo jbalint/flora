@@ -1309,7 +1309,6 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBF
 	),
 	util_include_file([FLHEADER],FLHeaderStatus),
 	flora_print_define_filename_statement(FLTFile,'FLORA_FLT_FILENAME'),
-	%%util_include_file([FLHEADER3],FLHeaderStatus3),
 	%% we must abolish tables when adding rules, since old tables
 	%% may no longer be valid
 	flora_concat_atoms(['?- catch(abolish_all_tables,_,flora_warning_line(''',
@@ -1728,7 +1727,7 @@ flora_read_symbols_canonical_and_insert(StorageName) :-
 	( Term == end_of_file, !
 	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,SymbolContext,SymbolTransactional,FileName),
 	  flora_storage_find_fact(StorageName,flora_symbol(SymbolName,UsedArity,_,_UsedIndex,_UsedLine,UsedContext,UsedTransactional,SFileName)), SFileName\=FileName ->
-	    form_symbol_context_load_status(StorageName,UsedContext,UsedTransactional,UsedArity,SymbolName,SymbolArity,WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus),
+	    make_symbol_context_load_status(StorageName,UsedContext,UsedTransactional,UsedArity,SymbolName,SymbolArity,WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus),
 	    util_load_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
 	    flora_increment_counter(flora_load_errors,ErrNum,_,_),
 	    util_load_warn(ContextStatus,SymbolLine,SymbolName,FileName,WarnNum),
@@ -1745,34 +1744,35 @@ flora_read_symbols_canonical_and_insert(StorageName) :-
 	print_error_count(ErrNum),
 	incr_flora_update_counter.
 
-form_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,FUNCTION_SYMBOL,SymbolTransactional,[]) :-
+%% MK: Need to add cases to warn about Prolog predicates and sensors!!!
+make_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,FUNCTION_SYMBOL,SymbolTransactional,[]) :-
 	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,_,FUNCTION_SYMBOL,SymbolTransactional,_)),
 	!.
 
-form_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,UDF_SYMBOL,SymbolTransactional,[]) :-
+make_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,UDF_SYMBOL,SymbolTransactional,[]) :-
 	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,_,UDF_SYMBOL,SymbolTransactional,_)),
 	!.
 
-form_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
+make_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
 	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,StoredWS,PREDICATE_SYMBOL,SymbolTransactional,_)),
 	!,
 	%% If StoredWS is anonymous variable - then ignore warnings
 	is_flvariable(StoredWS,VarName,_VarIndex),
 	VarName == FL_UNDERSCORE.
 
-form_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
+make_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
 	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,NULL,PREDICATE_SYMBOL,SymbolTransactional,_)),
 	!.
 
-form_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
+make_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
 	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,FL_THISMODULE,PREDICATE_SYMBOL,SymbolTransactional,_)),
 	!.
 
-form_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
+make_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
 	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,WS,PREDICATE_SYMBOL,SymbolTransactional,_)),
 	!.
 
-form_symbol_context_load_status(_StorageName,UDF_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,PREDICATE_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_load_status(_StorageName,UDF_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,PREDICATE_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	!,
 	( UsedArity==SymbolArity ->
 		compiling_warning(SymbolIndex,WARNING_PREDICATE_UDF_SYMBOL,Err),
@@ -1781,7 +1781,7 @@ form_symbol_context_load_status(_StorageName,UDF_SYMBOL,_UsedTransactional,UsedA
 		compiling_warning(SymbolIndex,WARNING_PREDICATE_UDF_ARITY_SYMBOL,Err),
 		ContextStatus=[Err]
 	).
-form_symbol_context_load_status(_StorageName,UDF_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,FUNCTION_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_load_status(_StorageName,UDF_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,FUNCTION_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	!,
 	( UsedArity\=SymbolArity ->
         	compiling_warning(SymbolIndex,WARNING_FUNC_UDF_ARITY_SYMBOL,Err),
@@ -1790,7 +1790,7 @@ form_symbol_context_load_status(_StorageName,UDF_SYMBOL,_UsedTransactional,UsedA
         	compiling_warning(SymbolIndex,WARNING_FUNC_UDF_SYMBOL,Err),
                 ContextStatus=[Err]
 	).
-form_symbol_context_load_status(_StorageName,FUNCTION_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,UDF_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_load_status(_StorageName,FUNCTION_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,UDF_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	!,
 	( UsedArity\=SymbolArity ->
         	compiling_warning(SymbolIndex,WARNING_UDF_FUNC_ARITY_SYMBOL,Err),
@@ -1799,7 +1799,7 @@ form_symbol_context_load_status(_StorageName,FUNCTION_SYMBOL,_UsedTransactional,
         	compiling_warning(SymbolIndex,WARNING_UDF_FUNC_SYMBOL,Err),
                 ContextStatus=[Err]
 	).
-form_symbol_context_load_status(_StorageName,PREDICATE_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,UDF_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_load_status(_StorageName,PREDICATE_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,UDF_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	!,
 	( UsedArity\=SymbolArity ->
         	compiling_warning(SymbolIndex,WARNING_UDF_PREDICATE_ARITY_SYMBOL,Err),
@@ -1809,8 +1809,8 @@ form_symbol_context_load_status(_StorageName,PREDICATE_SYMBOL,_UsedTransactional
                 ContextStatus=[Err]
 	).
 
-form_symbol_context_load_status(_StorageName,UsedContext,UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus) :-
-	form_symbol_context_status(UsedContext,UsedTransactional,UsedArity,SymbolArity,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus).
+make_symbol_context_load_status(_StorageName,UsedContext,UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus) :-
+	make_symbol_context_status(UsedContext,UsedTransactional,UsedArity,SymbolArity,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus).
 
 
 

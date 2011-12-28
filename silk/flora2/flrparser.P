@@ -467,8 +467,8 @@ arrange_arguments([A|L],S,Index,Left,Right,_Iright,CanoniTerm) :-
 **/
 
 %% Datatype operator is not treated right by the composer when it appears
-%% in the predicate position:  "aaa"^^bbb(f,g)
-%% is composed as ^^("aaa",(bbb(f,g))) instead of ^^("aaa",bbb)(f,g).
+%% in the predicate position:  "abcd"^^efgh(f,g)
+%% is composed as ^^("abcd",(efgh(f,g))) instead of ^^("abcd",efgh)(f,g).
 %% Similarly the CURI prefix operator misbehaves if the right-side is an 
 %% infix operator, like mod:
 %% silk#mod(?output)
@@ -765,7 +765,8 @@ flquery_struct(Body,FLQUERY(Body)).
 fldirective_struct(Direct,Index,FLDIRECTIVE(Direct,Index)).
 fludf_struct(Function,Body,ReturnValue,FLUDF(Function,Body,ReturnValue)).
 fludffact_struct(Function,ReturnValue,FLUDFFACT(Function,ReturnValue)).
-fludfsymbol_struct(Term,FLUDF(Term)).
+fludfsymbol_struct(Term,FLUDFSYM(Term)).
+flsensorsymbol_struct(Term,FLSENSORSYM(Term)).
 
 flexport_wrap_term(WS,Term,Modules,UpdTag,Code) :-
 	( var(UpdTag) ->
@@ -787,9 +788,10 @@ flimportmodule_struct(Module,FLIMPORTMOD(Module)).
 
 flopdef_struct(P,A,O,FLOPDEF(P,A,O)).
 flindxdirect_struct(A,P,FLINDEX(A,P)).
-flprologdirect_struct(SpecList,FLPROLOG(SpecList)).
-fltabledirect_struct(SpecList,FLTABLE(SpecList)).
-flsensor_struct(SensCall,DelayCond,FLSENSOR(SensCall,DelayCond)).
+flprologdirect_struct(SpecList,Idx,FLPROLOG(SpecList,Idx)).
+fltabledirect_struct(SpecList,Idx,FLTABLE(SpecList,Idx)).
+flusesensordirect_struct(SpecList,Idx,FLUSESENSOR(SpecList,Idx)).
+flsensordirect_struct(SensCall,DelayCond,FLSENSOR(SensCall,DelayCond)).
 
 flsemanticsdirect_struct(A,FLSEMANTICS(AList)) :-
 	fllist_struct(A,[],NO_INDEX,AList).
@@ -854,6 +856,7 @@ is_fltransactionalobject_struct(FLTRANSACTIONALATOM(_Atom,_I)) :- !.
 is_fltransactionalobject_struct(FLTRANSACTIONALVAR(_Name,_I)) :- !.
 
 is_flatom_struct(FLATOM(Atom,_I),Atom).
+is_flatom_struct(FLATOM(Atom,I),Atom,I).
 is_flnumber_struct(FLNUMBER(_Num,_I)).
 is_flstring_struct(FLSTRING(_Str,_I)).
 is_flstring_struct(FLSTRING(Str,I),Str,I).
@@ -1023,7 +1026,7 @@ flplib_struct(Goal,FLPLIB(Goal)) :- !.
 flpliball_struct(Goal,FLPLIBALL(Goal)) :- !.
 
 fldelayedliteral_struct(Op,Args,FLDELAYEDLITERAL(Op,Args)).
-fldelayedliteral_struct(Op,Args,Mod,FLDELAYEDLITERAL(Op,Args,Mod)).
+%%fldelayedliteral_struct(Op,Args,Mod,FLDELAYEDLITERAL(Op,Args,Mod)).
 
 %% Given module spec, get back module type and module name
 flora_get_module_from_spec(FLORAUSERMOD(Mod),FLORAUSERMOD,Mod) :- !.
@@ -1287,6 +1290,7 @@ parse_directive(CanoniTerm,Code,Status) :-
 	; index_directive(CanoniTerm,CodeList,Status)
 	; prolog_directive(CanoniTerm,CodeList,Status)
 	; table_directive(CanoniTerm,CodeList,Status)
+	; usesensor_directive(CanoniTerm,CodeList,Status)
 	; sensor_directive(CanoniTerm,CodeList,Status)
 	; setsemantics_directive(CanoniTerm,CodeList,Status)
 	; cmpopt_directive(CanoniTerm,CodeList,Status)
@@ -1326,8 +1330,11 @@ exec_directive(CanoniTerm,FloraModSpec,Code,Status) :-
 	exec_export_directive(CanoniTerm,FloraModSpec,CodeList,Status)
 	; operator_directive(CanoniTerm,CodeList,Status)
 	; exec_index_directive(CanoniTerm,CodeList,Status)
-	; prolog_directive(CanoniTerm,CodeList,Status)
-	; table_directive(CanoniTerm,CodeList,Status)
+	%% We do not allow executable prolog or table directives!
+	%% These are to be used only inside files!
+	; exec_prolog_directive(CanoniTerm,CodeList,Status)
+	; exec_table_directive(CanoniTerm,CodeList,Status)
+	; usesensor_directive(CanoniTerm,CodeList,Status)
 	; sensor_directive(CanoniTerm,CodeList,Status)
 	; exec_setsemantics_directive(CanoniTerm,CodeList,Status)
 	; exec_semantics_directive(CanoniTerm,CodeList,Status)
@@ -2149,24 +2156,44 @@ minus_var_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Arity,Pos) :-
 /****************************************************************************
   prolog_directive(+CanoniTerm,-CodeList,-Status)
   table_directive(+CanoniTerm,-CodeList,-Status)
+  usesensor_directive(+CanoniTerm,-CodeList,-Status)
 
   Define a low-level predicate as a prolog predicate
   Table those predicates.
   Used for sensors and builtins primarily
 ****************************************************************************/
-prolog_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],_If,_Ip),[Code],Status) :-
+prolog_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_PROLOG),
 	!,
 	comma_separated_list(Args,ArgList),
 	make_pred_arity_pair_list(ArgList,ArgCode,Status),
-	flprologdirect_struct(ArgCode,Code).
+	flprologdirect_struct(ArgCode,If,Code).
 
-table_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],_If,_Ip),[Code],Status) :-
+exec_prolog_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[_Args],If,_Ip),[_Code],Status) :-
+	get_name(Funct,FL_PROLOG),
+	!,
+	parsing_error(If,NO_EXEC_PROLOG_DIRECTIVE,Status).
+
+table_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_TABLE),
 	!,
 	comma_separated_list(Args,ArgList),
 	make_pred_arity_slash_list(ArgList,ArgCode,Status),
-	fltabledirect_struct(ArgCode,Code).
+	fltabledirect_struct(ArgCode,If,Code).
+
+exec_table_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[_Args],If,_Ip),[_Code],Status) :-
+	get_name(Funct,FL_TABLE),
+	!,
+	parsing_error(If,NO_EXEC_TABLE_DIRECTIVE,Status).
+
+usesensor_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Status) :-
+	get_name(Funct,FL_USESENSOR),
+	!,
+	comma_separated_list(Args,ArgList),
+	set_context(parsing_usesensor_directive),
+	make_pred_arity_slash_list(ArgList,ArgCode,Status),
+	clear_context(parsing_usesensor_directive),
+	flusesensordirect_struct(ArgCode,If,Code).
 	
 
 /****************************************************************************
@@ -2226,7 +2253,7 @@ sensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,[Code],Status) :-
 	; parsing_error(Ip,SENSOR_VARS_ERROR,S4)
 	),
 	merge_status([S1,S22,S33,S4],Status),
-	flsensor_struct(SensorCallCode,DelayCondCode,Code).
+	flsensordirect_struct(SensorCallCode,DelayCondCode,Code).
 
 prepend_two_anon_args(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),
 		      CANOTERM(Funct,N2,FL_PARENTHESIS,[AnonArg,AnonArg|Args],If,Ip)) :-
@@ -2372,7 +2399,7 @@ parse_cmpoptlist([H|T],[HCode|TCode],Status) :-
 /****************************************************************************
   prefixdef_directive(+CanoniTerm,-CodeList,-Status)
   Compiling the prefix directive in the form of
-    :- uriprefix A="aaa",B="bbb",....
+    :- uriprefix A="abcd",B="efgh",....
 ****************************************************************************/
 prefixdef_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[T],_If,_Ip),Code,Status) :-
 	get_name(Funct,FL_PREFIXDEF),
@@ -2497,6 +2524,12 @@ parse_body_symbol(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),Code,Status) :
 	!,
         parse_body_symbol_literal(Term,NULL,TermCode,Status),
         fludfsymbol_struct(TermCode,Code).
+
+parse_body_symbol(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),Code,Status) :-
+	get_atom(Funct,FL_SYMBOL_CONTEXT_SENSOR),
+	!,
+        parse_body_symbol_literal(Term,NULL,TermCode,Status),
+        flsensorsymbol_struct(TermCode,Code).
 
 parse_body_symbol(CanoniTerm,Code,Status) :-
         parse_body_symbol_literal(CanoniTerm,Code,Status).
@@ -3124,29 +3157,6 @@ parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) 
 	),
 	fllist_struct(ACode,[],Ip,ArgsCode),
 	fldelayedliteral_struct(OpCode,ArgsCode,Code).
-
-%% Delayed sensors
-parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
-	get_name(Funct,Atom),
-	N2 is N+2,
-	(flora_delayed_sensor_literal(Atom,N2), ! %% call sensor defined in .flr
-	; (flora_get_module_from_spec(WS,PROLOGMODULE,Mod) %% sensor@_plg(Mod)
-	  ; flora_get_module_from_spec(WS,PROLOGALLMODULE,Mod)
-	  ),
-	    is_flatom_struct(Mod,ModAtm)
-	->
-	    flora_delayed_sensor_literal(ModAtm:Atom,N2)
-	; flora_delayed_sensor_literal(Mod:Atom,N2) %% call sensor in a .P mod
-	),
-	!,
-	flatom_struct(Atom,If,OpCode),
-	parse_body_pathexplist(Args,DWS,ACode,Status),
-	is_anonymous_flvar_struct(AnonCode,NO_INDEX),
-	ACode2 = [AnonCode,AnonCode|ACode],
-	fllist_struct(ACode2,[],Ip,ArgsCode),
-	(var(Mod) -> fldelayedliteral_struct(OpCode,ArgsCode,Code)
-	; fldelayedliteral_struct(OpCode,ArgsCode,Mod,Code)
-	).
 
 
 %% At this point, CanoniTerm is not a logical formula.
@@ -4620,6 +4630,18 @@ make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[Pred,Arity],_If,_Ip),(
 	get_integer(Arity,Int),
 	!.
 
+%% :- usesensor allows pred@prologmodule/Arity
+%% No IRIs or curies for Prolog stuff
+make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[PredAtModCanoTerm,Arity],_If,_Ip),((PredName,ModName),Int),[]) :-
+	has_context(parsing_usesensor_directive),
+	get_name(Funct,FL_SLASH),
+	get_integer(Arity,Int),
+	PredAtModCanoTerm = CANOTERM(ModConnective,2,FL_PARENTHESIS,[Pred,Mod],_If1,_Ip1),
+	get_name(ModConnective,FL_AT),
+	get_name(Pred,PredName),
+	get_name(Mod,ModName),
+	!.
+
 %% case when predicate is defined via an iri prefix
 make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[Pred,Arity],_If,_Ip),(PredName,Int),Status) :-
 	get_name(Funct,FL_SLASH),
@@ -5034,11 +5056,12 @@ parse_pure_prolog_term(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),PrlgMod,Cod
 %% if Funct is an IRI or some kind of other thing convertible into an atom
 parse_pure_prolog_term(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),PrlgMod,Code,VarNameList-Tail,Status) :-
 	parse_head_literal(Funct,NULL,DTcode,_),
-	is_flatom_struct(DTcode,F),
+	is_flatom_struct(DTcode,F,Idx),
 	!,
+	flatom_struct(F,Idx,FObj),
 	parse_pure_prolog_arglist(Args,PrlgMod,AList,VarNameList-Tail,Status),
 	(Status == []
-	-> flterm_struct(F,N,AList,Goal),
+	-> flterm_struct(FObj,N,AList,Goal),
 	    (PrlgMod == usermod -> flplib_struct(Goal,Code)
 	    ; flmodule_struct(Goal,PrlgMod,PROLOGMODULE,Code)
 	    )
@@ -5829,6 +5852,19 @@ parse_head_term(Funct,N,Args,_TransFlag,DWS,Code,Status) :-
 	;
 	    true
 	).
+
+parse_head_term(Funct,_N,Args,_TransFlag,DWS,Code,Status) :-
+	get_atom(Funct,F),
+	is_datatypeop(F),
+	!,
+	get_index(Funct,If),
+	parse_composer_datatype(Args,If,DWS,Code,Status).
+
+parse_head_term(Funct,2,Args,TransFlag,DWS,Code,Status) :-
+	get_atom(Funct,F),
+	is_curi_op(F),
+	!,
+	parse_curi(Args,TransFlag,DWS,Code,Status).
 
 parse_head_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
 	fltransactionalobject_struct(Funct,F),

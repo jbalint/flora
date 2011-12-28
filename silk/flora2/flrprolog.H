@@ -31,7 +31,10 @@
 	flora_prlg/2-1.
 */
 
-:- import flora_compilation_context/1 from flrcompiler.
+:- import
+	%%flora_compiler_permaoption/1,
+	flora_compilation_context/1
+   from flrcompiler.
 
 :- export
           flora_reset_prolog/0,

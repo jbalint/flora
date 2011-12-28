@@ -31,8 +31,7 @@
 	flora_abort/2
    from flrporting.
 :- import
-	member/2,
-	length/2
+	member/2
    from basics.
 %%:- import flora_decode_goal_as_atom/2 from flrdecode.
 :- import
@@ -50,8 +49,8 @@
 
 :- dynamic delay_spec_to_predicate/6.
 :- index(delay_spec_to_predicate/6,[1,5]).
-:- dynamic delayed_sensor/2.
-:- index(delayed_sensor/2,trie).
+:- dynamic delayed_sensor/3.
+:- index(delayed_sensor/3,trie).
 
 :- export
 	flora_execute_delayed_literals/3,
@@ -82,9 +81,12 @@
 	flora_register_sensor/2.
 
 :- export
-	flora_delayed_literal/2,
+	flora_delayed_literal/3,
 	flora_delayed_builtin_literal/2,
-	flora_delayed_sensor_literal/2.
+	flora_delayed_sensor_literal/3.
+
+:- export
+	FLLIBRECORDSENSORS/2.
 
 
 /*******    Wrappers for builtins    ********/
@@ -93,7 +95,12 @@ FLLIBDELAYEDLITERAL(Builtin,FileN,Line,Args) :-
 	%% sometimes statically created delay conditions need postprocessing
 	make_delay_condition(Builtin,Condition_pre,Condition),
 	!,
-	flora_when(Condition,Call).
+	%% If Condition is ground, no point in using when.
+	%% This speeds up cases where args are mostly ground.
+	%% E.g., argumentation theories become faster by some 10%
+	(ground(Condition) -> Call
+	; flora_when(Condition,Call)
+	).
 
 /******************** Actual definitions of builtins ***********************/
 
@@ -309,7 +316,7 @@ call_trigger_list([Trigger|Rest],Template) :-
 %% this should eventually go into constraintLib.P
 get_trigger_goal(Trigger,Goal) :-
 	functor(Trigger,Fun,2),
-	member(Fun,[trigger,trigger_nonvar,trigger_ground]),
+	member(Fun,[trigger,trigger_nonvar,trigger_ground,check_disj]),
 	!,
 	arg(2,Trigger,T),
 	get_trigger_goal(T,Goal).
@@ -363,9 +370,7 @@ flora_register_delay(sensor,SensorSymbol,FileName,Line,ArgList,Call,DelayConditi
 	!,
 	strip_usermod(SensorSymbol,Stripped),
 	(\+delay_spec_to_predicate(Stripped,FileName,Line,ArgList,Call,DelayCondition)
-	-> assert(delay_spec_to_predicate(Stripped,FileName,Line,ArgList,Call,DelayCondition)),
-	    length(ArgList,Arity),
-	    record_delayed_sensor(Stripped,Arity)
+	-> assert(delay_spec_to_predicate(Stripped,FileName,Line,ArgList,Call,DelayCondition))
 	; true %% silently ignore, if duplicate
 	).
 
@@ -490,10 +495,15 @@ delayed_builtin(atom,1)         :- !.
 delayed_builtin(compound,1)     :- !.
 delayed_builtin(atomic,1)       :- !.
 
-flora_delayed_literal(X,Y) :- delayed_builtin(X,Y), !.
-flora_delayed_literal(X,Y) :- delayed_sensor(X,Y).
+flora_delayed_literal(X,Y,_) :- delayed_builtin(X,Y), !.
+flora_delayed_literal(X,Y,FlMod) :- delayed_sensor(X,Y,FlMod).
 flora_delayed_builtin_literal(X,Y) :- delayed_builtin(X,Y).
-flora_delayed_sensor_literal(X,Y)  :- delayed_sensor(X,Y).
+flora_delayed_sensor_literal(X,Y,FlMod) :-
+	atom(X),
+	!,
+	delayed_sensor(X,Y,FlMod), atom(X).
+flora_delayed_sensor_literal((X,PlMod),Y,FlMod) :-
+	delayed_sensor(PlMod:X,Y,FlMod).
 
 %% For sensors we use all arguments in delay_spec_to_predicate/6
 decompose_sensor_call(SensorCall,SensorSymbol,Module,FileName,Line,[FileName,Line|RestArgs]) :-
@@ -503,9 +513,17 @@ decompose_sensor_call(SensorCall,SensorSymbol,Module,FileName,Line,[FileName,Lin
 	    Module = usermod
 	).
 
-record_delayed_sensor(SensorSymbol,Arity) :-
+record_delayed_sensor(SensorSymbol,Arity,FloraMod) :-
 	strip_usermod(SensorSymbol,Stripped),
-	assert(delayed_sensor(Stripped,Arity)).
+	assert(delayed_sensor(Stripped,Arity,FloraMod)).
+
+FLLIBRECORDSENSORS(_,[]) :- !.
+FLLIBRECORDSENSORS(FloraMod,[Sensor|SensorList]) :-
+	(Sensor = (Name,Mod)/Arity
+	-> record_delayed_sensor(Mod:Name,Arity,FloraMod)
+	; Sensor = Name/Arity -> record_delayed_sensor(Name,Arity,FloraMod)
+	),
+	FLLIBRECORDSENSORS(FloraMod,SensorList).
 
 strip_usermod(SensorSymbol,Stripped) :-
 	SensorSymbol = usermod:Stripped -> true

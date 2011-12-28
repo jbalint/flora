@@ -20,8 +20,17 @@
 
 *******************************************************************************/
 
+#define USE_HILOG_FOR_OPPOSES_OVERRIDES_CANCEL 1
+
 #include "flora_wspredicates.flh"
 :- WRAP_COPY_UNQUOTED 'FLORA_THIS_MODULE_NAME'.
+:- WRAP_COPY_UNQUOTED 'FLORA_THIS_WORKSPACE(FL_OPPOSES_UNQUOTED)'.
+:- WRAP_COPY_UNQUOTED 'FLORA_THIS_WORKSPACE(FL_OVERRIDES_UNQUOTED)'.
+:- WRAP_COPY_UNQUOTED 'FLORA_THIS_WORKSPACE(FL_CANCEL_UNQUOTED)'.
+
+#ifndef USE_HILOG_FOR_OPPOSES_OVERRIDES_CANCEL
+:- import flora_predicate_is_defined_lowlevel/1 from flrporting.
+#endif
 
 /*
   The following rules connect Prolog predicates
@@ -54,72 +63,109 @@
 %% Interaction of defeat with cancellation:
 %% Cancellation rule is disqualified if the rule being canceled has higher
 %% priority than the cancellation rule itself
-FL_DISQUALIFIED_AUX((Id1,FLBodyPREFIX(WRAP_TABLED_HILOG)(FL_CANCEL,Id2,_)),
+FL_DISQUALIFIED_AUX((Tag1,FLBodyPREFIX(WRAP_TABLED_HILOG)(FL_CANCEL,Tag2,_)),
 	            'FLORA_THIS_MODULE_NAME') :-
     	            FL_OVERRIDES_AUX('FLORA_THIS_MODULE_NAME',
-	                             (Id2,_),
-			             (Id1,FLBodyPREFIX(WRAP_TABLED_HILOG)(FL_CANCEL,Id2,_))).
-FL_DISQUALIFIED_AUX((Id1,FLBodyPREFIX(WRAP_TABLED_HILOG)(FL_CANCEL,Id2,H,_)),
+	                             (Tag2,_),
+			             (Tag1,FLBodyPREFIX(WRAP_TABLED_HILOG)(FL_CANCEL,Tag2,_))).
+FL_DISQUALIFIED_AUX((Tag1,FLBodyPREFIX(WRAP_TABLED_HILOG)(FL_CANCEL,Tag2,H,_)),
 	            'FLORA_THIS_MODULE_NAME') :-
     	            FL_OVERRIDES_AUX('FLORA_THIS_MODULE_NAME',
-	                             (Id2,H),
-			             (Id1,FLBodyPREFIX(WRAP_TABLED_HILOG)(FL_CANCEL,Id2,H,_))).
+	                             (Tag2,H),
+			             (Tag1,FLBodyPREFIX(WRAP_TABLED_HILOG)(FL_CANCEL,Tag2,H,_))).
 
 
 %% Connect FL_OPPOSES_AUX, FL_OVERRIDES_AUX, and FL_CANCEL_AUX with
 %% user-level %% predicates:
 %% FL_OPPOSES/2+4, FL_OVERRIDES/2+4, FL_CANCEL/1+2
-?- assert((FL_OPPOSES_AUX('FLORA_THIS_MODULE_NAME',(Id1,H1),(Id2,H2),1) :-
+?- assert((FL_OPPOSES_AUX('FLORA_THIS_MODULE_NAME',(Tag1,H1),(Tag2,H2),1) :-
 	    flrtrim:flora_generalize_last(H1,HH1),
 	    flrtrim:flora_generalize_last(H2,HH2),
             (
+#ifdef USE_HILOG_FOR_OPPOSES_OVERRIDES_CANCEL
+	       %% top case used when _opposes is HiLog; bottom when it is Prolog
 	       WRAP_TABLED_HILOG(FL_OPPOSES,HH1,HH2,_)
+#else
+	       flora_predicate_is_defined_lowlevel('FLORA_THIS_WORKSPACE(FL_OPPOSES_UNQUOTED)'(_,_)),
+	       'FLORA_THIS_WORKSPACE(FL_OPPOSES_UNQUOTED)'(HH1,HH2)
+#endif
 	    ;
-	       WRAP_TABLED_HILOG(FL_OPPOSES,Id1,HH1,Id2,HH2,_)
+#ifdef USE_HILOG_FOR_OPPOSES_OVERRIDES_CANCEL
+	       %% top case used when _opposes is HiLog; bottom when it is Prolog
+	       WRAP_TABLED_HILOG(FL_OPPOSES,Tag1,HH1,Tag2,HH2,_)
+#else
+	       flora_predicate_is_defined_lowlevel('FLORA_THIS_WORKSPACE(FL_OPPOSES_UNQUOTED)'(_,_,_,_)),
+	       'FLORA_THIS_WORKSPACE(FL_OPPOSES_UNQUOTED)'(Tag1,HH1,Tag2,HH2)
+#endif
 	    ),
-	    flrcanon:show_rule_signature(Id1,_,_,HH1,_,_,_,_,_),
-	    flrcanon:show_rule_signature(Id2,_,_,HH2,_,_,_,_,_)
+	    flrcanon:show_rule_signature(Tag1,_,_,HH1,_,_,_,_,_),
+	    flrcanon:show_rule_signature(Tag2,_,_,HH2,_,_,_,_,_)
 	  )).
 
 %% These two are trying to make _opposes to have the same stuff as
 %% FL_OPPOSES_AUX. But it does not work.
 %% ****** The second rule, in particular, is problematic:
-%%        Id1,Id2 can be variables, and then they might unify with random
+%%        Tag1,Tag2 can be variables, and then they might unify with random
 %%        rule tags/heads.
 /*
 WRAP_TABLED_HILOG(FL_OPPOSES,H1,H2,_) :-
 	    flrtrim:flora_generalize_last(H1,HH1),
 	    flrtrim:flora_generalize_last(H2,HH2),
-	    FL_OPPOSES_AUX('FLORA_THIS_MODULE_NAME',(Id1,HH1),(Id2,HH2)),
-	    flrcanon:show_rule_signature(Id1,_,_,HH1,_,_,_,_,_),
-	    flrcanon:show_rule_signature(Id2,_,_,HH2,_,_,_,_,_).
-WRAP_TABLED_HILOG(FL_OPPOSES,Id1,H1,Id2,H2,_) :-
+	    FL_OPPOSES_AUX('FLORA_THIS_MODULE_NAME',(Tag1,HH1),(Tag2,HH2)),
+	    flrcanon:show_rule_signature(Tag1,_,_,HH1,_,_,_,_,_),
+	    flrcanon:show_rule_signature(Tag2,_,_,HH2,_,_,_,_,_).
+WRAP_TABLED_HILOG(FL_OPPOSES,Tag1,H1,Tag2,H2,_) :-
 	    flrtrim:flora_generalize_last(H1,HH1),
 	    flrtrim:flora_generalize_last(H2,HH2),
-	    FL_OPPOSES_AUX('FLORA_THIS_MODULE_NAME',(Id1,HH1),(Id2,HH2)),
-	    flrcanon:show_rule_signature(Id1,_,_,HH1,_,_,_,_,_),
-	    flrcanon:show_rule_signature(Id2,_,_,HH2,_,_,_,_,_).
+	    FL_OPPOSES_AUX('FLORA_THIS_MODULE_NAME',(Tag1,HH1),(Tag2,HH2)),
+	    flrcanon:show_rule_signature(Tag1,_,_,HH1,_,_,_,_,_),
+	    flrcanon:show_rule_signature(Tag2,_,_,HH2,_,_,_,_,_).
 */
 
 
-?- assert((FL_OVERRIDES_AUX('FLORA_THIS_MODULE_NAME',(Id1,H1),(Id2,H2)) :-
+?- assert((FL_OVERRIDES_AUX('FLORA_THIS_MODULE_NAME',(Tag1,H1),(Tag2,H2)) :-
             %% ???Why not use flrtrim:flora_generalize_last(H1,HH1) here???
             (
-	       WRAP_TABLED_HILOG(FL_OVERRIDES,Id1,Id2,_)
+#ifdef USE_HILOG_FOR_OPPOSES_OVERRIDES_CANCEL
+	       %% top case for when _overrides is HiLog; bottom when it's Prolog
+	       WRAP_TABLED_HILOG(FL_OVERRIDES,Tag1,Tag2,_)
+#else
+	       flora_predicate_is_defined_lowlevel('FLORA_THIS_WORKSPACE(FL_OVERRIDES_UNQUOTED)'(_,_)),
+	       'FLORA_THIS_WORKSPACE(FL_OVERRIDES_UNQUOTED)'(Tag1,Tag2)
+#endif
 	    ;
-	       WRAP_TABLED_HILOG(FL_OVERRIDES,Id1,H1,Id2,H2,_)
+#ifdef USE_HILOG_FOR_OPPOSES_OVERRIDES_CANCEL
+	       %% top case for when _overrides is HiLog; bottom when it's Prolog
+	       WRAP_TABLED_HILOG(FL_OVERRIDES,Tag1,H1,Tag2,H2,_)
+#else
+	       flora_predicate_is_defined_lowlevel('FLORA_THIS_WORKSPACE(FL_OVERRIDES_UNQUOTED)'(_,_,_,_)),
+	       'FLORA_THIS_WORKSPACE(FL_OVERRIDES_UNQUOTED)'(Tag1,H1,Tag2,H2)
+#endif
 	    ),
-	    flrcanon:show_rule_signature(Id1,_,_,H1,_,_,_,_,_),
-	    flrcanon:show_rule_signature(Id2,_,_,H2,_,_,_,_,_)
+	    flrcanon:show_rule_signature(Tag1,_,_,H1,_,_,_,_,_),
+	    flrcanon:show_rule_signature(Tag2,_,_,H2,_,_,_,_,_)
 	 )).
 
 
-?- assert((FL_CANCEL_AUX('FLORA_THIS_MODULE_NAME',(Id,H)) :-
+?- assert((FL_CANCEL_AUX('FLORA_THIS_MODULE_NAME',(Tag,H)) :-
 	    flrtrim:flora_generalize_last(H,HH),
             (
-	       WRAP_TABLED_HILOG(FL_CANCEL,Id,_)
+#ifdef USE_HILOG_FOR_OPPOSES_OVERRIDES_CANCEL
+	       %% top case for when _cancel is HiLog; bottom when it's Prolog
+	       WRAP_TABLED_HILOG(FL_CANCEL,Tag,_)
+#else
+	       flora_predicate_is_defined_lowlevel('FLORA_THIS_WORKSPACE(FL_CANCEL_UNQUOTED)'(_)),
+	       'FLORA_THIS_WORKSPACE(FL_CANCEL_UNQUOTED)'(Tag)
+#endif
 	    ;
-	       WRAP_TABLED_HILOG(FL_CANCEL,Id,HH,_)
+#ifdef USE_HILOG_FOR_OPPOSES_OVERRIDES_CANCEL
+	       %% top case for when _cancel is HiLog; bottom when it's Prolog
+	       WRAP_TABLED_HILOG(FL_CANCEL,Tag,HH,_)
+#else
+	       flora_predicate_is_defined_lowlevel('FLORA_THIS_WORKSPACE(FL_CANCEL_UNQUOTED)'(_,_)),
+	       'FLORA_THIS_WORKSPACE(FL_CANCEL_UNQUOTED)'(Tag,HH)
+#endif
 	    ),
-	    flrcanon:show_rule_signature(Id,_,_,HH,_,_,_,_,_)
+	    flrcanon:show_rule_signature(Tag,_,_,HH,_,_,_,_,_)
 	 )).
+
