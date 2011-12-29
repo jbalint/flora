@@ -114,9 +114,9 @@ FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
 	        ;  WRAP_DIFFOBJEQL(X,Y,Caller)
 	        )
 		/*
-		  Using WRAP_OBJEQL/3 does not work here because when
-   		  reloading the trainer XSB complains that WRAP_OBJEQL/3 is
-   		  still bein used (by WRAP_DIFFOBJEQL_AUX/3.
+		  %%Using WRAP_OBJEQL/3 does not work here because when
+   		  %%reloading the trailer XSB complains that WRAP_OBJEQL/3 is
+   		  %%still being used (by WRAP_DIFFOBJEQL_AUX/3.
 
 		  WRAP_OBJEQL(X,Y,Caller)
 	        */
