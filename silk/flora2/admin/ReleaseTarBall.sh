@@ -67,6 +67,7 @@ CVS
 *.log
 .#*
 .cvsignore
+.svn
 .excludedFiles
 *.zip
 *.tar
