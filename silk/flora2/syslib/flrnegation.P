@@ -23,9 +23,15 @@
 
 #include "flora_tabling_methods.flh"
 
+%%#define NEGATION_DEBUG_STATS 1
+
 :- import numbervars/4 from num_vars.
-:- import copy_term/2 from basics.
 :- import
+	member/2,
+	copy_term/2
+   from basics.
+:- import
+	call0/1,
 	is_acyclic/1,
 	term_arg/3
    from machine.
@@ -35,16 +41,19 @@
 :- import
 	incr_invalidate_call/1
    from increval.
+:- import predicate_property/2 from curr_sym.
 :- import
 	flora_has_incomplete_incr_dependent_table/1,
 	flora_abolish_table_call/1
    from flrtables.
 :- import
 	flora_abort/2,
+	flora_concat_atoms/2,
 	flora_match_substring/3
    from flrporting.
 :- import
 	flora_is_transactional_call/1,
+	flora_decode_predicate/7,
 	flora_module_predicate/4
    from flrwrapper.
 :- import flora_decode_goal_as_atom/2 from flrdecode.
@@ -63,6 +72,9 @@
 
 :- dynamic update_counter/2.
 :- local update_counter/2.
+
+:- dynamic convert_to_table_cache/2, convert_to_table_cache_failed/1.
+:- local convert_to_table_cache/2, convert_to_table_cache_failed/1.
 
 :- export
 	flora_unwrap_negation/2,
@@ -87,11 +99,34 @@
 
 FLORA_TNOT_PREDICATE(Goal) :- FLORA_TNOT_PREDICATE(Goal,NULL,NULL).
 
+FLORA_TNOT_PREDICATE(Goal,_Line,_File) :-
+#ifdef NEGATION_DEBUG_STATS
+	flrporting:flora_increment_counter(negtotal,1,_,_),
+#endif
+	flora_unwrap_negation_nocheck(Goal,UnwrappedGoal),
+	%% only tabled predicates can pass the next test
+	convert_flora_call_to_tabled(UnwrappedGoal,NewCall),
+	ground(NewCall),
+	!,
+	%% this will call body-predicates in flrpreddef_NAF.fli, which
+	%% will then call FLORA_TNOT_PREDICATE2/1 below
+	call0(NewCall).
 FLORA_TNOT_PREDICATE(Goal,Line,File) :-
 	flora_unwrap_negation_nocheck(Goal,UnwrappedGoal),
-	is_acyclic(UnwrappedGoal),
+	%% acyclicity og the goal is checked in make_negated_goal when needed
 	make_negated_goal(UnwrappedGoal,Goal,NewGoal),
-	catch(NewGoal,error(typed_table_error(incremental_tabling),_,_),incr_tabling_error_handler(Line,File,UnwrappedGoal)).
+	catch(call0(NewGoal),error(typed_table_error(incremental_tabling),_,_),
+	      incr_tabling_error_handler(Line,File,UnwrappedGoal)).
+
+:- export FLORA_TNOT_PREDICATE2/1.
+%% optimization for ground tabled negated subgoals
+%% Note: this is ground, so no need to check for Goal acyclicity!
+FLORA_TNOT_PREDICATE2(Goal) :-
+#ifdef NEGATION_DEBUG_STATS
+	flrporting:flora_increment_counter(negtabled,1,_,_),
+#endif
+	tnot(Goal).
+
 
 	
 %% Delete tables for FLORA_THIS_WORKSPACE(TABLED_UNNUMBER_CALL)/1, which
@@ -100,7 +135,7 @@ cleanup_negation(Call) :-
 	donot_cleanup_negation(Call),
 	!.
 cleanup_negation(Call) :-
-	(curr_sym:predicate_property(Call,incremental)
+	(predicate_property(Call,incremental)
 	-> ( flora_has_incomplete_incr_dependent_table(Call) -> true
 	   ; incr_invalidate_call(Call)
 	   )
@@ -177,21 +212,47 @@ make_negated_goal(_:flrground(G), _OrigGoal, flora_ground:flrnonground(G)) :- !.
 
 make_negated_goal(FLLIBHYPOTHETICAL(Type,Goal), _OrigGoal, FLLIBHYPOTHETICAL(ReverseType,Goal)) :-
 	!,
+#ifdef NEGATION_DEBUG_STATS
+	flrporting:flora_increment_counter(neghypo,1,_,_),
+#endif
+	is_acyclic(Goal),
 	(Type == FL_POSSIBLE -> ReverseType = FL_IMPOSSIBLE
 	; ReverseType = FL_POSSIBLE
 	).
 
+%% Simplification for ground calls: no need to numbervar and copy_term
+%% Since this is ground, not checking for acyclicity!
+make_negated_goal(UnwrappedGoal,OrigGoal,tnot(OrigGoal)) :-
+	ground(UnwrappedGoal),
+	!,
+#ifdef NEGATION_DEBUG_STATS
+	flrporting:flora_increment_counter(negground,1,_,_),
+#endif
+	cleanup_negation(OrigGoal),
+	%% register_negated_call MUST come after cleanup_negation
+	register_negated_call(OrigGoal).
+
+%% TRANSACTIONAL: This is more rare than TABLED, so it comes after
 make_negated_goal(UnwrappedGoal,_OrigGoal,\+(UnwrappedGoal)) :-
 	flora_is_transactional_call(UnwrappedGoal),
-	!.
+	!,
+#ifdef NEGATION_DEBUG_STATS
+	flrporting:flora_increment_counter(negtransactional,1,_,_),
+#endif
+	is_acyclic(UnwrappedGoal).
 	
-make_negated_goal(_UnwrappedGoal,OrigGoal,tnot(TempGoal)) :-
+%% General case
+make_negated_goal(UnwrappedGoal,OrigGoal,tnot(TempGoal)) :-
+#ifdef NEGATION_DEBUG_STATS
+	flrporting:flora_increment_counter(neggenerl,1,_,_),
+#endif
+	is_acyclic(UnwrappedGoal),
 	copy_term(OrigGoal,TempGoal),
-	%% make TempGoal ground, so no checks would be necessary in 't not'
+	%% make TempGoal ground, so no checks would be necessary in tnot
 	numbervars(TempGoal,0,_,[attvar(bind)]),
 	%% cleanup_negation/1 is checking for incomplete tables to be safe
 	cleanup_negation(TempGoal),
-	%% the below register_negated_call MUST come after cleanup_negation
+	%% register_negated_call MUST come after cleanup_negation
 	register_negated_call(TempGoal),
 	!.
 
@@ -225,3 +286,73 @@ register_negated_call(Call) :-
 					   NON_INCREMENTAL_TRIE,
 					   negated_calls_cache(Call,CurrFlag))
 	).
+
+
+%% cache for successful conversions
+convert_flora_call_to_tabled(Call,NewCall) :-
+	convert_to_table_cache(Call,NewCall),
+	!.
+%% cache for failed conversions
+convert_flora_call_to_tabled(Call,_NewCall) :-
+	convert_to_table_cache_failed(Call),
+	!,
+	fail.
+convert_flora_call_to_tabled(Call,NewCall) :-
+#ifdef NEGATION_DEBUG_STATS
+	flrporting:flora_set_counter(negtotal,1),
+	flrporting:flora_set_counter(negtabled,0),
+	flrporting:flora_set_counter(negground,0),
+	flrporting:flora_set_counter(negtransactional,0),
+	flrporting:flora_set_counter(neghypo,0),
+	flrporting:flora_set_counter(neggenerl,0),
+#endif
+	flora_decode_predicate(Call,CallType,ModuleName,FullWrapper,
+			       WrapPref,BaseWrapper,ArgList),
+	atom(ModuleName),
+	WrapPref == FLBodyPREFIX,
+	member(CallType,[flogic,hilog,neg_flogic,neg_hilog]),
+	BaseWrapper \== WRAP_TRAN,
+	BaseWrapper \== WRAP_NONTABLED_HILOG,
+	!,
+	flora_concat_atoms([FLNAFPREFIX,FullWrapper],NafWrapper),
+	flora_module_predicate(NafWrapper,ArgList,ModuleName,NewCall),
+	save_in_convert_to_table_cache(Call,NewCall),
+	!.
+%% failures are also cached
+convert_flora_call_to_tabled(Call,_NewCall) :-
+	save_in_convert_to_table_cache_failed(Call),
+	!,
+	fail.
+
+save_in_convert_to_table_cache(Call,NewCall) :-
+	functor(Call,Fun,N),
+	functor(NewCall,NewFun,N),
+	functor(CallTempl,Fun,N),
+	CallTempl =.. [_|Args],
+	NewCallTempl =.. [NewFun|Args],
+	assert(convert_to_table_cache(CallTempl,NewCallTempl)).
+save_in_convert_to_table_cache_failed(Call) :-
+	functor(Call,Fun,N),
+	functor(CallTempl,Fun,N),
+	assert(convert_to_table_cache_failed(CallTempl)).
+
+
+#ifdef NEGATION_DEBUG_STATS
+:- export get_negation_stats/0.
+get_negation_stats :-
+	gensym:conget(negtotal,Total),
+	gensym:conget(negtabled,Tabled),
+	gensym:conget(negground,Ground),
+	gensym:conget(negtransactional,Trans),
+	gensym:conget(neghypo,Hypo),
+	gensym:conget(neggenerl,Gen),
+	Builtins is Total-Tabled-Ground-Trans-Hypo-Gen,
+	writeln(2,'Statistics for negation use:'),
+	writeln(2,'total '=Total),
+	writeln(2,tabled=Tabled),
+	writeln(2,ground=Ground),
+	writeln(2,transl=Trans),
+	writeln(2,'hypo  '=Trans),
+	writeln(2,bltins=Builtins),
+	writeln(2,generl=Gen).
+#endif
