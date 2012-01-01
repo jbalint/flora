@@ -564,12 +564,7 @@ pure_flora_naf_struct(Goal,PRNOT(WrappedGoal,Line,CurrFileName)) :-
 flora_naf_struct(Goal,Code) :-
 	pure_flora_naf_struct(Goal,PureNotCode),
 	%% delay default negation
-	list_struct([PureNotCode],[],PureNotCodeList),
-	%% this never gives out errors, so no need for file/nline args
-	prologterm_struct(FLLIBDELAYEDLITERAL,4,
-			  [FL_DEFLTNEG,NULL,NULL,PureNotCodeList],
-			  FLDELAYSUPPORTMOD,
-			  Code).
+	delay_struct(NO_INDEX,FL_DEFLTNEG,[PureNotCode],Code).
 
 %% delay struct
 delay_struct(Index,DelayOp,Args,Code) :-
@@ -2789,9 +2784,8 @@ compile_sensor_direct(SensCall,DelayCond,Code,Status) :-
 	; Status = S2
 	),
 	report_option(FLSYSLIB(FLLIBSENSOR),NO_INDEX),
-	%%atomobj_struct(flora_register_sensor,FunctCode),
-	FunctCode = flora_register_sensor,
-	prologterm_struct(FunctCode,2,[SensCode,DelayCode],FLDELAYSUPPORTMOD,Code).
+	prologterm_struct(flora_register_sensor,2,
+			 [SensCode,DelayCode],FLDELAYSUPPORTMOD,Code).
 	
 
 
@@ -3439,13 +3433,10 @@ construct_defeasible_condition(Index,LblCode,DelayedDefeatCondCode) :-
 	    */
 	    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	    %% wrap up for delaying the defeasible condition
-	    code_line_and_file_by_index(Index,Line,CurrFileName),
 	    list_struct([],[],EmptyListObj),
-	    list_struct([DefeatCondCode,EmptyListObj,EmptyListObj,DummyVarObj],[],DelayArgs),
-	    prologterm_struct(FLLIBDELAYEDLITERAL,4,
-			      [FL_UNDEFEATED,CurrFileName,Line,DelayArgs],
-			      FLDELAYSUPPORTMOD,
-			      DelayedDefeatCondCode)
+	    delay_struct(Index,FL_UNDEFEATED,
+			 [DefeatCondCode,EmptyListObj,EmptyListObj,DummyVarObj],
+			 DelayedDefeatCondCode)
 	;
 	    DelayedDefeatCondCode = NULL
 	).
@@ -3482,17 +3473,14 @@ construct_defeasible_condition(Index,HeadCode,LblCode,DelayedDefeatCondCode) :-
 	    */
 	    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	    %% wrap up for delaying the defeasible condition
-	    code_line_and_file_by_index(Index,Line,CurrFileName),
 	    collect_prvars(HeadCode,HeadCodeVars1),
 	    remove_caller_vars(HeadCodeVars1,HeadCodeVars),
 	    vars_to_var_names(HeadCodeVars,HeadCodeVarNames),
 	    list_struct(HeadCodeVars,[],HeadCodeVarsStruct),
 	    list_struct(HeadCodeVarNames,[],HeadCodeVarNamesStruct),
-	    list_struct([DefeatCondCode,HeadCodeVarsStruct,HeadCodeVarNamesStruct,NULL],[],DelayArgs),
-	    prologterm_struct(FLLIBDELAYEDLITERAL,4,
-			      [FL_UNDEFEATED,CurrFileName,Line,DelayArgs],
-			      FLDELAYSUPPORTMOD,
-			      DelayedDefeatCondCode)
+	    delay_struct(Index,FL_UNDEFEATED,
+			 [DefeatCondCode,HeadCodeVarsStruct,HeadCodeVarNamesStruct,NULL],
+			 DelayedDefeatCondCode)
 	;
 	    DelayedDefeatCondCode = NULL
 	).
@@ -4790,22 +4778,15 @@ compile_fltransactionaltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,Co
   compile_fldelayquant(+Quant,+Condition,+Goal,+Index,-SpecCode,-BodyHeadList,-Status)
 ****************************************************************************/
 compile_fldelayquant(Quant,Condition,Goal,Index,SpecCode,BodyHeadList,Status):-
-	    code_line_and_file_by_index(Index,Line,CurrFileName),
-	    is_flatom(DelayQuantAtom,FL_DELAYQUANT,NO_INDEX),
 	    compile_body_literal(Condition,Nesting,ConditionCode,BodyHeadList1,S1),
 	    ( no_errors_found(S1) ->
 		compile_body_literal(Goal,Nesting,GoalCode,BodyHeadList2,S2),
 	    	( no_errors_found(S2) ->
 		    merge_status([S1,S2],Status),
 		    append(BodyHeadList1,BodyHeadList2,BodyHeadList),
-		    atomobj_struct(Quant,QuantCode),
-		    list_struct([QuantCode,ConditionCode,GoalCode],[],AObj),
-		    atomobj_struct(DelayQuantAtom,DelayQuantAtomCode),
-		    atomobj_struct(CurrFileName,CurrFileNameObj),
-		    prologterm_struct(FLLIBDELAYEDLITERAL,4,
-				      [DelayQuantAtomCode,CurrFileNameObj,Line,AObj],
-				      FLDELAYSUPPORTMOD,
-				      SpecCode)
+		    delay_struct(Index,FL_DELAYQUANT,
+				 [Quant,ConditionCode,GoalCode],
+				 SpecCode)
 		;
 		    Status = S2
 		)
