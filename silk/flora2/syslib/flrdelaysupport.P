@@ -33,7 +33,8 @@
 :- import
 	member/2
    from basics.
-%%:- import flora_decode_goal_as_atom/2 from flrdecode.
+:- import flora_decode_goal_as_atom_substitute_vars/2 from flrdecode.
+:- import flora_error_line/2 from flrprint.
 :- import
 	get_attr/3,
 	del_attr/2
@@ -77,6 +78,7 @@
 	flora_atom_builtin/3,
 	flora_compound_builtin/3,
 	flora_atomic_builtin/3,
+	flora_delay_quantifier/3,
 
 	flora_register_sensor/2.
 
@@ -88,6 +90,16 @@
 :- export
 	FLLIBRECORDSENSORS/2.
 
+%% MK: Support for testing. Need to replace with something more general like
+%% catch. But catch does not work in  a usual way, as delayed literals
+%% are slipped from under catch/3, so catch/3 applies vacuously to when/2.
+:- dynamic test_mode/1.
+:- export set_test_mode.
+:- export clear_test_mode.
+
+set_test_mode :- assert(test_mode(debug)). 
+clear_test_mode :- retract(test_mode(debug)). 
+
 
 /*******    Wrappers for builtins    ********/
 FLLIBDELAYEDLITERAL(Builtin,FileN,Line,Args) :-
@@ -95,7 +107,7 @@ FLLIBDELAYEDLITERAL(Builtin,FileN,Line,Args) :-
 	%% sometimes statically created delay conditions need postprocessing
 	make_delay_condition(Builtin,Condition_pre,Condition),
 	!,
-	%% If Condition is ground, no point in using when.
+	%% If Condition is ground, no point in using when/2.
 	%% This speeds up cases where args are mostly ground.
 	%% E.g., argumentation theories become faster by some 10%
 	(ground(Condition) -> Call
@@ -269,6 +281,31 @@ flora_atomic_builtin(File,Line,X) :-
 	(var(X) -> builtin_instantiation_error(File,Line,atomic,'unbound',X)
 	; atomic(X)
 	).
+
+flora_delay_quantifier(_File,_Line,[FL_WISH,_Condition,Goal]) :-
+	Goal.
+
+flora_delay_quantifier(_File,_Line,[FL_MUST,Condition,Goal]) :-
+	Condition,
+	!,
+	Goal.
+
+flora_delay_quantifier(File,Line,[FL_MUST,Condition,Goal]) :-
+	test_mode(debug),
+	!,
+	flora_decode_goal_as_atom_substitute_vars(Goal,GoalAtm),
+	flora_decode_goal_as_atom_substitute_vars(Condition,CondAtm),
+	flora_error_line('in file ~w, line ~w: unsatisfiable must-condition.~n\tGoal: ~w~n\tCondition: ~w',
+			 [File,Line,GoalAtm,CondAtm]).
+
+flora_delay_quantifier(File,Line,[FL_MUST,Condition,Goal]) :-
+	flora_decode_goal_as_atom_substitute_vars(Goal,GoalAtm),
+	flora_decode_goal_as_atom_substitute_vars(Condition,CondAtm),
+	flora_abort(['in file ', File, ', line ', Line, ': ',
+		     'unsatisfiable must-condition.',
+		     '\n\tGoal: ', GoalAtm,
+		     '\n\tCondition: ', CondAtm],
+		    FLORA_ABORT_NOTRACE).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -454,6 +491,10 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
    flora_register_delay(builtin,atomic,F,L,[X],
 			flora_atomic_builtin(F,L,X),
 			(nonvar(X))),
+
+   flora_register_delay(builtin,FL_DELAYQUANT,F,L,[Quant,Condition,Goal],
+			flora_delay_quantifier(F,L,[Quant,Condition,Goal]),
+			Condition),
 
    %% Add more builtins here
    true.

@@ -110,8 +110,11 @@ is_flneg(FLNEG(Goal,Idx),Goal,Idx).
 is_default_negation(Term,Goal,not) :- is_flnot(Term,Goal).
 is_default_negation(Term,Goal,naf) :- is_flnaf(Term,Goal).
 
-is_flquantifier(FLQUANTIFIER(Quant,VarNames,FormulaCode,Idx),
-		Quant,VarNames,FormulaCode,Idx).
+is_fllogicquantifier(FLQUANTIFIER(Quant,VarNames,FormulaCode,Idx),
+		     Quant,VarNames,FormulaCode,Idx).
+is_fldelayquant(FLDELAYQUANTIFIER(Quant,Condition,Goal,Index),
+		Quant,Condition,Goal,Index).
+
 
 is_flhypothetical(FLHYPOTHETICAL(Op,Goal,Index),Op,Goal,Index).
 
@@ -156,8 +159,6 @@ is_flcontrolconstruct(FLWHILELOOP(Cond,Action),FLLIBWHILELOOP,Cond,Action).
 is_flcontrolconstruct(FLDOUNTIL(Cond,Action),FLLIBDOUNTIL,Cond,Action).
 is_flcontrolconstruct(FLLOOPUNTIL(Cond,Action),FLLIBLOOPUNTIL,Cond,Action).
 is_flcontrolconstruct(FLUNLESSDO(Cond,Action),FLLIBUNLESSDO,Cond,Action).
-
-is_fldelayquant(FLDELAYQUANTIFIER(Quant,Condition,Goal),Quant,Condition,Goal).
 
 is_flterm(FLTERM(Funct,Arity,Args),Funct,Arity,Args) :-
 	\+is_fltransactionalatom(Funct,_),
@@ -571,12 +572,12 @@ flora_naf_struct(Goal,Code) :-
 			  Code).
 
 %% delay struct
-delay_struct(Args,Code) :-
-	%% delay default negation
+delay_struct(Index,DelayOp,Args,Code) :-
+	code_line_and_file_by_index(Index,Line,CurrFileName),
 	list_struct(Args,[],CodeList),
 	%% this never gives out errors, so no need for file/nline args
 	prologterm_struct(FLLIBDELAYEDLITERAL,4,
-			  [FL_DELAYOP,NULL,NULL,CodeList],
+			  [DelayOp,CurrFileName,Line,CodeList],
 			  FLDELAYSUPPORTMOD,
 			  Code).
 
@@ -2788,7 +2789,8 @@ compile_sensor_direct(SensCall,DelayCond,Code,Status) :-
 	; Status = S2
 	),
 	report_option(FLSYSLIB(FLLIBSENSOR),NO_INDEX),
-	atomobj_struct(flora_register_sensor,FunctCode),
+	%%atomobj_struct(flora_register_sensor,FunctCode),
+	FunctCode = flora_register_sensor,
 	prologterm_struct(FunctCode,2,[SensCode,DelayCode],FLDELAYSUPPORTMOD,Code).
 	
 
@@ -3679,7 +3681,7 @@ compile_body(ParserTerm,Code,Status) :-
 	clear_context(compiling_default_negation).
 
 compile_body(ParserTerm,Code,Status) :-
-	is_flquantifier(ParserTerm,FL_EXISTS,QuantVarNames,Formula,Idx),
+	is_fllogicquantifier(ParserTerm,FL_EXISTS,QuantVarNames,Formula,Idx),
 	has_context(compiling_default_negation),
 	!,
 	%% no quantified don't care vars (?,?_) 
@@ -3712,40 +3714,6 @@ compile_body(ParserTerm,Code,Status) :-
 	    true
 	).
 
-compile_body(ParserTerm,Code,Status) :-
-	is_flquantifier(ParserTerm,Quantifier,QuantVarNames,Formula,Idx),
-	\+ has_context(compiling_default_negation),
-	is_delayquant(Quantifier),
-	!,
-	%% no quantified don't care vars (?,?_) 
-	(member(FL_UNDERSCORE,QuantVarNames) ->
-	    compiling_error(Idx,NO_QUANTIFIED_ANONVARS,Err1),
-	    S1 = [Err1]
-	; S1 = []
-	),
-
-	compile_body(Formula,FormCode,S2),
-	%% We use prvars so that newly introduced vars will be accounted for
-	collect_prvars(FormCode,FormVarList),
-	vars_to_var_names(FormVarList,FormVarNames),
-	%% quantified vars must occur in Formula
-	(subset(QuantVarNames,FormVarNames) -> S3 = []
-	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
-	    S3 = [Err3]
-	),
-	subtract_vars(FormVarList,QuantVarNames,FreeVarObjs_aux),
-	remove_prdontcare_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
-	remove_caller_vars(FreeVarObjs_aux2,FreeVarObjs),
-
-	rename_prvariables(QuantVarNames,FormCode,
-			   RenamedFormCode,_RenamedQuantVars),
-	merge_status([S1,S2,S3],Status),
-	( no_errors_found(Status) ->
-	    %% Create the code for compiled quantification.
-	    delay_struct([Quantifier,RenamedFormCode,FreeVarObjs],Code)
-	;
-	    true
-	).
 
 compile_body(ParserTerm,Code,Status) :-
 	is_flhypothetical(ParserTerm,Op,Goal,Index),
@@ -3808,8 +3776,8 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    Status=[]
 	*/
 
-        ; is_fldelayquant(ParserTerm,Quant,Condition,Goal) ->
-		compile_fldelayquant(Quant,Condition,Goal,SpecCode,BodyHeadList,Status)
+        ; is_fldelayquant(ParserTerm,Quant,Condition,Goal,Idx) ->
+		compile_fldelayquant(Quant,Condition,Goal,Idx,SpecCode,BodyHeadList,Status)
 
         ; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_fltransactionaltermlit(Funct,N,Args,Nesting,OidCode,SpecCode,BodyHeadList,Status)
@@ -4261,8 +4229,8 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 
 compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	set_context(compiling_body_pathexp),
-        ( is_fldelayquant(ParserTerm,Quant,Condition,Goal) ->
-		compile_fldelayquant(Quant,Condition,Goal,OidCode,BodyHeadList,Status)
+        ( is_fldelayquant(ParserTerm,Quant,Condition,Goal,Idx) ->
+		compile_fldelayquant(Quant,Condition,Goal,Idx,OidCode,BodyHeadList,Status)
 
 	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_fltermobj(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,Status)
@@ -4819,17 +4787,11 @@ compile_fltransactionaltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,Co
 
 
 /****************************************************************************
-  compile_fldelayquant(+Quant,+Condition,+Goal,-SpecCode,-BodyHeadList,-Status)
+  compile_fldelayquant(+Quant,+Condition,+Goal,+Index,-SpecCode,-BodyHeadList,-Status)
 ****************************************************************************/
-compile_fldelayquant(Quant,Condition,Goal,SpecCode,BodyHeadList,Status):-
-	    is_flatom(Quant,_,Index),
+compile_fldelayquant(Quant,Condition,Goal,Index,SpecCode,BodyHeadList,Status):-
 	    code_line_and_file_by_index(Index,Line,CurrFileName),
-	    is_flatom(QuantAtom,FL_DELAYQUANT,NO_INDEX),
-	    /*is_flatom(CurrFileParserObj,CurrFileName,NO_INDEX),
-	    is_fllist(DelayArgs,[Quant,Condition,Goal],[],NO_INDEX),
-	    compile_prlgterm(FLLIBDELAYEDLITERAL,4,[QuantAtom,CurrFileParserObj,Line,DelayArgs],
-			     FLDELAYSUPPORTMOD,
-			     Nesting,SpecCode,OidCode,_ACode,BodyHeadList,Status)*/
+	    is_flatom(DelayQuantAtom,FL_DELAYQUANT,NO_INDEX),
 	    compile_body_literal(Condition,Nesting,ConditionCode,BodyHeadList1,S1),
 	    ( no_errors_found(S1) ->
 		compile_body_literal(Goal,Nesting,GoalCode,BodyHeadList2,S2),
@@ -4838,10 +4800,10 @@ compile_fldelayquant(Quant,Condition,Goal,SpecCode,BodyHeadList,Status):-
 		    append(BodyHeadList1,BodyHeadList2,BodyHeadList),
 		    atomobj_struct(Quant,QuantCode),
 		    list_struct([QuantCode,ConditionCode,GoalCode],[],AObj),
-		    atomobj_struct(QuantAtom,QuantAtomCode),
+		    atomobj_struct(DelayQuantAtom,DelayQuantAtomCode),
 		    atomobj_struct(CurrFileName,CurrFileNameObj),
 		    prologterm_struct(FLLIBDELAYEDLITERAL,4,
-				      [QuantAtomCode,CurrFileNameObj,Line,AObj],
+				      [DelayQuantAtomCode,CurrFileNameObj,Line,AObj],
 				      FLDELAYSUPPORTMOD,
 				      SpecCode)
 		;
@@ -5053,7 +5015,7 @@ compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
 
 %% Quantification under default negation
 compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
-	is_flquantifier(SpecTerm,FL_EXISTS,QuantVarNames,Formula,Idx),
+	is_fllogicquantifier(SpecTerm,FL_EXISTS,QuantVarNames,Formula,Idx),
 	has_context(compiling_default_negation),
 	!,
 	%% no quantified don't care vars (?,?_) 
@@ -5086,45 +5048,6 @@ compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
 	    %% Create the code for compiled quantification.
 	    conjunct_code([OidCode,RenamedFormCode],CombinedCode),
 	    quantifier_struct(FL_EXISTS,CombinedCode,FreeVarObjs,Code)
-	;
-	    true
-	).
-
-compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
-	is_flquantifier(SpecTerm,Quantifier,QuantVarNames,Formula,Idx),
-	\+ has_context(compiling_default_negation),
-	is_delayquant(Quantifier),
-	!,
-	%% no quantified don't care vars (?,?_) 
-	(member(FL_UNDERSCORE,QuantVarNames) ->
-	    compiling_error(Idx,NO_QUANTIFIED_ANONVARS,Err1),
-	    S1 = [Err1]
-	; S1 = []
-	),
-
-	compile_flspecbody(Object,Formula,OidCode,FormCode,BodyHeadList,S2),
-	%% We use prvars so that newly introduced vars will be accounted for
-	collect_prvars([Object,OidCode,FormCode],AllVarList),
-	vars_to_var_names(AllVarList,AllVarList_names),
-	%% quantified vars must occur in Formula
-	(subset(QuantVarNames,AllVarList_names) -> S3 = []
-	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
-	    S3 = [Err3]
-	),
-
-	subtract_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
-	%% remove don't care vars, since no need to delay because of them
-	remove_prdontcare_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
-	remove_caller_vars(FreeVarObjs_aux2,FreeVarObjs),
-
-	rename_prvariables(QuantVarNames,FormCode,
-			   RenamedFormCode,_RenamedQuantVars),
-
-	merge_status([S1,S2,S3],Status),
-	( no_errors_found(Status) -> 
-	    %% Create the code for compiled quantification.
-	    conjunct_code([OidCode,RenamedFormCode],CombinedCode),
-	    delay_struct([Quantifier,CombinedCode,FreeVarObjs],Code)
 	;
 	    true
 	).
@@ -6699,7 +6622,7 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 
 %% Quantification under default negation
 compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
-	is_flquantifier(SpecTerm,FL_EXISTS,QuantVarNames,Formula,Idx),
+	is_fllogicquantifier(SpecTerm,FL_EXISTS,QuantVarNames,Formula,Idx),
 	has_context(compiling_default_negation),
 	!,
 	%% no quantified don't care vars (?,?_) 
@@ -6736,44 +6659,6 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	    true
 	).
 
-compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
-	is_flquantifier(SpecTerm,Quantifier,QuantVarNames,Formula,Idx),
-	\+ has_context(compiling_default_negation),
-	is_delayquant(Quantifier),
-	!,
-	%% no quantified don't care vars (?,?_) 
-	(member(FL_UNDERSCORE,QuantVarNames) ->
-	    compiling_error(Idx,NO_QUANTIFIED_ANONVARS,Err1),
-	    S1 = [Err1]
-	; S1 = []
-	),
-
-	compile_wsflspecbody(Object,Formula,WS,OidCode,FormCode,BodyHeadList,S2),
-	%% We use prvars so that newly introduced vars will be accounted for
-	collect_prvars([Object,OidCode,FormCode],AllVarList),
-	vars_to_var_names(AllVarList,AllVarList_names),
-	%% quantified vars must occur in Formula
-	(subset(QuantVarNames,AllVarList_names) -> S3 = []
-	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
-	    S3 = [Err3]
-	),
-
-	subtract_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
-	%% remove don't care vars, since no need to delay because of them
-	remove_prdontcare_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
-	remove_caller_vars(FreeVarObjs_aux2,FreeVarObjs),
-	
-	rename_prvariables(QuantVarNames,FormCode,
-			   RenamedFormCode,_RenamedQuantVars),
-
-	merge_status([S1,S2,S3],Status),
-	( no_errors_found(Status) -> 
-	    %% Create the code for compiled quantification.
-	    conjunct_code([OidCode,RenamedFormCode],CombinedCode),
-	    delay_struct([Quantifier,CombinedCode,FreeVarObjs],Code)
-	;
-	    true
-	).
 
 %% OidCodeList below gets bound to code needed to produce
 %% the attribute (M) and the value (V). We conjunct this code in front of the
@@ -8947,6 +8832,7 @@ code_line_and_file_by_prterm(CompiledTerm,Line,File) :-
 	get_current_compile_file(File).
 
 %% Get the line number and file name of code represented by line/position index
+code_line_and_file_by_index(NO_INDEX,NULL,NULL) :- !.
 code_line_and_file_by_index(Index,Line,File) :-
 	flora_token_index_to_line(Index,Line),
 	get_current_compile_file(File).

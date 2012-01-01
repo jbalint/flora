@@ -43,7 +43,10 @@
 	flora_unscramble_atom/2,
         is_flora_callable_literal/1
     from flrwrapper.
-:- import flora_prlgdef/2 from flrprolog.
+:- import
+	flora_prlgdef_repl/4,
+	flora_prlgdef/2
+   from flrprolog.
 :- import flora_opdef/3 from flroperator.
 :- import
 	flora_delayed_builtin_literal/2,
@@ -71,6 +74,9 @@
    from flrnegation.
 
 :- import term_variables/2 from constraintLib.
+:- import
+	del_attr/2
+   from machine.
 
 %%:- import flora_warning_line/2 from flrprint.
 
@@ -501,7 +507,7 @@ decode_hilog_term(HiLogPred,Args,Code,Level,Depth) :-
 
 %% flora prolog-style builtin: declared as flora_prlg in flrprolog.P
 decode_prolog_call([F,Args,Arity],Code,Depth) :-
-	flora_prlgdef(F,Arity),
+	(flora_prlgdef(F,Arity) ; flora_prlgdef_repl(F,Arity,_,_)),
 	!,
 	Depth1 is Depth+1,
 	decode_builtin(F,Arity,Args,Code,Depth1).
@@ -529,6 +535,13 @@ decode_prolog_call([FLLIBDELAYEDLITERAL,[F,_,_,Args],4],[Code, ' /* sensor */'],
 	Args = [_,_|Args2],
 	Depth1 is Depth+1,
 	decode_builtin(F2,N2,Args2,Code,Depth1).
+
+decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],Code,Depth) :-
+	Term =.. [FLLIBDELAYEDLITERAL,FL_DELAYQUANT,_,_,[QuantType,Cond,Goal]],
+	!,
+	NewTerm = FL_DELAYQUANT(QuantType,Cond,Goal),
+	Depth1 is Depth+1,
+	decode_literal_internal(NewTerm,Code,1,Depth1).
 decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],Code,Depth) :-
 	Term =.. [FLLIBDELAYEDLITERAL|Args],
 	Args = [FL_DEFLTNEG,_,_,[Call|_]],
@@ -604,6 +617,8 @@ decode_builtin(F,_,Args,[EscF,'(',ArgsCode,')', '@_prolog'],Depth) :-
 	decode_list_add_separator(Args,ArgsCode,decode_literal_internal(_,_,1,Depth1),',').
 
 standard_FLORA_prolog_functor(P,A) :- flora_prlgdef(P,A).
+standard_FLORA_prolog_functor(P,A) :- flora_prlgdef_repl(P,A,_,_).
+standard_FLORA_prolog_functor(P,A) :- flora_delayed_builtin_literal(P,A).
 
 
 %%%%%%%%%%%%%%%%%%%%%% IF %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1270,6 +1285,15 @@ decode_literal_internal(FLLIBUNIVEQFORM(Left,Right),
 	decode_literal_internal(Left,LeftCode,0,Depth1),
 	decode_literal_internal(Right,RightCode,0,Depth1).
 
+decode_literal_internal(FL_DELAYQUANT(QuantType,Cond,Goal),
+			[ReifyStart,QuantType,'(',CondCode,')^',GoalCode,ReifyEnd],
+			Level,Depth) :-
+	!,
+	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
+	Depth1 is Depth+1,
+	decode_literal_internal(Cond,CondCode,0,Depth1),
+	decode_literal_internal(Goal,GoalCode,0,Depth1).
+
 %% var commalist - protects the next two clauses from meaningless unification
 decode_literal_internal((L,R),[ReifyStart,'(',[LCode,', '|RCode],')',ReifyEnd],Level,Depth) :-
 	(var(L) ; var(R)),
@@ -1674,6 +1698,8 @@ bind_vars_meaningfully([X|R],N) :-
 	!,
 	bind_vars_meaningfully(R,N).
 bind_vars_meaningfully([X|R],N) :-
+	%% need to figure out how to delete other possible attributes
+	del_attr(X,when),
 	Code is N mod 26 + 0'A,
 	atom_codes(Xname,[0'?,Code]),
 	X = '_$VAR'(Xname),

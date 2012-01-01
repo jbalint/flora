@@ -747,10 +747,13 @@ is_nafop(FL_NAF)	:- !.
 is_notop(FL_TNOT)	:- !.
 is_notop(FL_NOT)	:- !.
 
-is_quantifier(FL_EXISTS)        :- !.
-is_quantifier(FL_FORALL)        :- !.
+is_logicalquantifier(FL_EXISTS)        :- !.
+is_logicalquantifier(FL_FORALL)        :- !.
 is_existentialquant(FL_EXISTS)  :- !.
 %%is_universalquant(FL_FORALL)    :- !.
+
+is_delayquant(FL_MUST).
+is_delayquant(FL_WISH).
 
 is_hypothetical(FL_POSSIBLE)    :- !.
 is_hypothetical(FL_IMPOSSIBLE)  :- !.
@@ -999,7 +1002,7 @@ flneg_struct(Goal,Index,FLNEG(Goal,Index)).
 flquantifier_struct(Quant,VarNames,FormulaCode,Idx,
 		    FLQUANTIFIER(Quant,VarNames,FormulaCode,Idx)).
 
-fldelayquant_struct(Quant,Cond,Goal,FLDELAYQUANTIFIER(Quant,Cond,Goal)).
+fldelayquant_struct(Quant,Cond,Goal,Index,FLDELAYQUANTIFIER(Quant,Cond,Goal,Index)).
 
 flhypothetical_struct(Op,Goal,Index,FLHYPOTHETICAL(Op,Goal,Index)).
 
@@ -3015,63 +3018,70 @@ parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[G],If,_Ip),WS,DWS,Code,Status) 
 	    true
         ).
 
-%% Parsing quantifiers.
+%% Parsing logical quantifiers.
 %% QF: quantified formula. We allow only the following quantifiers here:
 %%    existential
 %% And only once, existential is allowed under \+ or not/naf,
 %% others are not allowed under negation.
 %% This would have to be generalized for Lloyd-Topor
-parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[QF],If,_Ip),WS,DWS,Code,Status) :-
-	get_atom(Funct,F),
-	is_quantifier(F),
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTHESIS,Vars,_,_),Goal],_If,_Ip),WS,DWS,Code,Status) :-
+	get_atom(Funct,FL_QUANTVARCONNECTOR),
+	get_atom(Quant,QuantAtom,QuantIdx),
+	is_logicalquantifier(QuantAtom),
 	has_context(parsing_default_negation),
 	!,
-	(\+is_existentialquant(F) -> parsing_error(If,ONLY_EXISTENTIALS,S1)
+	(\+is_existentialquant(QuantAtom)
+	-> parsing_error(QuantIdx,ONLY_EXISTENTIALS,S1)
 	; S1 = []
 	),
-	get_quantifier_parts(QF,Vars,Formula),
 	%% parse_varlist/4 checks that Vars are indeed vars
-	%% the compiler would have to make sure that Vars occus in Formula
+	%% the compiler would have to make sure that Vars occus in Goal
 	parse_varlist(Vars,_VarCode,VarNames,S2),
-	parse_rule_body(Formula, WS, DWS,FormCode,S3),
+	parse_rule_body(Goal, WS, DWS,GoalCode,S3),
 	merge_status([S1,S2,S3],Status),
 	( Status == [] ->
-	    flquantifier_struct(F,VarNames,FormCode,If,Code)
+	    flquantifier_struct(QuantAtom,VarNames,GoalCode,QuantIdx,Code)
 	;
 	    true
 	).
 
 %% quantification not under negation has not been implemented yet
-parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,_,If,_Ip),_WS,_DWS,_,Status) :-
-	get_atom(Funct,F),
-	is_quantifier(F),
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTHESIS,_Vars,_,_),_Goal],_If,_Ip),_WS,_DWS,_Code,Status) :-
+	get_atom(Funct,FL_QUANTVARCONNECTOR),
+	get_atom(Quant,QuantAtom,QuantIdx),
+	is_logicalquantifier(QuantAtom),
 	!,
-	parsing_error(If,NO_QUANTIFIERS,Status).
+	parsing_error(QuantIdx,NO_LOG_QUANTIFIERS,Status).
 
-%% Parsing delay quantifiers.
-%% Is not allowed under \+ or not/naf
+%% Parsing delay quantifiers
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTHESIS,Cond,_,_),Goal],_If,_Ip),WS,DWS,Code,Status) :-
+	get_atom(Funct,FL_QUANTVARCONNECTOR),
+	get_atom(Quant,QuantAtom,QIndex),
+	is_delayquant(QuantAtom),
+	!,
+	%% delay quantifiers. are not allowed under \+ or not/naf
+	(has_context(parsing_default_negation) ->
+	    parsing_error(QIndex,DELAY_QUANT_UNDER_NEGATION,S1)
+	;
+	    parse_prolog_condition(Cond,CondCode,S1)
+	),
+	(S1==[] ->
+	    parse_rule_body(Goal,WS,DWS,GoalCode,S2),
+	    (S2==[] ->
+		fldelayquant_struct(QuantAtom,CondCode,GoalCode,QIndex,Code),
+		Status = []
+	    ;
+		Status = S2
+	    )
+	;
+	    Status = S1
+	).
+
 parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(_Quant,1,FL_PARENTHESIS,[_Cond],_,_),_Goal],If,_Ip),_WS,_DWS,_Code,Status) :-
 	get_atom(Funct,FL_QUANTVARCONNECTOR),
-	has_context(parsing_default_negation),
 	!,
-	parsing_error(If,DELAY_QUANT_UNDER_NEGATION,Status).
+	parsing_error(If,UNKNOWN_QUANTIFIER,Status).
 
-parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,1,FL_PARENTHESIS,[Cond],_,_),Goal],_If,_Ip),_WS,_DWS,Code,[]) :-
-	get_atom(Funct,FL_QUANTVARCONNECTOR),
-	!,
-	parse_rule_body(Cond,NULL,NULL,CondCode,S1),
-	(S1==[] ->
-		parse_rule_body(Goal,NULL,NULL,GoalCode,S2),
-		(S2==[] ->
-			get_atom(Quant,FAtom,Index),
-			flatom_struct(FAtom,Index,QuantCode),
-			fldelayquant_struct(QuantCode,CondCode,GoalCode,Code)
-		;
-			Status = S2
-		)
-	;
-		Status = S1
-	).
 
 parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_atom(Funct,F),
@@ -3312,6 +3322,31 @@ parse_rule_body(CanoniTerm,NULL,NULL,Code,Status) :-
 	!,
 	%% no module name
 	parse_body_literal(CanoniTerm,NULL,Code,Status).
+
+/****************************************************************************
+  parse_prolog_condition(+Condition,-CondCode,-Status)
+
+  MK: Currently this parses only conjunctive conditions! Extend to disjunctions!
+****************************************************************************/
+parse_prolog_condition(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),CondCode,Status) :-
+	!,
+	parse_pure_prolog_term(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),usermod,CondCode,_,Status).
+
+parse_prolog_condition([Condition|CondTail],Code,Status):-
+	parse_prolog_condition(Condition,CondCode,S1),
+	(S1==[] ->
+		parse_prolog_condition(CondTail,CondTailCode,Status),
+		flatom_struct(FL_COMMA,NO_INDEX,F),
+		flterm_struct(F,2,[CondCode,CondTailCode],Code)
+	;
+		Status = S1
+	).
+
+parse_prolog_condition([Condition],CondCode,Status):-
+	parse_prolog_condition(Condition,CondCode,Status).
+
+parse_prolog_condition(Condition,_CondCode,Status):-
+	parsing_error(Condition,ERROR_DELAY_QUANT_CONDITION,Status).
 
 /****************************************************************************
   parse_workspace(+CanoniTerm,-WSCode,-Status)
@@ -5414,30 +5449,32 @@ parse_body_objspec(CANOTERM(Funct,1,FL_PARENTHESIS,[G],If,_Ip),DWS,Code,Status) 
 	clear_context(parsing_default_negation).
 
 %% existantial quantifier under default negation in
-%% obj[not exists ?X^?Y^goo->bar]
-parse_body_objspec(CANOTERM(Funct,1,FL_PARENTHESIS,[QF],If,_Ip),DWS,Code,Status) :-
-	get_atom(Funct,F),
-	is_quantifier(F),
+%% obj[not exists(?X,?Y)^goo->bar]
+parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTHESIS,Vars,_,_),Goal],_If,_Ip),DWS,Code,Status) :-
+	get_atom(Funct,FL_QUANTVARCONNECTOR),
+	get_atom(Quant,QuantAtom,QuantIdx),
+	is_logicalquantifier(QuantAtom),
 	has_context(parsing_default_negation),
 	!,
-	(\+is_existentialquant(F) -> parsing_error(If,ONLY_EXISTENTIALS,S1)
+	(\+is_existentialquant(QuantAtom)
+	-> parsing_error(QuantIdx,ONLY_EXISTENTIALS,S1)
 	; S1 = []
 	),
-	get_quantifier_parts(QF,Vars,Formula),
 	parse_varlist(Vars,_VarCode,VarNames,S2),
-	parse_body_objspec(Formula,DWS,FormCode,S3),
+	parse_body_objspec(Goal,DWS,GoalCode,S3),
 	merge_status([S1,S2,S3],Status),
 	( Status == [] ->
-	    flquantifier_struct(F,VarNames,FormCode,If,Code)
+	    flquantifier_struct(QuantAtom,VarNames,GoalCode,QuantIdx,Code)
 	;
 	  true
         ).
 
-parse_body_objspec(CANOTERM(Funct,1,FL_PARENTHESIS,_,If,_Ip),_DWS,_,Status) :-
-	get_atom(Funct,F),
-	is_quantifier(F),
+parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTHESIS,_Vars,_,_),_Goal],_If,_Ip),_DWS,_Code,Status) :-
+	get_atom(Funct,FL_QUANTVARCONNECTOR),
+	get_atom(Quant,QuantAtom,QuantIdx),
+	is_logicalquantifier(QuantAtom),
 	!,
-	parsing_error(If,NO_QUANTIFIERS,Status).
+	parsing_error(QuantIdx,NO_LOG_QUANTIFIERS,Status).
 
 
 parse_body_objspec(CanoniTerm,DWS,Code,Status) :-
@@ -7462,16 +7499,6 @@ parse_curi([Prefix,LocalName],TransFlag,DWS,Code,Status) :-
 	;
 	    parsing_error(Index_Prefix,FILE_NODEFPREFIX,Status)
 	).
-
-
-get_quantifier_parts(CANOTERM(Funct,2,FL_PARENTHESIS,[Var,Rest],_If,_Ip),[Var|Vars],Form) :-
-	get_atom(Funct,FL_QUANTVARCONNECTOR),
-	%%is_variable(Var,_,_),
-	!,
-	get_quantifier_parts(Rest,Vars,Form).
-
-%% exhaused variables, so this must be a formula
-get_quantifier_parts(Canoniterm,[],Canoniterm) :- !.
 
 
 merge_status([],[]) :- !.
