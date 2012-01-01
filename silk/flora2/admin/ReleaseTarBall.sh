@@ -47,7 +47,6 @@ files="./flora2/INSTALLATION \
     	./flora2/platforms/unix \
     	./flora2/platforms/windows \
     	./flora2/platforms/cygwin \
-    	./flora2/binary-distribution.txt \
         ./flora2/java "
 
 curdir=`pwd`
