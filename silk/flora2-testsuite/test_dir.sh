@@ -30,8 +30,8 @@ file_list=*.flr
 #
 exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
     	      basetype_moo.flr basetype_foo.flr \
-              add1.flr add2.flr\
-              trailer.flr \
+              add1.flr add2.flr \
+              trailer.flr sensortest_declarations.flr \
               ruleupdates.flr reif_foo.flr \
               callReified_foo.flr callReified_foo2.flr \
     	      module_foo.flr \

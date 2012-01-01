@@ -64,12 +64,6 @@ do
 	    shift
 	    ;;
 
-#     *-only*)
-#	    shift
-#	    only_tests=$1
-#	    shift
-#	    ;;
-	    
      *-tag*)
 	    shift
 	    config_tag=$1
