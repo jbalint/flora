@@ -30,12 +30,11 @@
 	flora_abort/1,
 	flora_abort/2
    from flrporting.
-:- import
-	member/2
-   from basics.
+%%:- import member/2 from basics.
 :- import flora_decode_goal_as_atom_substitute_vars/2 from flrdecode.
 :- import flora_error_line/2 from flrprint.
 :- import
+	call0/1,
 	get_attr/3,
 	del_attr/2
    from machine.
@@ -308,54 +307,81 @@ flora_delay_quantifier(File,Line,[FL_MUST,Condition,Goal]) :-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-FLORA_DELAY_CHECKER(BodyVars,HeadVars) :-
-	flora_execute_delayed_literals(BodyVars,HeadVars).
+FLORA_DELAY_CHECKER(InstantiatedBodyVars,HeadVars) :-
+	flora_execute_delayed_literals(InstantiatedBodyVars,HeadVars).
 
-%% Template makes sure that we call only those subgoals
-%% in the attr list of a variable that we intend to.
-%% like those satisfying delayed_pred_template/1.
-flora_execute_delayed_literals([],_HeadVars) :- !.
-flora_execute_delayed_literals([Term|Rest],HeadVars) :-
-	(
-	  var(Term)
-	->  ( %% do execution
-		get_attr(Term,when,Triggers) ->
-		call_trigger_list(Triggers,delayed_pred_template(_))
-	    ; true
-	    )
-	;  flrground(Term) -> true
-	;  aliased_to_head(Term,HeadVars) -> true
+flora_execute_delayed_literals(InstantiatedBodyVars,HeadVars) :-
+	get_all_triggers(InstantiatedBodyVars,HeadVars,Triggers),
+	call_trigger_list(Triggers).
+
+get_all_triggers(InstantiatedBodyVars,HeadVars,Triggers) :-
+	get_all_triggers(InstantiatedBodyVars,HeadVars,Triggers,[]).
+get_all_triggers([],_HeadVars,Triggers,Triggers) :- !.
+get_all_triggers([Term|Rest],HeadVars,NewTrigs,OldTrigs) :-
+	( flrground(Term) -> NewTrigs = OldTrigs
+	; aliased_to_head(Term,HeadVars) -> NewTrigs = OldTrigs
+	; var(Term)
+	->  ( get_attr(Term,when,Trigs) -> NewTrigs = [Trigs|RestNewTrigs]
+	    ; NewTrigs = RestNewTrigs
+	    ),
+	    %% remove attrs to avoid delayed lit calling itself repeatedly
+	    %% during its own work (eg, if it instantiates a when-variable)
+	    del_attr(Term,when)
 	;  flora_term_variables(Term,Vars)
-	-> flora_execute_delayed_literals(Vars,HeadVars)
+	->
+	  get_all_triggers(Vars,HeadVars,Trigs,[]),
+	  NewTrigs = [Trigs|RestNewTrigs]
 	; 
 	    flora_abort(['bug: unexpected term in delay list, ',Term])
 	),
 	!,
-	flora_execute_delayed_literals(Rest,HeadVars).
+	get_all_triggers(Rest,HeadVars,RestNewTrigs,OldTrigs).
 
+:- import
+	trigger_ground/2,
+	trigger_nonvar/2,
+	trigger/2,
+	check_disj/2
+   from constraintLib.
 aliased_to_head(V,[H|_HV]):- V == H, !.
-aliased_to_head(V,[_|H]):- aliased_to_head(H,V).
+aliased_to_head(V,[_|H]):- aliased_to_head(V,H).
 
-call_trigger_list([],_) :- !.
-call_trigger_list([Trigger|Rest],Template) :-
-	%% a trigger has the form trigger_NAME(VarList,Goal)
-	get_trigger_goal(Trigger,Goal),
-	%% check that call is an intended one (satisfying Template)
-	arg(1,Template,Goal),
-	Template,
-	%% remove attrs to avoid sensor calling itself repeatedly
-	%% during its own work (eg, if it instantiates a when-variable)
-	remove_attributes(Goal),
-	call(Goal),
-	call_trigger_list(Rest,Template).
-
-%% this should eventually go into constraintLib.P
-get_trigger_goal(Trigger,Goal) :-
-	functor(Trigger,Fun,2),
-	member(Fun,[trigger,trigger_nonvar,trigger_ground,check_disj]),
+call_trigger_list([]) :- !.
+call_trigger_list([Trigger|Rest]) :-
+	%% trigger list can actually be a list of lists
+	is_list(Trigger),
 	!,
-	arg(2,Trigger,T),
-	get_trigger_goal(T,Goal).
+	call_trigger_list(Trigger),
+	call_trigger_list(Rest).
+call_trigger_list([Trigger|Rest]) :-
+	%% a trigger has the form trigger_NAME(VarList,Goal)
+	(get_trigger_goal(Trigger,Goal) ->
+	    %% check that call is an intended one, i.e., 
+	    %% satisfies the template delayed_pred_template/1
+	    delayed_pred_template(Goal),
+	    call0(Goal)
+	; %% if no acceptable goal associated with trigger, just continue
+	    true
+	),
+	call_trigger_list(Rest).
+
+%% this should really be constraintLib.P
+get_trigger_goal(trigger_nonvar(_,Trigger),Goal) :-
+	!,
+	get_trigger_goal(Trigger,Goal).
+get_trigger_goal(trigger_ground(_,Trigger),Goal) :-
+	!,
+	get_trigger_goal(Trigger,Goal).
+get_trigger_goal(trigger(_,Trigger),Goal) :-
+	!,
+	get_trigger_goal(Trigger,Goal).
+get_trigger_goal(check_disj(Det,Trigger),Goal) :-
+	!,
+	%% note: if Det is nonvar, the trigger's goal has already been used
+	%% so we just fail
+	var(Det),
+	Det = (-),
+	get_trigger_goal(Trigger,Goal).
 get_trigger_goal(Trigger,Trigger).
 
 
