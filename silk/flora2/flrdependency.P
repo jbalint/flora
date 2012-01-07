@@ -33,10 +33,11 @@
 :- table rec_depend/7.
 :- use_subsumptive_tabling rec_depend(_,_,_,_,_,_,_).
 
-:- dynamic rule/3.
+:- dynamic rule/4.
+:- index(rule/4,[1,2]).
 
 #define MAXDEPTH          4
-#define MAX_RULE_CHAIN    4
+#define MAX_RULE_CHAIN    3
 #define STARTPOINT	  1
 
 /*
@@ -514,20 +515,23 @@ rec_depend(H,S,A,N,U,T,SearchDepth) :-
   match_rule(+Term,-Head,-Body,?anu(A,N,U))
   find rules whose heads unify with Term
  ****************************************************************************/
-match_rule(T,(H,IH),B,anu(A,N,U)) :-
-	%% Not clear why this was written with H bound to T after the fact.
-	%% This make things very slow.
-	%%rule((H,IH),B,anu(A,N,U)),
+%%match_rule(T,(H,IH),B,anu(A,N,U)) :-
+	%% Unclear why this was written with H = T after the fact-check.
+	%% This makes things very slow.
+	%%rule(H,IH,B,anu(A,N,U)),
 	%%T=H.
-	rule((T,IH),B,anu(A,N,U)).
+match_rule(T,(T,IH),B,anu(A,N,U)) :-
+	rule(T,IH,B,anu(A,N,U)).
 
 /****************************************************************************
   same_rule(+IndTerm,-Head,-Body,?anu(A,N,U))
   find rules whose heads unify with Term
  ****************************************************************************/
-same_rule(IT,(H,IH),B,anu(A,N,U)) :-
-	rule((H,IH),B,anu(A,N,U)),
-	IT=IH.
+%%same_rule(IT,(H,IH),B,anu(A,N,U)) :-
+	%%rule(H,IH,B,anu(A,N,U)),
+	%%IT=IH.
+same_rule(IT,(H,IT),B,anu(A,N,U)) :-
+	rule(H,IT,B,anu(A,N,U)).
 
 
 /****************************************************************************
@@ -538,7 +542,7 @@ same_rule(IT,(H,IH),B,anu(A,N,U)) :-
  ****************************************************************************/
 generate_rules([]) :- !.
 generate_rules(CodeList) :-
-	retractall(rule(_,_,_)),
+	retractall(rule(_,_,_,_)),
 	parse_codelist(CodeList).
 
 /****************************************************************************
@@ -606,7 +610,7 @@ assert_ignoredlist([H|L]) :-
 	).
 
 parse_rule(Head,Body) :-
-	%% See note on why DUMMY_WORKSPACE is used at top of file
+	%% See note on why DUMMY_WORKSPACE is used here at the top of file
 	flora_build_struct(Head,DUMMY_WORKSPACE,CODER_GENERIC_CONTEXT,VarList,HeadCode,HCI,Status_Head),
 	( Status_Head == [] ->
 	    functor(HeadCode,F,N),
@@ -656,7 +660,8 @@ assert_rule(HeadCode,BodyCode,(BCI,Index),anu(A,N,U)) :-
 	is_upd(BodyCode,_,List,Cond),
 	!,
 	is_updIdxStruct(BCI,(ListI,_I),CondI),
-	asserta(rule(HeadCode,(BodyCode,(BCI,Index)),anu(A,N,u))),
+	HeadCode = (HL,HR),
+	asserta(rule(HL,HR,(BodyCode,(BCI,Index)),anu(A,N,u))),
 	assert_rule(HeadCode,Cond,CondI,anu(A,N,U)),
 	assert_rules(HeadCode,List,ListI,anu(A,N,u)).
 
@@ -664,7 +669,8 @@ assert_rule(HeadCode,BodyCode,(BCI,Index),anu(A,N,U)) :-
 	is_updall(BodyCode,_,List,Cond),
 	!,
 	is_updallIdxStruct(BCI,(ListI,_I),CondI),
-	asserta(rule(HeadCode,(BodyCode,(BCI,Index)),anu(a,N,u))),
+	HeadCode = (HL,HR),
+	asserta(rule(HL,HR,(BodyCode,(BCI,Index)),anu(a,N,u))),
 	assert_rule(HeadCode,Cond,CondI,anu(A,N,U)),
 	assert_rules(HeadCode,List,ListI,anu(A,N,u)).
 
@@ -672,7 +678,8 @@ assert_rule(HeadCode,BodyCode,(BCI,Index),anu(_,N,U)) :-
 	is_agg(BodyCode,_,_,_,Condition,_),
 	!,
 	is_agg(BCI,_,_,_,ConditionI,_),
-	asserta(rule(HeadCode,(BodyCode,(BCI,Index)),anu(a,N,U))),
+	HeadCode = (HL,HR),
+	asserta(rule(HL,HR,(BodyCode,(BCI,Index)),anu(a,N,U))),
 	assert_rule(HeadCode,Condition,ConditionI,anu(a,N,U)).
 
 assert_rule(HeadCode,BodyCode,(BCI,_I),anu(A,N,U)) :-
@@ -688,7 +695,8 @@ assert_rule(HeadCode,BodyCode,(BCI,_I),anu(A,N,U)) :-
 	assert_rule(HeadCode,NewBody,NewBCI,anu(A,N,U)).
 
 assert_rule(HeadCode,BodyCode,BCwithIndex,anu(A,N,U)) :-
-	asserta(rule(HeadCode,(BodyCode,BCwithIndex),anu(A,N,U))).
+	HeadCode = (HL,HR),
+	asserta(rule(HL,HR,(BodyCode,BCwithIndex),anu(A,N,U))).
 
 assert_rules(_,[],_,_) :- !.
 assert_rules(HeadCode,[H|T],[HI|TI],anu(A,N,U)) :-
