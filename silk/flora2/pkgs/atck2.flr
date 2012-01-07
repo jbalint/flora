@@ -29,15 +29,26 @@
 #include "flora_terms.flh"
 #include "flora_porting.flh"
 
+:- table FL_CANDIDATE/3, FL_STRICT_CANDIDATE/3.
+:- prolog FL_REFUTES/4, FL_REFUTES/5.
+:- prolog FL_REBUTS/3, FL_REBUTS/4.
+:- prolog FL_DISQUALIFIED/3.
+:- prolog FL_DEFEATED/3.
 //:- table FL_UNDEFEATED/3.  // DO NOT TABLE - useless
 :- prolog FL_UNDEFEATED/3.
+:- prolog beaten_by_strict_rule/3, beaten_by_strict_rule/5,
+	  change_module/4, change_module_nocheck/4,
+	  check_module_to_AT_association/1.
+:- prolog existsOpposerWithNoCandidates/2, existsOpposerWithNoCandidates/3.
+:- prolog tightExclusion/3, tightBinaryExclusion/3.
 
 :- symbol_context
-    	FL_DEFEATED(?,?)@?,
-    	FL_COMPETES(?,?,?)@?,
-    	FL_REFUTES(?,?,?)@?,
-    	FL_REBUTS(?,?,?)@?,
-    	beaten_by_strict_rule(?,?,?)@?,
+        FL_DEFEATED(?,?)@?,
+        FL_COMPETES(?,?,?)@?,
+        FL_REFUTES(?,?,?,?,?)@?,
+        FL_REFUTES(?,?,?,?)@?,
+        FL_REBUTS(?,?,?)@?,
+        beaten_by_strict_rule(?,?,?)@?,
     	existsOpposerWithNoCandidates(?,?)@?,
     	existsOpposerWithNoCandidates(?,?,?)@?.
 
@@ -53,9 +64,9 @@
           FL_BEATER(?,?,?),
 	  FL_STOMPED(?,?),
 	  FL_DOMINATES(?,?,?),
-          opposes(?,?),
-	  overrides(?,?),
-	  defeated(?).
+          opposes(?,?,?,?),
+	  overrides(?,?,?,?),
+	  defeated(?,?).
 
 :- ignore_depchk %abort(?)@_system.
 
@@ -68,30 +79,30 @@
   Note 1: FL_UNDEFEATED/3 must be called with the third argument bound to
           the user module name in which defeasible theory is invoked.
           This is done by the compiler.
-  Note 2: We should make sure that ?R and ?Mod are ground.
+  Note 2: ?R and ?Mod must be ground. Otherwise FL_UNDEFEATED is delayed.
           If ?Mod is not ground, it is an error (should catch).
           If ?R is non-ground, the result is incorrect: false{defeated} ==
           not Exists defeated, while we need Exists not defeated.
 */
-FL_UNDEFEATED(?I,?H,?Mod) :-
-	not FL_DEFEATED((?I,?H),?Mod).
+FL_UNDEFEATED(?T,?H,?Mod) :-
+	naf FL_DEFEATED(?T,?H,?Mod).
 
 // These are mostly for debugging
 // Note: when ?H,?H1,?H2 are bound by the user, they should be reified
-// For instance: defeated((?I,${neg a}))@_gcl.
-defeated((?T,?H)) :-
+// For instance: defeated(?T,${neg a})@_gcl.
+defeated(?T,?H) :-
 	caller{?Mod},
 	change_module_nocheck(?H,?Mod,?RealMod,?MH),
-	FL_DEFEATED((?T,?MH),?RealMod).
+	FL_DEFEATED(?T,?MH,?RealMod).
 
 // Can also use ?Exclusion[opposers(?Mod)->?Opposer], to inspect k-ary mutexes
-opposes((?T1,?H1),(?T2,?H2)) :-
+opposes(?T1,?H1,?T2,?H2) :-
 	caller{?Mod},
 	change_module_nocheck(?H1,?Mod,?RealMod,?MH1),
 	change_module_nocheck(?H2,?Mod,?RealMod,?MH2),
 	FL_OPPOSES_AUX(?RealMod,(?T1,?MH1),(?T2,?MH2)).
 
-overrides((?T1,?H1),(?T2,?H2)) :-
+overrides(?T1,?H1,?T2,?H2) :-
 	caller{?Mod},
 	change_module_nocheck(?H1,?Mod,?RealMod,?MH1),
 	change_module_nocheck(?H2,?Mod,?RealMod,?MH2),
@@ -109,51 +120,48 @@ check_module_to_AT_association(?) :- true.
 
 // Axioms for Courteous LP with general exclusions
 
-FL_DEFEATED(?R,?Mod) :-
-	?R=(?,?H),
+FL_DEFEATED(?_T,?H,?Mod) :-
 	?Exclusion[opposers(?Mod)->?H],
-	not ?Exclusion[FL_BEATER(?Mod)->?H].
-FL_DEFEATED(?R,?Mod) :-
-	?R=(?,?H),
+	naf ?Exclusion[FL_BEATER(?Mod)->?H].
+FL_DEFEATED(?T,?H,?Mod) :-
 	// this incorporates the classical mutex and user-defined _opposes/2
-	FL_OPPOSES_AUX(?Mod,?R,?Other),
-	?Other=(?_OtherL,?OtherH),
-	not FL_BEATER(?H,?OtherH,?Mod).
-FL_DEFEATED(?R,?Mod) :- FL_DISQUALIFIED(?R,?Mod).
+	FL_OPPOSES_AUX(?Mod,(?T,?H),(?_OtherT,?OtherH)),
+	naf FL_BEATER(?H,?OtherH,?Mod).
+FL_DEFEATED(?T,?H,?Mod) :- FL_DISQUALIFIED(?T,?H,?Mod).
 
 /***************************** FL_BEATER ************************************/
 ?Exclusion[FL_BEATER(?Mod)->?H] :-
 	beater_aux(?H,?,?Exclusion,?Mod).
 // auxiliary FL_BEATER predicate
-beater_aux(?H,?Beaten,?Exclusion,?Mod) :-
-	FL_COMPETES(?H,?Beaten,?Exclusion,?Mod),
-	(FL_DOMINATES(?H,?Beaten,?Mod)
+beater_aux(?H,?BeatenH,?Exclusion,?Mod) :-
+	FL_COMPETES(?H,?BeatenH,?Exclusion,?Mod),
+	(FL_DOMINATES(?H,?BeatenH,?Mod)
          or
 #ifdef ATCK3
-         neg ?Beaten
+         neg ?BeatenH
 #else   // ATCK2
-         FL_STOMPED(?Beaten,?Mod)
+         FL_STOMPED(?BeatenH,?Mod)
 #endif
         ).
 /*
   The FL_BEATER predicate for binary exclusions (_opposes)
-  This corresponds to something like exclusion(?H,?_Beaten)[FL_BEATER(?Mod)->?H]
-  In other words, ?Beaten is part of the exclusion Id and can't be eliminated
+  This is like exclusion(?H,?_BeatenH)[FL_BEATER(?Mod)->?H]
+  In other words, ?BeatenH is part of the exclusion Id and can't be eliminated
 */
-FL_BEATER(?H,?Beaten,?Mod) :-
-	FL_COMPETES(?H,?Beaten,?Mod),
-	(FL_DOMINATES(?H,?Beaten,?Mod)
+FL_BEATER(?H,?BeatenH,?Mod) :-
+	FL_COMPETES(?H,?BeatenH,?Mod),
+	(FL_DOMINATES(?H,?BeatenH,?Mod)
          or
 #ifdef ATCK3
-         neg ?Beaten
+         neg ?BeatenH
 #else   // ATCK2
-         FL_STOMPED(?Beaten,?Mod)
+         FL_STOMPED(?BeatenH,?Mod)
 #endif
         ).
 
 /******************** FL_DISQUALIFIED **************************************/
-FL_DISQUALIFIED(?R,?Mod) :- beaten_by_strict_rule(?R,?Mod).
-FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
+FL_DISQUALIFIED(?T,?H,?Mod) :- beaten_by_strict_rule(?T,?H,?Mod).
+FL_DISQUALIFIED(?T,?H,?Mod) :- FL_CANCEL_AUX(?Mod,(?T,?H)).
 
 /* FL_DISQUALIFIED_AUX is defined in genincludes/flrdefeasible.fli
    roughly by axioms of the form:
@@ -165,7 +173,31 @@ FL_DISQUALIFIED(?R,?Mod) :- FL_CANCEL_AUX(?Mod,?R).
             has higher priority than the cancellation rule itself
 */
 
-FL_DISQUALIFIED(?R,?Mod) :- FL_DISQUALIFIED_AUX(?R,?Mod).
+FL_DISQUALIFIED(?T,?H,?Mod) :- FL_DISQUALIFIED_AUX((?T,?H),?Mod).
+
+
+/********* FL_REBUTS, FL_REFUTES *****************************************/
+// FL_REFUTES/5   Note: 1st arg is a head, second+third - a handle
+FL_REFUTES(?H1,?T2,?H2,?Exclusion,?Mod) :-
+	FL_COMPETES(?H1,?H2,?Exclusion,?Mod),
+	FL_OVERRIDES_AUX(?Mod,(?T1,?H1),(?T2,?H2)),
+	FL_CANDIDATE(?T1,?H1,?Mod).
+// FL_REFUTES/4   Note: 1st arg is a head, not handle
+FL_REFUTES(?H1,?T2,?H2,?Mod) :-
+	FL_COMPETES(?H1,?H2,?Mod),
+	FL_OVERRIDES_AUX(?Mod,(?T1,?H1),(?T2,?H2)),
+	FL_CANDIDATE(?T1,?H1,?Mod).
+
+// FL_REBUTS/4
+FL_REBUTS(?H1,?H2,?Exclusion,?Mod)  :-
+	FL_COMPETES(?H1,?H2,?Exclusion,?Mod),
+	FL_CANDIDATE(?T1,?H1,?Mod),
+	naf FL_REFUTES(?H2,?T1,?H1,?Exclusion,?Mod).
+// FL_REBUTS/3
+FL_REBUTS(?H1,?H2,?Mod)  :-
+	FL_COMPETES(?H1,?H2,?Mod),
+	FL_CANDIDATE(?T1,?H1,?Mod),
+	naf FL_REFUTES(?H2,?T1,?H1,?Mod).
 
 
 /************************ Competition **************************************/
@@ -183,54 +215,26 @@ competitors(?H1,?H2,?Mod) :-
 
 
 /*********************** FL_DOMINATES ****************************************
-** FL_DOMINATES(?Lit,?Dominee) =def=
-**    Forall ?DomineeTag ( candidate(?DomineeTag,?Dominee) ~~>
+** FL_DOMINATES(?Lit,?DomineeH) =def=
+**    Forall ?DomineeTag ( candidate(?DomineeTag,?DomineeH) ~~>
 **                 Exists ?Tag ( candidate(?Tag,?Lit) and
-**                               _overrides((?Tag,?Lit),(?DomineeTag,?Dominee))
+**                               _overrides((?Tag,?Lit),(?DomineeTag,?DomineeH))
 **                             )
 **                       )
-  Question: should it be _overrides((?Tag,?Lit),(?DomineeTag,?Dominee)) or
+  Question: should it be _overrides((?Tag,?Lit),(?DomineeTag,?DomineeH)) or
                          _overrides(?Tag,?DomineeTag)
 ****************************************************************************/
-FL_DOMINATES(?Lit,?Dominee,?Mod) :-
+FL_DOMINATES(?Lit,?DomineeH,?Mod) :-
 	tag{?,?Lit},
-	// tag{?,?Dominee} - must not be used: binary dominee may have no tag 
-	competitors(?Lit,?Dominee,?Mod),
-	not existsRuleWithNoOverrider(?Lit,?Dominee,?Mod).
-existsRuleWithNoOverrider(?Lit,?Dominee,?Mod) :-
-	FL_CANDIDATE((?DomineeTag,?Dominee),?Mod),
-	not exist(?Tag)^((
-	     FL_CANDIDATE((?Tag,?Lit),?Mod),
-	     FL_OVERRIDES_AUX(?Mod,(?Tag,?Lit),(?DomineeTag,?Dominee))
+	// tag{?,?DomineeH} - must not be used: binary dominee may have no tag 
+	competitors(?Lit,?DomineeH,?Mod),
+	naf existsRuleWithNoOverrider(?Lit,?DomineeH,?Mod).
+existsRuleWithNoOverrider(?Lit,?DomineeH,?Mod) :-
+	FL_CANDIDATE(?DomineeTag,?DomineeH,?Mod),
+	naf exist(?Tag)^((
+	     FL_CANDIDATE(?Tag,?Lit,?Mod),
+	     FL_OVERRIDES_AUX(?Mod,(?Tag,?Lit),(?DomineeTag,?DomineeH))
 	   )).
-
-
-/********* FL_REBUTS, FL_REFUTES *****************************************/
-// FL_REFUTES/4   Note: 1st arg is a head, second - a handle
-FL_REFUTES(?H1,?R2,?Exclusion,?Mod) :-
-	?R1 = (?_L1,?H1), ?R2 = (?_L2,?H2),
-	FL_COMPETES(?H1,?H2,?Exclusion,?Mod),
-	FL_OVERRIDES_AUX(?Mod,?R1,?R2),
-	FL_CANDIDATE(?R1,?Mod).
-// FL_REFUTES/3   Note: 1st arg is a head, not handle
-FL_REFUTES(?H1,?R2,?Mod) :-
-	?R1 = (?_L1,?H1), ?R2 = (?_L2,?H2),
-	FL_COMPETES(?H1,?H2,?Mod),
-	FL_OVERRIDES_AUX(?Mod,?R1,?R2),
-	FL_CANDIDATE(?R1,?Mod).
-
-// FL_REBUTS/4
-FL_REBUTS(?H1,?H2,?Exclusion,?Mod)  :-
-	FL_COMPETES(?H1,?H2,?Exclusion,?Mod),
-	?R1 = (?,?H1),
-	FL_CANDIDATE(?R1,?Mod),
-	not FL_REFUTES(?H2,?R1,?Exclusion,?Mod).
-// FL_REBUTS/3
-FL_REBUTS(?H1,?H2,?Mod)  :-
-	FL_COMPETES(?H1,?H2,?Mod),
-	?R1 = (?,?H1),
-	FL_CANDIDATE(?R1,?Mod),
-	not FL_REFUTES(?H2,?R1,?Mod).
 
 
 /************************ Stomping *****************************************
@@ -242,10 +246,10 @@ FL_REBUTS(?H1,?H2,?Mod)  :-
 ****************************************************************************/
 FL_STOMPED(?Lit,?Mod) :-
 	tightExclusion(?Excl,?Lit,?Mod),
-	not existsCompetitorWhoDoesNotDominate(?Lit,?Excl,?Mod).
+	naf existsCompetitorWhoDoesNotDominate(?Lit,?Excl,?Mod).
 existsCompetitorWhoDoesNotDominate(?Lit,?Excl,?Mod) :-
 	FL_COMPETES(?Lit,?Competitor,?Excl,?Mod),
-	not FL_DOMINATES(?Competitor,?Lit,?Mod).
+	naf FL_DOMINATES(?Competitor,?Lit,?Mod).
 // binary version of stomping
 FL_STOMPED(?Lit,?Mod) :-
 	tag{?,?Lit},
@@ -267,23 +271,23 @@ FL_STOMPED(?Lit,?Mod) :-
 ****************************************************************************/
 tightExclusion(?Excl,?Lit,?Mod) :-
 	?Excl:_Exclusion@?Mod,
-	FL_CANDIDATE((?,?Lit),?Mod),
-	not existsCompetitorNonCadidateOrStomped(?Excl,?Lit,?Mod).
+	FL_CANDIDATE(?,?Lit,?Mod),
+	naf existsCompetitorNonCadidateOrStomped(?Excl,?Lit,?Mod).
 existsCompetitorNonCadidateOrStomped(?Excl,?Lit,?Mod) :-
 	// tag{?,?Competitor} - must not use: binary competitor may have no tag
 	FL_COMPETES(?Lit,?Competitor,?Excl,?Mod),
-	not((FL_CANDIDATE((?,?Competitor),?Mod),
-	     // not FL_STOMPED in some exclusion
-	     not FL_STOMPED(?Competitor,?Mod))).
+	naf((FL_CANDIDATE(?,?Competitor,?Mod),
+	     // naf FL_STOMPED in some exclusion
+	     naf FL_STOMPED(?Competitor,?Mod))).
 
 // for binary exclusions (_opposes)
 tightBinaryExclusion(?Competitor,?Lit,?Mod) :-
 	// tag{?,?Competitor} - must not use: binary competitor may have no tag
-	FL_CANDIDATE((?,?Lit),?Mod),
+	FL_CANDIDATE(?,?Lit,?Mod),
 	if FL_COMPETES(?Competitor,?Lit,?Mod)
         then (
-	    FL_CANDIDATE((?,?Competitor),?Mod),
-	    not FL_STOMPED(?Competitor,?Mod)
+	    FL_CANDIDATE(?,?Competitor,?Mod),
+	    naf FL_STOMPED(?Competitor,?Mod)
 	).
 
 
@@ -296,11 +300,11 @@ tightBinaryExclusion(?Competitor,?Lit,?Mod) :-
 // **** NOT USED *****
 ConflictfulExclusion(?Excl,?Mod) :-
 	?Excl:_Exclusion@?Mod,
-	not existsOpposerWithNoCandidates(?Excl,?Mod).
+	naf existsOpposerWithNoCandidates(?Excl,?Mod).
 existsOpposerWithNoCandidates(?Excl,?Opposer,?Mod) :-
 	// tag{?,?Opposer}  - must not use: binary opposer may have no tag
 	?Excl[opposers(?Mod)->?Opposer]@?Mod,
-	not exist(?Tag)^((tag{?Tag,?}, FL_CANDIDATE((?Tag,?Opposer),?Mod))).
+	naf exist(?Tag)^((tag{?Tag,?}, FL_CANDIDATE(?Tag,?Opposer,?Mod))).
 
 
 /************************ Debugging ***************************************/
@@ -311,79 +315,77 @@ existsOpposerWithNoCandidates(?Excl,?Opposer,?Mod) :-
    This method finds out the caller module and replaces the module of Head
    with the caller module.
 */
-FL_STATUS(?_L,?H)[howDefeated -> notBeaterFor(?Exclusion)] :-
+FL_STATUS(?_T,?H)[howDefeated -> notBeaterFor(?Exclusion)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
         ?Exclusion[opposers(?RealMod)->?HM],
-	not ?Exclusion[FL_BEATER(?RealMod)->?HM].
-FL_STATUS(?L,?H)[howDefeated -> notBeaterFor(binaryExclusion(?HM,?Beaten))] :-
+	naf ?Exclusion[FL_BEATER(?RealMod)->?HM].
+FL_STATUS(?T,?H)[howDefeated -> notBeaterFor(binaryExclusion(?HM,?BeatenH))] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
-	?R1 = (?L,?HM),
-	FL_OPPOSES_AUX(?RealMod,?R1,?R2),
-	?R2 = (?_L2,?Beaten),
-	not FL_BEATER(?HM,?Beaten,?RealMod).
-FL_STATUS(?L,?H)[howDefeated -> canceled] :-
+	FL_OPPOSES_AUX(?RealMod,(?T,?HM),(?,?BeatenH)),
+	naf FL_BEATER(?HM,?BeatenH,?RealMod).
+FL_STATUS(?T,?H)[howDefeated -> canceled] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
-	FL_CANCEL_AUX(?RealMod,(?L,?HM)).
-FL_STATUS(?I,?H)[howDefeated->beatenByStrictRule(?SH)] :-
+	FL_CANCEL_AUX(?RealMod,(?T,?HM)).
+FL_STATUS(?T,?H)[howDefeated->beatenByStrictRule(?SH)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
-	beaten_by_strict_rule((?I,?HM),(?,?SH),?RealMod).
+	beaten_by_strict_rule(?T,?HM,?,?SH,?RealMod).
 
-FL_STATUS(?_L,?H)[info -> stomped] :-
+FL_STATUS(?_T,?H)[info -> stomped] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
 	FL_STOMPED(?HM,?RealMod).
 
-FL_STATUS(?_L,?H)[info -> dominates(?Dominee)] :-
+FL_STATUS(?_T,?H)[info -> dominates(?DomineeH)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
-	FL_DOMINATES(?HM,?Dominee,?RealMod).
+	FL_DOMINATES(?HM,?DomineeH,?RealMod).
 
-FL_STATUS(?_L,?H)[info -> refutes(?Refuted)] :-
+FL_STATUS(?_T,?H)[info -> refutes(?RefutedT,?RefutedH)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
-	FL_REFUTES(?HM,?Refuted,?RealMod).
-FL_STATUS(?_L,?H)[info -> refutes(?Refuted)] :-
+	FL_REFUTES(?HM,?RefutedT,?RefutedH,?RealMod).
+FL_STATUS(?_T,?H)[info -> refutes(?RefutedT,?RefutedH)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
-	FL_REFUTES(?HM,?Refuted,?_Exclusion,?RealMod).
+	FL_REFUTES(?HM,?RefutedT,?RefutedH,?_Exclusion,?RealMod).
 
-FL_STATUS(?_L,?H)[info -> rebuts(?Rebutted)] :-
+FL_STATUS(?_T,?H)[info -> rebuts(?Rebutted)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
 	FL_REBUTS(?HM,?Rebutted,?RealMod).
-FL_STATUS(?_L,?H)[info -> rebuts(?Rebutted)] :-
+FL_STATUS(?_T,?H)[info -> rebuts(?Rebutted)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
 	FL_REBUTS(?HM,?Rebutted,?_Exclusion,?RealMod).
 
-FL_STATUS(?_L,?H)[info->beats(?Exclusion,?Beaten)] :-
+FL_STATUS(?_T,?H)[info->beats(?Exclusion,?BeatenH)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
-	beater_aux(?HM,?Beaten,?Exclusion,?RealMod).
-FL_STATUS(?_L,?H)[info->beats(?Beaten)] :-
+	beater_aux(?HM,?BeatenH,?Exclusion,?RealMod).
+FL_STATUS(?_T,?H)[info->beats(?BeatenH)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
-	FL_BEATER(?HM,?Beaten,?RealMod).
+	FL_BEATER(?HM,?BeatenH,?RealMod).
 
-FL_STATUS(?_L,?H)[info->competes(?Exclusion,?Competitor)] :-
+FL_STATUS(?_T,?H)[info->competes(?Exclusion,?Competitor)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
 	FL_COMPETES(?HM,?Competitor,?Exclusion,?RealMod),
-	FL_CANDIDATE((?,?Competitor),?RealMod).
-FL_STATUS(?_L,?H)[info->competes(?Competitor)] :-
+	FL_CANDIDATE(?,?Competitor,?RealMod).
+FL_STATUS(?_T,?H)[info->competes(?Competitor)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
 	FL_COMPETES(?HM,?Competitor,?RealMod),
-	FL_CANDIDATE((?,?Competitor),?RealMod).
+	FL_CANDIDATE(?,?Competitor,?RealMod).
 
-FL_STATUS(?I,?H)[info->candidate] :-
+FL_STATUS(?T,?H)[info->candidate] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
-	FL_CANDIDATE((?I,?HM),?RealMod).
+	FL_CANDIDATE(?T,?HM,?RealMod).
 
 
 // if ?InA has module _@, change it to ?Mod
@@ -407,17 +409,17 @@ change_module_nocheck(?InA,?Mod,?RealNewMod,?OutA) :-
 /***************************** Auxiliary Predicates ***********************/
 // Given a rule Id and possibly Head, find body and test if it is satisfied.
 // This predicate's tables are abolished after each query by an
-// after-query hook because sometimes it is called with RId/Head as a var.
+// after-query hook because sometimes it is called with Tag/Head as a var.
 // It may succeed for one query and will be tabled.
 // If it is, then when called for another query, wrong result may be returned.
-FL_CANDIDATE((?RId,?Head),?Mod) :-
+FL_CANDIDATE(?Tag,?Head,?Mod) :-
 	/* Must reset term-depth limit, since both tag{...} and clause{...} can
 	   retrieve rules with very large bodies. As terms they will be very
 	   deep (>100). */
 	current_prolog_flag(max_table_subgoal_depth,?TermDepth)@_prolog,
 	set_prolog_flag(max_table_subgoal_depth, 0)@_prolog,
-	tag{?RId,?Head},
-	clause{@{?RId} ?Head@?Mod, ?Body},
+	tag{?Tag,?Head},
+	clause{@{?Tag} ?Head@?Mod, ?Body},
 	call(?Body),
 	set_prolog_flag(max_table_subgoal_depth, ?TermDepth)@_prolog.
 
@@ -431,19 +433,19 @@ FL_CANDIDATE((?RId,?Head),?Mod) :-
 
 
 
-beaten_by_strict_rule(?R,?Mod) :- beaten_by_strict_rule(?R,?,?Mod).
-beaten_by_strict_rule(?R,?Rstrict,?Mod) :-
-	FL_OPPOSES_AUX(?Mod,?R,?Rstrict),
-	FL_STRICT_CANDIDATE(?Rstrict,?Mod).
+beaten_by_strict_rule(?T,?H,?Mod) :- beaten_by_strict_rule(?T,?H,?,?,?Mod).
+beaten_by_strict_rule(?T,?H,?StrictT,?StrictH,?Mod) :-
+	FL_OPPOSES_AUX(?Mod,(?T,?H),(?StrictT,?StrictH)),
+	FL_STRICT_CANDIDATE(?StrictT,?StrictH,?Mod).
 
-FL_STRICT_CANDIDATE((?RId,?Head),?Mod) :-
+FL_STRICT_CANDIDATE(?Tag,?Head,?Mod) :-
 	/* Must reset term-depth limit, since both tag{...} and clause{...} can
 	   retrieve rules with very large bodies. As terms they will be very
 	   deep (>100). */
 	current_prolog_flag(max_table_subgoal_depth,?TermDepth)@_prolog,
 	set_prolog_flag(max_table_subgoal_depth, 0)@_prolog,
-	\+tag{?RId,?Head}, // strict
-	clause{@{?RId} ?Head@?Mod, ?Body},
+	\+tag{?Tag,?Head}, // strict
+	clause{@{?Tag} ?Head@?Mod, ?Body},
 	call(?Body),
 	set_prolog_flag(max_table_subgoal_depth, ?TermDepth)@_prolog.
 
@@ -451,16 +453,17 @@ FL_STRICT_CANDIDATE((?RId,?Head),?Mod) :-
 /***** refresh the tables used by the defeasible theory ********************/
 
 %refresh :-
-	refresh{?(?,?,?), ?(?,?)},
 	caller{?Mod},
 	refresh{FL_OPPOSES(?,?)@?Mod, FL_OPPOSES(?,?,?,?)@?Mod},
 	refresh{FL_OVERRIDES(?,?)@?Mod, FL_OVERRIDES(?,?,?,?)@?Mod},
 	refresh{FL_CANCEL(?)@?Mod, FL_CANCEL(?,?)@?Mod}.
 
-// Hook for abolishing FL_CANDIDATE/1 after each query
-FL_DEFEASIBLE_CLEANUP(?,?) :- flora_abolish_table_call(${FL_CANDIDATE(?,?)})@_prolog(flrtables).
+// Hook for abolishing FL_CANDIDATE/3, FL_STRICT_CANDIDATE/3 after each query
+FL_DEFEASIBLE_CLEANUP(?,?) :-
+	flora_abolish_table_call(${FL_CANDIDATE(?,?,?)})@_prolog(flrtables),
+	flora_abolish_table_call(${FL_STRICT_CANDIDATE(?,?,?)})@_prolog(flrtables).
 
-?- flora_add_hook(_@,QUERYHOOK,after,0,FL_DEFEASIBLE_CLEANUP(?,?))@_prolog(flrhooks).
+//?- flora_add_hook(_@,QUERYHOOK,after,0,FL_DEFEASIBLE_CLEANUP(?,?))@_prolog(flrhooks).
 
 // must have this in order for FL_STATUS to have right argument translation
 ?- flora_set_argdef(FL_STATUS,2,[FL_OID,FL_BODYFORMULA],_@)@_prolog(flrarguments).
