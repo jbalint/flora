@@ -15,6 +15,9 @@
 */
 
 
+#if 0
+#define FG_DEBUG
+#endif
 
 #include "xsb_config.h"
 
@@ -36,11 +39,20 @@
 #define FLORA_META_PREFIX         "_$_$_flora'mod"
 #define FLORA_META_PREFIX_LEN     14
 
+#define FLORA_TNOT_PREDICATE      "flora_tnot"
+#define FLORA_TNOT_LEN            10
+
 inline static int is_flora_form(prolog_term term);
+inline static int is_flora_tnot_predicate(prolog_term pterm);
 inline static int ground(CPtr term);
 inline static prolog_term trim(CPtr pterm);
 inline static prolog_term trim_compound(prolog_term pterm, int arity);
-static inline prolog_term trim_list(prolog_term inList);
+inline static prolog_term trim_list(prolog_term inList);
+inline static void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail);
+
+#ifdef FG_DEBUG
+static char *pterm2string(CTXTdeclc prolog_term term);
+#endif
 
 DllExport xsbBool call_conv flrground (CTXTdecl)
 {
@@ -54,6 +66,30 @@ DllExport xsbBool call_conv flrnonground (CTXTdecl)
   prolog_term pterm = extern_reg_term(1);
 
   return !ground((CPtr) pterm);
+}
+
+
+DllExport xsbBool call_conv flrterm_vars (CTXTdecl)
+{
+  prolog_term pterm = extern_reg_term(1);
+  prolog_term outvars = extern_reg_term(2);
+  prolog_term vars = extern_p2p_new();
+  prolog_term tail = vars;
+
+#ifdef FG_DEBUG
+  fprintf(stderr,"term_vars: pterm=%s\n", pterm2string(CTXTc pterm));
+#endif
+
+  term_vars((CPtr) pterm, (CPtr *) &vars, (CPtr*) &tail);
+  
+#ifdef FG_DEBUG
+  fprintf(stderr,"term_vars2: vars=%s\n", pterm2string(CTXTc vars));
+  fprintf(stderr,"term_vars2: tail=%s\n", pterm2string(CTXTc tail));
+#endif
+
+  extern_c2p_nil(tail);
+  return extern_p2p_unify(vars,outvars);
+
 }
 
 int ground(CPtr pterm)
@@ -92,7 +128,7 @@ int ground(CPtr pterm)
     goto groundBegin;
 
   default:
-    xsb_abort("[FLORA]: Internal bug flrground/1): term with unknown tag (%d)",
+    xsb_abort("[FLORA]: BUG in flrground/1: term with unknown tag (%d)",
 	      (int)cell_tag(pterm));
     return FALSE;	/* so that g++ does not complain */
   }
@@ -132,7 +168,90 @@ prolog_term trim(CPtr pterm)
   default:
     xsb_abort("[FLORA]: Internal bug (flrtrim_last/2): term with unknown tag (%d)",
 	      (int)cell_tag(pterm));
-    return FALSE;	/* so that g++ does not complain */
+    return FALSE;
+  }
+}
+
+
+void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail)
+{
+  int j, arity;
+
+ groundBegin:
+  XSB_CptrDeref(pterm);
+  switch(cell_tag(pterm)) {
+  case XSB_FREE:
+  case XSB_REF1:
+  case XSB_ATTV:
+#ifdef FG_DEBUG
+    fprintf(stderr,"v1: Arg1=%s\n",pterm2string(CTXTc (prolog_term)pterm));
+    fprintf(stderr,"v1: Arg2=%s\n",pterm2string(CTXTc (prolog_term)*pvars));
+    fprintf(stderr,"v1: Arg3=%s\n",pterm2string(CTXTc (prolog_term)*pvarstail));
+#endif
+
+    extern_c2p_list((prolog_term) *pvarstail);
+    extern_p2p_unify((prolog_term) pterm,
+		     extern_p2p_car((prolog_term) *pvarstail));
+    pvars = (CPtr *) pvarstail;
+    *pvarstail = (CPtr) extern_p2p_cdr((prolog_term) *pvarstail);
+#ifdef FG_DEBUG
+    fprintf(stderr,"v2: Arg1=%s\n",pterm2string(CTXTc (prolog_term)pterm));
+    fprintf(stderr,"v2: Arg2=%s\n",pterm2string(CTXTc (prolog_term)*pvars));
+    fprintf(stderr,"v2: Arg3=%s\n",pterm2string(CTXTc (prolog_term)*pvarstail));
+#endif
+    return;
+
+  case XSB_STRING:
+  case XSB_INT:
+  case XSB_FLOAT:
+    return;
+
+  case XSB_LIST:
+    term_vars(clref_val(pterm),pvars,pvarstail);
+    pterm = clref_val(pterm)+1;
+    goto groundBegin;
+
+  case XSB_STRUCT:
+    arity = (int) get_arity(get_str_psc(pterm));
+    // if it is FLORA_TNOT_PREDICATE(Call,File,Line), get vars from Call only
+    if (is_flora_tnot_predicate((prolog_term) pterm) && arity == 3) {
+      term_vars(clref_val(pterm)+1,pvars,pvarstail);
+      return;
+    }
+    if (arity == 0)
+      return;
+    for (j=1; j < arity; j++) {
+#ifdef FG_DEBUG
+      fprintf(stderr,"strct: Arg1=%s\n",
+              pterm2string(CTXTc (prolog_term) *(clref_val(pterm)+j)));
+      fprintf(stderr,"strct: Arg2=%s\n",
+              pterm2string(CTXTc (prolog_term) *pvars));
+      fprintf(stderr,"strct: Arg3=%s\n",
+              pterm2string(CTXTc (prolog_term) *pvarstail));
+#endif
+
+      term_vars(clref_val(pterm)+j,pvars,pvarstail);
+
+#ifdef FG_DEBUG
+      fprintf(stderr,"strct2: Arg1=%s\n",
+              pterm2string(CTXTc (prolog_term) *(clref_val(pterm)+j)));
+      fprintf(stderr,"strct2: Arg2=%s\n",
+              pterm2string(CTXTc (prolog_term) *pvars));
+      fprintf(stderr,"strct2: Arg3=%s\n",
+              pterm2string(CTXTc (prolog_term) *pvarstail));
+#endif
+    }
+    // if this is a flora formula, no need to check the last argument
+    if (is_flora_form((prolog_term)pterm))
+      return;
+
+    pterm = clref_val(pterm)+arity;
+    goto groundBegin;
+
+  default:
+    xsb_abort("[FLORA]: BUG in flrterm_vars/1: term with unknown tag (%d)",
+	      (int)cell_tag(pterm));
+    return;
   }
 }
 
@@ -149,14 +268,22 @@ static inline xsbBool is_scalar(prolog_term pterm)
 
 
 /* Check if pterm represents a formula rather than a term */
-static int is_flora_form(prolog_term pterm)
+static inline int is_flora_form(prolog_term pterm)
 {
   char *functor;
   if (is_scalar(pterm) || is_list(pterm)) return FALSE;
 
   functor = extern_p2c_functor(pterm);
-  return
-  (strncmp(functor, FLORA_META_PREFIX, FLORA_META_PREFIX_LEN)==0);
+  return (strncmp(functor, FLORA_META_PREFIX, FLORA_META_PREFIX_LEN)==0);
+}
+
+
+/* Check if pterm represents a formula rather than a term */
+static inline int is_flora_tnot_predicate(prolog_term pterm)
+{
+  char *functor;
+  functor = extern_p2c_functor(pterm);
+  return (strncmp(functor, FLORA_TNOT_PREDICATE, FLORA_TNOT_LEN)==0);
 }
 
 
@@ -202,3 +329,16 @@ static inline prolog_term trim_list(prolog_term inList)
   
   return trimmedList;
 }
+
+#ifdef FG_DEBUG
+static char *pterm2string(CTXTdeclc prolog_term term)
+{ 
+  static VarString *StrArgBuf;
+  prolog_term term2 = extern_p2p_deref(term);
+
+  XSB_StrCreate(&StrArgBuf);
+  XSB_StrSet(StrArgBuf,"");
+  extern_print_pterm(term2, 1, StrArgBuf); 
+  return StrArgBuf->string;
+} 
+#endif
