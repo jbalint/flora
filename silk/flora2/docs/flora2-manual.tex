@@ -6903,19 +6903,42 @@ programming, since it simply means to jump to a random state that is not
 reachable via execution of \emph{A}.  As explained in
 \cite{trans-chapter-98,trans-tcs94}, negation is typically useful only in conjunction
 with $\wedge$, where it acts as a constraint, or with the hypothetical
-operator of possibility $\Diamond$. In most cases, when the programmer
+operator of possibility \texttt{<>}.  In most cases, when the programmer
 wants to apply negation to a method that performs logical (transactional)
-updates, he has $\tt \neg \Diamond method$ in mind, i.e., a test to
-verify that execution of {\tt method} is not possible.
+updates, he has \texttt{$\sim$<>}$method$  in mind, i.e., a test to
+verify that execution of \emph{method}  is not possible.
+Both $\tt<>$ and \texttt{$\sim$<>} (equivalently $\tt\TNOT \texttt{<>}$) are supported in \FLORA.
 
-%% Unimplemented -- Transaction Logic NAF
-At present this operator is not implemented in \FLORA and neither \NAF
-nor \TNOT will produce correct results.  The difference with
-the logical formula $\tt \neg \Diamond method$ is that the latter does not
-change the current state of the underlying database, while \NAF {\tt
-  method} 
-will try to execute {\tt method}. If it succeeds, then \NAF {\tt method} 
-will fail, but the changes made by {\tt method} will not be undone.
+The idiom ${\tt neg}\,\%method$ is considered to be an error, but
+$\NAF\,\%method$ and $\TNOT\,\%method$ (the latter interpreted as
+$\NAF\,\%method$) are permitted. However, they yield meaningful results only
+if $\%method$ has no side effects and is non-recursive.
+
+A transaction of the form $\query \texttt{<>} expression$ is true in the current
+state if the transaction $\query method$ \emph{can} be executed in the current
+state. The state, however, is not changed even if  $\query method$
+does change the state during its execution. In other words, $\texttt{\query <>}
+expression$ only \emph{tests} if execution is possible.
+The transaction \texttt{\query} \texttt{$\sim$ <>}$expression$ tests if execution of
+$expression$ is \emph{im}possible. It is true if $\query expression$ fails
+and false otherwise. However, regardless of whether $\query expression$
+fails or not, the current state underlying the knowledge base does not
+change.
+Note that \texttt{<>} and \texttt{$\sin$<>} can apply to a group of
+subgoals, if they are enclosed in parentheses.  If the expression does not
+change the underlying state of the knowledge base then
+\texttt{\query <>} $expression$ and \query\texttt{$\sim$<>}\,$expression$ reduce to
+$\query expression$ and $\query \TNOT\,expression$, respectively.
+Examples:
+%% 
+\begin{verbatim}
+    ?- <> %p(?X).
+    ?- <> (%p(?X), q(?X,?Y), %r(?Y)).
+    ?- ~<> (%p(?X), q(?X,?Y), %r(?Y)).
+    ?- ~<> (%p(?X), q(?X,?Y), <> %r(?Y)).
+\end{verbatim}
+%% 
+
 
 
 \subsection{Words of (Extreme) Caution}
@@ -8097,6 +8120,137 @@ would bind \texttt{?X}  to \texttt{sens1} or \texttt{sens2}
 (cf. Section~\ref{sec-lowlevel}).
 
   
+\section{Rearranging the Order of Subgoals at Compile Time}.
+\label{sev-rearanging}
+
+Sometimes certain subgoals should be executed only if certain arguments are
+bound or ground and should be delayed otherwise.
+The reason for this might be correctness or efficiency of the execution.
+Since it may be impossible to know at compile time when the requisite
+arguments become bound, one might want to place the relevant subgoals as
+early as possible to the left and then wait until the binding conditions
+become true. Once they become true, the affected subgoals can be
+executed. It the binding condition never becomes true, then we can have two
+possible actions: abort or execute the subgoals anyway.
+
+\index{delay quantifier}
+\index{quantifier!delay}
+\FLORA supports this mode of goal rearranging via \emph{delay quantifiers}.  
+A delay quantifier has one of these forms:
+%% 
+\begin{quote}
+  \texttt{must}(\emph{Condition})\\
+  \texttt{wish}(\emph{Condition})  
+\end{quote}
+%% 
+where \emph{Condition} consists of the terms of the form
+\texttt{ground}(?\emph{Var}) and \texttt{ground}(?\emph{Var})
+connected with ``,'' (or \texttt{and}) and ``;'' (or \texttt{or}).  
+If parentheses are not used in \emph{Condition}, then the comma is
+considered to bind stronger than the semicolon. 
+
+\index{delayable subgoal}
+\index{subgoal!delayable}
+\index{subgoal!controlled by delay quantifier}
+Delay quantifiers are connected via the operator \texttt{\^} to the actual
+goal that is to be executed with possible delay. The goal can be a simple
+atomic formula or a frame or it can be a more complex goal of any kind that
+is allowed to appear in the rule bodies. In the latter case, the goal has
+to be enclosed inside parentheses. A subgoal with an attached delay
+quantifier is called a \emph{delayable subgoal}
+and the regular subgoal part in a delayable subgoal is said to be
+\emph{controlled} by the quantifiers.  So, the general syntax is
+%% 
+\begin{quote}
+   \emph{delay-quantifier}\texttt{\^}\emph{delay-quantifier}\texttt{\^}...\texttt{\^}\emph{Goal}  
+\end{quote}
+%% 
+Delayable subgoals can be
+nested and multiple delay quantifiers can be attached to the same goal.
+For instance, 
+%% 
+\begin{verbatim}
+    must(ground(?X) or nonvar(?Y))^?X[foo->?Y]
+    wish(ground(?X) and ground(?Y) ; nonvar(?Z))^(p(?X), foo[bar(?Y)->?Z])
+    wish(ground(?X) or ground(?Y))^must(nonvar(?Z))^
+               (p(?X), wish(nonvar(?W))^q(?W), foo[bar(?Y)->?Z])
+\end{verbatim}
+%% 
+When a delayable subgoal is to be executed, the attached delay quantifiers
+are checked. If at least one the quantifiers is not satisfied (i.e., if its
+condition is not satisfied) then the goal is \emph{not} executed, but is
+delayed instead until such time that all the quantifiers are satisfied or
+the engine determines that satisfying all the quantifiers is impossible.
+In the above example, the first goal would be delayed is \texttt{?X} is
+non-ground and \texttt{?Y} is an unbound variable. The second delayable
+subgoal has a more complex execution condition and it controls a more
+complex subgoal, the conjunction of \texttt{p(?X)} and
+\texttt{foo[bar(?Y)->?Z]}.  This subgoal will be delayed if either
+\texttt{?X} or \texttt{?Y} is non-ground and \texttt{?Z} is an unbound
+variable. The third delayable subgoal is even more complex. First, it
+involves two delay quantifiers; second, it controls a complex subgoal that
+is a conjunction of three other subgoals, and one of them is itself a
+delayable subgoal.  This complex delayable subgoal will be executed
+immediately only if \texttt{?X} or \texttt{?Y} are ground and \texttt{?Z}
+is not a variable.  Otherwise, it will be delayed. But when the controlled
+subgoal is eventually ready for execution, its middle part,
+\texttt{wish(nonvar(?W))\^{}q(?W)}, might still be delayed if \texttt{?W}
+is an unbound variable.
+
+When a delayable subgoal is delayed, its attached quantifiers are
+periodically checked for satisfaction. If the first (leftmost) quantifier is satisfied,
+the controlled subgoal is executed. If this subgoal still has a controlling
+delay quantifier, then this quantifier's condition will be checked, etc.
+At some point during the execution, the inference engine might stumble upon
+a delayed subgoal and \emph{determine} (provably!) 
+that its first delay quantifier is \emph{not satisfiable} any more, i.e.,
+subsequent execution will not be able to bind the variables in that quantifier
+in the required way.
+In this case, the cause of action depends on the type of the quantifier.
+If the unsatisfied quantifier is a  \texttt{wish}-quantifier, then the  
+controlled subgoal is executed anyway: the unsatisfied delay condition
+was only a ``wish.'' If, however, the unsatisfied quantifier is a
+\texttt{must}-quantifier, the execution of the subgoal is aborted and 
+the error message will indicate which 
+\texttt{must}-condition was at fault.
+To ullustrate this on an example, consider this delayable subgoal issued as
+a query against a knowledge base that contains the listed facts:
+%% 
+\begin{verbatim}
+    p(1).
+    foo[bar(2)->3].
+    ?- must(ground(?X) or ground(?Y))^wish(nonvar(?Z))^
+               (p(?X), must(nonvar(?W))^q(?W), foo[bar(?Y)->?Z]),
+       ?X=1.
+\end{verbatim}
+%% 
+When the subgoal is first encountered, it is delayed because \texttt{?X}
+and \texttt{?Y} are not ground. Then the engine executes the subgoal
+\texttt{?X=1} and \texttt{?X} gets bound to 1. The
+delay condition becomes satisfied, so the engine considers the subgoal
+%% 
+\begin{verbatim}
+   wish(nonvar(?Z))^(p(?X), must(nonvar(?W))^q(?W), foo[bar(?Y)->?Z])
+\end{verbatim}
+%% 
+Clearly, \texttt{?Z} will not be bound if the engine continues delaying the
+controlled subgoal, so it must decide on the final disposition for this
+delayable subgoal. Since the delayable subgoal
+is controlled by a \texttt{wish}-quantifier,
+the subgoal is executed despite the fact that the delay condition does not
+hold. During the execution, \texttt{p(1)} is
+satisfied, \texttt{must(nonvar(?W))\^{}q(?W)} gets delayed, and then
+\texttt{foo[bar(?Y)->?Z]} is satisfied. 
+Now the disposition of the remaining delayed subgoal has to be decided.
+Since \texttt{?W} cannot be bound any more and the controlling quantifier
+is of the \texttt{must}-variety, the engine will throw an error:
+%% 
+\begin{verbatim}
+++Abort[FLORA]> in file foo.flr, line 3: unsatisfied must-condition.
+	Goal: q(?A)
+	Condition: nonvar(?A)
+\end{verbatim}
+%% 
 
 
 \section{Rule Labels and Meta-information.}
