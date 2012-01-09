@@ -49,6 +49,9 @@ inline static prolog_term trim(CPtr pterm);
 inline static prolog_term trim_compound(prolog_term pterm, int arity);
 inline static prolog_term trim_list(prolog_term inList);
 inline static void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail);
+inline static void term_vars_split(CPtr pterm,
+				   CPtr* pvars, CPtr* pvarstail,
+				   CPtr* pattrvars, CPtr* pattrvarstail);
 
 #ifdef FG_DEBUG
 static char *pterm2string(CTXTdeclc prolog_term term);
@@ -89,8 +92,37 @@ DllExport xsbBool call_conv flrterm_vars (CTXTdecl)
 
   extern_c2p_nil(tail);
   return extern_p2p_unify(vars,outvars);
-
 }
+
+
+DllExport xsbBool call_conv flrterm_vars_split (CTXTdecl)
+{
+  prolog_term pterm = extern_reg_term(1);
+  prolog_term outvars = extern_reg_term(2);
+  prolog_term outattrvars = extern_reg_term(3);
+  prolog_term vars = extern_p2p_new();
+  prolog_term tail = vars;
+  prolog_term attrvars = extern_p2p_new();
+  prolog_term attrtail = attrvars;
+
+#ifdef FG_DEBUG
+  fprintf(stderr,"term_vars_split: pterm=%s\n", pterm2string(CTXTc pterm));
+#endif
+
+  term_vars_split((CPtr)pterm,
+		  (CPtr *)&vars, (CPtr*)&tail,
+		  (CPtr *)&attrvars, (CPtr*)&attrtail);
+  
+#ifdef FG_DEBUG
+  fprintf(stderr,"term_vars_split2: vars=%s\n", pterm2string(CTXTc vars));
+  fprintf(stderr,"term_vars_split2: tail=%s\n", pterm2string(CTXTc tail));
+#endif
+
+  extern_c2p_nil(tail);
+  extern_c2p_nil(attrtail);
+  return (extern_p2p_unify(vars,outvars) && extern_p2p_unify(attrvars,outattrvars));
+}
+
 
 int ground(CPtr pterm)
 {
@@ -250,6 +282,71 @@ void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail)
 
   default:
     xsb_abort("[FLORA]: BUG in flrterm_vars/1: term with unknown tag (%d)",
+	      (int)cell_tag(pterm));
+    return;
+  }
+}
+
+
+
+// this one splits attributed from regular vars
+void term_vars_split(CPtr pterm,
+		     CPtr* pvars, CPtr* pvarstail,
+		     CPtr* pattrvars, CPtr* pattrvarstail)
+{
+  int j, arity;
+
+ groundBegin:
+  XSB_CptrDeref(pterm);
+  switch(cell_tag(pterm)) {
+  case XSB_FREE:
+  case XSB_REF1:
+    extern_c2p_list((prolog_term) *pvarstail);
+    extern_p2p_unify((prolog_term) pterm,
+		     extern_p2p_car((prolog_term) *pvarstail));
+    pvars = (CPtr *) pvarstail;
+    *pvarstail = (CPtr) extern_p2p_cdr((prolog_term) *pvarstail);
+    return;
+
+  case XSB_ATTV:
+    extern_c2p_list((prolog_term) *pattrvarstail);
+    extern_p2p_unify((prolog_term) pterm,
+		     extern_p2p_car((prolog_term) *pattrvarstail));
+    pattrvars = (CPtr *) pattrvarstail;
+    *pattrvarstail = (CPtr) extern_p2p_cdr((prolog_term) *pattrvarstail);
+    return;
+
+  case XSB_STRING:
+  case XSB_INT:
+  case XSB_FLOAT:
+    return;
+
+  case XSB_LIST:
+    term_vars_split(clref_val(pterm),pvars,pvarstail,pattrvars,pattrvarstail);
+    pterm = clref_val(pterm)+1;
+    goto groundBegin;
+
+  case XSB_STRUCT:
+    arity = (int) get_arity(get_str_psc(pterm));
+    // if it is FLORA_TNOT_PREDICATE(Call,File,Line), get vars from Call only
+    if (is_flora_tnot_predicate((prolog_term) pterm) && arity == 3) {
+      term_vars_split(clref_val(pterm)+1,pvars,pvarstail,pattrvars,pattrvarstail);
+      return;
+    }
+    if (arity == 0)
+      return;
+    for (j=1; j < arity; j++) {
+      term_vars_split(clref_val(pterm)+j,pvars,pvarstail,pattrvars,pattrvarstail);
+    }
+    // if this is a flora formula, no need to check the last argument
+    if (is_flora_form((prolog_term)pterm))
+      return;
+
+    pterm = clref_val(pterm)+arity;
+    goto groundBegin;
+
+  default:
+    xsb_abort("[FLORA]: BUG in flrterm_vars_split/1: term with unknown tag (%d)",
 	      (int)cell_tag(pterm));
     return;
   }

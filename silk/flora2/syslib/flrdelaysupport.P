@@ -26,7 +26,11 @@
 %%:- import term_variables/2 from constraintLib.
 :- import get_trigger_goal/2 from constraintLib.
 
-:- import flrterm_vars/2 from flora_ground.
+:- import
+	flrterm_vars/2,
+	%% this one separates regular from attributed vars
+	flrterm_vars_split/3
+   from flora_ground.
 :- import
 	flora_abort/1,
 	flora_abort/2
@@ -282,6 +286,7 @@ flora_atomic_builtin(File,Line,X) :-
 	).
 
 flora_delay_quantifier(_File,_Line,[FL_WISH,_Condition,Goal]) :-
+	!,
 	Goal.
 
 flora_delay_quantifier(_File,_Line,[FL_MUST,Condition,Goal]) :-
@@ -289,6 +294,7 @@ flora_delay_quantifier(_File,_Line,[FL_MUST,Condition,Goal]) :-
 	!,
 	Goal.
 
+%% The next two are error cases
 flora_delay_quantifier(File,Line,[FL_MUST,Condition,Goal]) :-
 	test_mode(debug),
 	!,
@@ -309,12 +315,38 @@ flora_delay_quantifier(File,Line,[FL_MUST,Condition,Goal]) :-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 FLORA_DELAY_CHECKER(InstantiatedBodyVars,HeadVars) :-
-	%%term_variables(InstantiatedBodyVars,RemainingBodyVars),
-	flrterm_vars(InstantiatedBodyVars,RemainingBodyVars),
-	get_all_triggers(RemainingBodyVars,HeadVars,Triggers),
-	!,
-	call_trigger_list(Triggers).
+	extract_triggers_and_execute_all(InstantiatedBodyVars,HeadVars),
+	%% this cut is needed to release stack.
+	%% otherwise, lots of warnings about stack overflow
+	!.
 
+%% scan all vars repeatedly, eliminating attributed vars,
+%% until no more attributed vars left. Execute attached triggers on the way.
+extract_triggers_and_execute_all(AllVars,HeadVars) :-
+	flrterm_vars_split(AllVars, RegVars, AttrVars),
+	(AttrVars == [] -> true
+	; extract_triggers_and_execute(AttrVars,HeadVars),
+	    extract_triggers_and_execute_all(RegVars,HeadVars)
+	).
+
+extract_triggers_and_execute([],_HeadVars) :- !.
+extract_triggers_and_execute([Var|RestBodyVars],HeadVars) :-
+	get_var_triggers(Var,HeadVars,Triggers),
+	!,
+	call_trigger_list(Triggers),
+	extract_triggers_and_execute(RestBodyVars,HeadVars).
+
+get_var_triggers(Var,HeadVars,Triggers) :-
+	(aliased_to_head(Var,HeadVars) -> Triggers = []
+	; get_attr(Var,when,Triggers)
+	->  %% remove attrs to avoid delayed lit calling itself repeatedly
+	    %% during its own work (eg, if it instantiates a when-variable)
+	    del_attr(Var,when)
+	; Triggers = []
+	),
+	!.
+
+/*
 get_all_triggers(BodyVars,HeadVars,Triggers) :-
 	get_all_triggers(BodyVars,HeadVars,Triggers,[]).
 get_all_triggers([],_HeadVars,Triggers,Triggers) :- !.
@@ -329,17 +361,21 @@ get_all_triggers([Var|Rest],HeadVars,NewTrigs,OldTrigs) :-
 	),
 	!,
 	get_all_triggers(Rest,HeadVars,RestNewTrigs,OldTrigs).
+*/
 
 aliased_to_head(V,[H|_HV]):- V == H, !.
 aliased_to_head(V,[_|H]):- aliased_to_head(V,H).
 
 call_trigger_list([]) :- !.
+/*
+%% Now the arg is a proper list, not a list of lists
 call_trigger_list([Trigger|Rest]) :-
 	%% trigger list can actually be a list of lists
 	is_list(Trigger),
 	!,
 	call_trigger_list(Trigger),
 	call_trigger_list(Rest).
+*/
 call_trigger_list([Trigger|Rest]) :-
 	%% a trigger has the form trigger_NAME(VarList,Goal)
 	(get_trigger_goal(Trigger,Goal) ->

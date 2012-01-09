@@ -61,6 +61,8 @@ ALLOBJS = flranswer$(OBJEXT) \
 	  flrcommon_definitions$(OBJEXT) \
 	  flrrulesigops$(OBJEXT) \
 	  flrdelaysupport$(OBJEXT) \
+	  flrhypothetical$(OBJEXT) \
+	  flrcheckcard$(OBJEXT) \
 	  flrunify_handlers$(OBJEXT) \
 	  flrprefixdef$(OBJEXT)
 
