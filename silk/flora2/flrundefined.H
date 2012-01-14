@@ -21,6 +21,8 @@
 #include "flora_porting.flh"
 
 :- dynamic term_seen(_).
+%% trie indexing this speeds up things by a LOT!
+:- index(term_seen/1,trie).
 
 :- import
 	%%reverse/2,

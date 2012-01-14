@@ -59,8 +59,15 @@
 
 :- export
 	FLORA_DELAY_CHECKER/2,
-	FLLIBDELAYEDLITERAL/4.
+	FLLIBDELAYEDLITERAL/4,
+	FLLIBRECORDSENSORS/2.
+:- export
+	flora_register_sensor/2,
+	flora_delayed_literal/3,
+	flora_delayed_builtin_literal/2,
+	flora_delayed_sensor_literal/3.
 
+/*
 :- export
 	flora_default_negation_wrapper/3,
 	flora_defeat_condition_wrapper/6,
@@ -81,17 +88,10 @@
 	flora_atom_builtin/3,
 	flora_compound_builtin/3,
 	flora_atomic_builtin/3,
-	flora_delay_quantifier/3,
+	flora_delay_quantifier/3.
+*/
 
-	flora_register_sensor/2.
 
-:- export
-	flora_delayed_literal/3,
-	flora_delayed_builtin_literal/2,
-	flora_delayed_sensor_literal/3.
-
-:- export
-	FLLIBRECORDSENSORS/2.
 
 %% MK: Support for testing. Need to replace with something more general like
 %% catch. But catch does not work in  a usual way, as delayed literals
@@ -260,29 +260,43 @@ flora_arith_IS_builtin(File,Line,X,Y) :-
 %%%%%%%%%%%%%%%%%% Type Builtins %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% =:=
 flora_number_builtin(File,Line,X) :-
-	(var(X) -> builtin_instantiation_error(File,Line,number,'unbound',X)
+	(var(X) -> builtin_instantiation_error(File,Line,'_isnumber','unbound',X)
 	; number(X)
 	).
 flora_integer_builtin(File,Line,X) :-
-	(var(X) -> builtin_instantiation_error(File,Line,integer,'unbound',X)
+	(var(X) -> builtin_instantiation_error(File,Line,'_isinteger','unbound',X)
 	; integer(X)
 	).
 flora_float_builtin(File,Line,X) :-
-	(var(X) -> builtin_instantiation_error(File,Line,float,'unbound',X)
+	(var(X) -> builtin_instantiation_error(File,Line,'_isfloat','unbound',X)
 	; float(X)
 	).
+%% currently like number/1
+flora_decimal_builtin(File,Line,X) :-
+	(var(X) -> builtin_instantiation_error(File,Line,'_isdecimal','unbound',X)
+	; number(X)
+	).
 flora_atom_builtin(File,Line,X) :-
-	(var(X) -> builtin_instantiation_error(File,Line,atom,'unbound',X)
+	(var(X) -> builtin_instantiation_error(File,Line,'_isatom','unbound',X)
 	; atom(X)
 	).
 flora_compound_builtin(File,Line,X) :-
-	(var(X) -> builtin_instantiation_error(File,Line,compound,'unbound',X)
+	(var(X) -> builtin_instantiation_error(File,Line,'_iscompound','unbound',X)
 	; X = FL_DATATYPE(_,_) -> fail
 	; compound(X)
 	).
 flora_atomic_builtin(File,Line,X) :-
-	(var(X) -> builtin_instantiation_error(File,Line,atomic,'unbound',X)
+	(var(X) -> builtin_instantiation_error(File,Line,'_isatomic','unbound',X)
 	; atomic(X)
+	).
+
+flora_islist_builtin(File,Line,X) :-
+	(var(X) -> builtin_instantiation_error(File,Line,'_islist','unbound',X)
+	; is_list(X)
+	).
+flora_ischarlist_builtin(File,Line,X) :-
+	(var(X) -> builtin_instantiation_error(File,Line,'_ischarlist','unbound',X)
+	; is_charlist(X)
 	).
 
 flora_delay_quantifier(_File,_Line,[FL_WISH,_Condition,Goal]) :-
@@ -525,6 +539,35 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
 			flora_arith_IS_builtin(F,L,X,Y),
 			(ground(Y))),
 
+   flora_register_delay(builtin,'_isnumber',F,L,[X],
+			flora_number_builtin(F,L,X),
+			(nonvar(X))),
+   flora_register_delay(builtin,'_isinteger',F,L,[X],
+			flora_integer_builtin(F,L,X),
+			(nonvar(X))),
+   flora_register_delay(builtin,'_isdecimal',F,L,[X],
+			flora_decimal_builtin(F,L,X),
+			(nonvar(X))),
+   flora_register_delay(builtin,'_isfloat',F,L,[X],
+			flora_float_builtin(F,L,X),
+			(nonvar(X))),
+   flora_register_delay(builtin,'_isatom',F,L,[X],
+			flora_atom_builtin(F,L,X),
+			(nonvar(X))),
+   flora_register_delay(builtin,'_iscompound',F,L,[X],
+			flora_compound_builtin(F,L,X),
+			(nonvar(X))),
+   flora_register_delay(builtin,'_isatomic',F,L,[X],
+			flora_atomic_builtin(F,L,X),
+			(nonvar(X))),
+   flora_register_delay(builtin,'_islist',F,L,[X],
+			flora_islist_builtin(F,L,X),
+			(nonvar(X))),
+   flora_register_delay(builtin,'_ischarlist',F,L,[X],
+			flora_ischarlist_builtin(F,L,X),
+			(nonvar(X))),
+
+   %% These should be deleted when we switch to _atom and such names
    flora_register_delay(builtin,number,F,L,[X],
 			flora_number_builtin(F,L,X),
 			(nonvar(X))),
@@ -543,6 +586,8 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
    flora_register_delay(builtin,atomic,F,L,[X],
 			flora_atomic_builtin(F,L,X),
 			(nonvar(X))),
+   %% The above should be deleted when we switch to _atom and such names
+
 
    flora_register_delay(builtin,FL_DELAYQUANT,F,L,[Quant,Condition,Goal],
 			flora_delay_quantifier(F,L,[Quant,Condition,Goal]),
@@ -574,22 +619,41 @@ make_delay_condition(_,Cond,Cond).
 
 %% We do not add delayed builtin for NAF and NOT:
 %% they are treated specially in the compiler
-delayed_builtin(FL_C_UNEQUAL,2) :- !.
-%%delayed_builtin(FL_EQ,2)        :- !.
-delayed_builtin(FL_C_NOTSAME,2) :- !.
-delayed_builtin(FL_GT,2)        :- !.
-delayed_builtin(FL_EQGT,2)      :- !.
-delayed_builtin(FL_LT,2)        :- !.
-delayed_builtin(FL_EQLT,2)      :- !.
-delayed_builtin(FL_MATHEQ,2)    :- !.
-delayed_builtin(FL_MATHNOTEQ,2) :- !.
-delayed_builtin(FL_IS_INTERNAL,2)        :- !.
+delayed_builtin(FL_C_UNEQUAL,2)    :- !.
+%%delayed_builtin(FL_EQ,2)         :- !.
+delayed_builtin(FL_C_NOTSAME,2)    :- !.
+delayed_builtin(FL_GT,2)           :- !.
+delayed_builtin(FL_EQGT,2)         :- !.
+delayed_builtin(FL_LT,2)           :- !.
+delayed_builtin(FL_EQLT,2)         :- !.
+delayed_builtin(FL_MATHEQ,2)       :- !.
+delayed_builtin(FL_MATHNOTEQ,2)    :- !.
+delayed_builtin(FL_IS_INTERNAL,2)  :- !.
+
+%% From here to the next %%%%% to be commented out once
+%% we switch to the new _name schema
+%% we used to delay these, but it is pointless. better use them as guards
+delayed_builtin('_isnumber',1)     :- !.
+delayed_builtin('_isinteger',1)    :- !.
+delayed_builtin('_isdecimal',1)    :- !.
+delayed_builtin('_isfloat',1)      :- !.
+delayed_builtin('_isatom',1)       :- !.
+delayed_builtin('_iscompound',1)   :- !.
+delayed_builtin('_isatomic',1)     :- !.
+delayed_builtin('_islist',1)       :- !.
+delayed_builtin('_ischarlist',1)   :- !.
+
+%% these should be deleted once we switch to the _name schema
 delayed_builtin(number,1)       :- !.
 delayed_builtin(integer,1)      :- !.
 delayed_builtin(float,1)        :- !.
 delayed_builtin(atom,1)         :- !.
 delayed_builtin(compound,1)     :- !.
 delayed_builtin(atomic,1)       :- !.
+%% the above be deleted once we switch to the _name schema
+%%%%%
+/*
+*/
 
 flora_delayed_literal(X,Y,_) :- delayed_builtin(X,Y), !.
 flora_delayed_literal(X,Y,FlMod) :- delayed_sensor(X,Y,FlMod).

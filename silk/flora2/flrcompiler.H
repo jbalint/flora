@@ -42,7 +42,8 @@
    from basics.
 
 :- import
-        concat_atom/2
+        %%concat_atom/2,
+	substring/4
     from string.
 
 :- import sort/2, keysort/2, findall/3 from setof.

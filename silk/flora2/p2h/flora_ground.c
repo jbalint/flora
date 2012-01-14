@@ -42,6 +42,10 @@
 #define FLORA_TNOT_PREDICATE      "flora_tnot"
 #define FLORA_TNOT_LEN            10
 
+#define FL_TRUTHVALUE_TABLED_CALL "truthvalue_tabled_call"
+#define FL_TABLED_UNNUMBER_CALL   "tabled_unnumber_call"
+#define FL_UNDEFEATED             "undefeated"
+
 inline static int is_flora_form(prolog_term term);
 inline static int is_flora_tnot_predicate(prolog_term pterm);
 inline static int ground(CPtr term);
@@ -368,10 +372,26 @@ static inline xsbBool is_scalar(prolog_term pterm)
 static inline int is_flora_form(prolog_term pterm)
 {
   char *functor;
+  int has_flora_prefix;
+
   if (is_scalar(pterm) || is_list(pterm)) return FALSE;
 
   functor = extern_p2c_functor(pterm);
-  return (strncmp(functor, FLORA_META_PREFIX, FLORA_META_PREFIX_LEN)==0);
+  has_flora_prefix =
+    (strncmp(functor,FLORA_META_PREFIX,FLORA_META_PREFIX_LEN)==0);
+
+  /*
+  if (has_flora_prefix &&
+      (strstr(functor,FL_TRUTHVALUE_TABLED_CALL)
+       || strstr(functor,FL_TABLED_UNNUMBER_CALL)
+       || strstr(functor,FL_UNDEFEATED)
+       ))
+    return FALSE;
+  */
+  if (has_flora_prefix && strstr(functor,FL_UNDEFEATED))
+    return FALSE;
+
+  return (has_flora_prefix);
 }
 
 

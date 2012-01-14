@@ -50,6 +50,7 @@
 :- dynamic COMPILATION_CONTEXT(_).
 :- dynamic DYNRULE_VARLIST(_,_).
 :- dynamic user_defined_function_var_substitute(_,_,_,_,_).
+:- index(user_defined_function_var_substitute/5,2+1).
 :- dynamic symbol(_,_,_,_,_,_,_).
 :- dynamic nowarn_symbol(_,_,_,_,_).
 
@@ -1706,8 +1707,7 @@ collect_prvars(Term,NewVars,Vars) :-
 	is_prdatatype(Term,_Sort,Lit,_),
 	!,
 	(is_prvariable(Lit,_Name,_Indx)
-	->
-	    NewVars = [Lit|Vars]
+	-> NewVars = [Lit|Vars]
 	; is_list(Lit)
 	-> collect_prvars(Lit,AddlVars),
 	    append(AddlVars,Vars,NewVars)
@@ -1837,8 +1837,9 @@ collect_prdatatypevars(CompilerTermOrList,Vars,TVars) :-
 
 
 strip_underscore(Atom,NewAtom) :-
-	atom_codes(Atom,[_|NewAtomChars]),
-	atom_codes(NewAtom,NewAtomChars).
+	%%atom_codes(Atom,[_|NewAtomChars]),
+	%%atom_codes(NewAtom,NewAtomChars).
+	substring(Atom,1,_,NewAtom).
 
 add_underscore(Atom,NewAtom) :-
 	%%atom_codes(Atom,AtomChars),
@@ -1856,6 +1857,7 @@ add_underscore(Atom,NewAtom) :-
   Anonymous variables are considered as distinct names.
 ****************************************************************************/
 subtract_vars([],_,[]) :- !.
+subtract_vars(L,[],L) :- !.
 
 subtract_vars([H|T1],L,[H|T2]) :-
 	( is_flvariable(H,FL_UNDERSCORE,_I)
@@ -1868,17 +1870,24 @@ subtract_vars([H|T1],L,[H|T2]) :-
 
 subtract_vars([H|T],L,V) :-
 	( is_flvariable(H,N,_I)
+	-> (is_flvariable(X,N,_J) ; is_prvariable(X,N,_J))
 	; is_fltransactionalvariable(H,N,_I)
+	-> (is_fltransactionalvariable(X,N,_J) ; is_prtransactionalvariable(X,N,_J))
 	; is_prvariable(H,N,_I)
+	-> (is_flvariable(X,N,_J) ; is_prvariable(X,N,_J))
 	; is_prtransactionalvariable(H,N,_I)
+	-> (is_fltransactionalvariable(X,N,_J) ; is_prtransactionalvariable(X,N,_J))
+	; X = N
 	),
 	%% X is the same as H, but with variable index
+	/*
 	( is_flvariable(X,N,_J)
 	; is_fltransactionalvariable(X,N,_J)
 	; is_prvariable(X,N,_J)
 	; is_prtransactionalvariable(X,N,_J)
 	; X = N
 	),
+	*/
 	member(X,L),
 	!,
 	subtract_vars(T,L,V).
@@ -1898,6 +1907,7 @@ vars_contains([H1|T1],[H2|T2]) :-
 	; is_prvariable(H1,N,_), is_prvariable(H2,N,_)
 	; is_prtransactionalvariable(H1,N,_), is_prtransactionalvariable(H2,N,_)
 	),
+	!,
 	N \= FL_UNDERSCORE,
 	vars_contains(T1,T2).
 
@@ -1977,7 +1987,8 @@ namevars([],[]) :- !.
 
 namevars([Index-Name|L],[NV|NVs]) :-
 	varobj_struct(Name,Index,VCode),
-	concat_atom(['?',Name],NewName), % prepend '?' to var names in query answers
+	%% prepend '?' to var names in query answers
+	flora_concat_atoms(['?',Name],NewName),
 	atomobj_struct(NewName,Index,NCode),
 	atomobj_struct(FL_UNIVEQ,FCode),
 	prologterm_struct(FCode,2,[NCode,VCode],NV),
@@ -2003,7 +2014,9 @@ singleton_flvars([V|L],[V|Vs]) :-
 singleton_flvars([V],[V]) :- !.
 
 singleton_flvars([V1,V2|L],Vars) :-
-	( (is_flvariable(V1,Name,_I);is_fltransactionalvariable(V1,Name,_I)), (is_flvariable(V2,Name,_J);is_fltransactionalvariable(V2,Name,_I)) ->
+	( (is_flvariable(V1,Name,_I);is_fltransactionalvariable(V1,Name,_I)),
+	  (is_flvariable(V2,Name,_J);is_fltransactionalvariable(V2,Name,_I))
+	->
 	    remove_dupflvars(L,Name,Vs),
 	    singleton_flvars(Vs,Vars)
         ;
@@ -2471,7 +2484,7 @@ compile_directive([D|L],DirIdx,RuleList-RuleTail,Facts-Facts,Status) :-
 	( no_errors_found(S) -> 
 	    append(DCodeList,T,RuleList),
 	    compile_directive(L,DirIdx,T-RuleTail,Facts-Facts,S2),
-	    append(S2,S,Status)
+	    append(S,S2,Status)
 	;
 	  Status=S
         ).
@@ -2808,7 +2821,7 @@ compile_fact(Head,RuleList-RuleTail,FactList-FactTail,Status) :-
 		compile_factlist(HeadCode,RuleList-RuleTail,FactList-FactTail),
 		%%RuleList = RuleTail, %% empty rule diff list
 		(has_context(compiling_udf) ->
-		    %% for UDFs checking variables is done separately
+		    %% for UDFs checking variables are done separately
 		    S2 = []
 		;
 		    check_head_vars_for_safety(Head,[],S2)
@@ -4513,6 +4526,7 @@ compile_pathexplist(ParserTermList,ObjectList,OidCode,Code,BodyHeadList,Status) 
 compile_pathexplist([T|L],Nesting,[TObj|LObj],OidCode,Code,BodyHeadList,Status) :-
 	(var(BodyHeadList) -> true; BodyHeadList1=[],BodyHeadList2=[]),
 	compile_pathexp(T,Nesting,TObj,OidCodeHead,TCode,BodyHeadList1,S),
+	!,
 	clear_context(compiling_term_name),
 	( no_errors_found(S) ->
 	    compile_pathexplist(L,Nesting,LObj,OidCodeTail,LCode,BodyHeadList2,S2),
@@ -4611,7 +4625,7 @@ compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status):-
 	clearUDFVarSubstitute(Nesting),
 	( no_errors_found(S) -> 
 	    append(PBodyHeadList,[PCode],BodyHeadList),
-	    append(SymStatus,S,Status)
+	    append(S,SymStatus,Status)
 	;
 	    approx_flindex(ParserTerm,Index),
 	    compiling_error(Index,ERROR_UDF_COMPILE,Err),
@@ -8015,6 +8029,7 @@ compile_flinsert_list([H|T],Code,Status) :-
 compile_flinsert_list([H|T],Code,Status) :-
 	%% regular fact. may have path expression inside
 	compile_head_literal(H,HeadCode1,H2BCodeHead1,H2BCodeTail1,S),
+	!,
 	( no_errors_found(S) -> 
 	    ( H2BCodeHead1==NULL, H2BCodeTail1==NULL
 	    ->
@@ -8220,6 +8235,7 @@ compile_flupdaterule(Op,List,Code,Status) :-
 compile_fldynrule_list(_Op,[],[],[]) :- !.
 compile_fldynrule_list(Op,[H|L],[HCode|LCode],Status) :-
 	compile_fldynrule(Op,H,HCode,S),
+	!,
 	( no_errors_found(S) -> 
 		compile_fldynrule_list(Op,L,LCode,S1),
 		merge_status([S,S1],Status)
