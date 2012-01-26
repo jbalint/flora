@@ -120,7 +120,7 @@ FLNEGPREFIX(WRAP_IMVDSIG)(C,M,R,CallerInfo) :-
 	FLNEGTRAILERPREFIX(WRAP_IMVDSIG)(C,M,R,CallerInfo).
 
 FLNEGPREFIX(WRAP_IMVDSIG)(S,M,R,CallerInfo) :-
-	inheritance_sub(C,S,CallerInfo),
+	FLINHERITANCEPREFIX(WRAP_SUB)(C,S,CallerInfo),
 	FLNEGPREFIX(WRAP_IMVDSIG)(C,M,R,CallerInfo).
 
 
@@ -129,7 +129,7 @@ FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,CallerInfo) :-
 	FLNEGTRAILERPREFIX(WRAP_IMVDSIGDEF)(C,M,CallerInfo).
 
 FLNEGPREFIX(WRAP_IMVDSIGDEF)(S,M,CallerInfo) :-
-	inheritance_sub(C,S,CallerInfo),
+	FLINHERITANCEPREFIX(WRAP_SUB)(C,S,CallerInfo),
 	FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,CallerInfo).
 
 /* note: for neg WRAP_IMVDSIGDEF the implication goes in the opposite direction
@@ -151,7 +151,7 @@ FLNEGPREFIX(WRAP_IBOOLSIG)(C,M,CallerInfo) :-
 	FLNEGTRAILERPREFIX(WRAP_IBOOLSIG)(C,M,CallerInfo).
 
 FLNEGPREFIX(WRAP_IBOOLSIG)(S,M,CallerInfo) :-
-	inheritance_sub(C,S,CallerInfo),
+	FLINHERITANCEPREFIX(WRAP_SUB)(C,S,CallerInfo),
 	FLNEGPREFIX(WRAP_IBOOLSIG)(C,M,CallerInfo).
 
 

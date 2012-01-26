@@ -165,10 +165,11 @@ flora_prlg('_resetoptimization',2) :- !.
 ****************************************************************************/
 flora_prlg(FL_DEFEASIBLE_CLEANUP,2) :- !.
 
-flora_prlg(FL_OVERRIDES_AUX,3) :- !.
-flora_prlg(FL_OPPOSES_AUX,3) :- !.
-flora_prlg(FL_CANCEL_AUX,2) :- !.
-flora_prlg(FL_DISQUALIFIED_AUX,2) :- !.
+flora_prlg(FL_UNDEFEATED,3) :- !.
+flora_prlg(FL_OVERRIDES_AUX,5) :- !.
+flora_prlg(FL_OPPOSES_AUX,5) :- !.
+flora_prlg(FL_CANCEL_AUX,3) :- !.
+flora_prlg(FL_DISQUALIFIED_AUX,3) :- !.
 
 
 /* Mathematical functions in is/2 and inequalities */
@@ -210,6 +211,20 @@ flora_prlg(FL_MOD_INTERNAL,2,FL_MOD,_) :-
 flora_prlg(FL_MOD,2,FL_MOD,_) :-
 	flora_compilation_context(compiling_arithmetics), !.
 
+/****************************************************************************
+    Symbols that have to be treated as FLORA-modularized Prolog predicates
+****************************************************************************/
+
+%% There might be other modular prolog preds in the future
+modular_prlg(Atm,Arity) :- negatable_prlg(Atm,Arity,_).
+
+negatable_prlg(FL_OPPOSES,2,FLNEGBUILTIN(FL_OPPOSES_UNQUOTED)) :- !.
+negatable_prlg(FL_OPPOSES,4,FLNEGBUILTIN(FL_OPPOSES_UNQUOTED)) :- !.
+negatable_prlg(FL_OVERRIDES,2,FLNEGBUILTIN(FL_OVERRIDES_UNQUOTED)) :- !.
+negatable_prlg(FL_OVERRIDES,4,FLNEGBUILTIN(FL_OVERRIDES_UNQUOTED)) :- !.
+negatable_prlg(FL_CANCEL,1,FLNEGBUILTIN(FL_CANCEL_UNQUOTED)) :- !.
+negatable_prlg(FL_CANCEL,2,FLNEGBUILTIN(FL_CANCEL_UNQUOTED)) :- !.
+
 
 /****************************************************************************
   definitions
@@ -219,10 +234,6 @@ flora_prlgdef(P,A) :-
 	!.
 
 flora_prlgdef(P,A) :- flora_dynprlg(P,A), !.
-%% this enables us to temporarily define terms as prolog predicates
-%% (e.g., with :- prolog directive). When the module is compiled, P/A
-%% is no longer treated as prolog, so this won't interfere with other modules
-%%flora_prlgdef(P,A) :- flora_compiler_permaoption(prolog(P,A)).
 
 flora_prlgdef(P,Mod,A) :- flora_dynprlg(P,Mod,A).
 
@@ -230,11 +241,31 @@ flora_prlgdef_repl(P,A,NP,Mod) :-
 	flora_prlg(P,A,NP,Mod),
 	!.
 
+%% flora_modular_prlgdef/2 for FLORA-modularized prolog predicates
+flora_modular_prlgdef(P,A) :-
+	modular_prlg(P,A),
+	!.
+flora_modular_prlgdef(P,A) :-
+	modular_dynprlg(P,A),
+	!.
+
+%% flora_modular_prlgdef/3 - only for dynamic definitions
+flora_modular_prlgdef(P,A,Mod) :-
+	modular_dynprlg(P,A,Mod),
+	!.
+
+%% for negatable and FLORA-modularized prolog predicates
+%% hegatable implies modularized
+flora_negatable_prlgdef(P,A,NegP) :-
+	negatable_prlg(P,A,NegP),
+	!.
+
 
 /****************************************************************************
   flora_reset_prolog/0
 ****************************************************************************/
 flora_reset_prolog :-
+	retractall(modular_dynprlg(_,_)),
 	retractall(flora_dynprlg(_,_,_)),
 	retractall(flora_dynprlg(_,_)).
 
@@ -265,8 +296,36 @@ flora_define_prolog(Op,Arity,Mod) :-
 
 flora_define_prolog([]) :- !.
 flora_define_prolog([(Op,Arity)|Rest]) :-
+	!,
 	flora_define_prolog(Op,Arity),
 	flora_define_prolog(Rest).
 flora_define_prolog([(Op,Arity,Mod)|Rest]) :-
+	!,
 	flora_define_prolog(Op,Arity,Mod),
 	flora_define_prolog(Rest).
+
+%% flora_define_modular_prolog/2
+flora_define_modular_prolog(Op,Arity) :-
+	( modular_prlg(Op,Arity) -> true
+	;
+	  assert(modular_dynprlg(Op,Arity))
+	).
+
+%% flora_define_modular_prolog/3 - only for dynamic definitions
+flora_define_modular_prolog(Op,Arity,Mod) :-
+	( modular_dynprlg(Op,Arity,Mod) -> true
+	;
+	  assert(modular_dynprlg(Op,Arity,Mod))
+	).
+
+%% defines modular prolog according to list of elements of the form
+%% prolog(P,A) or prolog(P,A,Mod)
+flora_define_modular_prolog([]) :- !.
+flora_define_modular_prolog([prolog(P,A)|Rest]) :-
+	!,
+	flora_define_modular_prolog(P,A),
+	flora_define_modular_prolog(Rest).
+flora_define_modular_prolog([prolog(P,A,Mod)|Rest]) :-
+	!,
+	flora_define_modular_prolog(P,A,Mod),
+	flora_define_modular_prolog(Rest).

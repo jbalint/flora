@@ -35,7 +35,7 @@
 #define  FLORA_DYNRULE_HEADLIT_CALLER_VAR_NAME  '_DynRuleCallerModuleVar'
 
 #define  FLORA_HEADLIT_CALLER_ARGS_VAR_NAME  '_CallerModuleArgsVar'
-#define  FLORA_DYNRULE_HEADLIT_CALLER_ARGS_VAR_NAME  '_DynRuleCallerModuleArgsVar'
+#define  FLORA_DYNRULE_HEADLIT_CALLER_INFOVAR_NAME  '_DynRuleCallerInfoVar'
 
 
 /****************************************************************************
@@ -102,7 +102,7 @@ is_prbuiltin_identifier(PRBUILTIN_IDENTIFIER(Builtin,_I),Builtin).
 is_prbuiltin_identifier(PRBUILTIN_IDENTIFIER(Builtin,I),Builtin,I).
 
 %% This is provided for flrdependency.P to use
-is_prlabeled_construct(PRLABELEDCONSTRUCT(Label,Content),Label,Content).
+%%is_prlabeled_construct(PRLABELEDCONSTRUCT(Label,Content),Label,Content).
 
 is_prdatatype(PRDATATYPE(Sort,Lit,Idx), Sort,Lit,Idx).
 is_prdatatypelist(PRdtlist) :- is_prdatatypelist(PRdtlist,_).
@@ -564,10 +564,10 @@ coder_write_direct(Term,Status) :-
 	%% Compile time XSB :- table directive
 	; is_table_directive(Term,PredArityPairs) ->
 	    Status = [],
-	    flora_write_atom(':-(table('),
+	    flora_write_atom(':-(table(as('),
 	    %%write_canonical(PredArityPairs),
 	    write_table_speclist(PredArityPairs),
-	    flora_write_atom(')).'), nl
+	    flora_write_atom(',AUXILIARY_TABLING_TYPE))).'), nl
 
 	;
 	    flora_write_atom(':-('),
@@ -795,7 +795,7 @@ flora_write_struct(Term,_Context,[]) :-
 flora_write_struct(Term,_Context,[]) :-
 	is_prdyncallerargsvar(Term),
 	!,
-	flora_write_atom(FLORA_DYNRULE_HEADLIT_CALLER_ARGS_VAR_NAME).
+	flora_write_atom(FLORA_DYNRULE_HEADLIT_CALLER_INFOVAR_NAME).
 
 flora_write_struct(Term,_Context,Status) :-
 	is_prreify(Term,Term1),
@@ -815,7 +815,7 @@ flora_write_struct(Term,_Context,[]) :-
 flora_write_struct(Term,_Context,[]) :-
 	is_table_directive(Term,PredSpecList),
 	!,
-	write_canonical(table(PredSpecList)).
+	write_canonical(table(as(PredSpecList,'AUXILIARY_TABLING_TYPE'))).
 
 flora_write_struct(Term,Context,Status) :-
 	is_goallogic(Term,F,N,Args),
@@ -1065,6 +1065,7 @@ coder_write_wsstruct(WS,Term,Context,Status) :-
 	    put(CH_COMMA),
 	    coder_write_prolog(FAtom,N,Args,Context,Status),
 	    put(CH_RPAREN)
+
         ).
 
 
@@ -1327,7 +1328,7 @@ coder_write_syslib(Lib,5,[Id,Meta,Mode,HeadList,Body],_Context,Status) :-
 	!,
 	write_canonical(Lib),
 	put(CH_LPAREN),
-	%% do not prepend FLHEADPREFIX when constructing clauses;
+	%% do not prepend FL_HEADPREFIX when constructing clauses;
 	%% generate heads as facts
 	%% If Id = null, fllibclause will replace it with a variable
 	(Id == NULL -> Status_Id = [], flora_write_atom(NULL)
@@ -1379,7 +1380,7 @@ coder_write_syslib(Lib,7,[Id,WS,HeadList,Body,Meta,DefeatCond,Newpred],_Context,
 	    %% do not condition flora_write_struct(WS,CODER_GENERIC_CONTEXT,_)
 	    flora_write_struct(WS,CODER_GENERIC_CONTEXT,_),
 	    put(CH_COMMA),
-	    %% Generate inserted rule heads as facts: do not add FLHEADPREFIX
+	    %% Generate inserted rule heads as facts: do not add FL_HEADPREFIX
 	    flora_write_struct(HeadList,CODER_GENERIC_CONTEXT,Status_Head),
 	    ( Status_Head == [] ->
 		put(CH_COMMA),
@@ -2012,15 +2013,16 @@ coder_build_wsstruct(Term,WS,DWS,Context,VarList,Code,CodeInd,Status) :-
 	; is_flogic(Term,Context,F,Args) ->
 	    coder_build_wsliteral(F,Args,WS,DWS,Context,VarList,Code,CodeInd,Status)
 	
-	; is_prologterm(Term,F,N,Args) ->
-	    (is_pratom(F,FAtom,Index) ; is_prbuiltin_identifier(F,FAtom,Index)),
+	; is_prologterm(Term,Funct,N,Args) ->
+	    (is_pratom(Funct,FAtom,Index) ; is_prbuiltin_identifier(Funct,FAtom,Index)),
 	    coder_build_prolog(FAtom,N,Args,DWS,Context,VarList,Code,CodeInd,Status)
 
-	; is_prologterm(Term,F,N,Args,Module) ->
-	    (is_pratom(F,FAtom,Index) ; is_prbuiltin_identifier(F,FAtom,Index)),
+	; is_prologterm(Term,Funct,N,Args,Module) ->
+	    (is_pratom(Funct,FAtom,Index) ; is_prbuiltin_identifier(Funct,FAtom,Index)),
 	    coder_build_prolog(FAtom,N,Args,DWS,Context,VarList,Code1,CodeInd,Status),
 	    is_pratom(Module,MAtm,_),
 	    Code = MAtm:Code1
+
         ).
 
 
@@ -2213,7 +2215,7 @@ coder_build_syslib(Lib,1,[WrappedList],DWS,_Context,VarList,Code,CInd,Status) :-
 coder_build_syslib(Lib,5,[Id,Meta,Mode,HeadList,Body],DWS,_Context,VarList,Code,CodeInd,Status) :-
 	is_fllibclause(Lib),
 	!,
-	%% do not prepend FLHEADPREFIX when constructing clauses;
+	%% do not prepend FL_HEADPREFIX when constructing clauses;
 	%% generate heads as facts
 	%% If Id = null, fllibclause will replace it with a variable
 	(Id == NULL -> Status_Id = [], IdCode = NULL, IdCodeInd = (NULL,0)
@@ -2227,7 +2229,7 @@ coder_build_syslib(Lib,5,[Id,Meta,Mode,HeadList,Body],DWS,_Context,VarList,Code,
 	    ( Status_Meta == [] ->
 		flora_build_struct(Mode,DWS,CODER_GENERIC_CONTEXT,VarList,ModeCode,ModeCodeInd,Status_Mode),
 		( Status_Mode == [] ->
-		    %% do not prepend FLHEADPREFIX when constructing clauses;
+		    %% do not prepend FL_HEADPREFIX when constructing clauses;
 		    %% generate heads as facts
 		    flora_build_struct(HeadList,DWS,CODER_GENERIC_CONTEXT,VarList,HeadListCode,HeadListCodeInd,Status_Head),
 		    ( Status_Head == [] ->

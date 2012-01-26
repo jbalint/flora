@@ -41,7 +41,7 @@
 	is_prrule/3,
         is_prdirective/2,
         is_prignoredep/2,
-	is_prlabeled_construct/3,
+	%%is_prlabeled_construct/3,
 	flora_build_struct/7
    from flrcoder.
 

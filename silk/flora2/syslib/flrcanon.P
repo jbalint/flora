@@ -57,6 +57,7 @@
    from flrwrapper.
 
 :- import
+	memberchk/2,
 	append/3,
 	length/2,
 	copy_term/2
@@ -292,10 +293,10 @@ convert_to_head_literal(Body,Head) :-
 	!.
 convert_to_head_literal(Body,Head) :-
 	flora_decode_predicate(Body,Type,ModuleName,_Wrap,_Prefix,WrapOrPred,ArgL),
-	( (Type == flogic ; Type == (hilog)) ->
+	( memberchk(Type, [flogic,(hilog),(flora)]) ->
 	    flora_module_predicate(WrapOrPred,ArgL,ModuleName,Head)
-	; (Type == neg_flogic ; Type == neg_hilog) ->
-	    flora_concat_atoms([FLNEGPREFIX,WrapOrPred],NegMainWrapper),
+	; memberchk(Type,[neg_flogic,neg_hilog,neg_flora]) ->
+	    flora_concat_atoms([FL_NEGPREFIX,WrapOrPred],NegMainWrapper),
 	    flora_module_predicate(NegMainWrapper,ArgL,ModuleName,Head)
 	;
 	    Head = Body
@@ -327,10 +328,15 @@ convert_to_body_literal(Head,Body) :-
 convert_to_body_literal(Head,Body) :-
 	flora_decode_predicate(Head,Type,ModuleName,_Wrap,_WPrefix,WrapOrPred,ArgL),
 	( (Type == flogic ; Type == (hilog)) ->
-	    flora_concat_atoms([FLBodyPREFIX,WrapOrPred],BodyWrapper),
+	    flora_concat_atoms([FL_BodyPREFIX,WrapOrPred],BodyWrapper),
 	    flora_module_predicate(BodyWrapper,ArgL,ModuleName,Body)
 	; (Type == neg_flogic ; Type == neg_hilog) ->
-	    flora_concat_atoms([FLNEGPREFIX,FLBodyPREFIX,WrapOrPred],BodyWrapper),
+	    flora_concat_atoms([FL_NEGPREFIX,FL_BodyPREFIX,WrapOrPred],BodyWrapper),
+	    flora_module_predicate(BodyWrapper,ArgL,ModuleName,Body)
+	; Type == flora, atom(ModuleName) ->
+	    flora_module_predicate(WrapOrPred,ArgL,ModuleName,Body)
+	; Type == neg_flora, atom(ModuleName) ->
+	    flora_concat_atoms([FL_NEGPREFIX,WrapOrPred],BodyWrapper),
 	    flora_module_predicate(BodyWrapper,ArgL,ModuleName,Body)
 	;
 	    Body = Head
@@ -378,7 +384,7 @@ convert_to_signature(Molecule,InheritanceMode,Signature) :-
 
 /****************************************************************************
 **       convert_to_value_atom(+Molecule,+InheritanceMode,-Signature)
-** Converts Flora literals to value atom molecules
+** Converts Flora literals to value atomic molecules
 ** if already a value atom then leaves intact.
 ** Caches its result for faster processing
 ** If a literal doesn't have a corresponding value atom then simply fails
@@ -518,6 +524,8 @@ flora_preprocess_headlist([H|L],[H|LList]) :-
  we would need to convert the head into the FLORA-2 head format.
 ***********************************************************************/
 flora_record_rule_signature(RuleId,HPrefix,Module,Head,Body,Meta,DefeatCond,Rule,Bridge) :-
+	%% Head is stored in the body form so that it could be queried
+	%% via reification
 	convert_to_body_literal(Head,BHead),
 	bind_head_in_defeat_condition_with_copy(BHead,DefeatCond),
         flora_decode_goal_as_atom(Head,HeadAtm),
@@ -691,8 +699,8 @@ extract_head_from_defeat_condition(DefeatCond,Head) :-
 	DefeatCond = _:DelayLiteral,
 	arg(4,DelayLiteral,[DefeatCondSansDelay|_]),
 	%% OBSOLETE: the case when FL_UNDEFEATED is implemented as HiLog
-	%%arg(3,DefeatCondSansDelay,Head).
-	%% This is for the case when FL_UNDEFEATED is implemented as Prolog
+	%%      arg(3,DefeatCondSansDelay,Head).
+	%% The below is for the case when FL_UNDEFEATED is implemented as Prolog
 	arg(2,DefeatCondSansDelay,Head).
 
 

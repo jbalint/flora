@@ -30,6 +30,7 @@
 
 :- import
 	flora_abort/1,
+	flora_abort/2,
 	flora_user_floradir/1,
 	flora_file_op/2,
 	flora_file_op/3,
@@ -49,6 +50,7 @@
 
 :- import
 	length/2,
+	memberchk/2,
 	member/2,
 	append/3
     from basics.
@@ -122,7 +124,7 @@
 	symbol/7,
 	nowarn_symbol/5,
 	make_symbol_context_status/8,
-	compiling_warning/3,
+	compiling_error/3,
 	is_flvariable/3
    from flrcompiler.
 
@@ -197,6 +199,7 @@
 	flora_module_name_error/1,
 	%% support for undefinedness
 	flora_fld_storage_name/2,
+	flora_fls_storage_name/1,
 	flora_fls_storage_name/2
    from flrwrapper.
 
@@ -272,7 +275,7 @@
 	flora_experimenting_with/1,
 
 	flora_read_canonical_and_insert/2,
-	flora_read_symbols_canonical_and_insert/2,
+	flora_read_symbols_canonical_and_insert/3,
 	flora_load_system_module_util/1,
 	flora_measure_time/2,
 	

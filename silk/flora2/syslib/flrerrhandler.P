@@ -37,14 +37,12 @@
 	set_prolog_flag/2
    from curr_sym.
 
-:- import
-	stat_flag/2,
-	stat_set_flag/2
-   from machine.
-
 :- export FLLIBCATCH/3, FLLIBTHROW/1.
 
 :- export
+	flora_set_gc_margin/1,
+	flora_set_memory_limit/1,
+	flora_clear_memory_limit/0,
 	flora_clear_timeout/0,
 	flora_set_timeout/2.
 
@@ -79,9 +77,9 @@ abort_on_timeout(Goal) :-
 
 
 flora_set_timeout(Time,_) :-
-	\+number(Time),
+	\+ ((number(Time), Time>0)),
 	!,
-	flora_abort(['nonnumber passed as a timeout value, ', Time],
+	flora_abort(['timeout must be a positive number, ', Time],
 		    FLORA_ABORT_NOTRACE).
 flora_set_timeout(Time,fail) :-
 	flora_clear_timeout,
@@ -161,12 +159,29 @@ convert_depth_args(TermDepth,ListDepth,TermDepthOut,ListDepthOut) :-
 
 /***************** occurs check handling *************************************/
 flora_set_unification_mode(correct) :-
-	stat_set_flag(UNIFY_WITH_OCCURS_CHECK_FLAG,1).
+	set_prolog_flag(unify_with_occurs_check,on).
 flora_set_unification_mode(fast) :-
-	stat_set_flag(UNIFY_WITH_OCCURS_CHECK_FLAG,0).
+	set_prolog_flag(unify_with_occurs_check,off).
 
 flora_unification_mode(X) :-
-	stat_flag(UNIFY_WITH_OCCURS_CHECK_FLAG,F),
-	(F==1 -> X=correct
+	current_prolog_flag(unify_with_occurs_check,F),
+	(F==on -> X=correct
 	; X=fast
 	).
+
+/********************* memory management *************************************/
+%% in MBs. XSB uses KBs
+flora_set_memory_limit(MemLim) :-
+	\+ ((number(MemLim), MemLim > 0)),
+	!,
+	flora_abort(['memory limit must be a positive number, ', MemLim],
+		    FLORA_ABORT_NOTRACE).
+flora_set_memory_limit(MemLim) :-
+	KBlimit is round(1000*MemLim),
+	set_prolog_flag(max_memory,KBlimit).
+
+flora_clear_timeout :- set_prolog_flag(max_memory,0).
+
+
+flora_set_gc_margin(Mem) :-
+	set_prolog_flag(heap_margin,Mem).

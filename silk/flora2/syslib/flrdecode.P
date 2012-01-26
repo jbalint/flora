@@ -44,6 +44,7 @@
         is_flora_callable_literal/1
     from flrwrapper.
 :- import
+	flora_modular_prlgdef/2,
 	flora_prlgdef_repl/4,
 	flora_prlgdef/2
    from flrprolog.
@@ -91,8 +92,12 @@
 	flora_decode_oid_as_atom_substitute_vars/2,
 	flora_write_goal/1,
 	flora_write_goal/2,
+	flora_write_goal_substitute_vars/1,
+	flora_write_goal_substitute_vars/2,
 	flora_write_oid/1,
 	flora_write_oid/2,
+	flora_write_oid_substitute_vars/1,
+	flora_write_oid_substitute_vars/2,
 	flora_write_fact/1,
 	flora_write_fact/2,
 	flora_write_rule_head/1,
@@ -122,6 +127,16 @@ flora_write_goal(Goal) :-
 	telling(Stream),
 	flora_write_goal(Stream,Goal).
 
+flora_write_goal_substitute_vars(Stream,Goal) :-
+	flora_decode_goal_as_atom_substitute_vars(Goal,Code),
+	write(Stream,Code).
+
+%% Write to the currently open output stream
+flora_write_goal_substitute_vars(Goal) :-
+	telling(Stream),
+	flora_write_goal_substitute_vars(Stream,Goal).
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% flora_write_oid %%%%%%%%%%%%%%%%%%%%%%%%%%%
 	
 flora_write_oid(Stream,Goal) :-
@@ -133,6 +148,15 @@ flora_write_oid(Stream,Goal) :-
 flora_write_oid(Goal) :-
 	telling(Stream),
 	flora_write_oid(Stream,Goal).
+
+flora_write_oid_substitute_vars(Stream,Goal) :-
+	flora_decode_oid_as_atom_substitute_vars(Goal,Code),
+	write(Stream,Code).
+
+%% Write to the currently open output stream
+flora_write_oid_substitute_vars(Goal) :-
+	telling(Stream),
+	flora_write_oid_substitute_vars(Stream,Goal).
 			
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% flora_write_fact %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -577,15 +601,32 @@ decode_prolog_call([':',[Module,Term],2],Code,Depth) :-
 	    Code = ['${',EscF,'(',ArgsCode,')@_prolog(',Module,')}']
 	).
 	
-%% regular prolog call
-decode_prolog_call([F,Args,_Arity],Code,Depth) :-
+%% neg-negated regular prolog call (for negatable modularized prolog preds)
+decode_prolog_call([neg(F),Args,Arity],Code,Depth) :-
         escape(F,EscF),
+	(standard_FLORA_prolog_functor(F,Arity) -> Suffix = ''
+	; Suffix = '@_prolog'
+	),
 	(Args == []
-	->  Code = ['${',EscF,'@_prolog}']
+	->  Code = ['${neg ',EscF,Suffix,'}']
 	;
 	    Depth1 is Depth+1,
 	    decode_list_add_separator(Args,ArgsCode,decode_literal_internal(_,_,1,Depth1),','),
-	    Code = ['${',EscF,'(',ArgsCode,')@_prolog}']
+	    Code = ['${neg ',EscF,'(',ArgsCode,')', Suffix, '}']
+	).
+
+%% regular prolog call
+decode_prolog_call([F,Args,Arity],Code,Depth) :-
+        escape(F,EscF),
+	(standard_FLORA_prolog_functor(F,Arity) -> Suffix = ''
+	; Suffix = '@_prolog'
+	),
+	(Args == []
+	->  Code = ['${',EscF,Suffix, '}']
+	;
+	    Depth1 is Depth+1,
+	    decode_list_add_separator(Args,ArgsCode,decode_literal_internal(_,_,1,Depth1),','),
+	    Code = ['${',EscF,'(',ArgsCode,')', Suffix, '}']
 	).
 
 decode_builtin(F,0,_,[EscF],_Depth) :- escape(F,EscF), !.
@@ -618,6 +659,7 @@ decode_builtin(F,_,Args,[EscF,'(',ArgsCode,')', '@_prolog'],Depth) :-
 
 standard_FLORA_prolog_functor(P,A) :- flora_prlgdef(P,A).
 standard_FLORA_prolog_functor(P,A) :- flora_prlgdef_repl(P,A,_,_).
+standard_FLORA_prolog_functor(P,A) :- flora_modular_prlgdef(P,A).
 standard_FLORA_prolog_functor(P,A) :- flora_delayed_builtin_literal(P,A).
 
 
@@ -887,29 +929,29 @@ decode_anon_oid(NewOid,Code) :-
 %%%%%%%%%%%%%%%%%%%%%% Classifier %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 classify_call(Call,Type,Basename,ArgList,Module) :-
 	flora_decode_predicate(Call,Type1,Module,Prefix,Basename1,ArgList1),
+	/*
 	%% The following debugging statement helps weed out
 	%% calls that should be suppressed by the debugger
-	/*
 	writeln(2,('Decodecall: ',Call,Type1,Module,Prefix,Basename1,ArgList1)),
 	*/
 	(Type1 == (flora)
-	-> (Prefix==inheritance_
+	-> (Prefix==FL_INHERITANCEPREFIX
 	   -> Basename = Basename1, Type = (inheritance), ArgList = ArgList1
 
-	   ; Prefix==local_
+	   ; Prefix==FL_LOCALPREFIX
 	   -> Basename = Basename1, Type = (explicit_definition), ArgList = ArgList1
 	   
-	   ; Prefix==dyna_ % This is actually hidden (possible future use)
+	   ; Prefix==FL_DYNAPREFIX % This is actually hidden (possible future use)
 	   -> Basename = Basename1, Type = (dynhead_before), ArgList = ArgList1
-	   ; Prefix==dynz_ % This is actually hidden (possible future use)
+	   ; Prefix==FL_DYNZPREFIX % This is actually hidden (possible future use)
 	   -> Basename = Basename1, Type = (dynhead_after), ArgList = ArgList1
-	   ; Prefix==neg_dyna_ % This is actually hidden (possible future use)
+	   ; Prefix==FL_NEGDYNAPREFIX % This is actually hidden (possible future use)
 	   -> Basename = Basename1, Type = (neg_dynhead_before), ArgList = ArgList1
-	   ; Prefix==neg_dynz_ % This is actually hidden (possible future use)
+	   ; Prefix==FL_NEGDYNZPREFIX % This is actually hidden (possible future use)
 	   -> Basename = Basename1, Type = (neg_dynhead_after), ArgList = ArgList1
 	   ; Basename1 = WRAP_DIFFOBJEQL
 	   -> Basename = WRAP_OBJEQL, ArgList = ArgList1,
-	       (Prefix = 'neg_' -> Type = (neg_flogic)
+	       (Prefix = FLNEGPREFIX -> Type = (neg_flogic)
 	       ; Type = (flogic))
 
 
@@ -925,6 +967,8 @@ classify_call(Call,Type,Basename,ArgList,Module) :-
 	   ->  Type = (neg_tabled_hilog), ArgList1 = [Basename | ArgList]
 	   ; Type = Type1, Basename = Basename1, ArgList = ArgList1
 	   )
+	; Type1 == (neg_flora)
+	-> Type = Type1, ArgList = ArgList1, Basename = Basename1
 	; Type1 == (prolog), Basename1 = flora_db_find_base,
 	    Call = flora_db_find_base(Trie,RealCall),
 	    flora_match_substring(FLORA_PREFIX,Trie,forward,0,_)
@@ -1509,6 +1553,16 @@ decode_literal_internal(CallIn,Code,Level,Depth) :-
 	    -> decode_molecule(BasenameOrPred,Args,WS,Code,Level,Depth1)
 	    ; Type == (neg_flogic)
 	    -> decode_negated_molecule(BasenameOrPred,Args,WS,Code,Level,Depth1)
+	    ; Type == (flora), length(Args,Arity),
+		%% need to get rid of the Caller argument
+		Arity1 is Arity-1,
+		flora_modular_prlgdef(BasenameOrPred,Arity1)
+	    ->  flrtrim_last(Args,Args1),
+		decode_prolog_call([BasenameOrPred,Args1,Arity1],Code,Depth1)
+	    ; Type == (neg_flora)
+	    -> %% need to get rid of the Caller argument
+		length(Args,Arity), Arity1 is Arity-1, flrtrim_last(Args,Args1),
+		decode_prolog_call([neg(BasenameOrPred),Args1,Arity1],Code,Depth1)
 	    ;	%% cannot decode
 		%%flora_warning_line('~w: decode_literal_internal/3 failed to decode', [Call]),
 		flora_concat_items([Call], Code1),

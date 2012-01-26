@@ -21,6 +21,8 @@
 %% a dynamic declaration that foo is a prolog predicate.
 :- dynamic flora_dynprlg(_,_).
 :- dynamic flora_dynprlg(_,_,_).
+:- dynamic modular_dynprlg(_,_).
+:- dynamic modular_dynprlg(_,_,_).
 
 
 /*
@@ -37,11 +39,17 @@
    from flrcompiler.
 
 :- export
-          flora_reset_prolog/0,
-	  flora_define_prolog/1,
-	  flora_define_prolog/2,
-	  flora_define_prolog/3,
-	  flora_prlgdef_repl/4,
-	  flora_prlgdef/3,
-	  flora_prlgdef/2.
+	flora_reset_prolog/0,
+	flora_define_prolog/1,
+	flora_define_prolog/2,
+	flora_define_prolog/3,
+	flora_prlgdef_repl/4,
+	flora_modular_prlgdef/2,
+	flora_modular_prlgdef/3,
+	flora_negatable_prlgdef/3,
+	flora_define_modular_prolog/1,
+	flora_define_modular_prolog/2,
+	flora_define_modular_prolog/3,
+	flora_prlgdef/3,
+	flora_prlgdef/2.
 

@@ -73,7 +73,7 @@ flora_hilog_module_predicate_symbol(ModuleName,Call) :-
 flora_tabled_hilog_module_predicate_symbol(ModuleName,Call) :-
 	flora_module_predicate(WRAP_TABLED_HILOG,[],ModuleName,Call).
 flora_tabled_hilog_module_predicate_symbol(ModuleName,Call) :-
-	flora_module_predicate(FLNEGPREFIX(WRAP_TABLED_HILOG),[],ModuleName,Call).
+	flora_module_predicate(FL_NEGPREFIX(WRAP_TABLED_HILOG),[],ModuleName,Call).
 
 
 /*****************************************************************************
@@ -137,9 +137,18 @@ flora_fld_storage_name(ModuleName,StorageName) :-
 
 /*****************************************************************************
   flora_fls_storage_name(+ModuleName,-StorageName)
+
+      Storage for module-dependent symbol occurrences
+      (to issue errors/warnings during load)
+
+  flora_fls_storage_name(-StorageName)
+
+      Storage for module-independent symbol occurrences 
 *****************************************************************************/
 flora_fls_storage_name(ModuleName,StorageName) :-
 	flora_concat_atoms([FLORA_FLS_TRIE_PREFIX,'''',ModuleName],StorageName).
+flora_fls_storage_name(StorageName) :-
+	flora_concat_atoms([FLORA_FLS_TRIE_PREFIX,'$'],StorageName).
 
 
 /******************************************************************************
@@ -247,7 +256,7 @@ flora_decode_module_prefix(Funct) :-
   flora_is_transactional_wrapper(+Wrap)
 *****************************************************************************/
 flora_is_neg_wrapper(Wrapper) :-
-	flora_match_substring(FLNEGPREFIX,Wrapper,forward,0,_).
+	flora_match_substring(FL_NEGPREFIX,Wrapper,forward,0,_).
 
 flora_is_transactional_wrapper(WRAP_NONTABLED_HILOG) :- !.
 flora_is_transactional_wrapper(FLBodyPREFIX(WRAP_NONTABLED_HILOG)) :- !.
@@ -263,18 +272,20 @@ flora_is_transactional_call(Call) :-
 *****************************************************************************/
 flora_is_flogic_wrapper(WrapPrefix,Base) :-
 	( 
-	  WrapPrefix=FLEMPTYPREFIX
-	; WrapPrefix=FLHEADPREFIX
-	; WrapPrefix=FLTRAILERPREFIX
-	; WrapPrefix=FLBodyPREFIX
-	; WrapPrefix=FLDYNAPREFIX
-	; WrapPrefix=FLDYNZPREFIX
-	; WrapPrefix=FLNEGPREFIX
-	; WrapPrefix=FLNEGHEADPREFIX
-	; WrapPrefix=FLNEGTRAILERPREFIX
-	; WrapPrefix=FLNEGBodyPREFIX
-	; WrapPrefix=FLNEGDYNAPREFIX
-	; WrapPrefix=FLNEGDYNZPREFIX
+	  WrapPrefix=FL_EMPTYPREFIX
+	; WrapPrefix=FL_HEADPREFIX
+	; WrapPrefix=FL_TRAILERPREFIX
+	; WrapPrefix=FL_BodyPREFIX
+	; WrapPrefix=FL_DYNAPREFIX
+	; WrapPrefix=FL_DYNZPREFIX
+	; WrapPrefix=FL_NEGPREFIX
+	; WrapPrefix=FL_NEGHEADPREFIX
+	; WrapPrefix=FL_NEGTRAILERPREFIX
+	; WrapPrefix=FL_NEGBodyPREFIX
+	; WrapPrefix=FL_NEGDYNAPREFIX
+	; WrapPrefix=FL_NEGDYNZPREFIX
+	; WrapPrefix=FL_NAFBodyPREFIX
+	; WrapPrefix=FL_NAFNEGBodyPREFIX
 	),
 	!,
 	flora_is_flogic_base(Base).
@@ -316,6 +327,7 @@ flora_is_hilog_base_wrapper(WRAP_NONTABLED_HILOG) :- !.
 flora_is_hilog_base_wrapper(WRAP_TABLED_HILOG) :- !.
 flora_is_neg_hilog_base_wrapper(FLNEGPREFIX(WRAP_TABLED_HILOG)) :- !.
 
+flora_is_base_wrapper(FL_LIBMOD) :- !.
 flora_is_base_wrapper(W) :- flora_is_flogic_base(W), !.
 flora_is_base_wrapper(W) :- flora_is_hilog_base_wrapper(W).
 
@@ -331,7 +343,7 @@ flora_is_base_wrapper(W) :- flora_is_hilog_base_wrapper(W).
       ModuleName is a Flora module name.
       Wrapper is the wrapper used to encode the correponding molecule.
       WrapPrefix is the
-      prefix of the wrapper (e.g., dyna_, derived_). 
+      prefix of the wrapper (e.g., dyna^, derived^). 
       BaseWrapperOrFloraAuxPred is the type of the F-logic wrapper: mvd, imvd, etc.
 
   (2) CallType=flora, if the predicate is encoded as:
@@ -340,18 +352,19 @@ flora_is_base_wrapper(W) :- flora_is_hilog_base_wrapper(W).
       that are used to implement F-logic, e.g., immediate_sub.
       Wrapper is the predicate used in the trailer.
       If the predicate (call)
-      contains an `_' sign, then it is split into two parts: WrapPrefix is
-      the prefix up until the last `_' while BaseWrapperOrFloraAuxPred is the
+      contains an `^' (FLPREFIXSEPARATOR) sign, then it is split into two
+      parts: WrapPrefix is
+      the prefix up until the last `^' while BaseWrapperOrFloraAuxPred is the
       remaining string. For example, if the predicate is immediate_sub, then
-      WrapPrefix='immediate_', BaseWrapperOrFloraAuxPred='sub'.
+      WrapPrefix='immediate^', BaseWrapperOrFloraAuxPred='sub'.
       Otherwise, WrapPrefix='' and BaseWrapperOrFloraAuxPred=flora_predicate.
 
   (3) CallType=hilog or neg_hilog if the predicate is encoded as:
       'FLORA_PREFIX''FLORA_MODULE_TAG''workspace''hilog_wrapper'.
-      or their dyna_, dynz_ variants.
+      or their dyna^, dynz^ variants.
       ModuleName is a Flora module name.
       Wrapper is the hilog wrapper used to encode the predicate.
-      WrapPrefix is 'dyna_','dynz_', or empty
+      WrapPrefix is 'dyna^','dynz^', or empty
       BaseWrapperOrFloraAuxPred is the base HiLog wrapper:
       WRAP_NONTABLED_HILOG, WRAP_TABLED_HILOG, FLNEGPREFIX(WRAP_TABLED_HILOG)
 
@@ -409,15 +422,15 @@ flora_decode_predicate(Call,CallType,ModuleName,
 	%% Extract the predicate name.
 	flora_get_substring(RestFunct,M,-1,Wrapper),
 	!,
-	( flora_match_substring(FL_UNDERSCORE,Wrapper,reverse,_,S) ->
-	  %% The predicate consists of a prefix and a base.
-	  flora_get_substring(Wrapper,0,S,WrapPrefix),
-	  flora_get_substring(Wrapper,S,-1,WrapBase)
+	( flora_match_substring(FL_PREFIXSEPARATOR,Wrapper,reverse,_,S) ->
+	    %% The predicate consists of a prefix and a base.
+	    flora_get_substring(Wrapper,0,S,WrapPrefix),
+	    flora_get_substring(Wrapper,S,-1,WrapBase)
         ;
-	  WrapPrefix=FLEMPTYPREFIX,
-          WrapBase=Wrapper
+	    WrapPrefix=FL_EMPTYPREFIX,
+	    WrapBase=Wrapper
         ),
-	(flora_match_substring(FLNEGPREFIX,WrapPrefix,forward,0,_)
+	(flora_match_substring(FL_NEGPREFIX,WrapPrefix,forward,0,_)
 	-> Negated = yes
 	; Negated = no
 	),
@@ -443,7 +456,9 @@ flora_decode_predicate(Call,CallType,ModuleName,
 	      )
 	  ;
 	    %% a Flora builtin predicate, like difobjeql/2
-	    CallType = (flora)
+	      (Negated == no -> CallType = (flora)
+	      ; CallType = neg_flora
+	      )
 	  )
         ),
 	!,
@@ -527,11 +542,11 @@ flora_is_flogic_wrapper(Call,ModuleName,Base) :-
 *****************************************************************************/
 flora_canonic_wrapper_symbol(WRAP_HILOG,WRAP_HILOG) :- !.
 flora_canonic_wrapper_symbol(Wrap,Canonic) :-
-	flora_match_substring(FL_UNDERSCORE,Wrap,reverse,_,S) ->
+	flora_match_substring(FL_PREFIXSEPARATOR,Wrap,reverse,_,S) ->
 	flora_get_substring(Wrap,S,-1,Base),
 	flora_is_base_wrapper(Base),
 	!,
-	(flora_match_substring(FLNEGPREFIX,Wrap,forward,0,_)
+	(flora_match_substring(FL_NEGPREFIX,Wrap,forward,0,_)
 	-> negate_wrapper(Base,Canonic)
 	; Canonic = Base
 	).
@@ -634,11 +649,11 @@ flora_module_name_error(ModuleName) :-
 	flora_abort([ModuleName, ': Invalid FLORA-2 module name']).
 
 negate_wrapper(Wrap,NegWrap) :-
-	(flora_match_substring(FLNEGPREFIX,Wrap,forward,0,End)
+	(flora_match_substring(FL_NEGPREFIX,Wrap,forward,0,End)
 	-> flora_get_substring(Wrap,End, -1,NegWrap)
-	;
-	    flora_concat_atoms([FLNEGPREFIX,Wrap],NegWrap)
-	).
+	; flora_concat_atoms([FL_NEGPREFIX,Wrap],NegWrap)
+	),
+	!.
 
 negate_predicate(Pred,NPred) :-
 	flora_decode_predicate(Pred,_Type,ModName,FullWrap,_WPref,_BaseN,ArgL),

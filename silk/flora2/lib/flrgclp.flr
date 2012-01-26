@@ -27,6 +27,9 @@
 #include "flora_terms.flh"
 #include "flora_porting.flh"
 
+:- symbol_context defeated(?,?)@?.
+:- symbol_context prlg beaten_by_strict_rule(?,?,?,?,?).
+
 :- table FL_CANDIDATE/3, FL_STRICT_CANDIDATE/3.
 :- table FL_TRANS_DEFEATS/5.
 :- prolog FL_REFUTES/5, FL_REBUTS/5.
@@ -42,13 +45,8 @@
 	  change_module/4, change_module_nocheck/4,
 	  check_module_to_AT_association/1.
 
-:- symbol_context FL_DEFEATED(?,?,?)@?.
-:- symbol_context
-      beaten_by_strict_rule(?,?,?)@?, beaten_by_strict_rule(?,?,?,?,?)@?.
 
 // All the FL_* names are defined in flora_terms.flh to make it easier to change
-//:- export FL_UNDEFEATED(?,?,?).
-:- export %refresh.
 :- export ?[howDefeated -> ?],
 	  ?[info->?],
 	  ?[howDisqualified->?].
@@ -82,13 +80,13 @@ opposes(?T1,?H1,?T2,?H2) :-
 	caller{?Mod},
 	change_module_nocheck(?H1,?Mod,?RealMod,?MH1),
 	change_module_nocheck(?H2,?Mod,?RealMod,?MH2),
-	FL_OPPOSES_AUX(?RealMod,(?T1,?MH1),(?T2,?MH2)).
+	FL_OPPOSES_AUX(?RealMod,?T1,?MH1,?T2,?MH2).
 
 overrides(?T1,?H1,?T2,?H2) :-
 	caller{?Mod},
 	change_module_nocheck(?H1,?Mod,?RealMod,?MH1),
 	change_module_nocheck(?H2,?Mod,?RealMod,?MH2),
-	FL_OVERRIDES_AUX(?RealMod,(?T1,?MH1),(?T2,?MH2)).
+	FL_OVERRIDES_AUX(?RealMod,?T1,?MH1,?T2,?MH2).
 
 check_module_to_AT_association(?Mod) :-
 	\+flora_defeasible_module_registry(?Mod,_@)@_prolog(flrregistry),
@@ -117,11 +115,11 @@ FL_REBUTTED(?T,?H,?Mod)  :- FL_REBUTS(?,?,?T,?H,?Mod).
 FL_COMPROMISED(?T,?H,?Mod)  :- FL_REFUTED(?T,?H,?Mod), FL_DEFEATED(?T,?H,?Mod).
 FL_DISQUALIFIED(?T,?H,?Mod) :- FL_TRANS_DEFEATS(?T,?H,?T,?H,?Mod).
 FL_DISQUALIFIED(?T,?H,?Mod) :- beaten_by_strict_rule(?T,?H,?Mod).
-FL_DISQUALIFIED(?T,?H,?Mod) :- FL_CANCEL_AUX(?Mod,(?T,?H)).
+FL_DISQUALIFIED(?T,?H,?Mod) :- FL_CANCEL_AUX(?Mod,?T,?H).
 // FL_DISQUALIFIED_AUX expresses interaction  of defeat and cancellation:
 // Cancellation rule is disqualified if the rule being canceled has higher
 // priority than the cancellation rule itself
-FL_DISQUALIFIED(?T,?H,?Mod) :- FL_DISQUALIFIED_AUX((?T,?H),?Mod).
+FL_DISQUALIFIED(?T,?H,?Mod) :- FL_DISQUALIFIED_AUX(?T,?H,?Mod).
 
 /*
 // other possibilities
@@ -133,14 +131,14 @@ FL_COMPROMISED(?T,?H,?Mod)  :- FL_DEFEATED(?T,?H,?Mod).
 // FL_COMPROMISED/2 and FL_DISQUALIFIED/2 as below.
 /*
 FL_COMPROMISED(?,?,?)  :- false.
-FL_DISQUALIFIED(?T,?H,?Mod) :- FL_CANCEL_AUX(?Mod,(?T,?H)).
+FL_DISQUALIFIED(?T,?H,?Mod) :- FL_CANCEL_AUX(?Mod,?T,?H).
 */
 
 
 FL_REFUTES(?T1,?H1,?T2,?H2,?Mod) :-
 	// This order is potentially better, since normally
 	// there are fewer overrides than conflicts.
-	FL_OVERRIDES_AUX(?Mod,(?T1,?H1),(?T2,?H2)),
+	FL_OVERRIDES_AUX(?Mod,?T1,?H1,?T2,?H2),
 	FL_CONFLICTS(?T1,?H1,?T2,?H2,?Mod).
 FL_REBUTS(?T1,?H1,?T2,?H2,?Mod)  :-
 	FL_CONFLICTS(?T1,?H1,?T2,?H2,?Mod),
@@ -150,14 +148,6 @@ FL_REBUTS(?T1,?H1,?T2,?H2,?Mod)  :-
 	//naf FL_REFUTED(?T2,?H2,?Mod).   // this seems wrong
 	//naf FL_DEFEATED(?T1,?H1,?Mod).  // this dumps core
 
-
-/***** refresh the tables used by the defeasible theory ********************/
-
-%refresh :-
-	caller{?Mod},
-	refresh{FL_OPPOSES(?,?)@?Mod, FL_OPPOSES(?,?,?,?)@?Mod},
-	refresh{FL_OVERRIDES(?,?)@?Mod, FL_OVERRIDES(?,?,?,?)@?Mod},
-	refresh{FL_CANCEL(?)@?Mod, FL_CANCEL(?,?)@?Mod}.
 
 /************************ Debugging ***************************************/
 
@@ -222,7 +212,7 @@ FL_STATUS(?T,?H)[howDisqualified->defeatCycle(?DefeaterT,?DefeaterH,?DefeatedT,?
 FL_STATUS(?T,?H)[howDisqualified->canceled] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
-	FL_CANCEL_AUX(?RealMod,(?T,?HM)).
+	FL_CANCEL_AUX(?RealMod,?T,?HM).
 
 FL_STATUS(?T,?H)[howDisqualified->beatenByStrictRule(?SH)] :-
 	caller{?Mod},
@@ -265,7 +255,7 @@ FL_CANDIDATE(?Tag,?Head,?Mod) :-
 	/*
 	// Unclear if naf FL_CANCEL_AUX is needed. It adds table space
 	// but may not speed up cancellation
-        naf FL_CANCEL_AUX(?Mod,(?Tag,?Head)),
+        naf FL_CANCEL_AUX(?Mod,?Tag,?Head),
 	*/
 	/* Must reset term-depth limit, since both tag{...} and clause{...} can
 	   retrieve rules with very large bodies. As terms they will be very
@@ -281,21 +271,21 @@ FL_CANDIDATE(?Tag,?Head,?Mod) :-
 // Find out if two tags (Id,Head) are in conflict.
 // One of the tags might be a variable
 FL_CONFLICTS(?T1,?H1,?T2,?H2,?Mod) :-
-	// FL_OPPOSES_AUX(?Mod,(?T1,?H1),(?T2,?H2)) should be at the beginning,
+	// FL_OPPOSES_AUX(?Mod,?T1,?H1,?T2,?H2) should be at the beginning,
 	// since this is a cheap predicate compared to checking candidacy.
 	// FL_OPPOSES_AUX is made symmetric in T1,?H1, ?T2,?H2 by an axiom
 	// in genincludes/flrdefeasible.fli
-	FL_OPPOSES_AUX(?Mod,(?T1,?H1),(?T2,?H2)),
+	FL_OPPOSES_AUX(?Mod,?T1,?H1,?T2,?H2),
 	FL_CANDIDATE(?T1,?H1,?Mod),
 	FL_CANDIDATE(?T2,?H2,?Mod).
 
-// FL_OPPOSES_AUX/3, FL_OVERRIDES_AUX/3, FL_CANCEL_AUX/2 are defined in
+// FL_OPPOSES_AUX/5, FL_OVERRIDES_AUX/5, FL_CANCEL_AUX/3 are defined in
 // genincludes/flrdefeasible.fli
 
 
 beaten_by_strict_rule(?T,?H,?Mod) :- beaten_by_strict_rule(?T,?H,?,?,?Mod).
 beaten_by_strict_rule(?T,?H,?Tstrict,?Hstrict,?Mod) :-
-	FL_OPPOSES_AUX(?Mod,(?T,?H),(?Tstrict,?Hstrict)),
+	FL_OPPOSES_AUX(?Mod,?T,?H,?Tstrict,?Hstrict),
 	FL_STRICT_CANDIDATE(?Tstrict,?Hstrict,?Mod).
 
 FL_STRICT_CANDIDATE(?Tag,?Head,?Mod) :-
@@ -309,7 +299,6 @@ FL_STRICT_CANDIDATE(?Tag,?Head,?Mod) :-
 	?Body,
 	set_prolog_flag(max_table_subgoal_depth, ?TermDepth)@_prolog.
 
-/***** refresh the tables used by the defeasible theory ********************/
 
 // Hook for abolishing FL_CANDIDATE/3, FL_STRICT_CANDIDATE/3 after each query
 FL_DEFEASIBLE_CLEANUP(?,?) :-

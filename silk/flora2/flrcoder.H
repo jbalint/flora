@@ -72,7 +72,7 @@
 	is_prrule/3,
 	is_prfact/2,
 	is_prdirective/2,
-	is_prlabeled_construct/3,
+	%%is_prlabeled_construct/3,
         is_prignoredep/2,
 	is_prthismodule/1,
 	is_prthisfdbstorage/1,

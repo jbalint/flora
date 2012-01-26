@@ -34,7 +34,7 @@
     from flrporting.
 
 :- import
-	member/2,
+	memberchk/2,
 	subset/2,
 	append/3,
 	flatten/2,
@@ -54,7 +54,10 @@
 	%%flora_define_prolog/1,
 	flora_define_prolog/2,
 	flora_define_prolog/3,
+	flora_define_modular_prolog/2,
 	flora_prlgdef_repl/4,
+	flora_modular_prlgdef/2,
+	flora_negatable_prlgdef/3,
 	flora_prlgdef/3,
 	flora_prlgdef/2
    from flrprolog.
@@ -126,6 +129,9 @@
 
 :- dynamic dynrule_warnings(_).
 
+:- dynamic symbol/7.
+:- index(symbol/7,trie).
+
 :- export 
 	flora_clear_compilation_permaoptions/0,
 	flora_compilation_context/1,
@@ -141,5 +147,6 @@
 	nowarn_symbol/5,
 	make_symbol_context_status/8,
 	compiling_warning/3,
+	compiling_error/3,
 	is_fltoken/3,
 	is_flvariable/3.

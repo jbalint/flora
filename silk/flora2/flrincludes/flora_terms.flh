@@ -275,6 +275,7 @@ But people normally do not specify =>, so this is not really important
 /* 'udf' in symbol_context directive */
 #define FL_SYMBOL_CONTEXT_UDF	'udf'
 #define FL_SYMBOL_CONTEXT_SENSOR 'sensor'
+#define FL_SYMBOL_CONTEXT_PROLOG 'prlg'
 
 #define FL_REIFYOP		'$'
 #define FL_LABELINGOP		'@'
@@ -290,6 +291,7 @@ But people normally do not specify =>, so this is not really important
 #define FL_AS			as	 /* specifies tabling method */
 #define FL_SENSOR		sensor
 #define FL_USESENSOR		usesensor
+#define FL_USEFUNCTION		usefunction
 
 #define FL_IMPORT		(import)
 #define FL_IMPORTMODULE		(importmodule)
@@ -324,8 +326,8 @@ But people normally do not specify =>, so this is not really important
 #define FL_IN			(in)
 
 #define FL_LIBMOD               libmod_wrapper
-#define FL_NEGLIBMOD            neg_libmod_wrapper
-#define FL_TRANSLIBMOD          trans_libmod_wrapper
+#define FL_NEGLIBMOD            FLNEGPREFIX(libmod_wrapper)
+#define FL_TRANSLIBMOD          FLTRANSPREFIX(libmod_wrapper)
 
 #define FL_MIN			min
 #define FL_MAX			max
@@ -372,7 +374,7 @@ But people normally do not specify =>, so this is not really important
 /*  clause{...} */
 #define FL_CLAUSE		clause
 /*  tag{...} */
-#define FL_LABEL_PRIMITIVE	tag
+#define FL_TAG_PRIMITIVE	tag
 /*  prefix{...} */
 #define FL_PREFIX_PRIMITIVE	prefix
 
@@ -395,13 +397,14 @@ But people normally do not specify =>, so this is not really important
   FLFACT(Head)
   FLQUERY(Body)
   FLDIRECTIVE(DirectList)
-  FLLABELEDCONSTRUCT(Label,Construct)
-  FLLABEL(Id,Meta)
+  FLTAGGEDCONSTRUCT(Label,Construct)
+  FLTAG(Id,Meta)
   FLUDF(Function,Predicate,ReturnValue)
   FLUDFFACT(Function,ReturnValue)
 
   FLUDFSYM(Term)
   FLSENSORSYM(Term)
+  FLPRLGSYM(Term)
 
   FLEXPORT(Body)
   FLCOMMAND(Direct)
@@ -506,8 +509,8 @@ But people normally do not specify =>, so this is not really important
 #define FLUDF			fludfunction
 #define FLUDFFACT		fludfunctionfact
 
-#define FLLABELEDCONSTRUCT    	flannotatedconstruct
-#define FLLABEL			fltag
+#define FLTAGGEDCONSTRUCT    	flannotatedconstruct
+#define FLTAG			fltag
 
 #define FLDYNRULE               fldynrule
 
@@ -531,6 +534,7 @@ But people normally do not specify =>, so this is not really important
 
 #define FLUDFSYM		fludfsym
 #define FLSENSORSYM		flsensorsym
+#define FLPRLGSYM		flprlgsym
 
 #define FLATOM			flatom
 #define FLTRANSACTIONALATOM	fltransactionalatom
@@ -591,7 +595,7 @@ But people normally do not specify =>, so this is not really important
 #define FLREFRESH 		flrefresh
 
 #define FLCLAUSE                flclause
-#define FLLABELEDCLAUSE         flannotatedclause
+#define FLTAGGEDCLAUSE          flannotatedclause
 
 #define FLCALLERMODULE		flcallermodule
 #define FLNEWMODULE		flnewmodule
@@ -629,6 +633,8 @@ But people normally do not specify =>, so this is not really important
 #define FLSENSOR  		flsensor
 #define FLUSESENSOR  		flusesensor
 
+#define FLUSEFUNCTION  		flusefunction
+
 #define FLDELAYSUPPORTMOD       flrdelaysupport
 #define FLORA_DELAY_CHECKER     flora_execute_delayed_calls
 #define FLLIBSENSOR             fllibsensor
@@ -656,7 +662,9 @@ But people normally do not specify =>, so this is not really important
 #define PRQUERY			prquery
 #define PRDIRECTIVE		prdirective
 
+/*
 #define PRLABELEDCONSTRUCT    	prannotatedconstruct
+*/
 
 #define PRDYNRULE               prdynrule
 
@@ -885,7 +893,7 @@ But people normally do not specify =>, so this is not really important
 /* Determines the truth value of a goal */
 #define	FLLIBTRUTHVALUE 	fllibtruthvalue
 /* Library file for tag{...} */
-#define	FLLIBLABELPRIMITIVE 	fllibtagprimitive
+#define	FLLIBTAGPRIMITIVE 	fllibtagprimitive
 /* Library file for prefix{...} */
 #define	FLLIBPREFIXPRIMITIVE 	fllibprefixprimitive
 
@@ -1053,7 +1061,7 @@ But people normally do not specify =>, so this is not really important
 /* true{...}, undefined{...}, false{...} */
 #define FLTRUTHVALUE	    	fltruthvalue
 /* tag{...} */
-#define FLLABELPRIMITIVE    	fltagprimitive
+#define FLTAGPRIMITIVE    	fltagprimitive
 /* prefix{...} */
 #define FLPREFIXPRIMITIVE    	flprefixprimitive
 
@@ -1206,18 +1214,16 @@ But people normally do not specify =>, so this is not really important
 #define FL_NEGATION_AXIOM             'negation_axiom'
 
 #define FL_OPPOSES_AUX          FLORA_SYMBOL('_opposes_aux')
-#define FL_OPPOSES_AUX_AUX      FLORA_SYMBOL('_opposes_aux_aux')
 #define FL_OVERRIDES_AUX        FLORA_SYMBOL('_overrides_aux')
-#define FL_OVERRIDES_AUX_AUX    FLORA_SYMBOL('_overrides_aux_aux')
 #define FL_CANCEL_AUX           FLORA_SYMBOL('_cancel_aux')
-#define FL_DISQUALIFIED_AUX     FLORA_SYMBOL('_disqualified')
+#define FL_DISQUALIFIED_AUX     FLORA_SYMBOL('_disqualified_aux')
 
 #define FL_DEFEASIBLE_CLEANUP   FLORA_SYMBOL('_defesible_cleanup')
 
-#define FL_RULE_LABEL           FLORA_SYMBOL('rule_tag')
+#define FL_RULE_TAG             FLORA_SYMBOL('rule_tag')
 #define FL_RULE_BODY            FLORA_SYMBOL('rule_body')
 
-#define FL_SKIP_LABEL           flskipannotation
+#define FL_SKIP_TAG             flskipannotation
 
 /* User-visible predicates */
 #define FL_OPPOSES              '_opposes'
@@ -1226,7 +1232,7 @@ But people normally do not specify =>, so this is not really important
 #define FL_OVERRIDES_UNQUOTED   _overrides
 #define FL_CANCEL               '_cancel'
 #define FL_CANCEL_UNQUOTED      _cancel
-#define FL_UNDEFEATED           undefeated
+#define FL_UNDEFEATED           '_undefeated'
 
 /* function symbol used in the argumentation theories in explanations */
 #define FL_STATUS               status
@@ -1270,6 +1276,7 @@ But people normally do not specify =>, so this is not really important
    Symbols' contexts ( each symbol name in the program is stored, so it is possible to check for usage of symbols with the same name)
 ***************************************************************************/
 #define UDF_SYMBOL		udf_symbol
+#define USE_UDF_SYMBOL		use_udf_symbol
 #define TRANSACTIONAL_SYMBOL	transactional_symbol
 #define NONTRANSACTIONAL_SYMBOL	nontransactional_symbol
 #define PREDICATE_SYMBOL	predicate_symbol
@@ -1277,3 +1284,7 @@ But people normally do not specify =>, so this is not really important
 #define PROLOG_SYMBOL		prolog_symbol
 #define BUILTIN_SYMBOL		builtin_symbol
 #define SENSOR_SYMBOL		sensor_symbol
+#define USE_SENSOR_SYMBOL	use_sensor_symbol
+
+
+#define FLORA_COMPILATION_COUNTER  flora_compile_id

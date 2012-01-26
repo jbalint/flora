@@ -687,9 +687,9 @@ is_reification(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),Args,N,Ip) :-
 	get_atom(Funct,Atom),
 	is_reifyop(Atom).
 
-annotated_construct_struct(LabelCode,ContentCode,FLLABELEDCONSTRUCT(LabelCode,ContentCode)).
+annotated_construct_struct(LabelCode,ContentCode,FLTAGGEDCONSTRUCT(LabelCode,ContentCode)).
 
-annotation_struct(IdPart,MetaPart,Idx,FLLABEL(IdPart,MetaPart,Idx)).
+annotation_struct(IdPart,MetaPart,Idx,FLTAG(IdPart,MetaPart,Idx)).
 
 %% Binary relationship, like : or ::
 is_birelop(FL_ISA)    :- !.
@@ -768,8 +768,9 @@ flquery_struct(Body,FLQUERY(Body)).
 fldirective_struct(Direct,Index,FLDIRECTIVE(Direct,Index)).
 fludf_struct(Function,Body,ReturnValue,FLUDF(Function,Body,ReturnValue)).
 fludffact_struct(Function,ReturnValue,FLUDFFACT(Function,ReturnValue)).
-fludfsymbol_struct(Term,FLUDFSYM(Term)).
-flsensorsymbol_struct(Term,FLSENSORSYM(Term)).
+fludfsymbol_struct(Term,FLUDFSYM(Term)). %% :- symbol_context udf p(...).
+flsensorsymbol_struct(Term,FLSENSORSYM(Term)). %%:-symbol_context sensor p(...).
+flprlgsymbol_struct(Term,FLPRLGSYM(Term)). %% :- symbol context prlg p(...).
 
 flexport_wrap_term(WS,Term,Modules,UpdTag,Code) :-
 	( var(UpdTag) ->
@@ -795,6 +796,7 @@ flprologdirect_struct(SpecList,Idx,FLPROLOG(SpecList,Idx)).
 fltabledirect_struct(SpecList,Idx,FLTABLE(SpecList,Idx)).
 flusesensordirect_struct(SpecList,Idx,FLUSESENSOR(SpecList,Idx)).
 flsensordirect_struct(SensCall,DelayCond,FLSENSOR(SensCall,DelayCond)).
+flusefunctiondirect_struct(SpecList,Idx,FLUSEFUNCTION(SpecList,Idx)).
 
 flsemanticsdirect_struct(A,FLSEMANTICS(AList)) :-
 	fllist_struct(A,[],NO_INDEX,AList).
@@ -1099,13 +1101,13 @@ is_truthvalue_op(FL_FALSE) :- !.
 is_truthvalue_op(FL_FAIL) :- !.
 is_truthvalue_op(FL_UNKNOWN) :- !.
 
-is_labelprimitive_op(FL_LABEL_PRIMITIVE) :- !.
+is_tag_primitive_op(FL_TAG_PRIMITIVE) :- !.
 is_prefixprimitive_op(FL_PREFIX_PRIMITIVE) :- !.
 
 flrefresh_struct(List,FLREFRESH(List)).
 
 fltruthvalue_struct(Formula,OpName,FLTRUTHVALUE(Formula,OpName)).
-fllabelprimitive_struct(Label,Head,FLLABELPRIMITIVE(Label,Head)).
+fllabelprimitive_struct(Label,Head,FLTAGPRIMITIVE(Label,Head)).
 flprefixprimitive_struct(Prefix,Expansion,Module,FLPREFIXPRIMITIVE(Prefix,Expansion,Module)).
 
 flinsert_struct(Op,List,Cond,FLINSERT(Op,List,Cond)).
@@ -1120,8 +1122,8 @@ flupdaterule_struct(Op,RuleList,FLUPDATERULE(Op,RuleList)).
 
 flclause_struct(Head,Body,FLCLAUSE(Head,Body)).
 flclause_struct(Mode,Head,Body,FLCLAUSE(Mode,Head,Body)).
-fllabeledclause_struct(Label,Head,Body,FLLABELEDCLAUSE(Label,Head,Body)).
-fllabeledclause_struct(Label,Mode,Head,Body,FLLABELEDCLAUSE(Label,Mode,Head,Body)).
+fllabeledclause_struct(Label,Head,Body,FLTAGGEDCLAUSE(Label,Head,Body)).
+fllabeledclause_struct(Label,Mode,Head,Body,FLTAGGEDCLAUSE(Label,Mode,Head,Body)).
 
 is_flcallermodule_struct(FLCALLERMODULE(_,_)).
 is_flupdaterule_struct(FLUPDATERULE(_,_)).
@@ -1295,6 +1297,7 @@ parse_directive(CanoniTerm,Code,Status) :-
 	; table_directive(CanoniTerm,CodeList,Status)
 	; usesensor_directive(CanoniTerm,CodeList,Status)
 	; sensor_directive(CanoniTerm,CodeList,Status)
+	; usefunction_directive(CanoniTerm,CodeList,Status)
 	; setsemantics_directive(CanoniTerm,CodeList,Status)
 	; cmpopt_directive(CanoniTerm,CodeList,Status)
 	; prefixdef_directive(CanoniTerm,CodeList,Status)
@@ -1338,6 +1341,7 @@ exec_directive(CanoniTerm,FloraModSpec,Code,Status) :-
 	; exec_prolog_directive(CanoniTerm,CodeList,Status)
 	; exec_table_directive(CanoniTerm,CodeList,Status)
 	; usesensor_directive(CanoniTerm,CodeList,Status)
+	; usefunction_directive(CanoniTerm,CodeList,Status)
 	; sensor_directive(CanoniTerm,CodeList,Status)
 	; exec_setsemantics_directive(CanoniTerm,CodeList,Status)
 	; exec_semantics_directive(CanoniTerm,CodeList,Status)
@@ -2160,6 +2164,7 @@ minus_var_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Arity,Pos) :-
   prolog_directive(+CanoniTerm,-CodeList,-Status)
   table_directive(+CanoniTerm,-CodeList,-Status)
   usesensor_directive(+CanoniTerm,-CodeList,-Status)
+  usefunction_directive(+CanoniTerm,-CodeList,-Status)
 
   Define a low-level predicate as a prolog predicate
   Table those predicates.
@@ -2197,6 +2202,13 @@ usesensor_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Statu
 	make_pred_arity_slash_list(ArgList,ArgCode,Status),
 	clear_context(parsing_usesensor_directive),
 	flusesensordirect_struct(ArgCode,If,Code).
+
+usefunction_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Status) :-
+	get_name(Funct,FL_USEFUNCTION),
+	!,
+	comma_separated_list(Args,ArgList),
+	make_pred_arity_slash_list(ArgList,ArgCode,Status),
+	flusefunctiondirect_struct(ArgCode,If,Code).
 	
 
 /****************************************************************************
@@ -2525,17 +2537,41 @@ parse_body_symbol(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Code,Status) :-
 parse_body_symbol(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),Code,Status) :-
 	get_atom(Funct,FL_SYMBOL_CONTEXT_UDF),
 	!,
-        parse_body_symbol_literal(Term,NULL,TermCode,Status),
-        fludfsymbol_struct(TermCode,Code).
+	check_context_spec(Term,S1),
+	(S1 == [] ->
+	    parse_body_symbol_literal(Term,NULL,TermCode,Status),
+	    fludfsymbol_struct(TermCode,Code)
+	; Status = S1
+	).
 
 parse_body_symbol(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),Code,Status) :-
 	get_atom(Funct,FL_SYMBOL_CONTEXT_SENSOR),
 	!,
-        parse_body_symbol_literal(Term,NULL,TermCode,Status),
-        flsensorsymbol_struct(TermCode,Code).
+	check_context_spec(Term,S1),
+	(S1 == [] ->
+	    parse_body_symbol_literal(Term,NULL,TermCode,Status),
+	    flsensorsymbol_struct(TermCode,Code)
+	; Status = S1
+	).
+
+parse_body_symbol(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),Code,Status) :-
+	get_atom(Funct,FL_SYMBOL_CONTEXT_PROLOG),
+	!,
+	check_context_spec(Term,S1),
+	(S1 == [] ->
+	    parse_body_symbol_literal(Term,NULL,TermCode,Status),
+	    flprlgsymbol_struct(TermCode,Code)
+	; Status = S1
+	).
 
 parse_body_symbol(CanoniTerm,Code,Status) :-
         parse_body_symbol_literal(CanoniTerm,Code,Status).
+
+check_context_spec(CANOTERM(Funct,2,FL_PARENTHESIS,[_L,_R],If,_Ip),Status) :-
+	get_atom(Funct,FL_AT),
+	!,
+	parsing_error(If,ERROR_SYMBOL,Status).
+check_context_spec(_,[]).
 
 
 /****************************************************************************
@@ -2561,7 +2597,8 @@ parse_body_symbol_literal(CanoniTerm,_Code,Status) :-
 	fltransactionalobject_struct(CanoniTerm,_C),
 	is_fltransactionalvar_struct(_C),
         !,
-	parsing_error(CanoniTerm,ERROR_TRANSACTIONALVARLIT,Status).*/
+	parsing_error(CanoniTerm,ERROR_TRANSACTIONALVARLIT,Status).
+*/
         
 %% term
 parse_body_symbol_literal(CanoniTerm,Code,Status) :-
@@ -3829,7 +3866,7 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
 %% label{Label, Head}
 parse_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),DWS,_Code,Status) :-
 	get_name(Funct,Atom),
-	is_labelprimitive_op(Atom),
+	is_tag_primitive_op(Atom),
 	( DWS \== NULL -> parsing_error(If,ERROR_LABELPRIMITIVEMOD,Status)
 	; N \= 2 -> parsing_error(If,ERROR_LABELPRIMITIVEARITY,Status)
 	).
@@ -3837,7 +3874,7 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),DWS,_Code,Status) :-
 %% label{?Label,?Head}.  label{...}@Mod is not supported
 parse_body_literal(CANOTERM(Funct,2,FL_BRACE,[Label,Head],_If,_Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
-	is_labelprimitive_op(Atom),
+	is_tag_primitive_op(Atom),
 	!,
 	parse_term_or_var(Label,LabelCode,S1),
 	(S1 == [] ->
@@ -4910,19 +4947,6 @@ parse_body_term(Funct,N,Args,_TransFlag,DWS,Code,Status) :-
 	    true
 	).
 
-parse_body_term(Funct,_N,Args,_TransFlag,DWS,Code,Status) :-
-	get_atom(Funct,F),
-	is_datatypeop(F),
-	!,
-	get_index(Funct,If),
-	parse_composer_datatype(Args,If,DWS,Code,Status).
-
-parse_body_term(Funct,2,Args,TransFlag,DWS,Code,Status) :-
-	get_atom(Funct,F),
-	is_curi_op(F),
-	!,
-	parse_curi(Args,TransFlag,DWS,Code,Status).
-
 parse_body_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
         fltransactionalobject_struct(Funct,F),
         !,
@@ -4937,6 +4961,19 @@ parse_body_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
         ;
             parsing_error(Funct,ERROR_TRANSACTIONAL_SYMBOL,Status)
         ).
+
+parse_body_term(Funct,_N,Args,_TransFlag,DWS,Code,Status) :-
+	get_atom(Funct,F),
+	is_datatypeop(F),
+	!,
+	get_index(Funct,If),
+	parse_composer_datatype(Args,If,DWS,Code,Status).
+
+parse_body_term(Funct,2,Args,TransFlag,DWS,Code,Status) :-
+	get_atom(Funct,F),
+	is_curi_op(F),
+	!,
+	parse_curi(Args,TransFlag,DWS,Code,Status).
 
 parse_body_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
 	parse_body_pathexp(Funct,TransFlag,DWS,F,S),
@@ -6671,12 +6708,29 @@ parse_stripped_dbliteral(Mode,CanoniTerm,_DWS,_Code,Status) :-
 /****************************************************************************
   parse_db_term(+Mode,+Funct,+Arity,+Args,+TransFlag,+DWS,-Code,-Status)
 ****************************************************************************/
+parse_db_term(Mode,Funct,N,Args,_TransFlag,DWS,Code,Status) :-
+	get_atom(Funct,FAtom),
+	flora_argdef(FAtom,N,ArgTypes,DWS),
+	!, 
+        flobject_struct(Funct,F),
+	parse_db_argpathexplist(Mode,Args,ArgTypes,DWS,AList,Status),
+	( Status == []
+	-> flterm_struct(F,N,AList,Code)
+	;
+	    true
+	).
+
 parse_db_term(Mode,Funct,N,Args,TransFlag,DWS,Code,Status) :-
         fltransactionalobject_struct(Funct,F),
         !,
-        (TransFlag == ALLOW_TRANS ->
-            parse_db_pathexplist(Mode,Args,DWS,AList,Status),
-	    (Status == [] -> fltransactionalterm_struct(F,N,AList,Code); true)
+        ( TransFlag == ALLOW_TRANS ->
+	    (get_transactionalatom(Funct,FAtom),
+		flora_argdef(FAtom,N,ArgTypes,DWS)
+	    -> parse_db_argpathexplist(Mode,Args,ArgTypes,DWS,AList,Status)
+	    ;
+		parse_db_pathexplist(Mode,Args,DWS,AList,Status)
+	    ),
+            (Status == [] -> fltransactionalterm_struct(F,N,AList,Code) ; true)
         ;
             parsing_error(Funct,ERROR_TRANSACTIONAL_SYMBOL,Status)
         ).
@@ -6730,6 +6784,31 @@ parse_db_pathexplist(Mode,[T|L],DWS,[TCode|LCode],Status) :-
 	parse_db_pathexp(Mode,T,DISALLOW_TRANS,DWS,TCode,S),
 	( S == [] ->
 	    parse_db_pathexplist(Mode,L,DWS,LCode,Status)
+	;
+	  Status=S
+        ).
+
+
+/****************************************************************************
+  parse_db_argpathexplist(+Mode,+ListOfCanoniTerms,+ArgTypes,+DWS,-ListOfPathExpressions,-Status)
+****************************************************************************/
+parse_db_argpathexplist(_Mode,[],[],_DWS,[],[]) :- !.
+
+parse_db_argpathexplist(Mode,[T|L],[FL_OID|ArgTypes],DWS,[TCode|LCode],Status) :-
+	parse_db_pathexp(Mode,T,DISALLOW_TRANS,DWS,TCode,S),
+	( S == [] ->
+	    parse_db_argpathexplist(Mode,L,ArgTypes,DWS,LCode,Status)
+	;
+	  Status=S
+        ).
+
+parse_db_argpathexplist(Mode,[T|L],[FL_BODYFORMULA|ArgTypes],DWS,[RTCode|LCode],Status) :-
+	set_context(implicit_reification),
+	parse_rule_body(T,DWS,DWS,TCode,S),
+	clear_context(implicit_reification),
+	( S == [] ->
+            flreify_struct(TCode,RTCode),
+	    parse_db_argpathexplist(Mode,L,ArgTypes,DWS,LCode,Status)
 	;
 	  Status=S
         ).
@@ -7362,7 +7441,7 @@ parse_label_aux(Args,If,VarsOK,Code,Status) :-
 	    ;   %% just a variable in the Id position in meta (and not
 		%% in clause{...}) means it is a placeholder that skips the Id
 		get_flvar_struct(First,_),
-		IdCode = FL_SKIP_LABEL,
+		IdCode = FL_SKIP_TAG,
 		IdStat = []
 	    )
 	;

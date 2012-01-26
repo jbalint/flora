@@ -26,6 +26,7 @@ PROLOGEXT = .P
 ALLOBJS = flrxml_aux$(PROLOGEXT) javaAPI$(PROLOGEXT) \
 	  gclpe$(PROLOGEXT) \
 	  ogclp$(PROLOGEXT) \
+	  sgclp$(PROLOGEXT) \
 	  ogclpe$(PROLOGEXT) \
 	  atck2$(PROLOGEXT) \
 	  atck3$(PROLOGEXT) \
