@@ -2333,7 +2333,7 @@ bound to a symbol will result in a runtime error.
 
 When calling the literals defined in the same module, the {\tt @{\it
     module}} notation is not needed, of course. (In fact, since a program
-does not know where it will be loaded, using the @-notation to call a
+does not know where it will be loaded, using the @module idiom to call a
 literal in the same module is hard. However, it is possible with the help
 of the special token \thismodule, which is described later, and is left
 as an exercise.)
@@ -5873,6 +5873,46 @@ Note that the above example also illustrates that a definition of a UDF can
 consist of multiple \texttt{function}-statements---just like a definition
 of a predicate can have multiple rules. 
 
+\subsection{User-defined Functions and Multifile Modules}
+
+Recall from Section~\ref{sec-loading-mods} that sets of rules can be added to 
+an already loaded module using the \texttt{\_add}(\emph{ruleset})
+or \texttt{[+\textnormal{\emph{ruleset}}]}
+commands.  
+If the already loaded module has UDF definitions, say, for \texttt{foo/2}
+and \texttt{bar/3}, and if 
+the file \texttt{ruleset.flr} uses those functions, then it is necessary to
+tell \FLORA \emph{in the file}   \texttt{ruleset.flr} that these are UDFs and not regular HiLog
+function symbols. If this is not done, the program is unlikely to work
+correctly and it would be very hard to find out why.
+To prevent this type of hard-to-find mistakes, the system
+will issue an error at loading time.\footnote{
+  It is impossible to catch this mistake at compile time, since one
+  cannot know in advance that \texttt{ruleset.flr} is intended to
+  be loaded into a module with existing UDF definitions.
+  The \texttt{usefunction} directive is used to supply precisely this kind
+  of information to the compiler.
+  }
+
+\index{directive!usefunction}
+\index{usefunction directive}
+To deal with such situations, \FLORA provides the \texttt{usefunction}
+directive. For instance, if one puts the following at the top of
+\texttt{ruleset.flr}
+%% 
+\begin{verbatim}
+    :- usefunction foo/2, bar/3.
+\end{verbatim}
+%% 
+then \texttt{foo/2} and \texttt{bar/3}
+will be compiled correctly in \texttt{ruleset.flr} and
+no errors will be issued. 
+
+Note: UDF definitions and the \texttt{usefunction} directives are intended
+to be in \emph{different} files (for the same UDF):
+it makes \emph{no} good sense to have both a function definition and a
+\texttt{usefunction} directive for the \emph{same} UDF in the \emph{same}
+file. However, \FLORA is tolerant to this kind of misspecification.
 
 \subsection{How It Works}
 
@@ -6089,6 +6129,15 @@ occurrences of \texttt{p} as a term with two arguments, \texttt{q} as a
 predicate with one argument in \emph{any} module, \texttt{r} as a binary
 predicate in module \texttt{bar}, and \texttt{foo} as a unary UDF.      
 
+The \texttt{symbol\_context} directive also
+has special syntax for sensors and predicates declared as
+\texttt{prolog}:
+%% 
+\begin{alltt}
+   :- symbol_context sensor foo(?,?), prlg bar(?,?,?).
+\end{alltt}
+%% 
+
 Note that FLORA-2 issues warnings only on finding a \emph{second}
 inconsistent use of the same symbol. Since most symbols are used in just
 one context, there is no need to supply the above directive  
@@ -6100,8 +6149,10 @@ in most cases. For instance, in the following
     f(p(?x,?y)):-t(?x).
 \end{alltt}
 %%
-one needs to notify the compiler only about \texttt{p(?,?)}, since other
-symbols  are used consistently.
+one needs to notify the compiler only about the use of \texttt{p(?,?)} as a
+function symbol, since there is prior use of \texttt{p/1} as a predicate.
+The other symbols are used consistently and there is no need to do anything
+special for them.
 %%
 \begin{alltt}
 \end{alltt}
@@ -7934,6 +7985,23 @@ modules or to call them from outside of the modules where they are defined.
 There is also no \emph{executable}  \texttt{prolog} or \texttt{table}
 directives (i.e., invokable via $\query$ or from the \FLORA shell).
 
+\paragraph{The \texttt{prolog} and \texttt{table} directives in multi-file
+  modules.}  
+Recall from Section~\ref{sec-loading-mods} that a module can consist of
+several files: the first file would be normally loaded into the module and
+the subsequent files are added.
+Once a \texttt{prolog} or \texttt{table} declaration is issued, it affects
+the compilation of the corresponding predicate symbols. The files added
+after the file that contains the initial declarations \texttt{prolog/table}
+\emph{must} include
+the \texttt{prolog} directive, \emph{if} it uses the affected predicate symbols.
+If this is not done, the system would issue an error, as otherwise a
+hard-to-find error is likely to creep up into the user program.\footnote{
+  Note: subsequently added files need only the \texttt{prolog}
+  directives---even for predicates that are declared in a \texttt{table}
+  directive. 
+  }
+
 
 \section{Sensors: Predicates with Restricted Invocation Patterns}\label{sec-sensor}
 
@@ -8986,33 +9054,6 @@ For instance,
     ?- status(?I,configuration(0,block4,square7))[info->conflictsWith(?X)]@_gcl.
     ?- status(?I,configuration(nxt(nxt(0)),block4,square3))[howDefeated->?X]@_gcl.
     ?- status(?I,configuration(0,block4,square7))[info->competes(?Exclusion,?O)]@gcle.
-\end{verbatim}
-%% 
-
-\subsection{Defeasible Reasoning and Knowledge Base Updates}
-
-The dependency of tabling on knowledge base updates has been extensively
-discussed in Section~\ref{sec-updates-tabling}.
-Since argumentation theories used by the defeasible reasoning mechanism
-are implemented using tabled
-predicates, it is sometimes necessary to refresh those tables as well when
-the knowledge base is modified by insertion or deletion of facts and rules.
-To simplify this task, \FLORA modules that implement argumentation
-theories must provide the predicate {\tt \%refresh/0}, which is invoked as
-follows:
-%% 
-\begin{verbatim}
-    ?- %refresh@foo.
-\end{verbatim}
-%% 
-where {\tt foo} is the name of the argumentation theory in question. For
-instance, for the GCL argumentation theory, this task can be performed via the
-query
-%% 
-\index{\%refresh predicate}
-%%
-\begin{verbatim}
-    ?- %refresh@_gcl.
 \end{verbatim}
 %% 
 
