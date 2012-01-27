@@ -31,7 +31,8 @@ file_list=*.flr
 exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
     	      basetype_moo.flr basetype_foo.flr \
               add1.flr add2.flr \
-              trailer.flr sensortest_declarations.flr \
+              trailer.flr \
+              sensortest_declarations.flr sensortest_usedecl.flr \
               ruleupdates.flr reif_foo.flr \
               callReified_foo.flr callReified_foo2.flr \
     	      module_foo.flr \
@@ -39,7 +40,9 @@ exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
               encap_mod1.flr encap_mod2.flr encap_syntax_check.flr \
               error_invalidsym.flr error_dynmod.flr \
               error_nonvar.flr error_nonvar2.flr error_nonvar3.flr \
-	      test_func_modulebar.flr test_delays_errors1.flr test_delays_errors2.flr"
+	      test_func_modulebar.flr test_func_facts_aux.flr \
+	      test_builtin_err.flr \
+    	      test_delays_errors1.flr test_delays_errors2.flr"
 
 
 # Test if element is a member of exclude list
@@ -59,18 +62,18 @@ OBJEXT=.xwam
 
 # Remove the Prolog and object files to make sure we are using the 
 # latest compiled sources
-rm -f *.P *${OBJEXT} *.fld *.fdb *.con
-rm -f programs/*.P programs/*${OBJEXT} programs/*.fld programs/*.fdb
+rm -f *.P *${OBJEXT} *.fld *.fdb *.con *.flt *.fls*
+rm -f programs/*.P programs/*${OBJEXT} programs/*.fld programs/*.fdb programs/*.fls* programs/*.flt
 rm -f gpmanager/*.P gpmanager/*${OBJEXT} gpmanager/*.fld gpmanager/*.fdb
-rm -f $basedir/datafiles/*.P    $basedir/datafiles/*${OBJEXT}  $basedir/datafiles/*.fld  $basedir/datafiles/*.fdb
-rm -f $basedir/exporttest/*.P    $basedir/exporttest/*${OBJEXT}  $basedir/exporttest/*.fld  $basedir/exporttest/*.fdb
+rm -f $basedir/datafiles/*.P    $basedir/datafiles/*${OBJEXT}  $basedir/datafiles/*.fld  $basedir/datafiles/*.fdb $basedir/datafiles/*.fls* $basedir/datafiles/*.flt
+rm -f $basedir/exporttest/*.P    $basedir/exporttest/*${OBJEXT}  $basedir/exporttest/*.fld  $basedir/exporttest/*.fdb $basedir/exporttest/*.fls* $basedir/exporttest/*.flt
 rm -f $basedir/general_tests/prolog/*${OBJEXT}
 rm -f $basedir/functions/*${OBJEXT} $basedir/functions/*.P
-rm -f $basedir/functions/equality/*${OBJEXT} $basedir/functions/equality/*.P
-rm -f $basedir/functions/errors_warnings_tests/*${OBJEXT} $basedir/functions/errors_warnings_tests/*.P
+rm -f $basedir/functions/equality/*${OBJEXT} $basedir/functions/equality/*.P $basedir/functions/equality/*.fls* $basedir/functions/equality/*.flt $basedir/functions/equality/*.fld $basedir/functions/equality/*.fdb
+rm -f $basedir/functions/errors_warnings_tests/*${OBJEXT} $basedir/functions/errors_warnings_tests/*.P $basedir/functions/errors_warnings_tests/*.flt $basedir/functions/errors_warnings_tests/*.fls* $basedir/functions/errors_warnings_tests/*.fdb $basedir/functions/errors_warnings_tests/*.fld
 rm -f $basedir/symbols/*${OBJEXT} $basedir/symbols/*.P
-rm -f $basedir/symbols/tests/*${OBJEXT} $basedir/symbols/tests/*.P
-rm -f $basedir/symbols/test_load/*${OBJEXT} $basedir/symbols/test_load/*.P
+rm -f $basedir/symbols/tests/*${OBJEXT} $basedir/symbols/tests/*.P $basedir/symbols/tests/*.fdb $basedir/symbols/tests/*.fls* $basedir/symbols/tests/*.flt $basedir/symbols/tests/*.fld
+rm -f $basedir/symbols/test_load/*${OBJEXT} $basedir/symbols/test_load/*.P $basedir/symbols/test_load/*.fdb $basedir/symbols/test_load/*.fld $basedir/symbols/test_load/*.fls* $basedir/symbols/test_load/*.flt
 
 
 # run the tests
