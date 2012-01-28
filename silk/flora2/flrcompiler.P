@@ -2813,10 +2813,10 @@ compile_symbol_literal(ParserTerm,WS,Context,Status) :-
 	    compile_symbol_term(Funct,N,WS,Context,NONTRANSACTIONAL_SYMBOL),
 	    Status = []
 	; is_flatom(ParserTerm,_Atom) ->
-	    compile_symbol_term(ParserTerm,0,WS,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL),
+	    compile_symbol_term(ParserTerm,0,WS,Context,NONTRANSACTIONAL_SYMBOL),
 	    Status = []
 	; is_fltransactionalatom(ParserTerm,_Atom) ->
-	    compile_symbol_term(ParserTerm,0,WS,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL),
+	    compile_symbol_term(ParserTerm,0,WS,Context,TRANSACTIONAL_SYMBOL),
 	    Status = []
 	;
 	    approx_flindex(Funct,Index),
@@ -2905,10 +2905,16 @@ compile_fact(Head,RuleList-RuleTail,FactList-FactTail,Status) :-
 	    ( H2BCodeHead == NULL, H2BCodeTail == NULL ->
 		compile_factlist(HeadCode,RuleList-RuleTail,FactList-FactTail),
 		%%RuleList = RuleTail, %% empty rule diff list
-		(has_context(compiling_udf) -> S2 = []
-		%% for UDFs variables are checked separately
-		;
-		    check_head_vars_for_safety(Head,[],S2)
+		( %% UDF vars are checked elsewhere
+		    has_context(compiling_udf) -> S2 = []
+		; %% check head vars for safety
+		    collect_flvars(Head,HeadVars), HeadVars \== []
+		->  %% for facts we can do a fast check for var safety
+		    unbound_warning(HeadVars,S2_1,[],UNBOUND_VAR_IN_FACT),
+		    singleton_flvars(HeadVars,SingletonVars),
+		    singleton_warning(SingletonVars,S2_2,[]),
+		    append(S2_1,S2_2,S2)
+		;  S2 = []
 		)
 	    %%% fact became a rule due to code in arguments: compile as a rule
 	    ; has_context(compiling_for_addition) ->
@@ -3354,7 +3360,7 @@ new_udf_predicate(Name,N,OrigArgs,Args,NewPredicateCode,NewPredicateOrigArgs,NPN
 
 new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody):-
 	%% Form body for the new rule.
-	%% To avoid singletin variable warning variable in the head
+	%% To avoid singleton variable warning variable in the head
 	%%    and variable in the body of new rule must have different indexes
 	flvar_struct_change_index(NewReturnValue,FunctIndex,NewReturnValueInBody), 
 	flatom_struct(FL_UNIVEQ,NO_INDEX,ExprFunct),
@@ -3395,7 +3401,7 @@ compile_rule(Head,Body,Annotation,RuleList-RuleTail,Facts-Facts,Status) :-
 	compile_head(Head,HeadCode,H2BCodeHead,H2BCodeTail,HeadStatusPre),
 	compile_conjunct2list(HeadCode,HeadCodeList),
 	no_mixed_sensor_nonsensor_heads(HeadCodeList,Head,DelayStatus),
-	merge_status([HeadStatusPre,DelayStatus],HeadStatus),
+	append(HeadStatusPre,DelayStatus,HeadStatus),
 	( no_errors_found(HeadStatus) ->
 	    compile_body(Body,BCode1,BodyStatus),
 	    collect_prdatatypevars([HeadCodeList,BCode1],DTVarsCode),
@@ -3429,7 +3435,7 @@ compile_rule(Head,Body,Annotation,RuleList-RuleTail,Facts-Facts,Status) :-
 		%% for UDFS checking variables is done separately
 		->
 		    check_head_vars_for_safety(Head,Body,VarStatus),
-		    merge_status([HeadStatus,BodyStatus,Status1,VarStatus],Status)
+		    flatten([HeadStatus,BodyStatus,Status1,VarStatus],Status)
 		; Status = Status1
 		)
 	    ;
@@ -3709,7 +3715,7 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	; is_flatom(ParserTerm,_) ->
 	    %% atom (0-ary predicate)
 	    check_symbol_name_for_clashes(ParserTerm,0,
-					  FUNCTION_SYMBOL,
+					  PREDICATE_SYMBOL,
 					  NONTRANSACTIONAL_SYMBOL,Status),
 	    atomlit_struct(HEADLITERAL,ParserTerm,Code),
 	    H2BCodeHead=NULL,
@@ -3719,7 +3725,7 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	
 	; is_flbuiltin_identifier(ParserTerm,_) ->
 	    check_symbol_name_for_clashes(ParserTerm,0,
-					  FUNCTION_SYMBOL,
+					  PREDICATE_SYMBOL,
 					  NONTRANSACTIONAL_SYMBOL,Status),
 	    atomlit_struct(HEADLITERAL,ParserTerm,Code) ->
 	    H2BCodeHead=NULL,
@@ -3728,7 +3734,7 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 
         ;
 	    check_symbol_name_for_clashes(ParserTerm,0,
-					  FUNCTION_SYMBOL,
+					  PREDICATE_SYMBOL,
 					  TRANSACTIONAL_SYMBOL,Status),
 	    transactionalatomlit_struct(HEADLITERAL,ParserTerm,Code),
 	    H2BCodeHead=NULL,
@@ -3749,7 +3755,7 @@ compile_body(ParserTerm,Code,Status) :-
 	    compile_body(R,RCode,S2),
 	    ( no_errors_found(S2) ->
 		conjunct_struct(LCode,RCode,Code),
-		merge_status([S,S2],Status)
+		append(S,S2,Status)
 	    ; Status=S2)
 	;
 	  Status=S
@@ -3763,7 +3769,7 @@ compile_body(ParserTerm,Code,Status) :-
 	    compile_body(R,RCode,S2),
 	    ( no_errors_found(S2) ->
 		disjunct_struct(LCode,RCode,Code),
-		merge_status([S,S2],Status)
+		append(S,S2,Status)
 	    ; Status=S2)
 	;
 	  Status=S
@@ -3776,7 +3782,7 @@ compile_body(ParserTerm,Code,Status) :-
 	compile_body(G,GCode,Status1),
 	( no_errors_found(Status1) ->
 	   neg_struct(GCode,Idx,Code,Status2),
-	   merge_status([Status1,Status2],Status)
+	   append(Status1,Status2,Status)
 	; Status = Status1
 	).
 
@@ -3823,7 +3829,7 @@ compile_body(ParserTerm,Code,Status) :-
 
 	rename_prvariables(QuantVarNames,FormCode,
 			   RenamedFormCode,_RenamedQuantVars),
-	merge_status([S1,S2,S3],Status),
+	flatten([S1,S2,S3],Status),
 	( no_errors_found(Status) ->
 	    %% Create the code for compiled quantification.
 	    quantifier_struct(FL_EXISTS,RenamedFormCode,FreeVarObjs,Code)
@@ -4108,21 +4114,21 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    Status=[]
 
 	; is_flatom(ParserTerm,_A) ->
-	    check_symbol_name_for_clashes(ParserTerm,0,FUNCTION_SYMBOL,
+	    check_symbol_name_for_clashes(ParserTerm,0,PREDICATE_SYMBOL,
 					  NONTRANSACTIONAL_SYMBOL,Status),
 	    BodyHeadList = [],
 	    atomlit_struct(BODYLITERAL,ParserTerm,SpecCode) ->
 	    OidCode=NULL
 
 	; is_flbuiltin_identifier(ParserTerm,_A) ->
-	    check_symbol_name_for_clashes(ParserTerm,0,FUNCTION_SYMBOL,
+	    check_symbol_name_for_clashes(ParserTerm,0,PREDICATE_SYMBOL,
 					  NONTRANSACTIONAL_SYMBOL,Status),
 	    BodyHeadList = [],
 	    atomlit_struct(BODYLITERAL,ParserTerm,SpecCode) ->
 	    OidCode=NULL
 
 	; is_fltransactionalatom(ParserTerm,_A) ->
-	    check_symbol_name_for_clashes(ParserTerm,0,FUNCTION_SYMBOL,
+	    check_symbol_name_for_clashes(ParserTerm,0,PREDICATE_SYMBOL,
 					  TRANSACTIONAL_SYMBOL,Status),
 	    BodyHeadList = [],
 	    transactionalatomlit_struct(BODYLITERAL,ParserTerm,SpecCode) ->
@@ -4158,7 +4164,7 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 compile_flifthenelse(Cond,Then,Else,Code,Status) :-
 	compile_body(Cond,CondCode,S1),
 	compile_body(Then,ThenCode,S2),
-	merge_status([S1,S2],CondThenStatus),
+	append(S1,S2,CondThenStatus),
 	( no_errors_found(CondThenStatus) ->
 	    compile_body(Else,ElseCode,Status),
 	    ( no_errors_found(Status) ->
@@ -4750,7 +4756,7 @@ compile_pathexplist([T|L],Nesting,[TObj|LObj],OidCode,Code,BodyHeadList,Status) 
 	    ( no_errors_found(S2) ->
 		conjunct_code([TCode,LCode],Code),
 		conjunct_code([OidCodeHead,OidCodeTail],OidCode),
-		merge_status([S,S2],Status)
+		append(S,S2,Status)
 	    ;
 		Status=S2
 	    )
@@ -5036,7 +5042,7 @@ compile_fldelayquant(Quant,Condition,Goal,Index,SpecCode,BodyHeadList,Status):-
 	    ( no_errors_found(S1) ->
 		compile_body(Goal,GoalCode,S2),
 		( no_errors_found(S2) ->
-		    merge_status([S1,S2],Status),
+		    append(S1,S2,Status),
 		    delay_struct(Index,FL_DELAYQUANT,
 				 [Quant,ConditionCode,GoalCode],
 				 SpecCode)
@@ -5282,7 +5288,7 @@ compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
 	rename_prvariables(QuantVarNames,FormCode,
 			   RenamedFormCode,_RenamedQuantVars),
 
-	merge_status([S1,S2,S3],Status),
+	flatten([S1,S2,S3],Status),
 	( no_errors_found(Status) -> 
 	    %% Create the code for compiled quantification.
 	    conjunct_code([OidCode,RenamedFormCode],CombinedCode),
@@ -5851,7 +5857,7 @@ compile_head_pathexplist([T|L],[TObj|LObj],Code,H2BCodeHead,H2BCodeTail,Status) 
 		    conjunct_struct(TCode,LCode,Code),
 		    conjunct_code([TH2BCodeHead,LH2BCodeHead],H2BCodeHead),
 		    conjunct_code([TH2BCodeTail,LH2BCodeTail],H2BCodeTail),
-		    merge_status([S,S2],Status)
+		    append(S,S2,Status)
 	     ;
 	      Status=S2)
 	;
@@ -6303,7 +6309,8 @@ compile_head_flobjeql(Obj1,Obj2,Code,H2BCodeHead,H2BCodeTail,Status) :-
 compile_head_flneg(PosLit,Idx,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	compile_head_literal(PosLit,PosCode,H2BCodeHead,H2BCodeTail,Status1),
 	( no_errors_found(Status1) -> 
-	    head_neg_struct(PosCode,Idx,Code,Status)
+	    head_neg_struct(PosCode,Idx,Code,Status2),
+	    append(Status1,Status2,Status)
 	;
 	  Status = Status1
 	).
@@ -6385,7 +6392,7 @@ compile_wsliteral(ParserTerm,WS,Nesting,OidCode,WSCode,BodyHeadList,Status) :-
 	    attach_workspace(WS,
 			     atomlit_struct(BODYLITERAL,ParserTerm,Code),
 			     Code,WSCode),
-	    check_symbol_name_for_clashes(ParserTerm,0,WS,FUNCTION_SYMBOL,
+	    check_symbol_name_for_clashes(ParserTerm,0,WS,PREDICATE_SYMBOL,
 					  NONTRANSACTIONAL_SYMBOL,Status),
 	    OidCode=NULL
 	;
@@ -6393,7 +6400,7 @@ compile_wsliteral(ParserTerm,WS,Nesting,OidCode,WSCode,BodyHeadList,Status) :-
 	    attach_workspace(WS,
 			     transactionalatomlit_struct(BODYLITERAL,ParserTerm,Code),
 			     Code,WSCode),
-	    check_symbol_name_for_clashes(ParserTerm,0,WS,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,Status),
+	    check_symbol_name_for_clashes(ParserTerm,0,WS,PREDICATE_SYMBOL,TRANSACTIONAL_SYMBOL,Status),
 	    OidCode=NULL
 	).
 
@@ -6503,7 +6510,7 @@ compile_wsflpathexplist([T|L],WS,Nesting,[TObj|LObj],OidCode,Code,BodyHeadList,S
 	    ( no_errors_found(S2) -> 
 		conjunct_code([TCode,LCode],Code),
 		conjunct_code([OidCodeHead,OidCodeTail],OidCode),
-		merge_status([S,S2],Status)
+		append(S,S2,Status)
 	    ; Status=S2
 	    )
 	;
@@ -6925,7 +6932,7 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	rename_prvariables(QuantVarNames,FormCode,
 			   RenamedFormCode,_RenamedQuantVars),
 
-	merge_status([S1,S2,S3],Status),
+	flatten([S1,S2,S3],Status),
 	( no_errors_found(Status) -> 
 	    %% Create the code for compiled quantification.
 	    conjunct_code([OidCode,RenamedFormCode],CombinedCode),
@@ -7687,14 +7694,14 @@ compile_head_wsliteral(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    attach_workspace(WS,
 			     atomlit_struct(HEADLITERAL,ParserTerm,ACode),
 			     ACode,Code),
-	    check_symbol_name_for_clashes(ParserTerm,0,WS,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
+	    check_symbol_name_for_clashes(ParserTerm,0,WS,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL
 	;
 	    attach_workspace(WS,
 			     transactionalatomlit_struct(HEADLITERAL,ParserTerm,ACode),
 			     ACode,Code),
-	    check_symbol_name_for_clashes(ParserTerm,0,WS,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,Status),
+	    check_symbol_name_for_clashes(ParserTerm,0,WS,PREDICATE_SYMBOL,TRANSACTIONAL_SYMBOL,Status),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL
 	).
@@ -7714,7 +7721,7 @@ compile_head_wsflpathexplist([T|L],WS,[TObj|LObj],Code,H2BCodeHead,H2BCodeTail,S
 		conjunct_struct(TCode,LCode,Code),
 		conjunct_code([TH2BCodeHead,LH2BCodeHead],H2BCodeHead),
 		conjunct_code([TH2BCodeTail,LH2BCodeTail],H2BCodeTail),
-		merge_status([S,S2],Status)
+		append(S,S2,Status)
 	    ;
 		Status=S2
 	    )
@@ -8250,8 +8257,9 @@ compile_head_wsflneg(PosPart,WS,Idx,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	compile_head_wsliteral(PosPart,WS,PosCode,H2BCodeHead,H2BCodeTail,S),
 	( no_errors_found(S) -> 
 	    attach_workspace(WS,
-			     head_neg_struct(PosCode,Idx,NegCode,Status),
-			     NegCode,Code)
+			     head_neg_struct(PosCode,Idx,NegCode,Status1),
+			     NegCode,Code),
+	    append(S,Status1,Status)
 	; Status = S
 	).
 
@@ -8262,13 +8270,14 @@ compile_head_wsflneg(PosPart,WS,Idx,Code,H2BCodeHead,H2BCodeTail,Status) :-
 compile_flinsert(Op,List,Cond,Code,Status) :-
 	compile_flinsert_literals(List,CodeList,S),
 	( no_errors_found(S) -> 
-	    compile_body(Cond,CondCode,Status),
-	    ( no_errors_found(Status) -> 
+	    compile_body(Cond,CondCode,Status1),
+	    ( no_errors_found(Status1) -> 
 		list_struct(CodeList,[],ListCode),
 		insert_struct(Op,ListCode,CondCode,Code)
 	    ;
 	      true
-	    )
+	    ),
+	    append(S,Status1,Status)
 	;
 	  Status=S
         ).
@@ -8315,9 +8324,11 @@ compile_flinsert_list([H|T],Code,Status) :-
 	List = [R],
 	compile_fldynrule(OpAtom,R,HCode,S),
 	( no_errors_found(S) -> 
-	    compile_flinsert_list(T,TCode,Status),
-	    ( no_errors_found(Status) -> 
-		conjunct_struct(HCode,TCode,Code); true)
+	    compile_flinsert_list(T,TCode,Status1),
+	    ( no_errors_found(Status1) -> conjunct_struct(HCode,TCode,Code)
+	    ; true
+	    ),
+	    append(S,Status1,Status)
 	;
 	  Status=S
 	).
@@ -8334,7 +8345,7 @@ compile_flinsert_list([H|T],Code,Status) :-
 		   conjunct_struct(HeadCode1,TCode,Code)
 		; true
 		),
-		merge_status([S,S2],Status)
+		append(S,S2,Status)
 	    ;
 		%% Head literal contains a path expr, so it becomes a rule.
 		%% Treat it as a dynamically inserted rule.
@@ -8366,7 +8377,7 @@ compile_flinsert_list([H|T],Code,Status) :-
 		( no_errors_found(S2) -> 
 		    conjunct_struct(HDynruleCode,TCode,Code)
 		; true),
-		merge_status([S,S2],Status)
+		append(S,S2,Status)
 	    )
 	;
 	    Status=S
@@ -8381,13 +8392,14 @@ compile_flinsert_list([H|T],Code,Status) :-
 compile_fldelete(Op,List,Cond,Code,Status) :-
 	compile_fldelete_literals(List,CodeList,S),
 	( no_errors_found(S) -> 
-	    compile_body(Cond,CondCode,Status),
-	    ( no_errors_found(Status) -> 
+	    compile_body(Cond,CondCode,Status1),
+	    ( no_errors_found(Status1) -> 
 		list_struct(CodeList,[],ListCode),
 		delete_struct(Op,ListCode,CondCode,Code)
 	    ;
 	      true
-	    )
+	    ),
+	    append(S,Status1,Status)
 	;
 	  Status=S
         ).
@@ -8534,7 +8546,7 @@ compile_fldynrule_list(Op,[H|L],[HCode|LCode],Status) :-
 	!,
 	( no_errors_found(S) -> 
 		compile_fldynrule_list(Op,L,LCode,S1),
-		merge_status([S,S1],Status)
+		append(S,S1,Status)
 	; S = Status
 	).
 
@@ -8569,7 +8581,7 @@ compile_fldynrule(Op,R,RCode,Status) :-
 	    DelayStatus = [DelayStatus1]
 	; DelayStatus = []
 	),
-	merge_status([HeadStatusPre,DelayStatus],HeadStatus),
+	append(HeadStatusPre,DelayStatus,HeadStatus),
 	( no_errors_found(HeadStatus) -> 
 	    compile_body(Body,BodyCode1,BodyStatus),
 	    ( no_errors_found(BodyStatus) -> 
@@ -8629,10 +8641,9 @@ compile_fldynrule(Op,R,RCode,Status) :-
 		;
 		    true
 		),
-		merge_status([HeadStatus,BodyStatus,Status1],Status)
+		flatten([HeadStatus,BodyStatus,Status1],Status)
 	    ;
-		merge_status([HeadStatus,BodyStatus],Status)
-		%% Status = BodyStatus
+		flatten([HeadStatus,BodyStatus],Status)
 	    )
 	;
 	    Status=HeadStatus
@@ -9069,6 +9080,9 @@ compiling_flrshell_command :- \+ flora_current_compile_filename(_).
 
 
 
+/*
+%% This often looses warnings and errors, so we replaced with append and flatten
+%%
 %% This can simplify code when there is no dependency in the intervening code
 %% on the outcome of the status codes in the Arg 1 list
 merge_status([],[]) :- !.
@@ -9076,6 +9090,7 @@ merge_status([S|Rest],T) :-
 	(S == [] -> merge_status(Rest,T)
 	; T = S
 	).
+*/
 
 
 /***************************************************************************
