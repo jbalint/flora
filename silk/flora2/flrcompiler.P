@@ -2608,8 +2608,8 @@ compile_direct(DirectTerm,_DirIdx,[Code],Status) :-
 compile_direct(DirectTerm,_,[Code],Status) :-
 	is_flprolog_directive(DirectTerm,PairList,Idx),
 	!,
-	check_symbol_pairlist_for_clashes(PairList,Idx, PROLOG_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	verify_symbol_context_pairlist(PairList,Idx, PROLOG_SYMBOL,
+				       NONTRANSACTIONAL_SYMBOL,Status),
 	maplist(prolog_option(_,_),PairList,PermaOptions),
 	make_runtime_modular_prolog_declarations(PermaOptions,Code),
 	set_permaoptions(PermaOptions).
@@ -2624,8 +2624,8 @@ prolog_option(P/N,prolog(P,N)) :-
 compile_direct(DirectTerm,_,[CodeTbl,CodePrlg],Status) :-
 	is_fltabledirect(DirectTerm,PredSpecList,Idx),
 	!,
-	check_symbol_pairlist_for_clashes(PredSpecList,Idx, PROLOG_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	verify_symbol_context_pairlist(PredSpecList,Idx, PROLOG_SYMBOL,
+				       NONTRANSACTIONAL_SYMBOL,Status),
 	maplist(prolog_option(_,_),PredSpecList,PermaOptions),
 	make_runtime_modular_prolog_declarations(PermaOptions,CodePrlg),
 	set_permaoptions(PermaOptions),
@@ -2642,8 +2642,8 @@ compile_direct(DirectTerm,_,[Code],Status) :-
 	!,
 	maplist(make_sensor_permaoption(_,_),PairList,PermaOptions),
 	set_permaoptions(PermaOptions),
-	check_symbol_pairlist_for_clashes(PairList,Idx, USE_SENSOR_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	verify_symbol_context_pairlist(PairList,Idx, USE_SENSOR_SYMBOL,
+				       NONTRANSACTIONAL_SYMBOL,Status),
 	verbatim_struct(PairList,PairListCode),
 	thismodule_struct(ThisMod),
 	florasyslib_struct(FLLIBRECORDSENSORS,2,[ThisMod,PairListCode],Code1),
@@ -2658,8 +2658,8 @@ make_sensor_permaoption(P/N,sensor(P,N)).
 compile_direct(DirectTerm,_,[],Status) :-
 	is_flusefunctiondirect(DirectTerm,PairList,Idx),
 	!,
-	check_symbol_pairlist_for_clashes(PairList,Idx, USE_UDF_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	verify_symbol_context_pairlist(PairList,Idx, USE_UDF_SYMBOL,
+				       NONTRANSACTIONAL_SYMBOL,Status),
 	maplist(usefunction_option(_,_),PairList,PermaOptions),
 	set_permaoptions(PermaOptions).
 
@@ -2874,7 +2874,7 @@ compile_sensor_direct(SensCall,DelayCond,Code,Status) :-
 	    %% record symbol as sensor symbol, for error checking
 	    SensArity2 is SensArity-2,
 	    flprologlib_functor(SensCall,SensFunct),
-	    check_symbol_name_for_clashes(SensFunct,SensArity2,
+	    verify_symbol_context(SensFunct,SensArity2,
 					  SENSOR_SYMBOL,NONTRANSACTIONAL_SYMBOL,
 					  Status)
 	; Status = S2
@@ -3308,7 +3308,7 @@ compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactLi
 	    CodeList=RuleList,
 	    ( no_errors_found(S) -> 
 		is_flterm(Function,FuncSym,FuncSymArity,_),
-		check_symbol_name_for_clashes(FuncSym,FuncSymArity,UDF_SYMBOL,
+		verify_symbol_context(FuncSym,FuncSymArity,UDF_SYMBOL,
 					      NONTRANSACTIONAL_SYMBOL,
 					      SymbolStatus),
 		check_udf_vars_for_safety(Function,Body,ReturnValue,VarStatus),
@@ -3714,9 +3714,8 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 
 	; is_flatom(ParserTerm,_) ->
 	    %% atom (0-ary predicate)
-	    check_symbol_name_for_clashes(ParserTerm,0,
-					  PREDICATE_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0, PREDICATE_SYMBOL,
+				  NONTRANSACTIONAL_SYMBOL,Status),
 	    atomlit_struct(HEADLITERAL,ParserTerm,Code),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL
@@ -3724,18 +3723,16 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 
 	
 	; is_flbuiltin_identifier(ParserTerm,_) ->
-	    check_symbol_name_for_clashes(ParserTerm,0,
-					  PREDICATE_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0, PREDICATE_SYMBOL,
+				  NONTRANSACTIONAL_SYMBOL,Status),
 	    atomlit_struct(HEADLITERAL,ParserTerm,Code) ->
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL
 	    %%Status=[]
 
         ;
-	    check_symbol_name_for_clashes(ParserTerm,0,
-					  PREDICATE_SYMBOL,
-					  TRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0, PREDICATE_SYMBOL,
+				  TRANSACTIONAL_SYMBOL,Status),
 	    transactionalatomlit_struct(HEADLITERAL,ParserTerm,Code),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL
@@ -4114,22 +4111,22 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    Status=[]
 
 	; is_flatom(ParserTerm,_A) ->
-	    check_symbol_name_for_clashes(ParserTerm,0,PREDICATE_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,PREDICATE_SYMBOL,
+				  NONTRANSACTIONAL_SYMBOL,Status),
 	    BodyHeadList = [],
 	    atomlit_struct(BODYLITERAL,ParserTerm,SpecCode) ->
 	    OidCode=NULL
 
 	; is_flbuiltin_identifier(ParserTerm,_A) ->
-	    check_symbol_name_for_clashes(ParserTerm,0,PREDICATE_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,PREDICATE_SYMBOL,
+				  NONTRANSACTIONAL_SYMBOL,Status),
 	    BodyHeadList = [],
 	    atomlit_struct(BODYLITERAL,ParserTerm,SpecCode) ->
 	    OidCode=NULL
 
 	; is_fltransactionalatom(ParserTerm,_A) ->
-	    check_symbol_name_for_clashes(ParserTerm,0,PREDICATE_SYMBOL,
-					  TRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,PREDICATE_SYMBOL,
+				  TRANSACTIONAL_SYMBOL,Status),
 	    BodyHeadList = [],
 	    transactionalatomlit_struct(BODYLITERAL,ParserTerm,SpecCode) ->
 	    OidCode=NULL
@@ -4283,13 +4280,14 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status)
 
 	; is_fltransactionalatom(ParserTerm,_A) ->
-	    check_symbol_name_for_clashes(ParserTerm,0,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
+				  TRANSACTIONAL_SYMBOL,Status),
 	    BodyHeadList=[],
 	    transactionalatomobj_struct(ParserTerm,Object)
 
 	; is_fltoken(ParserTerm,FL_THISMODULE,_Index) ->
-	    check_symbol_name_for_clashes(ParserTerm,0,FUNCTION_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
+				  NONTRANSACTIONAL_SYMBOL,Status),
 	    BodyHeadList=[],
 	    thismodule_struct(Object)
 
@@ -4298,8 +4296,8 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	; is_fltoken(ParserTerm,FL_NEWOID,Index) ->
 	    /*
 	    %% no point checking skolems
-	    check_symbol_name_for_clashes(ParserTerm,0,FUNCTION_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
+				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
 	    BodyHeadList=[],
 	    new_oidobj(Index,Object)
@@ -4308,8 +4306,8 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	; is_fltoken(ParserTerm,FL_NEWOID,Num,Index) ->
 	    /*
 	    %% no point checking skolems
-	    check_symbol_name_for_clashes(ParserTerm,0,FUNCTION_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
+				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
 	    BodyHeadList=[],
 	    flora_get_counter(RULE_NUM, Rule_num), 
@@ -4342,8 +4340,8 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    Status=[]
 
 	; is_flbuiltin_identifier(ParserTerm,_Ident) ->
-	    check_symbol_name_for_clashes(ParserTerm,0,FUNCTION_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
+				  NONTRANSACTIONAL_SYMBOL,Status),
 	    BodyHeadList=[],
 	    builtin_identifier_struct(ParserTerm,Object)
 
@@ -4422,8 +4420,8 @@ compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 
 
 /****************************************************************************
-check_symbol_name_for_clashes(+Funct,+Arity,+SymbolContext,+Transactional,-SymbolContextStatus)
-check_symbol_name_for_clashes(+Funct,+Arity,+WS,+SymbolContext,+Transactional,-SymbolContextStatus)
+verify_symbol_context(+Funct,+Arity,+SymbolContext,+Transactional,-SymbolContextStatus)
+verify_symbol_context(+Funct,+Arity,+WS,+SymbolContext,+Transactional,-SymbolContextStatus)
 
   The context 'compiling_term_name' is set in rule body responsible
   for compiling a term (e.g. compile_fltermlit).
@@ -4432,56 +4430,56 @@ check_symbol_name_for_clashes(+Funct,+Arity,+WS,+SymbolContext,+Transactional,-S
   name and atom by itself
 
 ****************************************************************************/
-check_symbol_name_for_clashes(Funct,Arity,SymbolContext,Transactional,Status) :-
-	check_symbol_name_for_clashes(Funct,Arity,NULL,SymbolContext,Transactional,Status).
+verify_symbol_context(Funct,Arity,SymbolContext,Transactional,Status) :-
+	verify_symbol_context(Funct,Arity,NULL,SymbolContext,Transactional,Status).
 
 %% If term name is a variable, do not check 
-check_symbol_name_for_clashes(Funct,_Arity,_WS,_SymbolContext,_Transactional,[]):-
+verify_symbol_context(Funct,_Arity,_WS,_SymbolContext,_Transactional,[]):-
 	is_flvariable(Funct,_Name,_Index),
 	!.
 
 %% Already checked symbol: do not check again and do not record duplicates(!)
-check_symbol_name_for_clashes(Funct,Arity,_WS,SymbolContext,Transactional,[]):-
+verify_symbol_context(Funct,Arity,_WS,SymbolContext,Transactional,[]):-
 	SymbolContext \== SENSOR_SYMBOL,
 	SymbolContext \== UDF_SYMBOL,
 	flora_get_flatomvar_name(Funct,Name),
 	has_symbol(Name,Arity,_,_SIndex,_SLine,SymbolContext,Transactional),
 	!.
 
-check_symbol_name_for_clashes(Funct,Arity,_WS,UDF_SYMBOL,Transactional,[]):-
+verify_symbol_context(Funct,Arity,_WS,UDF_SYMBOL,Transactional,[]):-
 	flora_get_flatomvar_name(Funct,Name),
 	(has_symbol(Name,Arity,_,_SIndex,_SLine,USE_UDF_SYMBOL,Transactional)
 	; has_symbol(Name,Arity,_,_SIndex,_SLine,UDF_SYMBOL,Transactional)
 	),
 	!.
 
-check_symbol_name_for_clashes(Funct,Arity,_WS,SENSOR_SYMBOL,Transactional,[]):-
+verify_symbol_context(Funct,Arity,_WS,SENSOR_SYMBOL,Transactional,[]):-
 	flora_get_flatomvar_name(Funct,Name),
 	(has_symbol(Name,Arity,_,_SIndex,_SLine,USE_SENSOR_SYMBOL,Transactional)
 	; has_symbol(Name,Arity,_,_SIndex,_SLine,SENSOR_SYMBOL,Transactional)
 	),
 	!.
 
-check_symbol_name_for_clashes(_Funct,_Arity,_WS,_SymbolContext,_Transactional,[]):-
+verify_symbol_context(_Funct,_Arity,_WS,_SymbolContext,_Transactional,[]):-
 	has_context(compiling_term_name),
 	!.
 
-check_symbol_name_for_clashes(_Funct,_Arity,_WS,_SymbolContext,_Transactional,[]):-
+verify_symbol_context(_Funct,_Arity,_WS,_SymbolContext,_Transactional,[]):-
 	has_context(no_symbol_check),
 	!.
 
-check_symbol_name_for_clashes(Funct,Arity,_WS,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,[]):-
+verify_symbol_context(Funct,Arity,_WS,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,[]):-
 	flora_get_flatomvar_name(Funct,Name),
 	has_symbol(Name,Arity,_,_SIndex,_SLine,PROLOG_SYMBOL,_Transactional),
 	!.
 
-check_symbol_name_for_clashes(Funct,Arity,_WS,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,[]):-
+verify_symbol_context(Funct,Arity,_WS,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,[]):-
 	flora_get_flatomvar_name(Funct,Name),
 	has_context(compiling_sensor_directive(Name,Arity)),
 	!.
 
 %% do not check workspace for function symbols
-check_symbol_name_for_clashes(Funct,Arity,WS,FUNCTION_SYMBOL,Transactional,[]):-
+verify_symbol_context(Funct,Arity,WS,FUNCTION_SYMBOL,Transactional,[]):-
 	flora_get_flatomvar_name(Funct,Name),
 	has_nowarn_symbol(Name,Arity,_,FUNCTION_SYMBOL,Transactional),
   	approx_flindex(Funct,Index),
@@ -4489,7 +4487,7 @@ check_symbol_name_for_clashes(Funct,Arity,WS,FUNCTION_SYMBOL,Transactional,[]):-
 	add_symbol(Name,Arity,WS,Index,Line,FUNCTION_SYMBOL,Transactional),
 	!.
 
-check_symbol_name_for_clashes(Funct,Arity,WS,SymbolContext,Transactional,[]):-
+verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,[]):-
 	flora_get_flatomvar_name(Funct,Name),
 	has_nowarn_symbol(Name,Arity,StoredWS,SymbolContext,Transactional),
 	%% If StoredWS is an anonymous variable - then ignore warnings
@@ -4500,7 +4498,7 @@ check_symbol_name_for_clashes(Funct,Arity,WS,SymbolContext,Transactional,[]):-
 	add_symbol(Name,Arity,WS,Index,Line,SymbolContext,Transactional),
 	!.
 
-check_symbol_name_for_clashes(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
+verify_symbol_context(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
 	flora_get_flatomvar_name(Funct,Name),
 	%% if workspace for symbol is NULL then ignore warnings
 	%% only if StoredWS is current module or NULL
@@ -4510,7 +4508,7 @@ check_symbol_name_for_clashes(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
 	add_symbol(Name,Arity,NULL,Index,Line,SymbolContext,Transactional),
 	!.
 
-check_symbol_name_for_clashes(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
+verify_symbol_context(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
 	flora_get_flatomvar_name(Funct,Name),
 	%% if workspace for symbol is NULL then we ignore warnings
 	%% only if StoredWS is current module or NULL
@@ -4520,7 +4518,7 @@ check_symbol_name_for_clashes(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
 	get_index_line(Index,Line),
 	add_symbol(Name,Arity,NULL,Index,Line,SymbolContext,Transactional).
 
-check_symbol_name_for_clashes(Funct,Arity,WS,SymbolContext,Transactional,[]):-
+verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,[]):-
 	flora_get_flatomvar_name(Funct,Name),
 	%% if workspace for symbol is not NULL then we ignore warnings
 	%% only if StoredWS has the same name as WS
@@ -4532,7 +4530,7 @@ check_symbol_name_for_clashes(Funct,Arity,WS,SymbolContext,Transactional,[]):-
 	get_index_line(Index,Line),
 	add_symbol(Name,Arity,WS,Index,Line,SymbolContext,Transactional).
 
-check_symbol_name_for_clashes(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextStatus):-
+verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextStatus):-
 	flora_get_flatomvar_name(Funct,Name),
 	!,
   	approx_flindex(Funct,Index),
@@ -4555,7 +4553,7 @@ check_symbol_name_for_clashes(Funct,Arity,WS,SymbolContext,Transactional,SymbolC
 	get_index_line(Index,Line),
 	add_symbol(Name,Arity,WS,Index,Line,SymbolContext,Transactional).
 
-check_symbol_name_for_clashes(_Funct,_Arity,_WS,_SymbolContext,_Transactional,[]).
+verify_symbol_context(_Funct,_Arity,_WS,_SymbolContext,_Transactional,[]).
 
 /****************************************************************************
 make_symbol_context_status(+UsedContext,+UsedTransactional,+UsedArity,+SymbolArity,+SymbolIndex,+SymbolContext,+SymbolTransactional,-Status)
@@ -4834,8 +4832,8 @@ compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status):-
     	flora_get_flatomvar_name(ParserTerm,Name),
 	has_user_defined_function(Name,0,[],Predicate,ReturnValue),
 	!,
-	check_symbol_name_for_clashes(ParserTerm,0,UDF_SYMBOL,
-				      NONTRANSACTIONAL_SYMBOL,SymStatus),
+	verify_symbol_context(ParserTerm,0,UDF_SYMBOL,
+			      NONTRANSACTIONAL_SYMBOL,SymStatus),
 	new_prvariable(NO_INDEX,Object),
 	prvar_to_flvar_struct(Object,Var),
 	approx_flindex(ParserTerm,Index),
@@ -4852,8 +4850,8 @@ compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status):-
 	).
 
 compile_flatomobj(ParserTerm,_Nesting,Object,[],Status):-
-	check_symbol_name_for_clashes(ParserTerm,0,FUNCTION_SYMBOL,
-				      NONTRANSACTIONAL_SYMBOL,Status),
+	verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
+			      NONTRANSACTIONAL_SYMBOL,Status),
 	atomobj_struct(ParserTerm,Object).
 
 
@@ -4905,8 +4903,8 @@ compile_fltermobj(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,CompileS
 	-> Transactionality = TRANSACTIONAL_SYMBOL
 	; Transactionality = NONTRANSACTIONAL_SYMBOL
 	),
-	check_symbol_name_for_clashes(Funct,N,SymbolContext,
-				      Transactionality,SymbolStatus),
+	verify_symbol_context(Funct,N,SymbolContext,
+			      Transactionality,SymbolStatus),
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_fltermobj(Funct,N,Args,_Nesting,Object,OidCode,Code,[],CompileStatus) :-
@@ -4914,8 +4912,8 @@ compile_fltermobj(Funct,N,Args,_Nesting,Object,OidCode,Code,[],CompileStatus) :-
 	-> Transactionality = TRANSACTIONAL_SYMBOL
 	; Transactionality = NONTRANSACTIONAL_SYMBOL
 	),
-	check_symbol_name_for_clashes(Funct,N,FUNCTION_SYMBOL,
-				      Transactionality,SymbolStatus),
+	verify_symbol_context(Funct,N,FUNCTION_SYMBOL,
+			      Transactionality,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_pathexplist([Funct|Args],[FObj|AObj],OidCode,Code,_BodyHeadList,Status),
 	( no_errors_found(Status) -> termobj_struct(FObj,N,AObj,Object)
@@ -4982,7 +4980,8 @@ compile_fltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) 
 	    )
 	),
 	!,
-	check_symbol_name_for_clashes(Funct,N,SENSOR_SYMBOL,NONTRANSACTIONAL_SYMBOL,SymbolStatus),
+	verify_symbol_context(Funct,N,SENSOR_SYMBOL,
+			      NONTRANSACTIONAL_SYMBOL,SymbolStatus),
 	is_anonymous_flvariable(Anon,NO_INDEX),
 	%% compile_delayed_literal expects FLLIST as Arglist
 	is_fllist(ArgsList,[Anon,Anon|Args],[],NO_INDEX),
@@ -5004,8 +5003,8 @@ compile_fltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) 
 	-> Transactionality = TRANSACTIONAL_SYMBOL
 	; Transactionality = NONTRANSACTIONAL_SYMBOL
 	),
-	check_symbol_name_for_clashes(Funct,N,PREDICATE_SYMBOL,Transactionality,
-				      SymbolStatus),
+	verify_symbol_context(Funct,N,PREDICATE_SYMBOL,Transactionality,
+			      SymbolStatus),
 	set_context(compiling_term_name),
 	compile_pathexplist([Funct|Args],Nesting,[FObj|AObj],OidCode,ObjCode,BodyHeadList,Status),
 	( no_errors_found(Status) ->
@@ -5017,7 +5016,8 @@ compile_fltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) 
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_fltransactionaltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) :-
-	check_symbol_name_for_clashes(Funct,N,PREDICATE_SYMBOL,TRANSACTIONAL_SYMBOL,SymbolStatus),
+	verify_symbol_context(Funct,N,PREDICATE_SYMBOL,
+			      TRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_pathexplist([Funct|Args],Nesting,[FObj|AObj],OidCode,ObjCode,BodyHeadList,Status),
 	( no_errors_found(Status) ->
@@ -5764,8 +5764,8 @@ compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,CompileS
 	-> Transactionality = TRANSACTIONAL_SYMBOL
 	; Transactionality = NONTRANSACTIONAL_SYMBOL
 	),
-	check_symbol_name_for_clashes(Funct,N,SymbolContext,Transactionality,
-				      SymbolStatus),
+	verify_symbol_context(Funct,N,SymbolContext,Transactionality,
+			      SymbolStatus),
 	append(SymbolStatus,Status,CompileStatus).
 
 
@@ -5779,7 +5779,7 @@ compile_head_fltermlit(Funct,N,Args,Code,H2BCodeHead,H2BCodeTail,CompileStatus) 
 	-> Transactionality = TRANSACTIONAL_SYMBOL
 	; Transactionality = NONTRANSACTIONAL_SYMBOL
 	),
-	check_symbol_name_for_clashes(Funct,N,PREDICATE_SYMBOL,Transactionality,SymbolStatus),
+	verify_symbol_context(Funct,N,PREDICATE_SYMBOL,Transactionality,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_head_pathexplist([Funct|Args],[FObj|AObj],ObjCode,H2BCodeHead_pre,H2BCodeTail,Status),
 	((H2BCodeHead_pre \== NULL ; H2BCodeTail \== NULL)
@@ -5801,7 +5801,7 @@ compile_head_fltermlit(Funct,N,Args,Code,H2BCodeHead,H2BCodeTail,CompileStatus) 
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_head_fltransactionaltermlit(Funct,N,Args,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
-	check_symbol_name_for_clashes(Funct,N,PREDICATE_SYMBOL,TRANSACTIONAL_SYMBOL,SymbolStatus),
+	verify_symbol_context(Funct,N,PREDICATE_SYMBOL,TRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_head_pathexplist([Funct|Args],[FObj|AObj],ObjCode,H2BCodeHead,H2BCodeTail,Status),
 	( no_errors_found(Status) -> 
@@ -5872,7 +5872,8 @@ compile_head_pathexplist([T|L],[TObj|LObj],Code,H2BCodeHead,H2BCodeTail,Status) 
 ****************************************************************************/
 compile_head_pathexp(ParserTerm,Object,NULL,NULL,NULL,Status) :-
         ( is_fltransactionalatom(ParserTerm,_A) ->
-	    check_symbol_name_for_clashes(ParserTerm,0,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
+				  TRANSACTIONAL_SYMBOL,Status),
             transactionalatomobj_struct(ParserTerm,Object)
 
 	; is_flnumber(ParserTerm,_N) ->
@@ -5888,8 +5889,8 @@ compile_head_pathexp(ParserTerm,Object,NULL,NULL,NULL,Status) :-
 	    Status=[]
 
 	; is_flbuiltin_identifier(ParserTerm,_Ident) ->
-	    check_symbol_name_for_clashes(ParserTerm,0,FUNCTION_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
+				  NONTRANSACTIONAL_SYMBOL,Status),
 	    builtin_identifier_struct(ParserTerm,Object)
 
 	; is_fldatatype(ParserTerm,_Sort,_Lit,_Index) ->
@@ -5904,13 +5905,13 @@ compile_head_pathexp(ParserTerm,Object,NULL,NULL,NULL,Status) :-
 	    Status=[]
 
 	; is_fltoken(ParserTerm,Token,Index) ->
-	    check_symbol_name_for_clashes(ParserTerm,0,FUNCTION_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
+				  NONTRANSACTIONAL_SYMBOL,Status),
 	    compile_head_fltoken(Token,Index,Object)
 
 	; is_fltoken(ParserTerm,Token,Num,Index) ->      
-	    check_symbol_name_for_clashes(ParserTerm,0,FUNCTION_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
+				  NONTRANSACTIONAL_SYMBOL,Status),
 	    compile_head_fltoken(Token,Num,Index,Object)
 	),
 	!.
@@ -6392,15 +6393,16 @@ compile_wsliteral(ParserTerm,WS,Nesting,OidCode,WSCode,BodyHeadList,Status) :-
 	    attach_workspace(WS,
 			     atomlit_struct(BODYLITERAL,ParserTerm,Code),
 			     Code,WSCode),
-	    check_symbol_name_for_clashes(ParserTerm,0,WS,PREDICATE_SYMBOL,
-					  NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
+				  NONTRANSACTIONAL_SYMBOL,Status),
 	    OidCode=NULL
 	;
 	    BodyHeadList = [],
 	    attach_workspace(WS,
 			     transactionalatomlit_struct(BODYLITERAL,ParserTerm,Code),
 			     Code,WSCode),
-	    check_symbol_name_for_clashes(ParserTerm,0,WS,PREDICATE_SYMBOL,TRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
+				  TRANSACTIONAL_SYMBOL,Status),
 	    OidCode=NULL
 	).
 
@@ -6580,7 +6582,8 @@ compile_wstermobj(Funct,N,Args,WS,Object,OidCode,Code,BodyHeadList,Status) :-
 	-> Transactionality = TRANSACTIONAL_SYMBOL
 	; Transactionality = NONTRANSACTIONAL_SYMBOL
 	),
-	check_symbol_name_for_clashes(Funct,N,WS,FUNCTION_SYMBOL,Transactionality,SymbolStatus),
+	verify_symbol_context(Funct,N,WS,FUNCTION_SYMBOL,
+			      Transactionality,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_wsflpathexplist([Funct|Args],WS,[FObj|AObj],OidCode,TCode,BodyHeadList,CompileStatus),
 	( no_errors_found(Status) -> 
@@ -6593,7 +6596,8 @@ compile_wstermobj(Funct,N,Args,WS,Object,OidCode,Code,BodyHeadList,Status) :-
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_wstransactionaltermobj(Funct,N,Args,WS,Object,OidCode,Code,BodyHeadList,CompileStatus) :-
-	check_symbol_name_for_clashes(Funct,N,WS,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,SymbolStatus),
+	verify_symbol_context(Funct,N,WS,FUNCTION_SYMBOL,
+			      TRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_wsflpathexplist([Funct|Args],WS,[FObj|AObj],OidCode,TCode,BodyHeadList,Status),
 	( no_errors_found(Status) -> 
@@ -6651,11 +6655,13 @@ compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,BodyHeadList,Tra
 	    ( no_errors_found(Status) -> 
 		termobj_struct(FObj,N,AObj,Object); true)
         ),
-	check_symbol_name_for_clashes(Funct,N,WS,SymbolContext,Transactional,SymbolStatus),
+	verify_symbol_context(Funct,N,WS,SymbolContext,
+			      Transactional,SymbolStatus),
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,[],Transactional,CompileStatus) :-
-	check_symbol_name_for_clashes(Funct,N,WS,FUNCTION_SYMBOL,Transactional,SymbolStatus),
+	verify_symbol_context(Funct,N,WS,FUNCTION_SYMBOL,
+			      Transactional,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_wsflpathexplist([Funct|Args],WS,Nesting,[FObj|AObj],OidCode,Code,_BodyHeadList,Status),
 	( no_errors_found(Status) -> 
@@ -6682,7 +6688,8 @@ compile_wstermlit(Funct,N,Args,WS,Nesting,OidCode,Code,BodyHeadList,CompileStatu
 	-> Transactionality = TRANSACTIONAL_SYMBOL
 	; Transactionality = NONTRANSACTIONAL_SYMBOL
 	),
-	check_symbol_name_for_clashes(Funct,N,WS,PREDICATE_SYMBOL,Transactionality,SymbolStatus),
+	verify_symbol_context(Funct,N,WS,PREDICATE_SYMBOL,
+			      Transactionality,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_wsflpathexplist([Funct|Args],WS,Nesting,[FObj|AObj],OidCode,ObjCode,BodyHeadList,Status),
 	( no_errors_found(Status) -> 
@@ -6696,7 +6703,8 @@ compile_wstermlit(Funct,N,Args,WS,Nesting,OidCode,Code,BodyHeadList,CompileStatu
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_wstransactionaltermlit(Funct,N,Args,WS,Nesting,OidCode,Code,BodyHeadList,CompileStatus) :-
-	check_symbol_name_for_clashes(Funct,N,WS,PREDICATE_SYMBOL,TRANSACTIONAL_SYMBOL,SymbolStatus),
+	verify_symbol_context(Funct,N,WS,PREDICATE_SYMBOL,
+			      TRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_wsflpathexplist([Funct|Args],WS,Nesting,[FObj|AObj],OidCode,ObjCode,BodyHeadList,Status),
 	( no_errors_found(Status) -> 
@@ -7694,14 +7702,16 @@ compile_head_wsliteral(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    attach_workspace(WS,
 			     atomlit_struct(HEADLITERAL,ParserTerm,ACode),
 			     ACode,Code),
-	    check_symbol_name_for_clashes(ParserTerm,0,WS,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
+				  NONTRANSACTIONAL_SYMBOL,Status),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL
 	;
 	    attach_workspace(WS,
 			     transactionalatomlit_struct(HEADLITERAL,ParserTerm,ACode),
 			     ACode,Code),
-	    check_symbol_name_for_clashes(ParserTerm,0,WS,PREDICATE_SYMBOL,TRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
+				  TRANSACTIONAL_SYMBOL,Status),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL
 	).
@@ -7778,7 +7788,8 @@ compile_head_wstermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Compi
 	-> Transactionality = TRANSACTIONAL_SYMBOL
 	; Transactionality = NONTRANSACTIONAL_SYMBOL
 	),
-	check_symbol_name_for_clashes(Funct,N,WS,FUNCTION_SYMBOL,Transactionality,SymbolStatus),
+	verify_symbol_context(Funct,N,WS,FUNCTION_SYMBOL,
+			      Transactionality,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_head_wsflpathexplist([Funct|Args],WS,[FObj|AObj],Code,H2BCodeHead,H2BCodeTail,Status),
 	( no_errors_found(Status) -> 
@@ -7792,7 +7803,7 @@ compile_head_wstermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Compi
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_head_wstransactionaltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
-	check_symbol_name_for_clashes(Funct,N,WS,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,SymbolStatus),
+	verify_symbol_context(Funct,N,WS,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_head_wsflpathexplist([Funct|Args],WS,[FObj|AObj],Code,H2BCodeHead,H2BCodeTail,Status),
 	( no_errors_found(Status) -> 
@@ -7854,7 +7865,7 @@ compile_head_wsfltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Com
 	-> Transactionality = TRANSACTIONAL_SYMBOL
 	; Transactionality = NONTRANSACTIONAL_SYMBOL
 	),
-	check_symbol_name_for_clashes(Funct,N,WS,SymbolContext,Transactionality,SymbolStatus),
+	verify_symbol_context(Funct,N,WS,SymbolContext,Transactionality,SymbolStatus),
 	append(SymbolStatus,Status,CompileStatus).
 
 
@@ -7866,7 +7877,7 @@ compile_head_wstermlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatu
 	-> Transactionality = TRANSACTIONAL_SYMBOL
 	; Transactionality = NONTRANSACTIONAL_SYMBOL
 	),
-	check_symbol_name_for_clashes(Funct,N,WS,PREDICATE_SYMBOL,Transactionality,SymbolStatus),
+	verify_symbol_context(Funct,N,WS,PREDICATE_SYMBOL,Transactionality,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_head_wsflpathexplist([Funct|Args],WS,[FObj|AObj],ObjCode,H2BCodeHead,H2BCodeTail,Status),
 	( no_errors_found(Status) -> 
@@ -7880,7 +7891,7 @@ compile_head_wstermlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatu
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_head_wstransactionaltermlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
-	check_symbol_name_for_clashes(Funct,N,WS,PREDICATE_SYMBOL,TRANSACTIONAL_SYMBOL,SymbolStatus),
+	verify_symbol_context(Funct,N,WS,PREDICATE_SYMBOL,TRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_head_wsflpathexplist([Funct|Args],WS,[FObj|AObj],ObjCode,H2BCodeHead,H2BCodeTail,Status),
 	( no_errors_found(Status) -> 
@@ -8826,16 +8837,16 @@ compile_execdirect(DirectTerm,WS,Code,Status) :-
 	    directive_struct(Direct,Code)
 
 	; is_flusesensordirect(DirectTerm,PairList,Idx) ->
-	    check_symbol_pairlist_for_clashes(PairList,Idx, USE_SENSOR_SYMBOL,
-					      NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context_pairlist(PairList,Idx, USE_SENSOR_SYMBOL,
+					   NONTRANSACTIONAL_SYMBOL,Status),
 	    verbatim_struct(PairList,PairListCode),
 	    thismodule_struct(ThisMod),
 	    florasyslib_struct(FLLIBRECORDSENSORS,2,[ThisMod,PairListCode],Code),
 	    report_option(FLSYSLIB(FLLIBRECORDSENSORS),NO_INDEX)
 
 	; is_flusefunctiondirect(DirectTerm,PairList,Idx) ->
-	    check_symbol_pairlist_for_clashes(PairList,Idx, USE_UDF_SYMBOL,
-					      NONTRANSACTIONAL_SYMBOL,Status),
+	    verify_symbol_context_pairlist(PairList,Idx, USE_UDF_SYMBOL,
+					   NONTRANSACTIONAL_SYMBOL,Status),
 	    maplist(usefunction_option(_,_),PairList,PermaOptions),
 	    set_permaoptions(PermaOptions)
 
@@ -9278,22 +9289,22 @@ termlit_replacement(PRATOM(F,I),N,PRATOM(FF,I)) :-
 termlit_replacement(Funct,_N,Funct).
 
 
-check_symbol_pairlist_for_clashes([],_Index,_Context,_Trans,[]) :- !.
-check_symbol_pairlist_for_clashes([(P,A)|PairList],Index,Context,Trans,Status) :-
+verify_symbol_context_pairlist([],_Index,_Context,_Trans,[]) :- !.
+verify_symbol_context_pairlist([(P,A)|PairList],Index,Context,Trans,Status) :-
 	!,
 	%% P can be either the sensor name or (PrologSensor,PrologModule)
 	(P = (PA,_), !; P=PA),
 	is_flatom(PObj,PA,Index),
-	check_symbol_name_for_clashes(PObj,A,Context,Trans,S1),
-	check_symbol_pairlist_for_clashes(PairList,Index,Context,Trans,S2),
+	verify_symbol_context(PObj,A,Context,Trans,S1),
+	verify_symbol_context_pairlist(PairList,Index,Context,Trans,S2),
 	append(S2,S1,S3),
 	sort(S3,Status).
-check_symbol_pairlist_for_clashes([P/A|PairList],Index,Context,Trans,Status) :-
+verify_symbol_context_pairlist([P/A|PairList],Index,Context,Trans,Status) :-
 	!,
 	(P = (PA,_), !; P=PA),
 	is_flatom(PObj,PA,Index),
-	check_symbol_name_for_clashes(PObj,A,Context,Trans,S1),
-	check_symbol_pairlist_for_clashes(PairList,Index,Context,Trans,S2),
+	verify_symbol_context(PObj,A,Context,Trans,S1),
+	verify_symbol_context_pairlist(PairList,Index,Context,Trans,S2),
 	append(S2,S1,S3),
 	sort(S3,Status).
 
