@@ -53,7 +53,12 @@
 	memberchk/2,
 	member/2,
 	append/3
-    from basics.
+   from basics.
+
+:- import
+	file_open/3,
+	copyIOport/2
+   from file_io.
 
 :- import current_loaded_file/1 from consult.
 

@@ -386,54 +386,67 @@ util_rename_file(F1,F2) :-
 
 
 /*************************************************************************
-  flora_compile_then_prolog_compile_add(+FlrFile,+ModuleName)
+  flora_compile_then_prolog_compile_add(+FlrFile,+Module)
 
   This predicate is called to compile either a Flora user module or a
   Flora system module. In the former case, the module name is an atom
   whereas in the latter case the module name looks like _name.
   It first calls the FLORA-2 compiler and then Prolog compiler.
 *************************************************************************/
-flora_compile_then_prolog_compile_add(FlrFile,ModuleName) :-
+flora_compile_then_prolog_compile_add(FlrFile,Module) :-
 	util_addP_filename(FlrFile,AddPFile),
 	util_addFDB_filename(FlrFile,FDBFile),
 	util_addFLD_filename(FlrFile,FLDFile),
 	util_addFLS_filename(FlrFile,FLSFile),
 	util_addFLS2_filename(FlrFile,FLS2File),
 	util_addFLT_filename(FlrFile,FLTFile),
-	flora_set_xpp_options_for_compile(ModuleName),
-	util_compile_file_add(FlrFile,AddPFile,FDBFile,FLDFile,FLSFile,FLS2File,FLTFile,Status),
+	flora_set_xpp_options_for_compile(Module),
+	util_compile_file_add(FlrFile,AddPFile,FDBFile,FLDFile,
+			      FLSFile,FLS2File,FLTFile,Status),
 	( Status == FLORA_FAILURE ->
 	    flora_clear_xpp_options,
 	    !,
 	    fail
 	;
- 	  util_addXWAM_filename(FlrFile,AddXWAMFile),
-	  flora_loader_message('Invoking XSB compiler'),
-	  (
-	    %% Issue only important preprocessor warnings
-	    %% to avoid warnings when atoms or strings have \n in them
-	    flora_set_xpp_options_for_prolog_compile(ModuleName),
-	    flora_add_xpp_options('-warninglevel 1 '),
-	    (subsumptive_tabling_in_effect(ModuleName)
-	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
-	    ;  true
-	    ),
-	    (incremental_tabling_in_effect(ModuleName)
-	    -> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
-	    ;  true
-	    ),
-	    compile(AddPFile,[optimize,ti_all])
-	  ->
+	    util_addXWAM_filename(FlrFile,AddXWAMFile),
+	    flora_loader_message('Invoking XSB compiler'),
+	    (
+	      %% Issue only important preprocessor warnings
+	      %% to avoid warnings when atoms or strings have \n in them
+	      flora_set_xpp_options_for_prolog_compile(Module),
+	      flora_add_xpp_options('-warninglevel 1 '),
+	      (subsumptive_tabling_in_effect(Module)
+	      -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
+	      ;  true
+	      ),
+	      (incremental_tabling_in_effect(Module)
+	      -> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
+	      ;  true
+	      ),
+	      compile(AddPFile,[optimize,ti_all])
+	    ->
 	      true
-	  ;
+	    ;
+	      flora_clear_xpp_options,
+	      fail
+	    ),
+	    !,
+	    %% preprocess the data files.
+	    modularized_file_name(FDBFile,FDBFilePostGPP,Module),
+	    xpp_datafile_for_module_and_cache(FDBFile,FDBFilePostGPP,Module),
+	    modularized_file_name(FLDFile,FLDFilePostGPP,Module),
+	    xpp_datafile_for_module_and_cache(FLDFile,FLDFilePostGPP,Module),
+	    modularized_file_name(FLSFile,FLSFilePostGPP,Module),
+	    xpp_datafile_for_module_and_cache(FLSFile,FLSFilePostGPP,Module),
+	    modularized_file_name(FLS2File,FLS2FilePostGPP,Module),
+	    xpp_datafile_for_module_and_cache(FLS2File,FLS2FilePostGPP,Module),
+	    modularized_file_name(FLTFile,FLTFilePostGPP,Module),
+	    xpp_datafile_for_module_and_cache(FLTFile,FLTFilePostGPP,Module),
+
 	    flora_clear_xpp_options,
-	    fail
-	  ),
-	  !,
-	  flora_clear_xpp_options,
-	  flora_check_module_name(ModuleName),
-	  util_addWSXWAM_filename(FlrFile,ModuleName,WSXWAMFile),
-	  util_rename_file(AddXWAMFile,WSXWAMFile)
+	    flora_check_module_name(Module),
+	    util_addWSXWAM_filename(FlrFile,Module,WSXWAMFile),
+	    util_rename_file(AddXWAMFile,WSXWAMFile)
         ),
 	!.
 
@@ -550,7 +563,8 @@ flora_load_system_module_util(ModuleName) :-
 	    flora_loader_message('loading FLORA system module `~w''',[ModuleName]),
 	    %% Issue only important preprocessor warnings
 	    %% to avoid warnings when atoms or strings have \n in them
-	    flora_set_xpp_options_for_prolog_compile(ModuleName, '-warninglevel 0 '),
+	    flora_set_xpp_options_for_prolog_compile(ModuleName,
+						     '-warninglevel 0 '),
 	    (subsumptive_tabling_in_effect(ModuleName)
 	    -> flora_add_xpp_options('-D FLORA_SUBSUMPTIVE_TABLING ')
 	    ;  true
@@ -589,14 +603,15 @@ flora_fladd(FlrFile,Workspace) :-
 
 	util_addWSXWAM_filename(FlrFile,Workspace,WSXWAMFile),
 	!,
-	flora_set_xpp_options_for_compile(Workspace),
         ( util_file_newerthan(AddPFile,FlrFile),
 	    user_patch_file(UsrPatchFile),
 	    util_file_newerthan(AddPFile,UsrPatchFile)
 	-> flora_loader_msg_nl,
 	    true
 	;
-	  util_compile_file_add(FlrFile,AddPFile,FDBFile,FLDFile,FLSFile,FLS2File,FLTFile,Status),
+	    flora_set_xpp_options_for_compile(Workspace),
+	    util_compile_file_add(FlrFile,AddPFile,FDBFile,FLDFile,
+				  FLSFile,FLS2File,FLTFile,Status),
 	  ( Status == FLORA_FAILURE ->
 	      flora_clear_xpp_options,
 	      !,
@@ -659,13 +674,13 @@ flora_flload(FlrFile,Workspace) :-
 
 	util_WSXWAM_filename(FlrFile,Workspace,WSXWAMFile),
 	!,
-	flora_set_xpp_options_for_compile(Workspace),
         ( util_file_newerthan(MPFile,FlrFile),
 	    user_patch_file(UsrPatchFile),
 	    util_file_newerthan(MPFile,UsrPatchFile)
 	-> flora_loader_msg_nl,
 	    true
 	;
+	    flora_set_xpp_options_for_compile(Workspace),
 	    util_compile_file(FlrFile,MPFile,FDBFile,FLDFile,FLSFile,FLS2File,FLTFile,Status),
 	  ( Status == FLORA_FAILURE ->
 	      flora_clear_xpp_options,
@@ -955,7 +970,8 @@ util_FLT_filename(File,FLTFile) :-
 	flora_concat_atoms([Dir,Base,'.',FLORA_FLT_EXT],FLTFile).
 
 /*************************************************************************
-  utilities
+  flora_check_filename(+OrigFile,-OutFile): must be atom or url(File)
+  OutFile is either = OrigFile or has the prolog form url(File)
 *************************************************************************/
 flora_check_filename(OrigFile,File) :-
 	P2H_CONVERSION(File,OrigFile),
@@ -966,7 +982,24 @@ flora_check_filename(OrigFile,File) :-
 	    fail
 	).
 
+%% tries to get absolute name
+get_absolute_name(InFile,AbsFile) :-
+	( flora_file_op(isabsolute,InFile) ->
+	    AbsFile=InFile
 
+	; current_loaded_file(LoadedFile) ->
+	    flora_file_op(dirname,LoadedFile,FileDir),
+	    flora_concat_atoms([FileDir,InFile],AbsFile)
+	;
+	  AbsFile=InFile
+	).
+
+%% given file name, gets its modularized name with _module attached
+modularized_file_name(InFileName, ModularFileName,ModuleName) :-
+	parse_filename(InFileName,InDir,InBase,InExt),
+	url_encode(ModuleName,ModuleName_enc),
+	flora_concat_atoms([InDir,InBase,'_',ModuleName_enc,'.',InExt],
+			   ModularFileName).
 
 /*************************************************************************
   gpp control utilities
@@ -1195,7 +1228,7 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLTFile,Fi
 	flora_cputime(T0),
 	seeing(PreInFile),
 	%% Disable the compilation for FLORA template include file.
-	flora_set_counter(flora_compile_include_file,0),
+	%%flora_set_counter(flora_compile_include_file,0),
 	reset_modules_for_file(InputFile),
 	xpp_process_file(InputFile,XPP_process,IOportFromProc),
 	see(IOportFromProc),
@@ -1205,10 +1238,10 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLTFile,Fi
 					     UDFPredsList,
 					     FileOptionList,
 					     RuleStatus,CompileStatus),
-			   ['<Compiler> Compile time for adding to modules of ',
+			   ['<Compiler> Compile time for adding to module of ',
 			    InputFile, ':']
 			   ),
-	%% Wait, to not leave zombies.
+	%% Wait so as to not leave zombies.
 	check_xpp_process_status(InputFile,XPP_process),
 	%% Release the file descriptor used to read from cpp.
 	%%close(IOportFromProc),
@@ -1297,7 +1330,7 @@ generate_code_add(CompiledRuleList,CompiledFactList,UDFPredsList,FileOptionList,
 					      CompiledRuleList,CompiledFactList,
 					      DBFile,FLDFile,FLSFile,FLS2File,
 					      FLTFileOrStatus,PFileStatus),
-			   '<Coder> Generating .P file for adding to modules'
+			   '<Coder> Generating .P file for adding to module'
 			   ),
 	( PFileStatus == FLORA_FAILURE ->
 	    FileStatus=FLORA_FAILURE
@@ -1404,7 +1437,7 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLTFile,FileSt
 	flora_cputime(T0),
 	seeing(PreInFile),
 	%% Disable the compilation for FLORA template include file.
-	flora_set_counter(flora_compile_include_file,0),
+	%%flora_set_counter(flora_compile_include_file,0),
 	reset_modules_for_file(InputFile),
 	xpp_process_file(InputFile,XPP_process,IOportFromProc),
 	see(IOportFromProc),
@@ -1416,7 +1449,7 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLTFile,FileSt
 					 RuleStatus,CompileStatus),
 			   ['<Compiler> Compile time for ', InputFile, ':']
 			   ),
-	%% Wait, to not leave zombies.
+	%% Wait so as to not leave zombies.
 	check_xpp_process_status(InputFile,XPP_process),
 	%% Release the file descriptor used to read from cpp.
 	%%close(IOportFromProc),
@@ -1695,19 +1728,8 @@ flora_generate_DBfile(DBFileName,FactList,FileStatus) :-
 *************************************************************************/
 flora_loaddyn_data(OrigInFile,ModuleName,Ext) :-
 	flora_check_filename(OrigInFile,InFile),
-	( flora_file_op(isabsolute,InFile) ->
-	    InFileAbs=InFile
-
-	; current_loaded_file(LoadedFile) ->
-	    flora_file_op(dirname,LoadedFile,FileDir),
-	    flora_concat_atoms([FileDir,InFile],InFileAbs)
-	;
-	  InFileAbs=InFile
-	),
-	parse_filename(InFileAbs,InDir,InBase,InExt),
-	url_encode(ModuleName,ModuleName_enc),
-	flora_concat_atoms([InDir,InBase,'_',ModuleName_enc,'.',InExt],
-			   PostGppFile),
+	get_absolute_name(InFile,InFileAbs),
+	modularized_file_name(InFileAbs,PostGppFile,ModuleName),
 	!,
 	( flora_locate_file(InFileAbs,File) ->
 	    flora_loader_message('Dynamically loading ~w into module ~w',
@@ -1733,17 +1755,8 @@ flora_loaddyn_data(OrigInFile,ModuleName,Ext) :-
 		),
 		seen
 	    ;
-		flora_set_xpp_options_for_read(ModuleName),
-		%% Don't issue irrelevant warnings
-		flora_add_xpp_options('-warninglevel 1 '),
-		xpp_process_file(File,XPP_process,IOportFromProc),
-		%% copy the preprocessed result to file
-		file_io:file_open(PostGppFile,w,PostGppPort),
-		file_io:copyIOport(IOportFromProc,PostGppPort),
-		close(PostGppPort),
-		%% Release the file descriptor used to read from xpp.
-		close(IOportFromProc),
-		%% Now insert data to trie
+		xpp_datafile_for_module_and_cache(File,PostGppFile,ModuleName),
+		%% Now insert data into trie
 		see(PostGppFile),
 	    	( (Ext==FLORA_FLS_EXT ; Ext==FLORA_FLS2_EXT)
 		->
@@ -1751,8 +1764,6 @@ flora_loaddyn_data(OrigInFile,ModuleName,Ext) :-
 		;
 		    flora_read_canonical_and_insert(StorageName)
 		),
-		%% Wait, not to leave zombies.
-		check_xpp_process_status(File,XPP_process),
 		seen,
 		flora_clear_xpp_options
 	    ),
@@ -3894,6 +3905,26 @@ check_xpp_process_status(File,Process) :-
 	    ),
 	    flora_error_line('Error while preprocessing ~w', [Message])
 	).
+
+
+%% Preprocess a data file (for "read") and modularize its name
+%% If file does not exist, do nothing
+xpp_datafile_for_module_and_cache(File,_PreprocessedFile,_ModuleName) :-
+	\+flora_file_op(exists,File),
+	!.
+xpp_datafile_for_module_and_cache(File,PreprocessedFile,ModuleName) :-
+	flora_set_xpp_options_for_read(ModuleName),
+	%% Don't issue irrelevant warnings
+	flora_add_xpp_options('-warninglevel 1 '),
+	xpp_process_file(File,XPP_process,IOportFromProc),
+	%% copy the preprocessed result to file
+	file_open(PreprocessedFile,w,PostGppPort),
+	copyIOport(IOportFromProc,PostGppPort),
+	close(PostGppPort),
+	%% Release the file descriptor used to read from xpp.
+	close(IOportFromProc),
+	%% Wait so as not to leave zombies.
+	check_xpp_process_status(File,XPP_process).
 
 flora_token_index_to_line(TokenIndex,Line) :-
 	flora_nth_token(TokenIndex,Tk),
