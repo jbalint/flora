@@ -1689,8 +1689,6 @@ reset_newoid :- flora_set_counter(NEWOID_COUNT,1).
 
 new_oidobj(Index,OidObject) :-
 	flora_increment_counter(NEWOID_COUNT,1,OldVal,_NewVal),
-	%%number_codes(OldVal,OldValLst),
-	%%atom_codes(OldValAtm,OldValLst),
 	flora_term_to_atom(OldVal,OldValAtm),
 	flora_concat_atoms([NEWOID,OldValAtm],Name),
 	newoid_struct(Name,Index,OidObject).
@@ -1705,8 +1703,6 @@ new_oidobj(RuleNum,OidNumStr,Index,OidObject) :-
 	  asserta(ruleoid(OidNumStr,Index,Count_new))
 	;  asserta(ruleoid(OidNumStr,Index,1))
 	), 
-	%%number_codes(RuleNum,RuleNumLst),
-	%%atom_codes(RuleNumAtm,RuleNumLst),
 	flora_term_to_atom(RuleNum,RuleNumAtm),
         flora_concat_atoms([NEWOID,RuleNumAtm,'|',OidNumStr],Name),
 	newoid_struct(Name,Index,OidObject).
@@ -5031,10 +5027,15 @@ compile_fltransactionaltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,Co
   compile_fldelayquant(+Quant,+Condition,+Goal,+Index,-SpecCode,-BodyHeadList,-Status)
 ****************************************************************************/
 compile_fldelayquant(Quant,Condition,Goal,Index,SpecCode,BodyHeadList,Status):-
-	    compile_body_literal(Condition,0,ConditionCode,BodyHeadList,S1),
+	collect_flvars(Condition,CondVarList),
+	vars_to_var_names(CondVarList,CondVarNames),
+	collect_flvars(Goal,GoalVarList),
+	vars_to_var_names(GoalVarList,GoalVarNames),
+	compile_body_literal(Condition,0,ConditionCode,BodyHeadList,S1),
+	(subset(CondVarNames,GoalVarNames) ->
 	    ( no_errors_found(S1) ->
 		compile_body(Goal,GoalCode,S2),
-	    	( no_errors_found(S2) ->
+		( no_errors_found(S2) ->
 		    merge_status([S1,S2],Status),
 		    delay_struct(Index,FL_DELAYQUANT,
 				 [Quant,ConditionCode,GoalCode],
@@ -5044,7 +5045,12 @@ compile_fldelayquant(Quant,Condition,Goal,Index,SpecCode,BodyHeadList,Status):-
 		)
 	    ;
 		Status = S1
-	    ).
+	    )
+	;
+	    approx_flindex(Condition,Idx),
+	    compiling_error(Idx,DELAY_QUANT_VARS_NOT_IN_GOAL,Err),
+	    Status = [Err]
+	).
 
 
 /****************************************************************************
