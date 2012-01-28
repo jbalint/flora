@@ -42,7 +42,8 @@ exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
               error_nonvar.flr error_nonvar2.flr error_nonvar3.flr \
 	      test_func_modulebar.flr test_func_facts_aux.flr \
 	      test_builtin_err.flr \
-    	      test_delays_errors1.flr test_delays_errors2.flr"
+    	      test_delays_errors1.flr test_delays_errors2.flr \
+              test_delays_errors3.flr"
 
 
 # Test if element is a member of exclude list
