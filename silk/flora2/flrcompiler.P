@@ -39,8 +39,11 @@
 #define COMPILATION_CONTEXT	 compcontext
 #define DYNRULE_VARLIST          dynrule_varlist
 
-#define  BODYLITERAL     1
-#define  HEADLITERAL     2
+#define BODYLITERAL         	 1
+#define HEADLITERAL         	 2
+
+%% used in an error message
+#define ERRLINE_NO               ' on line '
 
 %% ruleoid is used for numbered anonymous oid generation
 :- dynamic ruleoid(_,_,_).
@@ -1772,9 +1775,17 @@ collect_prvars(Term,Vars,TVars) :-
 /****************************************************************************
   error and warning messages
 ****************************************************************************/
-compiling_error(Index,Msg,error(Index,Msg)).
+compiling_error(Index,Mesg,error(Index,ErrMsg)) :-
+	is_list(Mesg),
+	!,
+	flora_concat_atoms(Mesg,ErrMsg).
+compiling_error(Index,Mesg,error(Index,Mesg)).
 
-compiling_warning(Index,Msg,warning(Index,Msg)).
+compiling_warning(Index,Mesg,warning(Index,ErrMsg)) :-
+	is_list(Mesg),
+	!,
+	flora_concat_atoms(Mesg,ErrMsg).
+compiling_warning(Index,Mesg,warning(Index,Mesg)).
 
 
 /****************************************************************************
@@ -2628,11 +2639,11 @@ compile_direct(DirectTerm,_,[Code],Status) :-
 	maplist(prolog_option(_,_),PairList,PermaOptions),
 	make_runtime_modular_prolog_declarations(PermaOptions,Code),
 	set_permaoptions(PermaOptions).
-prolog_option((P,N),prolog(P,N)) :- 
+prolog_option((P,N,_Idx),prolog(P,N)) :- 
 	!,
 	flora_define_modular_prolog(P,N),
 	set_permaoption(atomreplacement(P,N,PRMODULARIZEDATOM(P))).
-prolog_option(P/N,prolog(P,N)) :- 
+prolog_option(P/N/_Idx,prolog(P,N)) :- 
 	flora_define_modular_prolog(P,N),
 	set_permaoption(atomreplacement(P,N,PRMODULARIZEDATOM(P))).
 
@@ -2648,7 +2659,7 @@ compile_direct(DirectTerm,_,[CodeTbl,CodePrlg],Status) :-
 	list2commalist(TableSpecList,TableSpec),
 	table_directive_struct(TableSpec,Direct),
 	directive_struct(Direct,CodeTbl).
-table_option(P/N,PMod/N1) :-
+table_option(P/N/_Idx,PMod/N1) :-
 	N1 is N+1, %% because of the caller argument
 	modularized_atom_struct(P,NO_INDEX,PMod).
 
@@ -2665,9 +2676,9 @@ compile_direct(DirectTerm,_,[Code],Status) :-
 	report_option(FLSYSLIB(FLLIBRECORDSENSORS),NO_INDEX),
 	query_struct(Code1,Code).
 %% used in converting usesensor pred list
-make_sensor_permaoption(P/N,sensor(P,N)).
+make_sensor_permaoption(P/N/_Idx,sensor(P,N)).
 %% not used
-%%sensor_name_replacement(P/N,SP/N) :- flora_scramble_atom(P,SP).
+%%sensor_name_replacement(P/N/_Idx,SP/N) :- flora_scramble_atom(P,SP).
 
 
 compile_direct(DirectTerm,_,[],Status) :-
@@ -2678,7 +2689,7 @@ compile_direct(DirectTerm,_,[],Status) :-
 	maplist(usefunction_option(_,_),PairList,PermaOptions),
 	set_permaoptions(PermaOptions).
 
-usefunction_option(FunName/Arity,PermaOption) :-
+usefunction_option(FunName/Arity/_Idx,PermaOption) :-
 	new_udf_predicate(FunName,Arity,[],NewArgs,NewPredicate,_NewPredicateOrigArgs,_NewPredName,_NewPredArity,NewReturnValue),
 	PermaOption = user_defined_function(FunName,Arity,NewArgs,NewPredicate,NewReturnValue).
 	
@@ -4575,12 +4586,14 @@ verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextSt
 	!,
   	approx_flindex(Funct,Index),
         %% Check if symbol was used before in a different context
-	( has_symbol(Name,SArity,_,_SIndex,_SLine,SContext,STransactional),
+	( has_symbol(Name,SArity,_,_SIndex,SLine,SContext,STransactional),
 	    %% Index > 0 ensures that symbols introduced by the compiler
 	    %% are not checked
 	    integer(Index),
 	    Index > 0,
-	    make_symbol_context_status(SContext,STransactional,SArity,Arity,
+	    make_symbol_context_status(SContext,SLine,' in the same file ',
+				       STransactional,
+				       SArity,Arity,
 				       Index,SymbolContext,Transactional,
 				       SymbolContextStatus),
 	    SymbolContextStatus \== [],
@@ -4597,41 +4610,62 @@ verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextSt
 verify_symbol_context(_Funct,_Arity,_WS,_SymbolContext,_Transactional,[]).
 
 /****************************************************************************
-make_symbol_context_status(+UsedContext,+UsedTransactional,+UsedArity,+SymbolArity,+SymbolIndex,+SymbolContext,+SymbolTransactional,-Status)
+make_symbol_context_status(+UsedContext,+UsedLine,+UsedFileMsg,+UsedTransactional,+UsedArity,+SymbolArity,+SymbolIndex,+SymbolContext,+SymbolTransactional,-Status)
 ****************************************************************************/
-make_symbol_context_status(_UsedContext,UsedTransactional,_UsedArity,_SymbolArity,SymbolIndex,_SymbolContext,SymbolTransactional,ContextStatus) :-
+make_symbol_context_status(_UsedContext,UsedLine,UsedFileMsg,UsedTransactional,_UsedArity,_SymbolArity,SymbolIndex,_SymbolContext,SymbolTransactional,ContextStatus) :-
 	UsedTransactional\=SymbolTransactional,
 	!,
 	(SymbolTransactional==TRANSACTIONAL_SYMBOL
-	-> compiling_warning(SymbolIndex,WARNING_TRANSACTIONAL_SYMBOL,Err)
-	; compiling_warning(SymbolIndex,WARNING_NONTRANSACTIONAL_SYMBOL,Err)
+	-> compiling_warning(SymbolIndex,
+			     [WARN_TRANSACTIONAL_SYMBOL,ERRLINE_NO,
+			      UsedLine,UsedFileMsg],
+			     Err)
+	; compiling_warning(SymbolIndex,
+			    [WARN_NONTRANSACTIONAL_SYMBOL,ERRLINE_NO,
+			     UsedLine,UsedFileMsg],
+			    Err)
 	),
 	ContextStatus=[Err].
 
-make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,FUNCTION_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,FUNCTION_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	( UsedContext==UDF_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_FUNC_UDF_ARITY_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_FUNC_UDF_ARITY_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==FUNCTION_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_FUNC_ARITY_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_FUNC_ARITY_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; %% for the following, we warn only if there was prior use as
 	  %% hilog predicate, modular prolog predicate, or sensor
 	  %% with the ***same*** number of arguments
 	  UsedContext==PREDICATE_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_FUNC_PREDICATE_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_FUNC_PREDICATE_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==PROLOG_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_FUNC_PROLOG_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_FUNC_PROLOG_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==SENSOR_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_FUNC_SENS_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_FUNC_SENS_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 /*
 	; UsedContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_warning(SymbolIndex,WARNING_BUILTIN_SYMBOL,Err)
-	    ; compiling_warning(SymbolIndex,WARNING_BUILTIN_ARITY_SYMBOL,Err)
+	    -> compiling_warning(SymbolIndex, WARN_BUILTIN_SYMBOL, Err)
+	    ; compiling_warning(SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, Err)
 	    ),
 	    ContextStatus=[Err]
 */
@@ -4640,22 +4674,37 @@ make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,
         ),
 	!.
 
-make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,PREDICATE_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,PREDICATE_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	( UsedContext==UDF_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_PREDICATE_UDF_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_PREDICATE_UDF_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==FUNCTION_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_PREDICATE_FUNC_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_PREDICATE_FUNC_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==PREDICATE_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_PREDICATE_ARITY_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==PROLOG_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_PREDICATE_PROLOG_ARITY_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_PREDICATE_PROLOG_ARITY_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==SENSOR_SYMBOL, UsedArity==SymbolArity ->
 	    (\+compiling_flrshell_command ->
-		compiling_error(SymbolIndex,ERROR_PREDICATE_SENS_SYMBOL,Err),
+		compiling_error(SymbolIndex,
+				[ERROR_PREDICATE_SENS_SYMBOL,ERRLINE_NO,
+				 UsedLine,UsedFileMsg],
+				Err),
 		ContextStatus=[Err]
 	    %% do not issue error if querying interactively
 	    ; ContextStatus = []
@@ -4665,29 +4714,47 @@ make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,
 	),
 	!.
 
-make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,UDF_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,UDF_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	( UsedContext==PROLOG_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_UDF_PROLOG_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_UDF_PROLOG_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==FUNCTION_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_error(SymbolIndex,WARNING_UDF_FUNC_SYMBOL,Err)
-	    ; compiling_warning(SymbolIndex,WARNING_UDF_FUNC_ARITY_SYMBOL,Err)
+	    -> compiling_error(SymbolIndex,
+			       [WARN_UDF_FUNC_SYMBOL,ERRLINE_NO,
+				UsedLine,UsedFileMsg],
+			       Err)
+	    ; compiling_warning(SymbolIndex,
+				[WARN_UDF_FUNC_ARITY_SYMBOL,ERRLINE_NO,
+				 UsedLine,UsedFileMsg],
+				Err)
 	    ),
 	    ContextStatus=[Err]
 	; UsedContext==PREDICATE_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_warning(SymbolIndex,WARNING_UDF_PREDICATE_SYMBOL,Err)
-	    ; compiling_warning(SymbolIndex,WARNING_UDF_PREDICATE_ARITY_SYMBOL,Err)
+	    -> compiling_warning(SymbolIndex,
+				 [WARN_UDF_PREDICATE_SYMBOL,ERRLINE_NO,
+				  UsedLine,UsedFileMsg],
+				 Err)
+	    ; compiling_warning(SymbolIndex,
+				[WARN_UDF_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
+				 UsedLine,UsedFileMsg],
+				Err)
 	    ),
 	    ContextStatus=[Err]
 	; UsedContext==SENSOR_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_UDF_SENSOR_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_UDF_SENSOR_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_warning(SymbolIndex,WARNING_BUILTIN_SYMBOL,Err)
-	    ; compiling_warning(SymbolIndex,WARNING_BUILTIN_ARITY_SYMBOL,Err)
+	    -> compiling_warning(SymbolIndex, WARN_BUILTIN_SYMBOL, Err)
+	    ; compiling_warning(SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, Err)
 	    ),
 	    ContextStatus=[Err]
 	;
@@ -4695,36 +4762,60 @@ make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,
 	),
 	!.
 
-make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,SENSOR_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,SENSOR_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	( UsedContext==UDF_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_SENSOR_UDF_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_SENSOR_UDF_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==FUNCTION_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_SENSOR_FUNC_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_SENSOR_FUNC_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==PREDICATE_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,ERROR_SENSOR_PREDICATE_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==PREDICATE_SYMBOL, UsedArity==SymbolArity ->
 	    (\+compiling_flrshell_command ->
-		compiling_error(SymbolIndex,ERROR_SENSOR_PREDICATE_SYMBOL,Err)
+		compiling_error(SymbolIndex,
+			      [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err)
 	    %% in the FLORA shell just give a warning
-	    ; compiling_warning(SymbolIndex,ERROR_SENSOR_PREDICATE_SYMBOL,Err)
+	    ; compiling_warning(SymbolIndex,
+			      [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err)
 	    ),
 	    ContextStatus=[Err]
 	; UsedContext==SENSOR_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_SENSOR_ARITY_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_SENSOR_ARITY_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==PROLOG_SYMBOL,
 	    (UsedArity\=SymbolArity
-	    -> compiling_warning(SymbolIndex,ERROR_SENSOR_PROLOG_SYMBOL,Err)
-	    ; compiling_error(SymbolIndex,ERROR_SENSOR_PROLOG_SYMBOL,Err)
+	    -> compiling_warning(SymbolIndex,
+				 [ERROR_SENSOR_PROLOG_SYMBOL,ERRLINE_NO,
+				  UsedLine,UsedFileMsg],
+				 Err)
+	    ; compiling_error(SymbolIndex,
+			      [ERROR_SENSOR_PROLOG_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err)
 	    ),
 	    ContextStatus=[Err]
 	; UsedContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_error(SymbolIndex,WARNING_BUILTIN_SYMBOL,Err)
-	    ; compiling_warning(SymbolIndex,WARNING_BUILTIN_ARITY_SYMBOL,Err)
+	    -> compiling_error(SymbolIndex, WARN_BUILTIN_SYMBOL, Err)
+	    ; compiling_warning(SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, Err)
 	    ),
 	    ContextStatus=[Err]
 	;
@@ -4732,27 +4823,42 @@ make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,
 	),
 	!.
 
-make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,PROLOG_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,PROLOG_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	%% MK: can this happen in the FLORA shell?
 	( UsedContext==UDF_SYMBOL, UsedArity==SymbolArity ->
-		compiling_error(SymbolIndex,ERROR_PROLOG_UDF_SYMBOL,Err),
+	    compiling_error(SymbolIndex,
+			    [ERROR_PROLOG_UDF_SYMBOL,ERRLINE_NO,
+			     UsedLine,UsedFileMsg],
+			    Err),
 		ContextStatus=[Err]
 	; UsedContext==PROLOG_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,WARNING_PROLOG_ARITY_SYMBOL,Err),
+	    compiling_warning(SymbolIndex,
+			      [WARN_PROLOG_ARITY_SYMBOL,ERRLINE_NO,
+			       UsedLine,UsedFileMsg],
+			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==FUNCTION_SYMBOL, UsedArity==SymbolArity ->
-		compiling_error(SymbolIndex,ERROR_PROLOG_FUNC_SYMBOL,Err),
+		compiling_error(SymbolIndex,
+				[ERROR_PROLOG_FUNC_SYMBOL,ERRLINE_NO,
+				 UsedLine,UsedFileMsg],
+				Err),
 		ContextStatus=[Err]
 	; UsedContext==PREDICATE_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_error(SymbolIndex,ERROR_PROLOG_PREDICATE_SYMBOL,Err)
-	    ; compiling_warning(SymbolIndex,WARNING_PROLOG_PREDICATE_ARITY_SYMBOL,Err)
+	    -> compiling_error(SymbolIndex,
+			       [ERROR_PROLOG_PREDICATE_SYMBOL,ERRLINE_NO,
+				UsedLine,UsedFileMsg],
+			       Err)
+	    ; compiling_warning(SymbolIndex,
+				[WARN_PROLOG_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
+				 UsedLine,UsedFileMsg],
+				Err)
 	    ),
 	    ContextStatus=[Err]
 	; UsedContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_error(SymbolIndex,WARNING_BUILTIN_SYMBOL,Err)
-	    ; compiling_warning(SymbolIndex,WARNING_BUILTIN_ARITY_SYMBOL,Err)
+	    -> compiling_error(SymbolIndex, WARN_BUILTIN_SYMBOL, Err)
+	    ; compiling_warning(SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, Err)
 	    ),
 	    ContextStatus=[Err]
 	;
@@ -4760,7 +4866,7 @@ make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,
 	),
 	!.
 
-make_symbol_context_status(_,_,_,_,_,_,_,[]).
+make_symbol_context_status(_,_,_,_,_,_,_,_,_,[]).
 
 
 /****************************************************************************
@@ -9441,27 +9547,27 @@ termlit_replacement(PRATOM(F,I),N,PRATOM(FF,I)) :-
 termlit_replacement(Funct,_N,Funct).
 
 
+%% The Index argument is not used currently
 verify_symbol_context_pairlist([],_Index,_Context,_Trans,[]) :- !.
-verify_symbol_context_pairlist([(P,A)|PairList],Index,Context,Trans,Status) :-
-	!,
+verify_symbol_context_pairlist([(P,A,Idx)|PairList],Index,Context,Trans,Status) :-
 	%% P can be either the sensor name or (PrologSensor,PrologModule)
 	(P = (PA,_) ; P=PA),
 	!,
-	is_flatom(PObj,PA,Index),
+	is_flatom(PObj,PA,Idx),
 	verify_symbol_context(PObj,A,Context,Trans,S1),
 	verify_symbol_context_pairlist(PairList,Index,Context,Trans,S2),
 	append(S2,S1,S3),
 	sort(S3,Status).
-verify_symbol_context_pairlist([P/A|PairList],Index,Context,Trans,Status) :-
-	!,
+verify_symbol_context_pairlist([P/A/Idx|PairList],Index,Context,Trans,Status) :-
 	(P = (PA,_) ; P=PA),
 	!,
-	is_flatom(PObj,PA,Index),
+	is_flatom(PObj,PA,Idx),
 	verify_symbol_context(PObj,A,Context,Trans,S1),
 	verify_symbol_context_pairlist(PairList,Index,Context,Trans,S2),
 	append(S2,S1,S3),
 	sort(S3,Status).
 
+%% this takes predicate-arity pairs without the index
 make_runtime_modular_prolog_declarations(PairList,Code) :-
 	maplist(term_to_prologterm_struct(_,_),PairList,PairListCode),
 	list_struct(PairListCode,[],PairListCodeList),

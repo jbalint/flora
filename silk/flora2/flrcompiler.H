@@ -145,7 +145,7 @@
 	%%flora_compiler_permaoption/1,
 	symbol/7,
 	nowarn_symbol/5,
-	make_symbol_context_status/8,
+	make_symbol_context_status/10,
 	compiling_warning/3,
 	compiling_error/3,
 	is_fltoken/3,

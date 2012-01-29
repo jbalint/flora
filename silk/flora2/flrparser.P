@@ -543,6 +543,9 @@ is_pathop(FL_INHERIMVD) :- !.
 get_name(OBJECT(IDENTIFIER(Name),_I),Name)  :- !.
 get_name(OBJECT(QUOTED_ATOM(Name),_I),Name) :- !.
 get_name(OBJECT(BUILTIN_IDENTIFIER(Name),_I),Name) :- !.
+get_name(OBJECT(IDENTIFIER(Name),I),Name,I)  :- !.
+get_name(OBJECT(QUOTED_ATOM(Name),I),Name,I) :- !.
+get_name(OBJECT(BUILTIN_IDENTIFIER(Name),I),Name,I) :- !.
 
 is_variable(OBJECT(VARIABLE(Name),I),Name,I).
 is_anonymous_variable(Obj,I) :- is_variable(Obj,FL_UNDERSCORE,I).
@@ -4681,42 +4684,40 @@ anonymous_varlist([H|L],[HCode|LCode],Status) :-
 make_pred_arity_pair_list([],[],[]) :- !.
 make_pred_arity_pair_list([Spec|SpecList],[SpecCode|SpecListCode],Status) :-
 	make_one_pred_arity_pair(Spec,SpecCode,S1),
-	(S1 == []
-	-> make_pred_arity_pair_list(SpecList,SpecListCode,Status)
+	(S1 == [] -> make_pred_arity_pair_list(SpecList,SpecListCode,Status)
 	;  S1 = Status
 	).
 
 make_pred_arity_slash_list([],[],[]) :- !.
-make_pred_arity_slash_list([Spec|SpecList],[(Pred/Arity)|SpecListCode],Status) :-
-	make_one_pred_arity_pair(Spec,(Pred,Arity),S1),
-	(S1 == []
-	-> make_pred_arity_slash_list(SpecList,SpecListCode,Status)
+make_pred_arity_slash_list([Spec|SpecList],[(Pred/Arity/Idx)|SpecListCode],Status) :-
+	make_one_pred_arity_pair(Spec,(Pred,Arity,Idx),S1),
+	(S1 == [] -> make_pred_arity_slash_list(SpecList,SpecListCode,Status)
 	;  S1 = Status
 	).
 
-make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[Pred,Arity],_If,_Ip),(PredName,Int),[]) :-
+make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[Pred,Arity],_If,_Ip),(PredName,Int,Idx),[]) :-
 	get_name(Funct,FL_SLASH),
-	get_atom(Pred,PredName),
+	get_atom(Pred,PredName,Idx),
 	get_integer(Arity,Int),
 	!.
 
 %% :- usesensor allows pred@prologmodule/Arity
 %% No IRIs or curies for Prolog stuff
-make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[PredAtModCanoTerm,Arity],_If,_Ip),((PredName,ModName),Int),[]) :-
+make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[PredAtModCanoTerm,Arity],_If,_Ip),((PredName,ModName),Int,Idx),[]) :-
 	has_context(parsing_usesensor_directive),
 	get_name(Funct,FL_SLASH),
 	get_integer(Arity,Int),
 	PredAtModCanoTerm = CANOTERM(ModConnective,2,FL_PARENTHESIS,[Pred,Mod],_If1,_Ip1),
 	get_name(ModConnective,FL_AT),
-	get_name(Pred,PredName),
+	get_name(Pred,PredName,Idx),
 	get_name(Mod,ModName),
 	!.
 
 %% case when predicate is defined via an iri prefix
-make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[Pred,Arity],_If,_Ip),(PredName,Int),Status) :-
+make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[Pred,Arity],_If,_Ip),(PredName,Int,Ifp),Status) :-
 	get_name(Funct,FL_SLASH),
-	Pred = CANOTERM(Funct2,2,FL_PARENTHESIS,[Prefix,LocalName],_Ifp,_Ipp),
-	%% Funct2 is a prefix combining symbol #
+	Pred = CANOTERM(Funct2,2,FL_PARENTHESIS,[Prefix,LocalName],Ifp,_Ipp),
+	%% Funct2 is a prefix-combining symbol #
 	get_atom(Funct2,F2),
 	is_curi_op(F2),
 	get_integer(Arity,Int),
@@ -4725,10 +4726,10 @@ make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[Pred,Arity],_If,_Ip),(
 	!.
 
 %% case when predicate is defined as a full IRI
-make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[Pred,Arity],_If,_Ip),(PredName,Int),Status) :-
+make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[Pred,Arity],_If,_Ip),(PredName,Int,Ifp),Status) :-
 	get_name(Funct,FL_SLASH),
 	Pred = CANOTERM(Funct2,2,FL_PARENTHESIS,Args,Ifp,_Ipp),
-	%% Funct2 is a prefix combining symbol #
+	%% Funct2 is a datatype definition symbol ^^
 	get_atom(Funct2,F2),
 	is_datatypeop(F2),
 	parse_composer_datatype(Args,Ifp,_WS,PrefixCode,Status),

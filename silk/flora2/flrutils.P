@@ -1816,7 +1816,7 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
 	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,USE_UDF_SYMBOL,SymbolTransactional,FileName),
 	    %% Note: we are testing in the same storage name == same module.
 	    %% Therefore, the WS argument is unimportant
-	    \+ flora_storage_find_fact(StorageName,flora_symbol(SymbolName,SymbolArity,_WS,_UsedIndex,_UsedLine,UDF_SYMBOL,SymbolTransactional,_SFileName))
+	    \+ flora_storage_find_fact(StorageName,flora_symbol(SymbolName,SymbolArity,_WS,_UsedIndex,_UsedLine,UDF_SYMBOL,SymbolTransactional,_UsedFileName))
 	->
 	    compiling_error(SymbolIndex,ERROR_UDF_WITHOUT_DEFINITION,Stat),
 	    ContextStatus = [Stat],
@@ -1825,7 +1825,7 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
             storage_insert_fact(StorageName,Term,_Inserted),
 	    fail
 	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,USE_SENSOR_SYMBOL,SymbolTransactional,FileName),
-	    \+ flora_storage_find_fact(CommonFLSstorage,flora_symbol(SymbolName,SymbolArity,_WS,_UsedIndex,_UsedLine,SENSOR_SYMBOL,SymbolTransactional,_SFileName))
+	    \+ flora_storage_find_fact(CommonFLSstorage,flora_symbol(SymbolName,SymbolArity,_WS,_UsedIndex,_UsedLine,SENSOR_SYMBOL,SymbolTransactional,_UsedFileName))
 	->
 	    compiling_error(SymbolIndex,ERROR_SENSOR_WITHOUT_DEFINITION,Stat),
 	    ContextStatus = [Stat],
@@ -1834,10 +1834,10 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
             storage_insert_fact(StorageName,Term,_Inserted),
 	    fail
 	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,SymbolContext,SymbolTransactional,FileName),
-	    (flora_storage_find_fact(StorageName,flora_symbol(SymbolName,UsedArity,_,_UsedIndex,_UsedLine,UsedContext,UsedTransactional,SFileName))
-	    ; flora_storage_find_fact(CommonFLSstorage,flora_symbol(SymbolName,UsedArity,_,_UsedIndex,_UsedLine,UsedContext,UsedTransactional,SFileName))
+	    (flora_storage_find_fact(StorageName,flora_symbol(SymbolName,UsedArity,_,_UsedIndex,UsedLine,UsedContext,UsedTransactional,UsedFileName))
+	    ; flora_storage_find_fact(CommonFLSstorage,flora_symbol(SymbolName,UsedArity,_,_UsedIndex,UsedLine,UsedContext,UsedTransactional,UsedFileName))
 	    ),
-	    (SFileName\=FileName
+	    (UsedFileName\=FileName
 	    %% The temp file is allowed here as an exception to enable
 	    %% testing using the [_] program input method.
 	    %% This isn't always correct: might cause wrong warnings sometimes.
@@ -1845,7 +1845,7 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
 	    ; FileName == 'tmp$user.flr'
 	    )
 	->
-	    make_symbol_context_load_status(StorageName,UsedContext,UsedTransactional,UsedArity,SymbolName,SymbolArity,WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus),
+	    make_symbol_context_load_status(StorageName,UsedLine,UsedFileName,UsedContext,UsedTransactional,UsedArity,SymbolName,SymbolArity,WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus),
 	    util_load_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
 	    flora_increment_counter(flora_load_errors,ErrNum,_,_),
 	    util_load_warn(ContextStatus,SymbolLine,SymbolName,FileName,WarnNum),
@@ -1871,60 +1871,73 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
 	incr_flora_update_counter.
 
 %% MK: Need to add cases to warn about Prolog predicates and sensors!!!
-make_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,FUNCTION_SYMBOL,SymbolTransactional,[]) :-
+make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,FUNCTION_SYMBOL,SymbolTransactional,[]) :-
 	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,_,FUNCTION_SYMBOL,SymbolTransactional,_)),
 	!.
 
-make_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,UDF_SYMBOL,SymbolTransactional,[]) :-
+make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,UDF_SYMBOL,SymbolTransactional,[]) :-
 	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,_,UDF_SYMBOL,SymbolTransactional,_)),
 	!.
 
-make_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,PROLOG_SYMBOL,SymbolTransactional,[]) :-
+make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,PROLOG_SYMBOL,SymbolTransactional,[]) :-
 	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,_,PROLOG_SYMBOL,SymbolTransactional,_)),
 	!.
 
-make_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
+make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
 	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,StoredWS,PREDICATE_SYMBOL,SymbolTransactional,_)),
 	!,
 	%% If StoredWS is anonymous variable - then ignore warnings
 	is_flvariable(StoredWS,VarName,_VarIndex),
 	VarName == FL_UNDERSCORE.
 
-make_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
+make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
 	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,NULL,PREDICATE_SYMBOL,SymbolTransactional,_)),
 	!.
 
-make_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
+make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
 	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,FL_THISMODULE,PREDICATE_SYMBOL,SymbolTransactional,_)),
 	!.
 
-make_symbol_context_load_status(StorageName,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
+make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
 	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,WS,PREDICATE_SYMBOL,SymbolTransactional,_)),
 	!.
 
 %% This case is handled differently from the compiler (error instead of warning)
-make_symbol_context_load_status(_StorageName,UDF_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,FUNCTION_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_load_status(_StorageName,UsedLine,UsedFile,UDF_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,FUNCTION_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	UsedArity==SymbolArity,
 	!,
-	compiling_error(SymbolIndex,WARNING_FUNC_UDF_SYMBOL,Err),
+	compiling_error(SymbolIndex,
+			[WARN_FUNC_UDF_SYMBOL,
+			 ' on line ', UsedLine,
+			 ' in file ', UsedFile],
+			Err),
 	ContextStatus=[Err].
 
 %% This case is handled differently from the compiler (error instead of warning)
-make_symbol_context_load_status(_StorageName,FUNCTION_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,UDF_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_load_status(_StorageName,UsedLine,UsedFile,FUNCTION_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,UDF_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	UsedArity==SymbolArity,
 	!,
-	compiling_error(SymbolIndex,WARNING_UDF_FUNC_SYMBOL,Err),
+	compiling_error(SymbolIndex,
+			[WARN_UDF_FUNC_SYMBOL,
+			 ' on line ', UsedLine,
+			 ' in file ', UsedFile],
+			Err),
 	ContextStatus=[Err].
 
 %% this case is not covered by the compiler, so must be here
-make_symbol_context_load_status(_StorageName,PROLOG_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,PREDICATE_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_load_status(_StorageName,UsedLine,UsedFile,PROLOG_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,PREDICATE_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	UsedArity==SymbolArity,
 	!,
-	compiling_error(SymbolIndex,ERROR_PREDICATE_PROLOG_SYMBOL,Err),
+	compiling_error(SymbolIndex,
+			[ERROR_PREDICATE_PROLOG_SYMBOL,
+			 ' on line ', UsedLine,
+			 ' in file ', UsedFile],
+			Err),
 	ContextStatus=[Err].
 
-make_symbol_context_load_status(_StorageName,UsedContext,UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus) :-
-	make_symbol_context_status(UsedContext,UsedTransactional,UsedArity,SymbolArity,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus).
+make_symbol_context_load_status(_StorageName,UsedLine,UsedFile,UsedContext,UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus) :-
+	flora_concat_atoms([' in file ',UsedFile],UsedFileMsg),
+	make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,UsedTransactional,UsedArity,SymbolArity,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus).
 
 
 
