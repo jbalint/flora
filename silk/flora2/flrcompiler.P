@@ -44,6 +44,7 @@
 
 %% ruleoid is used for numbered anonymous oid generation
 :- dynamic ruleoid(_,_,_).
+:- index(ruleoid/3,0).
 %%:- dynamic TMPDIRECT(_).
 :- dynamic TMPOPTION(_,_).
 :- dynamic PERMAOPTION(_).
@@ -659,10 +660,9 @@ head_neg_struct(Goal,Idx,Code,Status) :-
 	workspace_struct(L,WS,Goal),
 	!,
 	head_neg_struct(L,Idx,Code1,Status),
-	( no_errors_found(Status) -> 
-		workspace_struct(Code1,WS,Code)
+	( no_errors_found(Status) -> workspace_struct(Code1,WS,Code)
 	;
-		true
+	    true
 	).
 
 head_neg_struct(Goal,_Idx,NegGoal,[]) :-
@@ -720,8 +720,7 @@ conjunct_code([NULL|GList],ConjGoal) :- !, conjunct_code(GList,ConjGoal).
 conjunct_code([Goal|GList],ConjGoal) :-
 	conjunct_code(GList,ConjGoalTail),
 	!,
-	( ConjGoalTail == NULL ->
-	    ConjGoal=Goal
+	( ConjGoalTail == NULL -> ConjGoal=Goal
 	;
 	  conjunct_struct(Goal,ConjGoalTail,ConjGoal)
 	).
@@ -874,6 +873,7 @@ callerargsterm_struct(Caller,CallerInfo) :-
 	  %%thismodule_struct(ArgsCode)
 	    ArgsCode = INFONULL
 	),
+	!,
 	list_struct([Caller,PRCALLERARGSTERM(ArgsCode)],[],CallerInfo).
 
 
@@ -893,7 +893,8 @@ compile_workspace_term(WS, CompiledWS) :-
 	-> WS = CompiledWS
 	; flora_error_line('[Compiler] BUG: Invalid workspace term, ~w', [WS]),
 	    throw(FLORA_TOP_LEVEL)
-	).
+	),
+	!.
 
 %% For dynamic rules - workspace of the rule: (rule)@WS
 %% Otherwise - current module.
@@ -949,7 +950,8 @@ determine_caller_info(Context,Caller) :-
 	%% debug
 	; flora_error_line('[Compiler] BUG: No caller type exists for this context, ~w', [Context]),
 	    throw(FLORA_TOP_LEVEL)
-	).
+	),
+	!.
 splice_in_caller_argument(Context,Args,NewArgs) :-
 	determine_caller_info(Context,Caller),
 	flatten([Args,Caller],NewArgs).
@@ -981,7 +983,8 @@ termlit_struct(_Context,FObj,N,ObjList,Code) :-
 	    prologterm_struct(FObj,N,ObjList,Code)
 	; flora_prlgdef(AtomName,N,Mod)
 	-> prologterm_struct(FObj,N,ObjList,Mod,Code)
-	).
+	),
+	!.
 termlit_struct(_Context,FObj,N,ObjList,Code) :-
 	is_pratom(FObj,AtomName,Idx),
 	flora_prlgdef_repl(AtomName,N,ReplacementAtm,Mod),
@@ -1019,9 +1022,6 @@ transactionaltermlit_struct(Context,FObj,N,ObjList,PRTRANSACTIONALTERMLIT(FObj,N
 	).
 
 
-%%udfunction_struct(Name,N,Args,Predicate,ReturnValue,PRUSERDEFINEDFUNCTION(Name,N,Args,Predicate,ReturnValue)).
-
-
 caller_binding_code(Binding,Code) :-
 	callermod_var_structure(CallerVar),
 	atomobj_struct(FL_SILENT_EQUAL,EqCode),
@@ -1045,8 +1045,10 @@ has_prtransactionallit([_|Rest],Idx) :-
 
 has_prologlit([],_) :- !, fail.
 has_prologlit([H|Rest],Idx) :-
-	prologterm_atom_arity(H,Atm,_) -> approx_prindex(Atm,Idx)
-	; has_prologlit(Rest,Idx).
+	(prologterm_atom_arity(H,Atm,_) -> approx_prindex(Atm,Idx)
+	; has_prologlit(Rest,Idx)
+	),
+	!.
 
 
 /*
@@ -1069,7 +1071,8 @@ attach_workspace(WS,Generator,GeneratorCode,WSCode) :-
 	;
 	    workspacelit_struct(GeneratorCode,WS,WSCode),
 	    clear_context(literal_workspace(WS))
-	).
+	),
+	!.
 
 workspacelit_struct(P,WS,Code) :-
 	thismodule_struct(ThisModuleName),
@@ -1101,7 +1104,8 @@ workspacelit_struct(P,WS,Code) :-
 	;
 	    %% a Flora system module
 	    workspace_struct(P,WS,Code)
-	).
+	),
+	!.
 
 %% This is used in situations where a workspace
 %% term appears inside a predicate or a molecule,
@@ -1139,7 +1143,8 @@ workspaceobj_struct(P,WS,Object,Code) :-
 	  %% a Flora system module
 	  Code=NULL,
 	  workspace_struct(P,WS,Object)
-	).
+	),
+	!.
 
 prologterm_struct(F,N,Args,PROLOGTERM(F,N,Args)).
 %% This is used for prolog terms like goo(...)@_prolog(module)
@@ -1195,7 +1200,8 @@ termobj_struct(FObj,N,ObjList,Code) :-
 	-> prologterm_struct(FObj,N,ObjList,Code)
 	; flora_prlgdef(AtomName,N,Mod)
 	-> prologterm_struct(FObj,N,ObjList,Mod,Code)
-	).
+	),
+	!.
 termobj_struct(FObj,N,ObjList,Code) :-
 	is_pratom(FObj,AtomName,Idx),
 	flora_prlgdef_repl(AtomName,N,ReplacementAtm,Mod),
@@ -1385,7 +1391,8 @@ birelate_struct(LiteralContext,Obj1,RelType,Obj2,Code) :-
 	;
 	  is_subspecop(RelType),
 	  subspec_struct(LiteralContext,Obj1,Obj2,Code)
-        ).
+        ),
+	!.
 
 isaspec_struct(Context,Obj1,Obj2,PRISA(Obj1,Obj2,Caller)) :-
 	determine_caller_info(Context,Caller).
@@ -1402,7 +1409,8 @@ sigattspec_struct(LiteralContext,Object,AttObj,RefType,ValObj,Code) :-
 	; is_imvdsigspecop(RefType) ->
 	    imvdsigspec_struct(LiteralContext,Object,AttObj,ValObj,Code)
 
-        ).
+        ),
+	!.
 
 
 %% cardinality constraints in the body
@@ -1413,7 +1421,8 @@ sigattconstr_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,RefType,Code)
 
 	; is_imvdsigspecop(RefType) ->
 	    imvdcon_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,Code) 
-	).
+	),
+	!.
 
 
 %% cardinality constraints in the head
@@ -1423,7 +1432,8 @@ sigattcondef_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,RefType,ValOb
 
 	; is_imvdsigspecop(RefType) ->
 	    imvdcondef_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,ValObj,Code) 
-	).
+	),
+	!.
 
 mvdsigspec_struct(Context,Object,AttObj,ValObj,PRMVDSIG(Object,AttObj,ValObj,Caller)) :-
 	determine_caller_info(Context,Caller).
@@ -1464,7 +1474,8 @@ mvdattdef_struct(LiteralContext,Object,AttObj,RefType,Code) :-
 	;
 	  is_imvdspecop(RefType),
 	    imvddef_struct(LiteralContext,Object,AttObj,Code)
-        ).
+        ),
+	!.
 
 %% This is for =>, *=>, when the attribute is defined,
 %% but its value is empty set
@@ -1476,7 +1487,8 @@ sigattdef_struct(LiteralContext,Object,AttObj,RefType,Code) :-
 	; is_imvdsigspecop(RefType) ->
 	    imvdsigdef_struct(LiteralContext,Object,AttObj,Code)
 
-        ).
+        ),
+	!.
 
 
 mvddef_struct(Context,Object,AttObj,PRMVDDEF(Object,AttObj,Caller)) :-
@@ -1495,7 +1507,8 @@ mvdattspec_struct(LiteralContext,Object,AttObj,RefType,ValObj,Code) :-
 
 	; is_imvdspecop(RefType) ->
 	    imvdspec_struct(LiteralContext,Object,AttObj,ValObj,Code)
-        ).
+        ),
+	!.
 
 mvdspec_struct(Context,Object,AttObj,ValObj,PRMVD(Object,AttObj,ValObj,Caller)) :-
 		determine_caller_info(Context,Caller).
@@ -1510,7 +1523,8 @@ incattspec_struct(Object,AttObj,RefType,ValObj,Code) :-
 	;
 	  is_imvdincspecop(RefType),
 	  imvdincspec_struct(Object,AttObj,ValObj,Code)
-        ).
+        ),
+	!.
 
 %% +>>
 %% appears only in the rule body
@@ -1531,7 +1545,8 @@ tolistattspec_struct(Object,AttObj,RefType,ValObj,Code) :-
 	;
 	  is_imvdtolistspecop(RefType),
 	  imvdtolistspec_struct(Object,AttObj,ValObj,Code)
-        ).
+        ),
+	!.
 
 mvdtolistspec_struct(Object,AttObj,ValObj,PRMVDTOLIST(Object,AttObj,ValObj,CallerInfo)) :-
 	thismodule_struct(ThisModule),
@@ -1550,7 +1565,8 @@ body_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
 	;
 	  is_imvdrefop(RefType),
 	  imvdspec_struct(BODYLITERAL,Obj,Att,Val,Code)
-        ).
+        ),
+	!.
 
 %% if it is the same with body_objref_struct, combine them later
 head_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
@@ -1560,7 +1576,8 @@ head_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
         ; 	 
           is_imvdrefop(RefType), 	 
           imvdspec_struct(HEADLITERAL,Obj,Att,Val,Code) 	 
-        ). 	 
+        ),
+	!. 	 
  	 
 
 methspec_struct(Context,Obj,Meth,PRMETH(Obj,Meth,Caller)) :-
@@ -1610,9 +1627,6 @@ reset_newpredicate :- flora_set_counter(NEWPREDICATE,1).
 
 new_predicate(Name) :-
 	flora_increment_counter(NEWPREDICATE,1,OldVal,_NewVal),
-	%%number_codes(OldVal,OldValLst),
-	%%atom_codes(OldValAtm,OldValLst),
-	%%flora_concat_atoms([NEWPREDICATE,OldValAtm],Name).
 	flora_concat_items([NEWPREDICATE,OldVal],Name).
 
 /****************************************************************************
@@ -1623,9 +1637,6 @@ reset_defaultlabel :- flora_set_counter(DEFAULT_RULE_TAG,1).
 
 new_defaultlabel(Name) :-
 	flora_increment_counter(DEFAULT_RULE_TAG,1,OldVal,_NewVal),
-	%%number_codes(OldVal,OldValLst),
-	%%atom_codes(OldValAtm,OldValLst),
-	%%flora_concat_atoms([DEFAULT_RULE_TAG,OldValAtm],Name).
 	flora_concat_items([DEFAULT_RULE_TAG,OldVal],Name).
 
 is_defaultlabel(LabObj) :-
@@ -1645,17 +1656,11 @@ flora_reset_newvar :- flora_set_counter(NEWVAR,1).
 %% VarPrefix makes sure that names don't clash.
 flora_new_varobj(VarPrefix,Index,VarObj) :-
 	flora_increment_counter(NEWVAR,1,OldVal,_NewVal),
-	%%number_codes(OldVal,OldValLst),
-	%%atom_codes(OldValAtm,OldValLst),
-	%%flora_concat_atoms([VarPrefix,OldValAtm],Name),
 	flora_concat_items([VarPrefix,OldVal],Name),
 	varobj_struct(Name,Index,VarObj).
 
 flora_new_transactionalvarobj(VarPrefix,Index,VarObj) :-
 	flora_increment_counter(NEWVAR,1,OldVal,_NewVal),
-	%%number_codes(OldVal,OldValLst),
-	%%atom_codes(OldValAtm,OldValLst),
-	%%flora_concat_atoms([VarPrefix,OldValAtm],Name),
 	flora_concat_items([VarPrefix,OldVal],Name),
 	transactionalvar_struct(Name,Index,VarObj).
 
@@ -1667,8 +1672,6 @@ new_caller_prvariable(Index,VarObj) :-
 	flora_new_varobj(NEWCALLERVAR,Index,VarObj).
 
 %% creates new transactional variable
-%%new_prtransactionalvar(Index,VarObj) :-
-%%	flora_new_transactionalvarobj(NEWVAR,Index,VarObj).
 new_dontcare_prtransactionalvar(Index,VarObj) :-
 	flora_new_transactionalvarobj(NEWDONTCAREVAR,Index,VarObj).
 
@@ -1703,6 +1706,7 @@ new_oidobj(RuleNum,OidNumStr,Index,OidObject) :-
 	  asserta(ruleoid(OidNumStr,Index,Count_new))
 	;  asserta(ruleoid(OidNumStr,Index,1))
 	), 
+	!,
 	flora_term_to_atom(RuleNum,RuleNumAtm),
         flora_concat_atoms([NEWOID,RuleNumAtm,'|',OidNumStr],Name),
 	newoid_struct(Name,Index,OidObject).
@@ -1754,16 +1758,12 @@ collect_prvars(Term,Vars,Vars) :-
 collect_prvars(Term,NewVars,Vars) :-
 	is_prdatatype(Term,_Sort,Lit,_),
 	!,
-	(is_prvariable(Lit,_Name,_Indx)
-	-> NewVars = [Lit|Vars]
-	; is_list(Lit)
-	-> collect_prvars(Lit,AddlVars),
-	    append(AddlVars,Vars,NewVars)
-	; is_prdatatypelist(Lit,LitList)
-	-> collect_prvars(LitList,AddlVars),
-	    append(AddlVars,Vars,NewVars)
+	(is_prvariable(Lit,_Name,_Indx) -> NewVars = [Lit|Vars]
+	; is_list(Lit) -> collect_prvars(Lit,NewVars,Vars)
+	; is_prdatatypelist(Lit,LitList) -> collect_prvars(LitList,NewVars,Vars)
 	; NewVars=Vars
-	).
+	),
+	!.
 collect_prvars(Term,Vars,TVars) :-
 	Term =.. [_F|L],
 	collect_prvars(L,Vars,TVars).
@@ -1813,8 +1813,8 @@ collect_flvars(ParserTerm,Vars,Vars) :-
 	  is_flnumber(ParserTerm,_Number);
 	  is_flstring(ParserTerm,_String);
 	  is_flbuiltin_identifier(ParserTerm,_Ident);
-	  is_fltransactionalnumber(ParserTerm,_Number);
           is_fltransactionalatom(ParserTerm,_Atom);
+	  is_fltransactionalnumber(ParserTerm,_Number);
 	  is_fltransactionalstring(ParserTerm,_String);
 	  is_fltoken(ParserTerm,_Token,_I);
 	  is_fltoken(ParserTerm,_Token,_Num,_I) 
@@ -1824,14 +1824,12 @@ collect_flvars(ParserTerm,Vars,Vars) :-
 collect_flvars(ParserTerm,NewVars,Vars) :-
 	is_fldatatype(ParserTerm,_Sort,Lit,_Index),
 	!,
-        (is_flvariable(Lit,_Name,_Indx)
-	-> NewVars = [Lit|Vars]
-	; is_list(Lit)
-	-> collect_flvars(Lit,NewVars,Vars)
-	; is_fldatatypelist(Lit,ListLit)
-	-> collect_flvars(ListLit,NewVars,Vars)
+        (is_flvariable(Lit,_Name,_Indx) -> NewVars = [Lit|Vars]
+	; is_list(Lit) -> collect_flvars(Lit,NewVars,Vars)
+	; is_fldatatypelist(Lit,ListLit) -> collect_flvars(ListLit,NewVars,Vars)
 	;  NewVars=Vars
-	).
+	),
+	!.
 
 collect_flvars(ParserTerm,Vars,TVars) :-
 	ParserTerm =.. [_F|L],
@@ -1876,7 +1874,8 @@ collect_prdatatypevars(CompilerTermOrList,NewVars,Vars) :-
 	-> collect_prdatatypevars(ListOfLits,AddlVars),
 	    append(AddlVars,Vars,NewVars)
 	;  NewVars=Vars
-	).
+	),
+	!.
 
 
 collect_prdatatypevars(CompilerTermOrList,Vars,TVars) :-
@@ -1896,52 +1895,53 @@ add_underscore(Atom,NewAtom) :-
 
 
 /****************************************************************************
-  subtract_vars(+VarsList1,+VarsList2,-VarsList)
+  subtract_vars(+VarList1,+VarList2,-VarList)
+  subtract_varnames_from_vars(+VarList1,+VarNameList2,-VarList)
 
-  subtracts the VarsList2 from VarsList1.
-  Both VarsList1 and VarsList2 must be of the same type: parser vars
-  or compiler vars. Alternatively, VarsList2 can be a list of names of vars.
-  The result is a list of variables whose names do not appear in VarsList2.
-  Anonymous variables are considered as distinct names.
+  subtracts VarList2 from VarList1.
+  Both VarList1 and VarList2 must be of the same type: parser vars
+  or compiler vars. VarNameList2 is a list of names of vars.
+  The result is a list of variables whose names do not appear in VarsList2
+  or VarNameList2.
+  Anonymous variables are considered as distinct names and are not subtracted.
 ****************************************************************************/
+%% subtract_vars/3: subtract flvars from flvars or prvars from prvars
 subtract_vars([],_,[]) :- !.
 subtract_vars(L,[],L) :- !.
 
-subtract_vars([H|T1],L,[H|T2]) :-
-	( is_flvariable(H,FL_UNDERSCORE,_I)
-	; is_fltransactionalvariable(H,FL_UNDERSCORE,_I)
-	; is_prvariable(H,FL_UNDERSCORE,_I)
-	; is_prtransactionalvariable(H,FL_UNDERSCORE,_I)
+subtract_vars([H|T],L,Res) :-
+	( %% construct X as H, but with variable index
+	  is_flvariable(H,N,_) -> is_flvariable(X,N,_)
+	; is_fltransactionalvariable(H,N,_) -> is_fltransactionalvariable(X,N,_)
+	; is_prvariable(H,N,_) -> is_prvariable(X,N,_)
+	; is_prtransactionalvariable(H,N,_) -> is_prtransactionalvariable(X,N,_)
 	),
 	!,
-	subtract_vars(T1,L,T2).
+	subtract_vars(T,L,V),
+	!,
+	(N \== FL_UNDERSCORE, memberchk(X,L) -> Res = V
+	; Res = [H|V]
+	),
+	!.
 
-subtract_vars([H|T],L,V) :-
+%% subtract_varnames_from_vars/3: subtract var names from flvars or prvars
+subtract_varnames_from_vars([],_,[]) :- !.
+subtract_varnames_from_vars(L,[],L) :- !.
+
+subtract_varnames_from_vars([H|T],L,Res) :-
 	( is_flvariable(H,N,_I)
-	-> (is_flvariable(X,N,_J) ; is_prvariable(X,N,_J))
 	; is_fltransactionalvariable(H,N,_I)
-	-> (is_fltransactionalvariable(X,N,_J) ; is_prtransactionalvariable(X,N,_J))
 	; is_prvariable(H,N,_I)
-	-> (is_flvariable(X,N,_J) ; is_prvariable(X,N,_J))
 	; is_prtransactionalvariable(H,N,_I)
-	-> (is_fltransactionalvariable(X,N,_J) ; is_prtransactionalvariable(X,N,_J))
-	; X = N
 	),
-	%% X is the same as H, but with variable index
-	/*
-	( is_flvariable(X,N,_J)
-	; is_fltransactionalvariable(X,N,_J)
-	; is_prvariable(X,N,_J)
-	; is_prtransactionalvariable(X,N,_J)
-	; X = N
-	),
-	*/
-	memberchk(X,L),
 	!,
-	subtract_vars(T,L,V).
+	subtract_varnames_from_vars(T,L,V),
+	!,
+	(N \== FL_UNDERSCORE, memberchk(N,L) -> Res = V
+	; Res = [H|V]
+	),
+	!.
 
-subtract_vars([H|T1],L,[H|T2]) :-
-	subtract_vars(T1,L,T2).
 
 /*****************************************************************************
      vars_contains(+VarList1,+VarList2)
@@ -1956,7 +1956,7 @@ vars_contains([H1|T1],[H2|T2]) :-
 	; is_prtransactionalvariable(H1,N,_), is_prtransactionalvariable(H2,N,_)
 	),
 	!,
-	N \= FL_UNDERSCORE,
+	N \== FL_UNDERSCORE,
 	vars_contains(T1,T2).
 
 
@@ -2028,7 +2028,8 @@ indexvars([T|L],Vars) :-
           Vars=[I-Name|Vs],
 	  remove_dupflvars(L,Name,VL),
 	  indexvars(VL,Vs)
-        ).
+        ),
+	!.
 
 
 namevars([],[]) :- !.
@@ -2055,22 +2056,26 @@ namevars([Index-Name|L],[NV|NVs]) :-
 singleton_flvars([],[]) :- !.
 
 singleton_flvars([V|L],[V|Vs]) :-
-	(is_flvariable(V,FL_UNDERSCORE,_I);is_fltransactionalvariable(V,FL_UNDERSCORE,_I)),
+	( is_flvariable(V,FL_UNDERSCORE,_I)
+	; is_fltransactionalvariable(V,FL_UNDERSCORE,_I)
+	),
 	!,
 	singleton_flvars(L,Vs).
 
 singleton_flvars([V],[V]) :- !.
 
 singleton_flvars([V1,V2|L],Vars) :-
-	( (is_flvariable(V1,Name,_I);is_fltransactionalvariable(V1,Name,_I)),
-	  (is_flvariable(V2,Name,_J);is_fltransactionalvariable(V2,Name,_I))
-	->
-	    remove_dupflvars(L,Name,Vs),
+	( ( is_flvariable(V1,Name,_), is_flvariable(V2,Name,_)
+	  ; is_fltransactionalvariable(V1,Name,_),
+	      is_fltransactionalvariable(V2,Name,_)
+	  )
+	-> remove_dupflvars(L,Name,Vs),
 	    singleton_flvars(Vs,Vars)
         ;
 	  Vars=[V1|Vs],
 	  singleton_flvars([V2|L],Vs)
-        ).
+        ),
+	!.
 
 
 %% removes variables named Name from a sorted list of vars,
@@ -2102,13 +2107,20 @@ singleton_warning([],WarnList,WarnList).
 
 singleton_warning([V|L],WarnList,WarnTail) :-
 	(is_flvariable(V,Name,I);is_fltransactionalvariable(V,Name,I)),
-	( (is_flvariable(V,Name,I),flora_match_substring(FL_UNDERSCORE,Name,0);is_fltransactionalvariable(V,Name,I),flora_match_substring(FL_UNDERSCORE,Name,0)) ->
+	( ( is_flvariable(V,Name,I),
+	      flora_match_substring(FL_UNDERSCORE,Name,0)
+	  ;
+	      is_fltransactionalvariable(V,Name,I),
+	      flora_match_substring(FL_UNDERSCORE,Name,0)
+	  )
+	->
 	    singleton_warning(L,WarnList,WarnTail)
 	;
 	  compiling_warning(I,SINGLETON_VAR,W),
 	  WarnList=[W|T],
 	  singleton_warning(L,T,WarnTail)
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -2132,7 +2144,8 @@ unbound_warning([V|L],WarnList,WarnTail,WarningMessage) :-
 	  compiling_warning(I,WarningMessage,W),
 	  WarnList=[W|T],
 	  unbound_warning(L,T,WarnTail,WarningMessage)
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -2147,11 +2160,11 @@ check_head_vars_for_safety(HeadTermList,BodyTerm,Status) :-
 	singleton_warning(SingletonVars,Status,WarnTail),
 	subtract_vars(HeadVars,BodyVars,UnboundVars),
 	%% Don't issue the unboundedness var warning for facts
-	(BodyTerm \= [] ->
-	    unbound_warning(UnboundVars,WarnTail,[])
+	(BodyTerm \== [] -> unbound_warning(UnboundVars,WarnTail,[])
 	;
 	    (var(Status) -> Status=[] ; true )
-	).
+	),
+	!.
 
 
 /****************************************************************************
@@ -2166,11 +2179,11 @@ check_udf_vars_for_safety(Function,Predicate,ReturnValue,Status) :-
         singleton_warning(SingletonVars,Status,WarnTail),
         subtract_vars(FuncVars,PredVars,UnboundVars),
         %% Don't issue the unboundedness var warning for facts (facts can be defined using function definition)
-        (Predicate = NULL ->
-            ( var(Status) -> Status=[] ; true )
+        (Predicate = NULL -> ( var(Status) -> Status=[] ; true )
         ;
             unbound_warning(UnboundVars,WarnTail,[],UNBOUND_UDF_VAR)
-        ).
+        ),
+	!.
 
 
 
@@ -2224,12 +2237,12 @@ set_permaoptions([X|Rest]) :-
 	set_permaoptions(Rest).
 has_permaoption(X) :- PERMAOPTION(X).
 flora_clear_compilation_permaoptions :- retractall(PERMAOPTION(_)).
-clear_one_permaoption(X) :- (retract(PERMAOPTION(X)), ! ; true).
+clear_one_permaoption(X) :- (retract(PERMAOPTION(X)) ; true), !.
 %% this is exported for others to use
 %%flora_compiler_permaoption(X) :- has_permaoption(X).
 
 /*
-clear_context(X) :- (retract(COMPILATION_CONTEXT(X)), ! ; true).
+clear_context(X) :- (retract(COMPILATION_CONTEXT(X)) ; true), !.
 clear_contextall(X) :- flora_retractall_substitute(COMPILATION_CONTEXT(X)).
 set_context(X) :-
 	(\+has_context(X)
@@ -2245,12 +2258,10 @@ set_context(X) :-
 	flora_set_counter(X,1).
 set_context(X) :-
 	compound(X),
-	\+COMPILATION_CONTEXT(X),
 	!,
-	asserta(COMPILATION_CONTEXT(X)).
-set_context(X) :-
-	compound(X),
-	!.
+	(\+COMPILATION_CONTEXT(X) -> asserta(COMPILATION_CONTEXT(X))
+	; true
+	).
 set_context(X) :-
 	abort([X, ': FLORA-2 compiler BUG!! Invalid compiler context']).
 
@@ -2415,7 +2426,8 @@ compile_directive_add([D|L],DirIdx,RuleList-RuleTail,Facts-Facts,Status) :-
 	    append(S2,S,Status)
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 compile_direct_add(DirectTerm,_DirIdx,[Code],S) :-
 	is_flsetsemantics(DirectTerm,_OptionsList),
@@ -2434,7 +2446,8 @@ compile_annotated_construct_add(Label,Contents,RuleList-RuleTail,Facts,Status) :
 				 RuleList1-[],Facts,_UDFPreds,_OptionList,Status),
 	    append(RuleList1,RuleTail,RuleList)
 	;  Status = Status1
-	).
+	),
+	!.
 
 
 /****************************************************************************
@@ -2549,7 +2562,8 @@ compile_directive([D|L],DirIdx,RuleList-RuleTail,Facts-Facts,Status) :-
 	    append(S,S2,Status)
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 compile_direct(DirectTerm,_DirIdx,[Code],Status) :-
 	is_flexport_list(DirectTerm,Term),
@@ -2581,6 +2595,7 @@ compile_direct(DirectTerm,DirIdx,[Code],[]) :-
 	    report_option(FLSYSMOD(FL_DEFAULT_DEFEASIBLE_THEORY),DirIdx)
 	; true
 	),
+	!,
 	defeasible_struct(Name,Direct),
 	directive_struct(Direct,Code).
 
@@ -2685,7 +2700,8 @@ compile_direct(DirectTerm,_,[Code],Status) :-
 	    directive_struct(Direct,Code),
 	    append(S1,S2,Status)
 	; Status = S1
-	).
+	),
+	!.
 
 compile_direct(DirectTerm,_Idx,CodeList,[]) :-
 	is_flsetsemantics(DirectTerm,OptionsList),
@@ -2727,7 +2743,8 @@ compile_direct(DirectTerm,_Idx,[Code],Status) :-
 	    ignoredep_struct(SCode,ICode),
 	    directive_struct(ICode,Code)
         ;   true
-        ).
+        ),
+	!.
 
 compile_direct(DirectTerm,_Idx,[Code],Status) :-
 	is_importmodule(DirectTerm,Modspec) ->
@@ -2739,7 +2756,8 @@ compile_direct(DirectTerm,_Idx,[Code],Status) :-
 	    flrlibman:flora_system_module(MName)
 	-> report_option(FLSYSMOD(MName),Index)
 	; true
-	).
+	),
+	!.
 
 compile_direct(DirectTerm,_Idx,[],Status) :-
 	is_flsymbolcontext(DirectTerm,SymbolList),
@@ -2756,7 +2774,8 @@ compile_ignoredep_list([H|L],[HCode|LCode],Status) :-
             compile_ignoredep_list(L,LCode,Status)
         ;
             Status = S
-        ).
+        ),
+	!.
 
 /****************************************************************************
   compile_symbol_context_list(+SymbolsList,-Status)
@@ -2769,7 +2788,8 @@ compile_symbol_context_list([H|L],Status) :-
             compile_symbol_context_list(L,Status)
         ;
             Status = S
-        ).
+        ),
+	!.
 
 /****************************************************************************
   compile_symbol_literal(+ParserTerm,-Status)
@@ -2803,7 +2823,8 @@ compile_symbol_literal(ParserTerm,Status) :-
 	    approx_flindex(Funct,Index),
 	    compiling_error(Index,ERROR_SYMBOL,Err),
 	    Status = [Err]
-	).
+	),
+	!.
 
 compile_symbol_literal(ParserTerm,WS,Context,Status) :-
 	( is_fltransactionalterm(ParserTerm,Funct,N,_Args) ->
@@ -2822,7 +2843,8 @@ compile_symbol_literal(ParserTerm,WS,Context,Status) :-
 	    approx_flindex(Funct,Index),
 	    compiling_error(Index,ERROR_SYMBOL,Err),
 	    Status = [Err]
-	).
+	),
+	!.
 
 /****************************************************************************
   compile_symbol_term(+Funct,+N,+WS,+Context,+Transactional)
@@ -2837,11 +2859,11 @@ compile_symbol_term(Funct,N,WS,Context,Transactional) :-
   T is a variable structure, or an atom structure, or a plain atomic.
 ****************************************************************************/
 compile_flatomvar(T,Code) :-
-	    ( is_flvariable(T,TName,I) ->
-		varobj_struct(TName,I,Code)
-	    ; 
-	      atomobj_struct(T,Code)
-	    ).
+	( is_flvariable(T,TName,I) -> varobj_struct(TName,I,Code)
+	; 
+	    atomobj_struct(T,Code)
+	),
+	!.
 
 /****************************************************************************
         compile_sensor_direct(+SensCall,+DelayCond,-Direct,-Status)
@@ -2879,6 +2901,7 @@ compile_sensor_direct(SensCall,DelayCond,Code,Status) :-
 					  Status)
 	; Status = S2
 	),
+	!,
 	report_option(FLSYSLIB(FLLIBSENSOR),NO_INDEX),
 	prologterm_struct(flora_register_sensor,2,
 			 [SensCode,DelayCode],FLDELAYSUPPORTMOD,Code),
@@ -2951,6 +2974,7 @@ compile_fact(Head,RuleList-RuleTail,FactList-FactTail,Status) :-
         ;
 	  Status=S
 	),
+	!,
 	clear_context(compiling_facts).
 
 
@@ -2981,7 +3005,8 @@ compile_factlist(F,[FCode|ListTail]-ListTail,FL-FL) :-
 	    generate_prolog_liblit(assert,1,[F],FCode1),
 	    query_struct(FCode1,FCode)
 	; fact_struct(F,FCode)
-	).
+	),
+	!.
 
 compile_factlist(F,RL-RL,[FCode|ListTail]-ListTail) :-
 	!,
@@ -2993,7 +3018,8 @@ compile_factlist(F,RL-RL,[FCode|ListTail]-ListTail) :-
         ;
             add_fact_attr_code(NL,F,AugmentedF),
             fact_struct(AugmentedF,FCode)
-        ).
+        ),
+	!.
 
 add_dynrule_attr_code([],Code,Code) :- !.
 add_dynrule_attr_code([(Var,Val)|L],BCode,NewCode) :-
@@ -3056,7 +3082,8 @@ compile_query(Body,RuleList-RuleTail,Facts-Facts,Status) :-
 	    RuleList = [QueryCode|RuleTail]
 	;
 	  true
-	).
+	),
+	!.
 
 
 /****************************************************************************
@@ -3073,7 +3100,8 @@ compile_annotated_construct(Label,Contents,RuleList-RuleTail,Facts,Status) :-
 			     RuleList1-[],Facts,_UDFPreds,_OptionList,Status),
 	    append(RuleList1,RuleTail,RuleList)
 	;  Status = Status1
-	).
+	),
+	!.
 
 
 %% TagCode is NULL or an atom object
@@ -3137,7 +3165,8 @@ compile_label(Label,TagCode,MetaCode,Status) :-
 	    )
 	;  compiling_error(Index,INVALID_META_IN_LABEL,Err),
 	    Status = [Err]
-	).
+	),
+	!.
 
 
 %% default tag: either NULL or the DEFAULT_RULE_TAGNNNN atom
@@ -3147,7 +3176,8 @@ construct_default_label(TagCode) :-
 	    atomobj_struct(Rule_lab,TagCode)
 	;
 	    TagCode = FL_SKIP_TAG
-	).
+	),
+	!.
 
 
 /***************************************************************************
@@ -3282,10 +3312,6 @@ compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactLi
 				 ReturnValue,NewReturnValue,NewBody),
 		compile_rule([NewPredicateOrigArgs],NewBody,(NULL,NULL),
 			     RuleList-ListTail,FactList-FactTail,S)
-		/*
-	        new_udffact(Name,N,Args,ReturnValue,Fact),
-		compile_fact([Fact],RuleList-ListTail,FactList-FactTail,S)
-		*/
 	    ;
 		approx_flindex(Funct,FunctIndex),
 		new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody),
@@ -3297,7 +3323,8 @@ compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactLi
 	    ( var(HasUDF) ->
 		%% or has_permaoption(udf...) - i.e. already have function defn
 		%% This puts function definition into the registry
-		udfunction_struct(Name,N,NewArgs,NewPredicate,NewReturnValue,UDFCodeList),
+		udfunction_struct(Name,N,NewArgs,NewPredicate,NewReturnValue,
+				  UDFCodeList),
 		%% code for setting prolog declaration at run time.
 		make_runtime_modular_prolog_declarations([prolog(NewPredName,NewPredArity)],PrologDeclarationCode),
 		CodeList=[PrologDeclarationCode,UDFCodeList|RuleList]
@@ -3328,6 +3355,7 @@ compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactLi
 	    compiling_error(Index,ERROR_UDF,Err),
 	    Status = [Err]
 	),
+	!,
 	clear_context(compiling_udf).
 
 /*
@@ -3443,7 +3471,8 @@ compile_rule(Head,Body,Annotation,RuleList-RuleTail,Facts-Facts,Status) :-
 	    )
 	;
 	    Status=HeadStatus
-        ).
+        ),
+	!.
 
 /****************************************************************************
   split_ruleheads_add_rulesig(+HeadCodeList,+BodyCode,+BodyCodeSansDelay,?LabelCode,-RuleDiffList,-Status)
@@ -3478,7 +3507,8 @@ split_ruleheads_add_rulesig([H],Body,BodySansDelay,(TagCodeIn,MetaCode),[InsSigC
 	    add_defeasible_condition_to_body(DefeatCondWithHead,Body,NewBody),
 	    rule_struct(H,NewBody,Code),
 	    Status=[]
-	).
+	),
+	!.
 
 split_ruleheads_add_rulesig(HeadList,Body,BodySansDelay,(TagCode,MetaCode),[InsSigCode,Code|CodeList]-ListTail,Status) :-
 	%% Multiple atoms appear in the rule head.
@@ -3515,7 +3545,8 @@ rule_difflist([H|L],B,TagCodeIn,[HC|LC]-T,Status) :-
 	    add_defeasible_condition_to_body(DefeatCond,B,NewB),
 	    rule_struct(H,NewB,HC),
 	    rule_difflist(L,B,TagCode,LC-T,Status)
-	).
+	),
+	!.
 
 %% If TagCode is NULL, inserts a unique Id
 insert_rule_signature_onehead(Head,Body,(TagCode,MetaCode,DefeatCond),Code) :-
@@ -3537,13 +3568,15 @@ make_real_label_id(ProposedId,RealId) :-
 	(ProposedId == NULL -> new_oidobj(NO_INDEX,RealId)
 	; ProposedId == FL_SKIP_TAG -> new_oidobj(NO_INDEX,RealId)
 	; RealId = ProposedId
-	).
+	),
+	!.
 
 %% add_defeasible_condition_to_body(+DefeatCondCode,+BodyCode,-NewBodyCode)
 add_defeasible_condition_to_body(DefeatCondCode,BodyCode,NewBodyCode) :-
 	(DefeatCondCode == NULL -> NewBodyCode = BodyCode
 	; conjunct_struct(BodyCode,DefeatCondCode,NewBodyCode)
-	).
+	),
+	!.
 
 %% DefeatCondCode = FL_UNDEFEATED@LibModule(TagCode,NewVar,ThisModule)
 %% or NULL. This is encoded as
@@ -3578,7 +3611,8 @@ construct_defeasible_condition(Index,TagCode,DelayedDefeatCondCode) :-
 			 DelayedDefeatCondCode)
 	;
 	    DelayedDefeatCondCode = NULL
-	).
+	),
+	!.
 
 %% DefeatCondCode = FL_UNDEFEATED@LibModule(TagCode,HeadCode,ThisModule)
 %% or NULL. This is encoded as
@@ -3611,7 +3645,8 @@ construct_defeasible_condition(Index,HeadCode,TagCode,DelayedDefeatCondCode) :-
 			 DelayedDefeatCondCode)
 	;
 	    DelayedDefeatCondCode = NULL
-	).
+	),
+	!.
 
 
 /****************************************************************************
@@ -3657,7 +3692,8 @@ compile_head([ParserTerm|ParserTermList],Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    )
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -3738,6 +3774,7 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    H2BCodeTail=NULL
             %%Status=[]
 	),
+	!,
         clear_context(compiling_headliteral).
 
 
@@ -3820,13 +3857,14 @@ compile_body(ParserTerm,Code,Status) :-
 	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
 	    S3 = [Err3]
 	),
-	subtract_vars(FormVarList,QuantVarNames,FreeVarObjs_aux),
+	subtract_varnames_from_vars(FormVarList,QuantVarNames,FreeVarObjs_aux),
 	remove_prdontcare_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
 	remove_caller_vars(FreeVarObjs_aux2,FreeVarObjs),
 
 	rename_prvariables(QuantVarNames,FormCode,
 			   RenamedFormCode,_RenamedQuantVars),
 	flatten([S1,S2,S3],Status),
+	!,
 	( no_errors_found(Status) ->
 	    %% Create the code for compiled quantification.
 	    quantifier_struct(FL_EXISTS,RenamedFormCode,FreeVarObjs,Code)
@@ -4152,6 +4190,7 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    compile_exec_directive(DirectList,NULL,SpecCode,Status),
 	    OidCode=NULL
 	),
+	!,
 	conjunct_code([OidCode,SpecCode],Code).
 
 
@@ -4354,8 +4393,8 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    transactionalstrobj_struct(ParserTerm,Object),
 	    Status=[]
 	),
-	clear_context(compiling_body_pathexp),
-	!.
+	!,
+	clear_context(compiling_body_pathexp).
 
 compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	set_context(compiling_body_pathexp),
@@ -4415,6 +4454,7 @@ compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	; is_flworkspace(ParserTerm,P,WS),
 	    compile_wspathexp(P,WS,Object,OidCode,Code,BodyHeadList,Status)
 	),
+	!,
 	clear_context(compiling_body_pathexp).
 
 
@@ -4550,6 +4590,7 @@ verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextSt
 	 ;
                	SymbolContextStatus=[]
          ),
+	!,
 	get_index_line(Index,Line),
 	add_symbol(Name,Arity,WS,Index,Line,SymbolContext,Transactional).
 
@@ -4596,7 +4637,8 @@ make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,
 */
 	;
 		ContextStatus=[]
-        ).
+        ),
+	!.
 
 make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,PREDICATE_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	( UsedContext==UDF_SYMBOL, UsedArity==SymbolArity ->
@@ -4620,7 +4662,8 @@ make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,
 	    )
 	;
 		ContextStatus=[]
-	).
+	),
+	!.
 
 make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,UDF_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	( UsedContext==PROLOG_SYMBOL, UsedArity==SymbolArity ->
@@ -4649,7 +4692,8 @@ make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,
 	    ContextStatus=[Err]
 	;
 	    ContextStatus=[]
-	).
+	),
+	!.
 
 make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,SENSOR_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	( UsedContext==UDF_SYMBOL, UsedArity==SymbolArity ->
@@ -4685,7 +4729,8 @@ make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,
 	    ContextStatus=[Err]
 	;
 	    ContextStatus=[]
-	).
+	),
+	!.
 
 make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,PROLOG_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	%% MK: can this happen in the FLORA shell?
@@ -4712,7 +4757,8 @@ make_symbol_context_status(UsedContext,_UsedTransactional,UsedArity,SymbolArity,
 	    ContextStatus=[Err]
 	;
 	    ContextStatus=[]
-	).
+	),
+	!.
 
 make_symbol_context_status(_,_,_,_,_,_,_,[]).
 
@@ -4797,25 +4843,25 @@ compile_flload(LoadList,Code,Status) :-
   compile_flvar(+Name,+Index,-VarObject)
 ****************************************************************************/
 compile_flvar(Name,Index,VarObject) :-
-	( Name == FL_UNDERSCORE ->
-	    new_dontcare_prvariable(Index,VarObject)
+	( Name == FL_UNDERSCORE -> new_dontcare_prvariable(Index,VarObject)
 	;
 	  varobj_struct(Name,Index,VarObject)
-        ).
+        ),
+	!.
 
 compile_fltransactionalvar_without_trans(Name,Index,VarObject) :-
-	( Name == FL_UNDERSCORE ->
-	    new_dontcare_prvariable(Index,VarObject)
+	( Name == FL_UNDERSCORE -> new_dontcare_prvariable(Index,VarObject)
 	;
 	  varobj_struct(Name,Index,VarObject)
-        ).
+        ),
+	!.
 
 compile_fltransactionalvar(Name,Index,VarObject) :-
-	( Name == FL_UNDERSCORE ->
-	    new_dontcare_prtransactionalvar(Index,VarObject)
+	( Name == FL_UNDERSCORE -> new_dontcare_prtransactionalvar(Index,VarObject)
 	;
 	  transactionalvar_struct(Name,Index,VarObject)
-        ).
+        ),
+	!.
 
 /****************************************************************************
   compile_flatomobj(+ParserTerm,+Nesting,-Object,?BodyHeadList,-Status)
@@ -4903,6 +4949,7 @@ compile_fltermobj(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,CompileS
 	-> Transactionality = TRANSACTIONAL_SYMBOL
 	; Transactionality = NONTRANSACTIONAL_SYMBOL
 	),
+	!,
 	verify_symbol_context(Funct,N,SymbolContext,
 			      Transactionality,SymbolStatus),
 	append(SymbolStatus,Status,CompileStatus).
@@ -4919,6 +4966,7 @@ compile_fltermobj(Funct,N,Args,_Nesting,Object,OidCode,Code,[],CompileStatus) :-
 	( no_errors_found(Status) -> termobj_struct(FObj,N,AObj,Object)
 	; true
 	),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 
@@ -4930,13 +4978,6 @@ compile_fltermobj(Funct,N,Args,_Nesting,Object,OidCode,Code,[],CompileStatus) :-
 has_user_defined_function(Name,N,FArgs,Predicate,ReturnValue) :-
 	has_permaoption(user_defined_function(Name,N,FArgs,Predicate,ReturnValue)),
 	!. 
-/*
-%% registry for UDFs is not used, and this piece is wrong anyway, as it uses
-%% FLORA_DEFAULT_WORKSPACE, not the actual module into which the file is loaded
-has_user_defined_function(Name,N,FArgs,Predicate,ReturnValue) :-
-	flrregistry:flora_user_defined_function(FLORA_DEFAULT_WORKSPACE,Name,N,
-						FArgs,Predicate,ReturnValue). 
-*/
 
 /****************************************************************************
   FormUDFVarSubstitute(+Args,+FArgs,+Nesting)
@@ -4996,6 +5037,7 @@ compile_fltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) 
 	    is_flatom(ScrambledFunct,ScrambledAtom,FunctIdx),
 	    compile_delayed_literal(ScrambledFunct,ArgsList,Nesting,Code,OidCode,BodyHeadList,Status)
 	),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_fltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) :-
@@ -5013,6 +5055,7 @@ compile_fltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) 
 	;
 		true
 	),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_fltransactionaltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) :-
@@ -5093,6 +5136,7 @@ compile_fllist(ObjTermList,ObjTerm,Index,Nesting,Object,OidCode,Code,BodyHeadLis
 		    true
 		)
 	    ),
+	    !,
 	    ( no_errors_found(Status) ->
 		list_struct(ObjList,Obj,Index,Object),
 		conjunct_code([ObjListCode,ObjCode],Code),
@@ -5192,7 +5236,8 @@ compile_flobjspec(ObjTerm,SpecBody,Object,OidCode,Code,BodyHeadList,Status) :-
 		Status=S,
 		BodyHeadList = BodyHeadList2
 	    )
-        ).
+        ),
+	!.
 
 /****************************************************************************
   compile_flspecbody(+Object,+SpecTerm,-OidCode,-Code,-BodyHeadList,-Status)
@@ -5280,7 +5325,7 @@ compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
 	    S3 = [Err3]
 	),
 
-	subtract_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
+	subtract_varnames_from_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
 	%% remove don't care vars, since no need to delay because of them
 	remove_prdontcare_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
 	remove_caller_vars(FreeVarObjs_aux2,FreeVarObjs),
@@ -5289,6 +5334,7 @@ compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
 			   RenamedFormCode,_RenamedQuantVars),
 
 	flatten([S1,S2,S3],Status),
+	!,
 	( no_errors_found(Status) -> 
 	    %% Create the code for compiled quantification.
 	    conjunct_code([OidCode,RenamedFormCode],CombinedCode),
@@ -5334,7 +5380,8 @@ compile_flspecbody(Object,SpecTerm,NULL,Code,BodyHeadList,Status) :-
         ;
 	  BodyHeadList = BodyHeadList1,
 	  Status=S
-        ).
+        ),
+	!.
 
 %% signatures: =>, *=>, etc.
 compile_flspecbody(Object,SpecTerm,NULL,Code,BodyHeadList,Status) :-
@@ -5367,7 +5414,8 @@ compile_flspecbody(Object,SpecTerm,NULL,Code,BodyHeadList,Status) :-
 	;
 	    BodyHeadList = BodyHeadList1,
 	    Status = S
-        ).
+        ),
+	!.
 
 %% signatures: =>, *=>, etc.
 compile_flspecbody(Object,SpecTerm,NULL,Code,BodyHeadList,Status) :-
@@ -5408,7 +5456,8 @@ compile_flspecbody(Object,SpecTerm,NULL,Code,BodyHeadList,Status) :-
 	;
 	    BodyHeadList = BodyHeadList1,
 	    Status = S
-        ).
+        ),
+	!.
 
 %% boolean signatures: =>.
 compile_flspecbody(Object,SpecTerm,NULL,Code,BodyHeadList,Status) :-
@@ -5500,8 +5549,9 @@ compile_flspecbody(_Object,SpecTerm,NULL,Code,BodyHeadList,Status) :-
 	is_flterm(P, Funct, N, Args),
 	!,
 	compile_prlgterm(Funct,N,Args,0,TCode,_OidCode,ACode,BodyHeadList,Status),
-	( no_errors_found(Status) -> 
-		conjunct_code([ACode,TCode],Code); true).
+	( no_errors_found(Status) -> conjunct_code([ACode,TCode],Code)
+	; true
+	).
 
 %% for O[BoolMeth]
 compile_flspecbody(Object,SpecTerm,NULL,Code,BodyHeadList,Status) :-
@@ -5622,7 +5672,8 @@ compile_flaggregate(Op,Var,GVars,SortSpec,BodyTerm,Object,Code,Status) :-
 	    )
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -5666,7 +5717,8 @@ check_aggregate(Var,GVars,BodyTerm,Status) :-
 	    allgvar_notin(SL,S5,[])
 	;
 	  S5=[]
-        ).
+        ),
+	!.
 
 
 check_gvar([],S,S) :- !.
@@ -5764,6 +5816,7 @@ compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,CompileS
 	-> Transactionality = TRANSACTIONAL_SYMBOL
 	; Transactionality = NONTRANSACTIONAL_SYMBOL
 	),
+	!,
 	verify_symbol_context(Funct,N,SymbolContext,Transactionality,
 			      SymbolStatus),
 	append(SymbolStatus,Status,CompileStatus).
@@ -5793,11 +5846,12 @@ compile_head_fltermlit(Funct,N,Args,Code,H2BCodeHead,H2BCodeTail,CompileStatus) 
 	; H2BCodeHead = H2BCodeHead_pre
 	),
 	( no_errors_found(Status) -> 
-		termlit_struct(HEADLITERAL,FObj,N,AObj,TObj),
-		conjunct_struct(ObjCode,TObj,Code)
+	    termlit_struct(HEADLITERAL,FObj,N,AObj,TObj),
+	    conjunct_struct(ObjCode,TObj,Code)
 	;
-		true
+	    true
 	),	
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_head_fltransactionaltermlit(Funct,N,Args,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
@@ -5840,7 +5894,8 @@ compile_head_fllist(ObjTermList,ObjTerm,Index,Object,Code,H2BCodeHead,H2BCodeTai
 	    )
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -5851,6 +5906,7 @@ compile_head_pathexplist([],[],NULL,NULL,NULL,[]) :- !.
 compile_head_pathexplist([T|L],[TObj|LObj],Code,H2BCodeHead,H2BCodeTail,Status) :-
 	compile_head_pathexp(T,TObj,TCode,TH2BCodeHead,TH2BCodeTail,S),
 	clear_context(compiling_term_name),
+	!,
 	( no_errors_found(S) -> 
 	    compile_head_pathexplist(L,LObj,LCode,LH2BCodeHead,LH2BCodeTail,S2),
 	    ( no_errors_found(S2) -> 
@@ -5963,7 +6019,8 @@ compile_head_pathexp(ParserTerm,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	;
 	  is_flworkspace(ParserTerm,P,WS),
 	  compile_head_wspathexp(P,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -5972,13 +6029,12 @@ compile_head_pathexp(ParserTerm,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
   Handles _#, _#123, _@, atoms
 ****************************************************************************/
 compile_head_fltoken(Token,Index,Object) :-
-	( Token == FL_NEWOID ->
-	    new_oidobj(Index,Object)
-        ; Token == FL_THISMODULE ->
-	    thismodule_struct(Object)
+	( Token == FL_NEWOID -> new_oidobj(Index,Object)
+        ; Token == FL_THISMODULE -> thismodule_struct(Object)
         ;
 	  atomobj_struct(Token,Index,Object)
-	).
+	),
+	!.
 
 /****************************************************************************
   compile_head_fltoken(+Token,+Num,+Index,-Object)
@@ -5989,7 +6045,8 @@ compile_head_fltoken(Token,Num,Index,Object) :-
 	    new_oidobj(Rule_num,Num,Index,Object)
         ;
           atomobj_struct(Token,Index,Object)
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -6000,6 +6057,7 @@ compile_head_fltoken(Token,Num,Index,Object) :-
 ****************************************************************************/
 compile_head_flobjref(ObjTerm,RefType,AttTerm,Object,Code,H2BCodeHead,H2BCodeTail,Status) :- 
         compile_head_pathexplist([ObjTerm,AttTerm],[Obj,Att],OACode,OAH2BCodeHead,OAH2BCodeTail,Status), 	 
+	!,
 	( no_errors_found(Status) -> 
             %% Approximate the textual information for the new variable.
             approx_flindex(AttTerm,Index), 	 
@@ -6017,6 +6075,7 @@ compile_head_flobjref(ObjTerm,RefType,AttTerm,Object,Code,H2BCodeHead,H2BCodeTai
 ****************************************************************************/
 compile_head_flbirelate(ObjTerm1,RelType,ObjTerm2,Obj1,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	compile_head_pathexplist([ObjTerm1,ObjTerm2],[Obj1,Obj2],OCode,H2BCodeHead,H2BCodeTail,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    birelate_struct(HEADLITERAL,Obj1,RelType,Obj2,TCode),
 	    conjunct_struct(OCode,TCode,Code)
@@ -6052,7 +6111,8 @@ compile_head_flobjspec(ObjTerm,SpecBody,Object,Code,H2BCodeHead,H2BCodeTail,Stat
 	  ;
 	    Status=S
 	  )
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -6068,6 +6128,7 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flconjunct(SpecTerm,L,R),
 	!,
 	compile_head_flspecbody(Object,L,LCode,LH2BCodeHead,LH2BCodeTail,S),
+	!,
 	( no_errors_found(S) -> 
 	    compile_head_flspecbody(Object,R,RCode,RH2BCodeHead,RH2BCodeTail,Status),
 	    ( no_errors_found(Status) -> 
@@ -6084,6 +6145,7 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flneg(SpecTerm,G,Idx),
 	!,
 	compile_head_flspecbody(Object,G,GCode,H2BCodeHead,H2BCodeTail,S),
+	!,
 	( no_errors_found(S) -> 
 	    neg_struct(GCode,Idx,Code,Status)
 	; Status = S
@@ -6110,7 +6172,8 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    )
         ;
 	  Status=S
-        ).
+        ),
+	!.
 
 %% signatures: =>, *=>, etc.
 compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
@@ -6138,7 +6201,8 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    )
 	;
 	    Status = S
-        ).
+        ),
+	!.
 
 compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flsigattconspec(SpecTerm,AttTerm,ConstrTerm,RefType,ValTerm),
@@ -6172,13 +6236,15 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    )
 	;
 	    Status = S
-        ).
+        ),
+	!.
 
 %% boolean signatures: =>.
 compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flboolsig(SpecTerm,AttTerm,_RefType),
 	!,
 	compile_head_pathexp(AttTerm,AttObj,ACode,H2BCodeHead,H2BCodeTail,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    boolsig_struct(HEADLITERAL,Object,AttObj,SCode),
 	    conjunct_struct(ACode,SCode,Code)
@@ -6191,6 +6257,7 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_fliboolsig(SpecTerm,AttTerm,_RefType),
 	!,
 	compile_head_pathexp(AttTerm,AttObj,ACode,H2BCodeHead,H2BCodeTail,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    iboolsig_struct(HEADLITERAL,Object,AttObj,SCode),
 	    conjunct_struct(ACode,SCode,Code)
@@ -6203,6 +6270,7 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_fltransig(SpecTerm,AttTerm,_RefType),
 	!,
 	compile_head_pathexp(AttTerm,AttObj,ACode,H2BCodeHead,H2BCodeTail,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    transig_struct(HEADLITERAL,Object,AttObj,SCode),
 	    conjunct_struct(ACode,SCode,Code)
@@ -6215,6 +6283,7 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flitransig(SpecTerm,AttTerm,_RefType),
 	!,
 	compile_head_pathexp(AttTerm,AttObj,ACode,H2BCodeHead,H2BCodeTail,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    itransig_struct(HEADLITERAL,Object,AttObj,SCode),
 	    conjunct_struct(ACode,SCode,Code)
@@ -6226,6 +6295,7 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flmethspec(SpecTerm,MethTerm),
 	!,
 	compile_head_pathexp(MethTerm,MethObj,MCode,H2BCodeHead,H2BCodeTail,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    methspec_struct(HEADLITERAL,Object,MethObj,SCode),
 	    conjunct_struct(MCode,SCode,Code)
@@ -6237,6 +6307,7 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flimethspec(SpecTerm,IMethTerm),
 	!,
 	compile_head_pathexp(IMethTerm,IMethObj,IMCode,H2BCodeHead,H2BCodeTail,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    imethspec_struct(HEADLITERAL,Object,IMethObj,SCode),
 	    conjunct_struct(IMCode,SCode,Code)
@@ -6248,6 +6319,7 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_fltranspec(SpecTerm,TranTerm),
 	!,
 	compile_head_pathexp(TranTerm,TranObj,TCode,H2BCodeHead,H2BCodeTail,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    transpec_struct(HEADLITERAL,Object,TranObj,SCode),
 	    conjunct_struct(TCode,SCode,Code)
@@ -6274,7 +6346,8 @@ compile_head_mvdattspec(Object,AttObj,RefType,[T|L],Code,H2BCodeHead,H2BCodeTail
 	    )
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -6288,6 +6361,7 @@ compile_head_mvdattspec(Object,AttObj,RefType,[T|L],Code,H2BCodeHead,H2BCodeTail
 ****************************************************************************/
 compile_head_flobjeql(Obj1,Obj2,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	compile_head_pathexplist([Obj1,Obj2],[O1,O2],OCode,H2BCodeHead,H2BCodeTail,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    objeql_struct(HEADLITERAL,O1,O2,OECode),
 	    conjunct_struct(OCode,OECode,Code),
@@ -6309,6 +6383,7 @@ compile_head_flobjeql(Obj1,Obj2,Code,H2BCodeHead,H2BCodeTail,Status) :-
 ****************************************************************************/
 compile_head_flneg(PosLit,Idx,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	compile_head_literal(PosLit,PosCode,H2BCodeHead,H2BCodeTail,Status1),
+	!,
 	( no_errors_found(Status1) -> 
 	    head_neg_struct(PosCode,Idx,Code,Status2),
 	    append(Status1,Status2,Status)
@@ -6404,7 +6479,8 @@ compile_wsliteral(ParserTerm,WS,Nesting,OidCode,WSCode,BodyHeadList,Status) :-
 	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
 				  TRANSACTIONAL_SYMBOL,Status),
 	    OidCode=NULL
-	).
+	),
+	!.
 
 
 /****************************************************************************
@@ -6479,7 +6555,8 @@ compile_wspathexp(ParserTerm,WS,Object,OidCode,Code,BodyHeadList,Status) :-
 	    Code=NULL,
 	    Status=[]
 	*/
-	).
+	),
+	!.
 
 
 /****************************************************************************
@@ -6517,7 +6594,8 @@ compile_wsflpathexplist([T|L],WS,Nesting,[TObj|LObj],OidCode,Code,BodyHeadList,S
 	    )
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -6571,7 +6649,8 @@ compile_wsflpathexp(ParserTerm,WS,Nesting,Object,OidCode,Code,BodyHeadList,Statu
 	;
 	  %% workspace not distributive over nested aggregates
 	  compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status)
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -6593,6 +6672,7 @@ compile_wstermobj(Funct,N,Args,WS,Object,OidCode,Code,BodyHeadList,Status) :-
 	;
 	  true
         ),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_wstransactionaltermobj(Funct,N,Args,WS,Object,OidCode,Code,BodyHeadList,CompileStatus) :-
@@ -6607,6 +6687,7 @@ compile_wstransactionaltermobj(Funct,N,Args,WS,Object,OidCode,Code,BodyHeadList,
 	;
 	  true
         ),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 
@@ -6655,6 +6736,7 @@ compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,BodyHeadList,Tra
 	    ( no_errors_found(Status) -> 
 		termobj_struct(FObj,N,AObj,Object); true)
         ),
+	!,
 	verify_symbol_context(Funct,N,WS,SymbolContext,
 			      Transactional,SymbolStatus),
 	append(SymbolStatus,Status,CompileStatus).
@@ -6664,8 +6746,10 @@ compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,[],Transactional
 			      Transactional,SymbolStatus),
 	set_context(compiling_term_name),
 	compile_wsflpathexplist([Funct|Args],WS,Nesting,[FObj|AObj],OidCode,Code,_BodyHeadList,Status),
-	( no_errors_found(Status) -> 
-	    termobj_struct(FObj,N,AObj,Object); true),
+	!,
+	( no_errors_found(Status) -> termobj_struct(FObj,N,AObj,Object)
+	; true
+	),
 	append(SymbolStatus,Status,CompileStatus).
 
 /****************************************************************************
@@ -6700,6 +6784,7 @@ compile_wstermlit(Funct,N,Args,WS,Nesting,OidCode,Code,BodyHeadList,CompileStatu
 	;
 	  true
         ),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_wstransactionaltermlit(Funct,N,Args,WS,Nesting,OidCode,Code,BodyHeadList,CompileStatus) :-
@@ -6715,6 +6800,7 @@ compile_wstransactionaltermlit(Funct,N,Args,WS,Nesting,OidCode,Code,BodyHeadList
 	;
 	  true
         ),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 /****************************************************************************
@@ -6753,7 +6839,8 @@ compile_wsfllist(ObjTermList,ObjTerm,Index,WS,Nesting,Object,OidCode,Code,BodyHe
 	    )
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -6764,6 +6851,7 @@ compile_wsfllist(ObjTermList,ObjTerm,Index,WS,Nesting,Object,OidCode,Code,BodyHe
 ****************************************************************************/
 compile_wsflobjref(ObjTerm,RefType,AttTerm,WS,Object,OidCode,Code,Status) :-
 	compile_wsflpathexplist([ObjTerm,AttTerm],WS,[Obj,Att],OidCodeList,OACode,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    %% Approximate the textual information for the new variable.
 	    approx_flindex(AttTerm,Index),
@@ -6782,6 +6870,7 @@ compile_wsflobjref(ObjTerm,RefType,AttTerm,WS,Object,OidCode,Code,Status) :-
 ****************************************************************************/
 compile_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,Obj1,OidCode,Code,Status) :-
 	compile_wsflpathexplist([ObjTerm1,ObjTerm2],WS,[Obj1,Obj2],OidCode,OCode,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    attach_workspace(WS,
 			     birelate_struct(BODYLITERAL,Obj1,RelType,Obj2,TCode),
@@ -6846,7 +6935,8 @@ compile_wsflobjspec(ObjTerm,SpecBody,WS,Object,OidCode,Code,BodyHeadList,Status)
 	    BodyHeadList = BodyHeadList1,
 	    Status=S
           )
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -6863,7 +6953,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	    append(BodyHeadList1,BodyHeadList2,BodyHeadList)
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	is_fldisjunct(SpecTerm,L,R),
@@ -6876,7 +6967,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	    append(BodyHeadList1,BodyHeadList2,BodyHeadList)
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	is_flnaf(SpecTerm,G),
@@ -6886,7 +6978,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	    conjunct_code([OidCode,GCode],CombinedGCode),
 	    prolog_naf_struct(CombinedGCode,Code)
 	; true
-	).
+	),
+	!.
 
 compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	is_flneg(SpecTerm,G,Idx),
@@ -6896,7 +6989,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	    conjunct_code([OidCode,GCode],CombinedGCode),
 	    neg_struct(CombinedGCode,Idx,Code,Status)
 	; Status = Status1
-	).
+	),
+	!.
 
 compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	is_flnot(SpecTerm,G),
@@ -6908,6 +7002,7 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	    flora_naf_struct(CombinedGCode,Code)
 	; true
 	),
+	!,
 	set_context(compiling_default_negation).
 
 %% Quantification under default negation
@@ -6932,7 +7027,7 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	    S3 = [Err3]
 	),
 
-	subtract_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
+	subtract_varnames_from_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
 	%% remove don't care vars, since no need to delay because of them
 	remove_prdontcare_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
 	remove_caller_vars(FreeVarObjs_aux2,FreeVarObjs),
@@ -6940,6 +7035,7 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	rename_prvariables(QuantVarNames,FormCode,
 			   RenamedFormCode,_RenamedQuantVars),
 
+	!,
 	flatten([S1,S2,S3],Status),
 	( no_errors_found(Status) -> 
 	    %% Create the code for compiled quantification.
@@ -6980,7 +7076,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	    )
         ;
 	  Status=S
-        ).
+        ),
+	!.
 
 %% signatures: =>, *=>, etc.
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
@@ -7011,7 +7108,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	;
 	    BodyHeadList = BodyHeadList1,
 	    Status = S
-        ).
+        ),
+	!.
 
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	is_flsigattconspec(SpecTerm,AttTerm,ConstrTerm,RefType,ValTerm),
@@ -7051,7 +7149,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	;
 	    BodyHeadList = BodyHeadList1,
 	    Status = S
-        ).
+        ),
+	!.
 
 %% boolean signatures: =>.
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
@@ -7065,7 +7164,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	    conjunct_code([AOidCode,ACode,WSCode],Code)
 	;
 	    true
-	).
+	),
+	!.
 
 %% boolean signatures: *=>.
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
@@ -7079,7 +7179,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	    conjunct_code([AOidCode,ACode,WSCode],Code)
 	;
 	    true
-	).
+	),
+	!.
 
 %% boolean signatures: =>% for transactional method
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
@@ -7093,7 +7194,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	    conjunct_code([AOidCode,ACode,WSCode],Code)
 	;
 	    true
-	).
+	),
+	!.
 
 %% boolean signatures: *=>% for transactional method
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
@@ -7107,7 +7209,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	    conjunct_code([AOidCode,ACode,WSCode],Code)
 	;
 	    true
-	).
+	),
+	!.
 
 %% +>>, *+>>@module
 %% NULL means: consume OidCode for attr and val here -- don't pass up the chain
@@ -7123,7 +7226,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	    conjunct_code([OidCode,WSCode,OCode],Code)
 	;
 	  true
-        ).
+        ),
+	!.
 
 %% same for ->->@module
 %% NULL means: consume OidCode for attr and val here -- don't pass up the chain
@@ -7138,15 +7242,15 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	    conjunct_code([OidCode,WSCode,OCode],Code)
 	;
 	  true
-        ).
+        ),
+	!.
 
 %% Obj[true], Obj[fail], Obj[!] translate as true, fail, and !
 compile_wsflspecbody(_Object,SpecTerm,_WS,NULL,Code,[],Status) :-
 	is_flpassthru(SpecTerm,P),
 	is_flatom(P, Atom, I),
 	!,
-	(Atom==FL_CUT
-	-> cut_struct(I,Code)
+	(Atom==FL_CUT -> cut_struct(I,Code)
 	; atomobj_struct(P,Code)
 	),
 	Status=[].
@@ -7157,8 +7261,9 @@ compile_wsflspecbody(_Object,SpecTerm,_WS,NULL,Code,BodyHeadList,Status) :-
 	is_flterm(P, Funct, N, Args),
 	!,
 	compile_prlgterm(Funct,N,Args,0,TCode,_OidCode,ACode,BodyHeadList,Status),
-	( no_errors_found(Status) -> 
-		conjunct_code([ACode,TCode],Code); true).
+	( no_errors_found(Status) -> conjunct_code([ACode,TCode],Code)
+	; true
+	).
 
 %% for O[BoolMeth]@module
 %% NULL means: consume OidCode for attr and val here -- don't pass up the chain
@@ -7173,7 +7278,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	    conjunct_code([OidCode,MCode,WSCode],Code)
 	;
 	  true
-        ).
+        ),
+	!.
 
 %% for O[*BoolMeth]@module
 %% NULL means: consume OidCode for attr and val here -- don't pass up the chain
@@ -7189,7 +7295,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	    conjunct_code([OidCode,IMCode,WSCode],Code)
 	;
 	  true
-        ).
+        ),
+	!.
 
 %% O[%M]@module
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
@@ -7203,7 +7310,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	    conjunct_code([OidCode,TCode,WSCode],Code)
 	;
 	  true
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -7221,7 +7329,8 @@ compile_wsmvdattspec(Object,AttObj,RefType,[T],WS,OidCode,Code,Status) :-
 	    conjunct_code([WSCode,TCode],Code)
 	;
 	  true
-        ).
+        ),
+	!.
 
 compile_wsmvdattspec(Object,AttObj,RefType,[T|L],WS,OidCode,Code,Status) :-
 	!,
@@ -7235,7 +7344,8 @@ compile_wsmvdattspec(Object,AttObj,RefType,[T|L],WS,OidCode,Code,Status) :-
 	    )
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -7250,7 +7360,8 @@ compile_wsflobjeql(Obj1,Obj2,WS,OidCode,Code,Status) :-
 	    conjunct_code([OCode,WSCode],Code)
 	;
 	  true
-	).
+	),
+	!.
 
 
 /****************************************************************************
@@ -7304,7 +7415,8 @@ compute_reification_expr(Formula,Object,OidCode,Status) :-
 	;
 	    reify_struct(Object1,Object),
 	    OidCode = NULL
-	).
+	),
+	!.
 
 /****************************************************************************
   compile_truthvalue(+Form,+Op,-OidCode,-Code,-Status)
@@ -7313,6 +7425,7 @@ compute_reification_expr(Formula,Object,OidCode,Status) :-
 compile_truthvalue(Formula,Op,Code,Status) :-
 	atomobj_struct(Op,OpCode),
 	compile_body(Formula,FCode,Status),
+	!,
 	( no_errors_found(Status) -> 
 	   truthvalue_struct(FCode,OpCode,Code)
 	; true
@@ -7335,7 +7448,8 @@ compile_labelprimitive(LabelParserTerm,HeadList,Code,Status) :-
 	    ; true
 	    )
 	; Status = S1
-	).
+	),
+	!.
 
 
 /****************************************************************************
@@ -7348,6 +7462,7 @@ compile_prefixprimitive(Prefix,Expansion,Module,Code,Status) :-
 	; compile_flatomvar(Module,ModuleCode)
 	),
 	compile_pathexplist([Prefix,Expansion],[PrefixCode,ExpansionCode],_,_,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    prefixprimitive_struct(PrefixCode,ExpansionCode,ModuleCode,Code)
 	; true
@@ -7416,6 +7531,7 @@ compile_prologallliblit(ParserTerm,Nesting,OidCode,Code,BodyHeadList,Status) :-
 	  conjunct_struct(ACode,PrelimTermCode,PrelimCode), !
 	; PrelimCode = PrelimTermCode, ACode=NULL
 	),
+	!,
 	%% Here PrelimTermCode is bound and we decompose it
 	prologterm_struct(FunctCode,N,ArgsCode,PrelimTermCode),
 	new_prvarlist(N,NewVarList),
@@ -7436,6 +7552,7 @@ compile_prologallliblit(ParserTerm,Module,Nesting,OidCode,Code,BodyHeadList,Stat
 	  conjunct_struct(ACode,PrelimTermLitCode,PrelimCode), !
 	; PrelimCode = PrelimTermLitCode, ACode=NULL
 	),
+	!,
 	%% PrelimTermLitCode is bound and we decompose it
 	prologliblit_struct(PrelimTermCode,PrelimTermLitCode),
 	%% PrelimTermCode is bound and we decompose it
@@ -7567,15 +7684,6 @@ compile_prlgterm(Funct,N,Args,Module,Nesting,Object,OidCode,Code,BodyHeadList,St
 	clear_context(no_symbol_check),
 	!.
 
-/*
-compile_prlgterm(Funct,N,Args,Module,Object,OidCode,Code,Status) :-
-	atomobj_struct(Funct,FObj),
-	prologterm_struct(FObj,N,AObj,Module,Object),
-	compile_pathexplist(Args,AObj,OidCode,Code,Status),
-	!.
-*/
-
-
 /*************************************************************************
    generate_convert_to_prolog_code(+AObjList,+VarList,-Code)
 *************************************************************************/ 
@@ -7635,7 +7743,8 @@ compile_head_wspathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL,
 	    Status=[]
-	).
+	),
+	!.
 
 
 /****************************************************************************
@@ -7714,7 +7823,8 @@ compile_head_wsliteral(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 				  TRANSACTIONAL_SYMBOL,Status),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL
-	).
+	),
+	!.
 
 
 /****************************************************************************
@@ -7737,7 +7847,8 @@ compile_head_wsflpathexplist([T|L],WS,[TObj|LObj],Code,H2BCodeHead,H2BCodeTail,S
 	    )
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -7767,7 +7878,8 @@ compile_head_wsflpathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Statu
 	    compile_head_wspathexp(P,NestedWS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
 	;
 	  compile_head_pathexp(ParserTerm,Object,Code,H2BCodeHead,H2BCodeTail,Status)
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -7800,6 +7912,7 @@ compile_head_wstermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Compi
 	;
 	  true
         ),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_head_wstransactionaltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
@@ -7814,6 +7927,7 @@ compile_head_wstransactionaltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BC
 	;
 	  true
         ),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 
@@ -7825,12 +7939,6 @@ compile_head_wstransactionaltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BC
         is that compile_head_wsflpathexp applies workspace only to F-Logic
         constructs.
 ****************************************************************************/
-/*
-compile_head_wsfltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	compile_head_wsflpathexplist([Funct|Args],WS,[FObj|AObj],Code,H2BCodeHead,H2BCodeTail,Status),
-	(Status == [] -> termobj_struct(FObj,N,AObj,Object); true).
-*/
-
 compile_head_wsfltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
         ( \+ has_context(compiling_arithmetics),
 	    flora_get_flatomvar_name(Funct,Name),
@@ -7866,6 +7974,7 @@ compile_head_wsfltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Com
 	; Transactionality = NONTRANSACTIONAL_SYMBOL
 	),
 	verify_symbol_context(Funct,N,WS,SymbolContext,Transactionality,SymbolStatus),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 
@@ -7888,6 +7997,7 @@ compile_head_wstermlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatu
 	;
 	  true
         ),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 compile_head_wstransactionaltermlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
@@ -7902,6 +8012,7 @@ compile_head_wstransactionaltermlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail
 	;
 	  true
         ),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 
@@ -7931,7 +8042,8 @@ compile_head_wsfllist(ObjTermList,ObjTerm,Index,WS,Object,Code,H2BCodeHead,H2BCo
 	    )
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -7939,6 +8051,7 @@ compile_head_wsfllist(ObjTermList,ObjTerm,Index,WS,Object,Code,H2BCodeHead,H2BCo
 ****************************************************************************/
 compile_head_wsflobjref(ObjTerm,RefType,AttTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	compile_head_wsflpathexplist([ObjTerm,AttTerm],WS,[Obj,Att],OACode,OAH2BCodeHead,OAH2BCodeTail,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    %% Approximate the textual information for the new variable.
 	    approx_flindex(AttTerm,Index),
@@ -7958,6 +8071,7 @@ compile_head_wsflobjref(ObjTerm,RefType,AttTerm,WS,Object,Code,H2BCodeHead,H2BCo
 ****************************************************************************/
 compile_head_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,Obj1,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	compile_head_wsflpathexplist([ObjTerm1,ObjTerm2],WS,[Obj1,Obj2],OCode,H2BCodeHead,H2BCodeTail,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    attach_workspace(WS,
 			     birelate_struct(HEADLITERAL,Obj1,RelType,Obj2,TCode),
@@ -7998,7 +8112,8 @@ compile_head_wsflobjspec(ObjTerm,SpecBody,WS,Object,Code,H2BCodeHead,H2BCodeTail
 	  ;
 	    Status=S
 	  )
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -8018,7 +8133,8 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 	     ; true)
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flmvdattspec(SpecTerm,AttTerm,RefType,VL),
@@ -8045,7 +8161,8 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 	    )
         ;
 	  Status=S
-        ).
+        ),
+	!.
 
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flmethspec(SpecTerm,MethTerm),
@@ -8058,7 +8175,8 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 	    conjunct_struct(MCode,WSSCode,Code)
 	;
 	  true
-        ).
+        ),
+	!.
 
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flimethspec(SpecTerm,IMethTerm),
@@ -8071,7 +8189,8 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 	    conjunct_struct(IMCode,WSSCode,Code)
 	;
 	  true
-        ).
+        ),
+	!.
 
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_fltranspec(SpecTerm,TranTerm),
@@ -8084,7 +8203,8 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 	    conjunct_struct(TCode,WSSCode,Code)
 	;
 	  true
-        ).
+        ),
+	!.
 
 
 %% signatures: =>, *=>, etc.
@@ -8117,7 +8237,8 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 	    )
 	;
 	    Status = S
-        ).
+        ),
+	!.
 
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flsigattconspec(SpecTerm,AttTerm,ConstrTerm,RefType,ValTerm),
@@ -8157,7 +8278,8 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 	    )
 	;
 	    Status = S
-        ).
+        ),
+	!.
 
 
 %% boolean signatures: =>.
@@ -8172,7 +8294,8 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 	    conjunct_struct(ACode,WSCode,Code)
 	;
 	    true
-	).
+	),
+	!.
 
 %% boolean signatures: *=>.
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
@@ -8186,7 +8309,8 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 	    conjunct_struct(ACode,WSCode,Code)
 	;
 	    true
-	).
+	),
+	!.
 
 %% boolean signatures: =>% for transactional method
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
@@ -8200,7 +8324,8 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 	    conjunct_struct(ACode,WSCode,Code)
 	;
 	    true
-	).
+	),
+	!.
 
 %% boolean signatures: *=>% for transactional method
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
@@ -8214,7 +8339,8 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 	    conjunct_struct(ACode,WSCode,Code)
 	;
 	    true
-	).
+	),
+	!.
 
 compile_head_wsmvdattspec(_Object,_AttObj,_RefType,[],_WS,NULL,NULL,NULL,[]) :- !.
 
@@ -8234,7 +8360,8 @@ compile_head_wsmvdattspec(Object,AttObj,RefType,[T|L],WS,Code,H2BCodeHead,H2BCod
 	     ; true)
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -8254,7 +8381,8 @@ compile_head_wsflobjeql(Obj1,Obj2,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    conjunct_struct(OCode,WSCode,Code)
 	;
 	  true
-	).
+	),
+	!.
 
 /****************************************************************************
   compile_head_wsflneg(+PosPart,+WS,+Idx,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
@@ -8272,7 +8400,8 @@ compile_head_wsflneg(PosPart,WS,Idx,Code,H2BCodeHead,H2BCodeTail,Status) :-
 			     NegCode,Code),
 	    append(S,Status1,Status)
 	; Status = S
-	).
+	),
+	!.
 
 
 /****************************************************************************
@@ -8291,7 +8420,8 @@ compile_flinsert(Op,List,Cond,Code,Status) :-
 	    append(S,Status1,Status)
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 /****************************************************************************
   compile_flinsert(+Op,+List,-Code,Status)
@@ -8303,7 +8433,8 @@ compile_flinsert(Op,List,Code,Status) :-
 	    insert_struct(Op,ListCode,Code)
 	;
 	  true
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -8318,6 +8449,7 @@ compile_flinsert_literals(List,DBCodeList,Status) :-
 	;
 	    true
 	),
+	!,
 	clear_context(compiling_update_literals).
 
 
@@ -8342,7 +8474,8 @@ compile_flinsert_list([H|T],Code,Status) :-
 	    append(S,Status1,Status)
 	;
 	  Status=S
-	).
+	),
+	!.
 
 compile_flinsert_list([H|T],Code,Status) :-
 	%% regular fact. may have path expression inside
@@ -8392,7 +8525,8 @@ compile_flinsert_list([H|T],Code,Status) :-
 	    )
 	;
 	    Status=S
-	).
+	),
+	!.
 
 
 /****************************************************************************
@@ -8413,7 +8547,8 @@ compile_fldelete(Op,List,Cond,Code,Status) :-
 	    append(S,Status1,Status)
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -8423,6 +8558,7 @@ compile_fldelete(Op,List,Cond,Code,Status) :-
 ****************************************************************************/
 compile_fldelete(Op,List,Code,Status) :-
 	compile_fldelete_literals(List,CodeList,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    list_struct(CodeList,[],ListCode),
 	    delete_struct(Op,ListCode,Code)
@@ -8442,6 +8578,7 @@ compile_fldelete_literals(List,DBCodeList,Status) :-
 	;
 	    true
 	),
+	!,
 	clear_context(compiling_update_literals).
 
 
@@ -8467,7 +8604,8 @@ compile_fldelete_list([H|T],CodeList,Status) :-
 		append(HCodeList,TCodeList,CodeList); true)
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 compile_fldelete_list([H|T],CodeList,Status) :-
 	is_flupdaterule(H,Op,List),
@@ -8481,7 +8619,8 @@ compile_fldelete_list([H|T],CodeList,Status) :-
 		CodeList = [HCode|TCodeList]; true)
 	;
 	  Status=S
-	).
+	),
+	!.
 
 compile_fldelete_list([H|T],CodeList,Status) :-
 	%% Call compile_body_literal because path expressions should be
@@ -8496,7 +8635,8 @@ compile_fldelete_list([H|T],CodeList,Status) :-
 		append(HCodeList,TCodeList,CodeList); true)
 	;
 	  Status=S
-        ).
+        ),
+	!.
 
 
 /****************************************************************************
@@ -8534,6 +8674,7 @@ compile_dbupdate_list([C|CL],[DBCode|DBCodeList]) :-
 	),
 	atomobj_struct(FLSYSDBUPDATE,FCode),
 	prologterm_struct(FCode,3,[C,SCode,WS],DBCode),
+	!,
 	compile_dbupdate_list(CL,DBCodeList).
 
 /****************************************************************************
@@ -8542,6 +8683,7 @@ compile_dbupdate_list([C|CL],[DBCode|DBCodeList]) :-
 compile_flupdaterule(Op,List,Code,Status) :-
 	is_flatom(Op,OpAtom,Index),
 	compile_fldynrule_list(OpAtom,List,CodeList,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    list_struct(CodeList,[],ListCode),
 	    updaterule_syslib(OpAtom,UpdateruleLib),
@@ -8569,6 +8711,7 @@ compile_fldynrule(Op,R,RCode,Status) :-
 	workspaceterm_struct(WS,WSTerm),
 	set_context(dynruleworkspace(WSTerm)),
 	compile_fldynrule(Op,Rule,RCode,Status),
+	!,
 	clear_contextall(dynruleworkspace(_)).
 
 compile_fldynrule(_Op,R,RCode,Status) :-
@@ -8659,6 +8802,7 @@ compile_fldynrule(Op,R,RCode,Status) :-
 	;
 	    Status=HeadStatus
 	),
+	!,
 	clear_context(compiling_dynrule),
         clear_context(compile_with_var_module).
 
@@ -8676,6 +8820,7 @@ remove_empty_list([H|L],[H|NL]) :-
 ****************************************************************************/
 compile_flrefresh(List,Code,Status) :-
 	compile_fldelete_list(List,CodeList,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    list_struct(CodeList,[],ListCode),
 	    table_refresh_struct(ListCode,Code)
@@ -8719,13 +8864,13 @@ compile_flclause(Label,Mode,HeadList,Body,Code,Status) :-
 	;
 	    Status = LabStatus
         ),
+	!,
         clear_context(compile_with_var_module),
 	set_context(compiling_clause_primitive).
 
 
 /****************************************************************************
-             Error handling
-     catch{Goal,Err,Handler}
+    Error handling: catch{Goal,Err,Handler}
 ****************************************************************************/
 compile_flcatch(Goal,Err,Handler,Code,Status) :-
 	compile_body(Goal,GoalCode,GoalStatus),
@@ -8740,13 +8885,15 @@ compile_flcatch(Goal,Err,Handler,Code,Status) :-
 	    ; Status = ErrStatus
 	    )
 	; Status = GoalStatus
-	).
+	),
+	!.
 
 /****************************************************************************
      throw{Err}
 ****************************************************************************/
 compile_flthrow(Err,Code,Status) :-
 	compile_pathexp(Err,ErrCode,_OidCode,_ObjSpec,Status),
+	!,
 	( no_errors_found(Status) -> 
 	    throw_struct(ErrCode,Code)
 	; true
@@ -8765,7 +8912,8 @@ compile_flp2h(Prolog,Hilog,Code,Status) :-
 	    ; true
 	    )
 	; Status = PStatus
-	).
+	),
+	!.
 
 
 /****************************************************************************
@@ -8902,6 +9050,7 @@ compile_delayed_literal(Op,Args,Mod,Nesting,SpecCode,OidCode,BodyHeadList,Status
 *******************************************************************************/
 flora_compile_pathexp(ParserTerm,Code,Status) :-
 	compile_pathexp(ParserTerm,ObjectCode,OidCode,SpecCode,Status1),
+	!,
 	( no_errors_found(Status1), (OidCode \= NULL ; SpecCode \= NULL) -> 
 	    %%conjunct_code([OidCode,SpecCode],Code)
 	    approx_flindex(ParserTerm,Index),
@@ -8923,7 +9072,8 @@ compile_datatype_list([H|Tail],[HCode|TailCode],Status) :-
 	   compile_datatype_list(Tail,TailCode,Status)
 	;
 	    Status=S1
-	).
+	),
+	!.
 
 %% Check if Goal is negatable by NEG (explicit negation)
 %% Only F-logic atoms (except the derived ones) and HiLog
@@ -8964,9 +9114,9 @@ is_body_neg_negatable_literal(X) :-
 	; is_florasyslib_struct(X, _I,FLNEGLIBMODLIT,_N,Args)
 	; is_florasyslib_struct(X,_I,FLNEGLIBMODOBJ,_N,Args)
 	),
+	!,
 	Args = [P|_],
-	is_body_neg_negatable_literal(P),
-	!.
+	is_body_neg_negatable_literal(P).
 is_body_neg_negatable_literal(X) :-
 	X = PRVARIABLE(_,_),
 	%% Allow variables to be negated so that
@@ -9012,7 +9162,8 @@ delay_literals_checking_code(Head,Body,Code) :-
 			   [ParserBodyVars,ParserHeadVars],
 			   FLDELAYSUPPORTMOD,
 			   Code,_OidCode,_ACode,_Status)
-	).
+	),
+	!.
 
 /*
 %% Input: compiled Head code
@@ -9164,6 +9315,7 @@ code_line_and_file_by_prterm(CompiledTerm,Line,File) :-
 	-> flora_token_index_to_line(Index,Line)
 	; Line = NULL
 	),
+	!,
 	get_current_compile_file(File).
 
 %% Get the line number and file name of code represented by line/position index
@@ -9293,7 +9445,8 @@ verify_symbol_context_pairlist([],_Index,_Context,_Trans,[]) :- !.
 verify_symbol_context_pairlist([(P,A)|PairList],Index,Context,Trans,Status) :-
 	!,
 	%% P can be either the sensor name or (PrologSensor,PrologModule)
-	(P = (PA,_), !; P=PA),
+	(P = (PA,_) ; P=PA),
+	!,
 	is_flatom(PObj,PA,Index),
 	verify_symbol_context(PObj,A,Context,Trans,S1),
 	verify_symbol_context_pairlist(PairList,Index,Context,Trans,S2),
@@ -9301,7 +9454,8 @@ verify_symbol_context_pairlist([(P,A)|PairList],Index,Context,Trans,Status) :-
 	sort(S3,Status).
 verify_symbol_context_pairlist([P/A|PairList],Index,Context,Trans,Status) :-
 	!,
-	(P = (PA,_), !; P=PA),
+	(P = (PA,_) ; P=PA),
+	!,
 	is_flatom(PObj,PA,Index),
 	verify_symbol_context(PObj,A,Context,Trans,S1),
 	verify_symbol_context_pairlist(PairList,Index,Context,Trans,S2),
