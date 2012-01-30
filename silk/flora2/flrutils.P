@@ -718,10 +718,16 @@ flora_flload(FlrFile,Workspace) :-
         ),
 	flora_call_hooks(Workspace,LOADTOMODULE,FlrFile,before,AroundHookLink),
 	flora_cputime(T0),
+	%% We clean out UDF predicates before loading (not adding!) a module
+	%% This *cannot* be done from within flrdefinition.flh because then
+	%% the call to flora_cleanup_udf/1 would abolish the predicates
+	%% that we've just loaded!
+	flora_cleanup_udf(Workspace),
 	consult(WSXWAMFile),
 	flora_cputime(T1),
 	T is T1-T0,
-	flora_loader_message('Done loading ~w. CPU time used: ~w seconds',[FlrFile,T]),
+	flora_loader_message('Done loading ~w. CPU time used: ~w seconds',
+			     [FlrFile,T]),
 	flora_call_hooks(Workspace,LOADTOMODULE,FlrFile,after,AroundHookLink),
 	flora_clear_xpp_options,
 	!.
@@ -1819,6 +1825,22 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
 	    \+ flora_storage_find_fact(StorageName,flora_symbol(SymbolName,SymbolArity,_WS,_UsedIndex,_UsedLine,UDF_SYMBOL,SymbolTransactional,_UsedFileName))
 	->
 	    compiling_error(SymbolIndex,ERROR_UDF_WITHOUT_DEFINITION,Stat),
+	    ContextStatus = [Stat],
+	    util_load_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
+	    flora_increment_counter(flora_load_errors,ErrNum,_,_),
+            storage_insert_fact(StorageName,Term,_Inserted),
+	    fail
+	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,UDF_SYMBOL,SymbolTransactional,FileName),
+	    %% If there is another function definition for the same symbol/arity
+	    %% in a previous file, give an error unless nowarn is specified
+	    flora_storage_find_fact(StorageName,flora_symbol(SymbolName,SymbolArity,_WS,_UsedIndex,UsedLine,UDF_SYMBOL,SymbolTransactional,UsedFileName)),
+	    \+ flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,_,UDF_SYMBOL,SymbolTransactional,FileName)),
+	    UsedFileName\=FileName
+	->
+	    compiling_error(SymbolIndex,
+			    [ERROR_OVERRIDING_UDF,
+			     ' (see file ',UsedFileName,', line ',UsedLine,')'],
+			    Stat),
 	    ContextStatus = [Stat],
 	    util_load_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
 	    flora_increment_counter(flora_load_errors,ErrNum,_,_),
@@ -3992,8 +4014,12 @@ write_use_symbols(LocalName,FLS2File):-
 		),
 		List),
 	!,
-	(List == [] -> true
-	; 
+	(List == [] ->
+	    %% if FLS2 file exists, delete it
+	    (flora_file_op(exists,FLS2File) -> flora_file_op(unlink,FLS2File)
+	    ; true
+	    )
+	;  %% create new FLS2 file
 	    telling(PreOut),
 	    tell(FLS2File),
 	    write_symbols_list(List),
@@ -4061,6 +4087,30 @@ write_tabled_udf_predicates([(PredName,PredArity),UDFPreds]):-
 	!.
 
 write_tabled_udf_predicates(_).
+
+%% This is called when a new module is loaded
+flora_cleanup_udf(Module) :-
+	(Module == FLORA_DEFAULT_WORKSPACE ->
+	    retractall(flora_used_udf_registry(_,_,_,_,_))
+	; true
+	),
+	flora_fls_storage_name(Module,FLSStorage),
+	flora_db_delete_all(FLSStorage),
+	abolish_udf_predicates(Module).
+abolish_udf_predicates(Module) :-
+	repeat,
+	( flora_defined_udf_registry(Module,_Fun,FunArity,FunPred),
+	    %% UDF predicate's arity is function arity+2
+	    FunArity2 is FunArity+2,
+	    current_predicate(FunPred/FunArity2),
+	    abolish(FunPred,FunArity2),
+	    fail
+	; true
+	),
+	retractall(flora_defined_udf_registry(_,_,_,_)).
+abolish_udf_predicates(_).
+
+	
 
 %% This is used because retractall/1 is either slow by itself
 %% or is prone to invoke garbage collection too often

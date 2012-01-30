@@ -38,6 +38,10 @@
 	flora_compilation_context/1
    from flrcompiler.
 
+:- import
+	flora_modular_prolog_registry/2
+   from flrregistry.
+
 :- export
 	flora_reset_prolog/0,
 	flora_define_prolog/1,

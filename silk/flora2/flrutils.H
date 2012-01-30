@@ -76,6 +76,7 @@
 	flora_db_insert_base_fast/2,
 	flora_db_commit/1,
 	flora_db_reclaim_space/1,
+	flora_db_delete_all/1,
 	flora_storage_find_fact/2
    from flrstoragebase.
 
@@ -149,6 +150,8 @@
 	flora_configuration/2,
 	flora_storage_registry/1,
 	flora_trailer_registry/2,
+	flora_used_udf_registry/5,
+	flora_defined_udf_registry/4,
 	flora_module_registry/1
    from flrregistry.
 
@@ -272,6 +275,7 @@
 	flora_loaddyn_data/3,
 
 	flora_compiler_environment/2,
+	flora_cleanup_udf/1,
 
 	flora_put_attr/3,
 	flora_disable_attributed_variables/0,

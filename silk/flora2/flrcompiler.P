@@ -69,6 +69,10 @@ is_fldirective(FLDIRECTIVE(DirectList,I),DirectList,I).
 is_fllabeled_construct(FLTAGGEDCONSTRUCT(Label,Contents),Label,Contents).
 is_fludfunction(FLUDF(Function,Body,ReturnValue),Function,Body,ReturnValue).
 is_fludfunctionfact(FLUDFFACT(Function,Value),Function,Value).
+%% udfunction_struct causes flrcoder.P to record UDF definitions in the registry
+%% so that we could abolish all new_udf_predicate_XXX on reloading modules. This
+%% is done in flora_cleanup_udf/1, which is called from flrutils:flora_flload/2
+udfunction_struct(Name,N,PredName,PRUDFDEFINITION(Name,N,PredName)).
 
 is_fludfsymbol(FLUDFSYM(ParserTerm),ParserTerm).
 is_flsensorsymbol(FLSENSORSYM(ParserTerm),ParserTerm).
@@ -2670,17 +2674,23 @@ compile_direct(DirectTerm,_,[Code],Status) :-
 	set_permaoptions(PermaOptions),
 	verify_symbol_context_pairlist(PairList,Idx, USE_SENSOR_SYMBOL,
 				       NONTRANSACTIONAL_SYMBOL,Status),
-	verbatim_struct(PairList,PairListCode),
+	maplist(strip_pairlist_index(_,_),PairList,PairListSansIdx),
+	verbatim_struct(PairListSansIdx,PairListCode),
 	thismodule_struct(ThisMod),
 	florasyslib_struct(FLLIBRECORDSENSORS,2,[ThisMod,PairListCode],Code1),
 	report_option(FLSYSLIB(FLLIBRECORDSENSORS),NO_INDEX),
 	query_struct(Code1,Code).
 %% used in converting usesensor pred list
 make_sensor_permaoption(P/N/_Idx,sensor(P,N)).
+%% strip the index part from pred/arity/idx
+strip_pairlist_index(P/N/_Idx,P/N) :- !.
+strip_pairlist_index((P,N,_Idx),(P,N)).
 %% not used
 %%sensor_name_replacement(P/N/_Idx,SP/N) :- flora_scramble_atom(P,SP).
 
 
+%% Compile-time :- usefunction directive.
+%% Does not generate any code - just sets options for compilation
 compile_direct(DirectTerm,_,[],Status) :-
 	is_flusefunctiondirect(DirectTerm,PairList,Idx),
 	!,
@@ -2690,8 +2700,18 @@ compile_direct(DirectTerm,_,[],Status) :-
 	set_permaoptions(PermaOptions).
 
 usefunction_option(FunName/Arity/_Idx,PermaOption) :-
-	new_udf_predicate(FunName,Arity,[],NewArgs,NewPredicate,_NewPredicateOrigArgs,_NewPredName,_NewPredArity,NewReturnValue),
-	PermaOption = user_defined_function(FunName,Arity,NewArgs,NewPredicate,NewReturnValue).
+	new_udf_predicate(FunName,Arity,[],NewArgs,NewPredicate,_NewPredicateOrigArgs,NewPredName,NewPredArity,NewReturnValue),
+	flora_modularize_atom(NewPredName,FLORA_DEFAULT_WORKSPACE,
+			      NewPredNameMod),
+	NewPredArity1 is NewPredArity+1,
+	(\+current_predicate(NewPredNameMod/NewPredArity1),
+	    compiling_flrshell_command
+	->
+	    flora_abort([ERROR_UDF_WITHOUT_DEFINITION,', ',FunName,'/',Arity],FLORA_ABORT_NOTRACE)
+	; PermaOption = user_defined_function(FunName,Arity,NewArgs,NewPredicate,NewReturnValue),
+	    asserta(flora_used_udf_registry(FunName,Arity,NewArgs,NewPredicate,NewReturnValue)),
+	    asserta(flora_modular_prolog_registry(NewPredName,NewPredArity))
+	).
 	
 
 
@@ -3289,6 +3309,14 @@ construct_export_struct(TermCode,WSCode,IsUpdatableCode,ModuleListCode,Code) :-
   FactDiffList is the same for facts
   UDFPredsDiffList is the same for the list of tabled predicates
 ****************************************************************************/
+%% UDFs are always compiled as STATIC rules, even the facts.
+%% If a file is added to a module and difines the same function, the added UDFs
+%% would use the same predicate, so the new would override the old.
+%% In this case we issue an error.
+%% When overriding a module, we abolish new_udf_predicates_FUN and
+%% retractall flora_defined_udf_registry/4.
+%% If overriding module FLORA_DEFAULT_WORKSPACE, we also
+%% retractall flora_used_udf_registry/5.
 compile_user_defined_function(Function,_Body,_ReturnValue,CodeList-CodeList,FactList-FactList,U-U,[Err]) :-
 	is_flterm_or_flatom(Function,Funct,N,_),
 	flora_get_flatomvar_name(Funct,Name),
@@ -3310,12 +3338,7 @@ compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactLi
 		set_permaoption(user_defined_function(Name,N,NewArgs,NewPredicate,NewReturnValue))
 	    ;
 		UDFPreds = UDFPredsTail
-		%% ,HasUDF=1
 	    ),
-	    %% UDFs are always compiled as STATIC rules.
-	    %% If a file is added to a module and has the same function,
-	    %% the added UDFs use a different predicate, so no clash.
-	    %% Perhaps we should warn in this case.
 	    ( Body=NULL ->
 		%% UDFs are always compiled as rules: add a dummy body
 		RealBody = FLATOM(FL_TRUE,NO_INDEX),
@@ -3328,23 +3351,14 @@ compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactLi
 		new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody),
 		compile_rule([NewPredicateOrigArgs],NewBody,(NULL,NULL),RuleList-ListTail,FactList-FactTail,S)
 	    ),
-	    /*
-	    %% neither the registry for UDF nor the associated :- prolog
-	    %% declarations are used. Not clear how to utilize them
-	    ( var(HasUDF) ->
-		%% or has_permaoption(udf...) - i.e. already have function defn
-		%% This puts function definition into the registry
-		udfunction_struct(Name,N,NewArgs,NewPredicate,NewReturnValue,
-				  UDFCodeList),
-		%% code for setting prolog declaration at run time.
-		make_runtime_modular_prolog_declarations([prolog(NewPredName,NewPredArity)],PrologDeclarationCode),
-		CodeList=[PrologDeclarationCode,UDFCodeList|RuleList]
-	    ;
-		CodeList=RuleList
-	    ),
-	    */
-	    CodeList=RuleList,
+	    CodeList=[UDFCodeList|RuleList],
 	    ( no_errors_found(S) -> 
+		%% udfunction_struct causes flrcoder.P to record UDF definitions
+		%% in the registry so that we could abolish all
+		%% new_udf_predicate_XXX on reloading modules.
+		%% This is done in flora_cleanup_udf/1, which is called
+		%% from flrutils:flora_flload/2
+		udfunction_struct(Name,N,NewPredName,UDFCodeList),
 		is_flterm(Function,FuncSym,FuncSymArity,_),
 		verify_symbol_context(FuncSym,FuncSymArity,UDF_SYMBOL,
 					      NONTRANSACTIONAL_SYMBOL,
@@ -3352,13 +3366,7 @@ compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactLi
 		check_udf_vars_for_safety(Function,Body,ReturnValue,VarStatus),
 		append(SymbolStatus,VarStatus,Status)
 	    ;
-		/*
-		clear_one_permaoption(user_defined_function(Name,N,Args,NewPredicate,NewReturnValue)),
-		approx_flindex(Function,Index),
-		compiling_error(Index,ERROR_UDF,Err),
-		append([Err],S,Status)
-		*/
-			Status=S
+		Status=S
 	    )
 	;
 	    %%CodeList=ListTail,
@@ -4597,7 +4605,7 @@ verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextSt
 				       Index,SymbolContext,Transactional,
 				       SymbolContextStatus),
 	    SymbolContextStatus \== [],
-	    %% note: we need to backtrack through enough og the symbols to
+	    %% note: we need to backtrack through enough of symbols to
 	    %% get a warning
 	    !
 	 ;
@@ -5083,7 +5091,9 @@ compile_fltermobj(Funct,N,Args,_Nesting,Object,OidCode,Code,[],CompileStatus) :-
 ****************************************************************************/
 has_user_defined_function(Name,N,FArgs,Predicate,ReturnValue) :-
 	has_permaoption(user_defined_function(Name,N,FArgs,Predicate,ReturnValue)),
-	!. 
+	!.
+has_user_defined_function(Name,N,FArgs,Predicate,ReturnValue) :-
+	flora_used_udf_registry(Name,N,FArgs,Predicate,ReturnValue).
 
 /****************************************************************************
   FormUDFVarSubstitute(+Args,+FArgs,+Nesting)
@@ -9090,19 +9100,30 @@ compile_execdirect(DirectTerm,WS,Code,Status) :-
 	    compile_sensor_direct(SensCall,DelayCond,Direct,Status),
 	    directive_struct(Direct,Code)
 
+	%% This runtime usesensor directive enables to use sensors in the shell
+	%% This directive can be called from within a file or interactively.
 	; is_flusesensordirect(DirectTerm,PairList,Idx) ->
 	    verify_symbol_context_pairlist(PairList,Idx, USE_SENSOR_SYMBOL,
 					   NONTRANSACTIONAL_SYMBOL,Status),
-	    verbatim_struct(PairList,PairListCode),
+	    maplist(strip_pairlist_index(_,_),PairList,PairListSansIdx),
+	    verbatim_struct(PairListSansIdx,PairListCode),
 	    thismodule_struct(ThisMod),
 	    florasyslib_struct(FLLIBRECORDSENSORS,2,[ThisMod,PairListCode],Code),
 	    report_option(FLSYSLIB(FLLIBRECORDSENSORS),NO_INDEX)
 
+	%% Run-time usefunction directive. It defines the use of a function
+	%% **only** in the shell and only for the module main.
 	; is_flusefunctiondirect(DirectTerm,PairList,Idx) ->
 	    verify_symbol_context_pairlist(PairList,Idx, USE_UDF_SYMBOL,
-					   NONTRANSACTIONAL_SYMBOL,Status),
+					   NONTRANSACTIONAL_SYMBOL,Status1),
 	    maplist(usefunction_option(_,_),PairList,PermaOptions),
-	    set_permaoptions(PermaOptions)
+	    set_permaoptions(PermaOptions),
+	    (compiling_flrshell_command -> Status = Status1
+	    ;
+		compiling_error(Idx,ERROR_USEFUNCTION_IN_SHELL_ONLY,Err),
+		Status = [Err|Status1]
+	    ),
+	    Code = NULL
 
 	/*
 	%% Executable :- prolog and :- table directives are not allowed!!!
@@ -9455,10 +9476,16 @@ add_symbol(Name,N,_WS,_Index,_LineNumber,_Context,_Transactional) :-
 	%% do not add builtins
 	flora_nodefp(Name,N),
 	!.
-add_symbol(Name,N,WS,_Index,_LineNumber,_Context,_Transactional) :-
+add_symbol(Name,N,_WS,_Index,_LineNumber,_Context,_Transactional) :-
 	%% do not add delayed builtins
-	flora_get_flatomvar_name(WS,WSName),
-	flora_delayed_literal(Name,N,WSName),
+	%%flora_get_flatomvar_name(WS,WSName),
+	%%flora_delayed_literal(Name,N,WSName),
+	flora_delayed_builtin_literal(Name,N),
+	!.
+add_symbol(_Name,_N,_WS,_Index,_LineNumber,_Context,_Transactional) :-
+	%% do not add symbols used in shell commands: errors/warnings get
+	%% too confusing for the user
+	compiling_flrshell_command,
 	!.
 add_symbol(Name,N,NULL,Index,LineNumber,Context,Transactional) :-
 	!,
@@ -9492,9 +9519,10 @@ add_nowarn_symbol(Name,N,WS,Context,Transactional) :-
 
 has_symbol(Name,Arity,_,NO_INDEX,-1,BUILTIN_SYMBOL,_) :-
 	flora_nodefp(Name,Arity).
-has_symbol(Name,Arity,WS,NO_INDEX,-1,BUILTIN_SYMBOL,_) :-
-	flora_get_flatomvar_name(WS,WSName),
-	flora_delayed_literal(Name,Arity,WSName).
+has_symbol(Name,Arity,_WS,NO_INDEX,-1,BUILTIN_SYMBOL,_) :-
+	%%flora_get_flatomvar_name(WS,WSName),
+	%%flora_delayed_literal(Name,Arity,WSName).
+	flora_delayed_builtin_literal(Name,Arity).
 has_symbol(Name,N,WS,Index,LineNumber,Context,Transactional) :-
 	symbol(Name,N,WS,Index,LineNumber,Context,Transactional).
 

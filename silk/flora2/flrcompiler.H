@@ -27,6 +27,7 @@
 	flora_increment_counter/4,
 	flora_set_counter/2,
 	flora_get_counter/2,
+	flora_abort/2,
 	flora_concat_atoms/2,
 	flora_concat_items/2,
 	flora_term_to_atom/2,
@@ -105,13 +106,14 @@
    from flrcoder.
 
 :- import
-	%%flora_modularize_atom/3,
+	flora_modularize_atom/3,
 	flora_scramble_atom/2
    from flrwrapper.
 
 :- import
-	flora_delayed_sensor_literal/3,
-	flora_delayed_literal/3
+	%%flora_delayed_literal/3,
+	flora_delayed_builtin_literal/2,
+	flora_delayed_sensor_literal/3
    from FLDELAYSUPPORTMOD.
         
 :- import flora_error_line/2 from flrprint.
@@ -122,6 +124,11 @@
 	flterm_struct/4,
 	flconjunct_struct/3
    from flrparser.
+
+:- import
+	flora_modular_prolog_registry/2,
+	flora_used_udf_registry/5
+   from flrregistry.
 
 :- import flora_nodefp/2 from flrnodefp.
 
