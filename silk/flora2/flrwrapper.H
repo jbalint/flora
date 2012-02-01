@@ -37,6 +37,8 @@
 	flora_module_registry/1
    from flrregistry.
 
+:- import flratom_char_code/3 from flora_ground.
+
 
 :- dynamic flora_flogic_fact_wrapper(_,_).
 :- dynamic flora_current_flogic_module(_).

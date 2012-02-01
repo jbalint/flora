@@ -61,6 +61,18 @@ inline static void term_vars_split(CPtr pterm,
 static char *pterm2string(CTXTdeclc prolog_term term);
 #endif
 
+DllExport xsbBool call_conv flratom_char_code (CTXTdecl)
+{
+  char *inatom = ptoc_string(CTXTc 1);
+  Integer pos = ptoc_int(CTXTc 2);
+  Integer charcode = inatom[pos];
+  prolog_term pcode = p2p_new();
+  prolog_term out = extern_reg_term(3);
+  
+  c2p_int(CTXTc charcode,pcode);
+  return extern_p2p_unify(pcode,out);
+}
+
 DllExport xsbBool call_conv flrground (CTXTdecl)
 {
   prolog_term pterm = extern_reg_term(1);

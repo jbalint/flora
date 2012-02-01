@@ -19,10 +19,9 @@
 :- dynamic flora_dynop(_,_,_).
 :- dynamic flora_shop(_,_,_).
 
-:- index(flora_dynop/3,trie).
-:- index(flora_shop/3,trie).
-
-:- index flora_op/3-3.
+:- index(flora_dynop/3,3).
+:- index(flora_shop/3,3).
+:- index(flora_op/3,3).
 
 :- import flora_get_counter/2 from flrporting.
 

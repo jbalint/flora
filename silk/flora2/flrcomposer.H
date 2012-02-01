@@ -42,6 +42,10 @@
 
 :- import flora_op_synonym/2 from flrsynonym.
 
+:- import
+	flratom_char_code/3
+   from flora_ground.
+
 :- export
 	flora_reset_composer/0,
 	flora_compose/3,

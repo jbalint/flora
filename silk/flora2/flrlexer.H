@@ -31,6 +31,10 @@
 	flora_increment_counter/4
    from flrporting.
 
+:- import
+	flratom_char_code/3
+   from flora_ground.
+
 :- import flora_builtin_synonym/2 from flrsynonym.
 
 :- dynamic flora_file_stack/2.

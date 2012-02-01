@@ -33,7 +33,6 @@
 #define RULE_NUM                 rule_num
 #define DEFAULT_RULE_TAG         default_rule_tag
 #define NEWOID_COUNT        	 FL_NEWOID_PREFIX
-#define TMPDIRECT        	 tmpdirect
 #define TMPOPTION	         tmpoption
 #define PERMAOPTION	         permaoption
 #define COMPILATION_CONTEXT	 compcontext
@@ -48,10 +47,12 @@
 %% ruleoid is used for numbered anonymous oid generation
 :- dynamic ruleoid(_,_,_).
 :- index(ruleoid/3,0).
-%%:- dynamic TMPDIRECT(_).
 :- dynamic TMPOPTION(_,_).
+:- index(TMPOPTION/2,trie).
+%% do NOT use trie indexing for PERMAOPTION. We rely on duplicates
 :- dynamic PERMAOPTION(_).
 :- dynamic COMPILATION_CONTEXT(_).
+:- index(COMPILATION_CONTEXT/1,trie).
 :- dynamic DYNRULE_VARLIST(_,_).
 :- dynamic user_defined_function_var_substitute(_,_,_,_,_).
 :- index(user_defined_function_var_substitute/5,2+1).
@@ -148,7 +149,7 @@ is_flfloralib(FLFLORALIB(Mod), Mod).
 is_flplib(FLPLIB(P,M),P,M).
 is_flplib(FLPLIB(P),P).
 %% @_prologall and @_prologall(module)
-%% Make sure the coder translates P2H_PREDICATE/4 as prolog
+%% Make sure the coder writes P2H_PREDICATE/4 as prolog
 is_flpliball(FLPLIBALL(P),P) :-
 	flora_define_prolog(P2H_PREDICATE,4).
 is_flpliball(FLPLIBALL(P,M),P,M) :-
@@ -1166,13 +1167,13 @@ prologterm_struct(F,N,Args,Module,PROLOGTERM(F,N,Args,ModuleCode)) :-
 
 prologliblit_struct(PrologTerm,PROLOGLIBLIT(PrologTerm)).
 
-is_prologterm(Term)    :- is_prologterm(Term,_,_,_).
+is_prologterm(Term)    :- is_prologterm(Term,_,_,_), !.
 is_prologterm(Term)    :- is_prologterm(Term,_,_,_,_).
 
 prologterm_atom_arity(Term,Atom,Arity) :-
 	is_prologterm(Term,Struct,Arity,_),
 	is_modularized_atom(Struct,Atom,_).
-prologterm_atom_arity(Term,Atom,Arity) :- is_prologterm(Term,Atom,Arity,_).
+prologterm_atom_arity(Term,Atom,Arity) :- is_prologterm(Term,Atom,Arity,_), !.
 prologterm_atom_arity(Term,Atom,Arity) :- is_prologterm(Term,Atom,Arity,_,_).
 
 flprologlib_atom_arity(ParserTerm,Atm,Arity) :-
@@ -1186,9 +1187,11 @@ flprologlib_atom_arity_mod(ParserTerm,Atm,Arity,Mod) :-
 %% returns functor object, not its name
 flprologlib_functor(ParserTerm,Funct) :-
 	(is_flplib(ParserTerm,FLterm) ; is_flplib(ParserTerm,FLterm,_)),
+	!,
 	is_flterm(FLterm,Funct,_,_).
 flprologlib_call(ParserTerm,FLterm) :-
-	(is_flplib(ParserTerm,FLterm) ; is_flplib(ParserTerm,FLterm,_)).
+	(is_flplib(ParserTerm,FLterm) ; is_flplib(ParserTerm,FLterm,_)),
+	!.
 
 %% Not all Flora system libraries encode textual information. Only
 %% the ones for aggregates and DB updates
@@ -1347,8 +1350,7 @@ aggregate_struct(Op,V,GV,B,Object,Code) :-
 	is_flatom(Op,OpAtom,Index),
 	aggregate_syslib(OpAtom,Lib),
 	new_prvariable(Index,Object),
-	( GV == [] ->
-	    florasyslib_struct(Index,Lib,3,[V,B,Object],Code)
+	( GV == [] -> florasyslib_struct(Index,Lib,3,[V,B,Object],Code)
 	;
 	  florasyslib_struct(Index,Lib,4,[V,GV,B,Object],Code)
         ),
@@ -1395,8 +1397,7 @@ objexists_struct(Context,Obj,PREXISTS(Obj,Caller)) :-
 birelate_struct(LiteralContext,Obj1,RelType,Obj2,Code) :-
 	( is_isaspecop(RelType) ->
 	    isaspec_struct(LiteralContext,Obj1,Obj2,Code)
-	;
-	  is_subspecop(RelType),
+	; is_subspecop(RelType) ->
 	  subspec_struct(LiteralContext,Obj1,Obj2,Code)
         ),
 	!.
@@ -1409,8 +1410,7 @@ subspec_struct(Context,Obj1,Obj2,PRSUB(Obj1,Obj2,Caller)) :-
 
 
 sigattspec_struct(LiteralContext,Object,AttObj,RefType,ValObj,Code) :-
-	(
-	  is_mvdsigspecop(RefType) ->
+	( is_mvdsigspecop(RefType) ->
 	    mvdsigspec_struct(LiteralContext,Object,AttObj,ValObj,Code)
 
 	; is_imvdsigspecop(RefType) ->
@@ -1422,8 +1422,7 @@ sigattspec_struct(LiteralContext,Object,AttObj,RefType,ValObj,Code) :-
 
 %% cardinality constraints in the body
 sigattconstr_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,RefType,Code) :-
-	(
-	is_mvdsigspecop(RefType) ->
+	( is_mvdsigspecop(RefType) ->
 	    mvdcon_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,Code) 
 
 	; is_imvdsigspecop(RefType) ->
@@ -1479,7 +1478,7 @@ mvdattdef_struct(LiteralContext,Object,AttObj,RefType,Code) :-
 	( is_mvdspecop(RefType) ->
 	    mvddef_struct(LiteralContext,Object,AttObj,Code)
 	;
-	  is_imvdspecop(RefType),
+	  is_imvdspecop(RefType) ->
 	    imvddef_struct(LiteralContext,Object,AttObj,Code)
         ),
 	!.
@@ -1487,8 +1486,7 @@ mvdattdef_struct(LiteralContext,Object,AttObj,RefType,Code) :-
 %% This is for =>, *=>, when the attribute is defined,
 %% but its value is empty set
 sigattdef_struct(LiteralContext,Object,AttObj,RefType,Code) :-
-	( 
-	  is_mvdsigspecop(RefType) ->
+	( is_mvdsigspecop(RefType) ->
 	    mvdsigdef_struct(LiteralContext,Object,AttObj,Code)
 
 	; is_imvdsigspecop(RefType) ->
@@ -1508,8 +1506,7 @@ imvdsigdef_struct(Context,Object,AttObj,PRIMVDSIGDEF(Object,AttObj,Caller)) :-
 		determine_caller_info(Context,Caller).
 
 mvdattspec_struct(LiteralContext,Object,AttObj,RefType,ValObj,Code) :-
-	(
-	  is_mvdspecop(RefType) ->
+	( is_mvdspecop(RefType) ->
 	    mvdspec_struct(LiteralContext,Object,AttObj,ValObj,Code)
 
 	; is_imvdspecop(RefType) ->
@@ -1528,7 +1525,7 @@ incattspec_struct(Object,AttObj,RefType,ValObj,Code) :-
 	( is_mvdincspecop(RefType) ->
 	    mvdincspec_struct(Object,AttObj,ValObj,Code)
 	;
-	  is_imvdincspecop(RefType),
+	  is_imvdincspecop(RefType) ->
 	  imvdincspec_struct(Object,AttObj,ValObj,Code)
         ),
 	!.
@@ -1550,7 +1547,7 @@ tolistattspec_struct(Object,AttObj,RefType,ValObj,Code) :-
 	( is_mvdtolistspecop(RefType) ->
 	    mvdtolistspec_struct(Object,AttObj,ValObj,Code)
 	;
-	  is_imvdtolistspecop(RefType),
+	  is_imvdtolistspecop(RefType) ->
 	  imvdtolistspec_struct(Object,AttObj,ValObj,Code)
         ),
 	!.
@@ -1570,7 +1567,7 @@ body_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
 	( is_mvdrefop(RefType) ->
 	    mvdspec_struct(BODYLITERAL,Obj,Att,Val,Code)
 	;
-	  is_imvdrefop(RefType),
+	  is_imvdrefop(RefType) ->
 	  imvdspec_struct(BODYLITERAL,Obj,Att,Val,Code)
         ),
 	!.
@@ -1581,7 +1578,7 @@ head_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
         ( is_mvdrefop(RefType) -> 	 
             mvdspec_struct(HEADLITERAL,Obj,Att,Val,Code) 	 
         ; 	 
-          is_imvdrefop(RefType), 	 
+          is_imvdrefop(RefType) -> 	 
           imvdspec_struct(HEADLITERAL,Obj,Att,Val,Code) 	 
         ),
 	!. 	 
@@ -1736,7 +1733,8 @@ reset_rulenum :- flora_set_counter(RULE_NUM,1).
 ****************************************************************************/
 collect_prvars(Term,Vars) :-
 	collect_prvars(Term,Vs,[]),
-	sort(Vs,Vars).
+	%%sort(Vs,Vars).
+	Vs=Vars. %% sorting does nothing here
 
 collect_prvars([],Vars,Vars) :- !.
 collect_prvars(Term,Vars,Vars) :-
@@ -1859,7 +1857,8 @@ collect_flvars(ParserTerm,Vars,TVars) :-
 ****************************************************************************/
 collect_prdatatypevars(CompilerTermOrList,Vars) :-
 	collect_prdatatypevars(CompilerTermOrList,VarsUnsorted,[]),
-	sort(VarsUnsorted,Vars).
+	%%sort(VarsUnsorted,Vars).
+	Vars = VarsUnsorted. %% sorting does nothing here
 
 collect_prdatatypevars([],Vars,Vars) :- !.
 
@@ -2000,6 +1999,7 @@ remove_prvars(Prefix,[H|T1],T2) :-
 	( is_prvariable(H,Var,_I)
 	; is_prtransactionalvariable(H,Var,_I)
 	),
+	%% must be before the cut!!!
 	str_sub(Prefix,Var,0), %% starts with Prefix
 	!,
 	remove_prvars(Prefix,T1,T2).
@@ -2023,25 +2023,24 @@ remove_caller_vars(InVars,OutVars) :-
 ****************************************************************************/
 collect_name_var_pairs(ParserTerm,QueryVars) :-
 	collect_flvars(ParserTerm,NameVs),
-	sort(NameVs,SortedNameVs),
+	%%sort(NameVs,SortedNameVs), %% sorting does nothing kere
+	SortedNameVs = NameVs,
 	indexvars(SortedNameVs,IndexVs),
 	keysort(IndexVs,SortedIndexVs),
 	namevars(SortedIndexVs,QueryVars).
 
 
+%% creates a list of vars of the form [Idx-Name,Idx-Name,...]
 indexvars([],[]) :- !.
-
 indexvars([T|L],Vars) :-
-	(is_flvariable(T,Name,I);is_fltransactionalvariable(T,Name,I)),
-	(
-	  (is_flvariable(T,Name,I), flora_match_substring(FL_UNDERSCORE,Name,0)
-	  ; is_fltransactionalvariable(T,Name,I),
-	      flora_match_substring(FL_UNDERSCORE,Name,0)
-	  )
+	(is_flvariable(T,Name,I) ; is_fltransactionalvariable(T,Name,I)),
+	!,
+	( %%flora_match_substring(FL_UNDERSCORE,Name,0)
+	  flratom_char_code(Name,0,CH_UNDERSCORE)
 	-> indexvars(L,Vars)
 	;
           Vars=[I-Name|Vs],
-	  remove_dupflvars(L,Name,VL),
+	  remove_named_flvar(L,Name,VL),
 	  indexvars(VL,Vs)
         ),
 	!.
@@ -2065,8 +2064,11 @@ namevars([Index-Name|L],[NV|NVs]) :-
   Singleton variables collected here exclude those
   beginning with a underscore and the anonymous.
 
-  remove_dupflvars(+SortedVarsList,+VarName,-Vars)
+  remove_named_flvar(+SortedVarsList,+VarName,-Vars)
+  Remove variable named Name from SortedVarsList
+
   remove_dupflvars(+SortedVarsList,-Vars)
+  Remove duplicates of variables in SortedVarsList
 ****************************************************************************/
 singleton_flvars([],[]) :- !.
 
@@ -2084,7 +2086,7 @@ singleton_flvars([V1,V2|L],Vars) :-
 	  ; is_fltransactionalvariable(V1,Name,_),
 	      is_fltransactionalvariable(V2,Name,_)
 	  )
-	-> remove_dupflvars(L,Name,Vs),
+	-> remove_named_flvar(L,Name,Vs),
 	    singleton_flvars(Vs,Vars)
         ;
 	  Vars=[V1|Vs],
@@ -2093,14 +2095,13 @@ singleton_flvars([V1,V2|L],Vars) :-
 	!.
 
 
-%% removes variables named Name from a sorted list of vars,
-%% if this var is at the top
-remove_dupflvars([V|L],Name,Vars) :-
+%% Removes variables named Name from a sorted list of vars.
+%% The var to be removed can be at the top or not at all
+remove_named_flvar([V|L],Name,Vars) :-
 	(is_flvariable(V,Name,_I) ; is_fltransactionalvariable(V,Name,_I)),
 	!,
-	remove_dupflvars(L,Name,Vars).
-
-remove_dupflvars(Vars,_Name,Vars).
+	remove_named_flvar(L,Name,Vars).
+remove_named_flvar(L,_Name,L).
 
 %% real remove duplicate flvars
 remove_dupflvars(Vars,VarsOut) :-
@@ -2110,7 +2111,7 @@ remove_dupflvars_aux([],[]) :- !.
 remove_dupflvars_aux([H|T],[H|TT]) :-
 	(is_flvariable(H,Name,_I) ; is_fltransactionalvariable(H,Name,_I)),
 	!,
-	remove_dupflvars(T,Name,Vars),
+	remove_named_flvar(T,Name,Vars),
 	remove_dupflvars_aux(Vars,TT).
 
 
@@ -2121,13 +2122,10 @@ remove_dupflvars_aux([H|T],[H|TT]) :-
 singleton_warning([],WarnList,WarnList).
 
 singleton_warning([V|L],WarnList,WarnTail) :-
-	(is_flvariable(V,Name,I);is_fltransactionalvariable(V,Name,I)),
-	( ( is_flvariable(V,Name,I),
-	      flora_match_substring(FL_UNDERSCORE,Name,0)
-	  ;
-	      is_fltransactionalvariable(V,Name,I),
-	      flora_match_substring(FL_UNDERSCORE,Name,0)
-	  )
+	(is_flvariable(V,Name,I) ; is_fltransactionalvariable(V,Name,I)),
+	!,
+	( %%flora_match_substring(FL_UNDERSCORE,Name,0)
+	  flratom_char_code(Name,0,CH_UNDERSCORE)
 	->
 	    singleton_warning(L,WarnList,WarnTail)
 	;
@@ -2149,12 +2147,11 @@ unbound_warning([],WarnList,WarnList,_).
 
 unbound_warning([V|L],WarnList,WarnTail,WarningMessage) :-
 	(is_flvariable(V,Name,I) ; is_fltransactionalvariable(V,Name,I)),
-	( (is_flvariable(V,Name,I), flora_match_substring(FL_UNDERSCORE,Name,0)
-	  ;
-	      is_fltransactionalvariable(V,Name,I),
-	      flora_match_substring(FL_UNDERSCORE,Name,0))
+	!,
+	( %%flora_match_substring(FL_UNDERSCORE,Name,0)
+	  flratom_char_code(Name,0,CH_UNDERSCORE)
 	->
-	    unbound_warning(L,WarnList,WarnTail,WarningMessage)
+	  unbound_warning(L,WarnList,WarnTail,WarningMessage)
 	;
 	  compiling_warning(I,WarningMessage,W),
 	  WarnList=[W|T],
@@ -2170,14 +2167,14 @@ check_head_vars_for_safety(HeadTermList,BodyTerm,Status) :-
 	collect_flvars(HeadTermList,HeadVars),
 	collect_flvars(BodyTerm,BodyVars),
 	append(HeadVars,BodyVars,Vars),
-	sort(Vars,SortedVars),
+	sort(Vars,SortedVars), %% singleton_flvars relies on sorting
 	singleton_flvars(SortedVars,SingletonVars),
 	singleton_warning(SingletonVars,Status,WarnTail),
 	subtract_vars(HeadVars,BodyVars,UnboundVars),
 	%% Don't issue the unboundedness var warning for facts
 	(BodyTerm \== [] -> unbound_warning(UnboundVars,WarnTail,[])
-	;
-	    (var(Status) -> Status=[] ; true )
+	; var(Status) -> Status=[]
+	; true
 	),
 	!.
 
@@ -2189,12 +2186,13 @@ check_udf_vars_for_safety(Function,Predicate,ReturnValue,Status) :-
         collect_flvars([Function,ReturnValue],FuncVars),
         collect_flvars(Predicate,PredVars),
         append(FuncVars,PredVars,Vars),
-        sort(Vars,SortedVars),
+        sort(Vars,SortedVars), %% singleton_flvars relies on sorting
         singleton_flvars(SortedVars,SingletonVars),
         singleton_warning(SingletonVars,Status,WarnTail),
         subtract_vars(FuncVars,PredVars,UnboundVars),
         %% Don't issue the unboundedness var warning for facts (facts can be defined using function definition)
-        (Predicate = NULL -> ( var(Status) -> Status=[] ; true )
+        (Predicate == NULL
+	-> ( var(Status) -> Status=[] ; true )
         ;
             unbound_warning(UnboundVars,WarnTail,[],UNBOUND_UDF_VAR)
         ),
@@ -2233,17 +2231,13 @@ vars_to_var_names([V|VarList],[Name|NameList]) :-
   get_dynrule_varlist(-L)
   get_dynrule_varlist(+CompileVarList,-L)
 ****************************************************************************/
-%% Not used any more. Instead of import we use the module:pred notation
-%%clear_directive :- flora_retractall_substitute(TMPDIRECT(_)).
-%%get_directive(L) :- findall(D,TMPDIRECT(D),L).
-%%report_directive(Direct) :- asserta(TMPDIRECT(Direct)).
-
-
 clear_options :- flora_retractall_substitute(TMPOPTION(_,_)).
+%%clear_options :- retractall(TMPOPTION(_,_)).
 get_options(L) :- findall((O,Idx),TMPOPTION(O,Idx),L).
-report_option(Option,Idx) :- asserta(TMPOPTION(Option,Idx)).
+report_option(Option,Idx) :- assert(TMPOPTION(Option,Idx)).
 
 %% Do not(!) check for \+ PERMAOPTION(X) here!
+%% So, do NOT use trie indexing!
 %% We rely on duplicates if multiple declarations of argumentation theories
 set_permaoption(X) :- asserta(PERMAOPTION(X)).
 set_permaoptions([]) :- !.
@@ -2274,18 +2268,19 @@ set_context(X) :-
 set_context(X) :-
 	compound(X),
 	!,
-	(\+COMPILATION_CONTEXT(X) -> asserta(COMPILATION_CONTEXT(X))
-	; true
-	).
+	%% it is a trie - so no checking for duplicates
+	assert(COMPILATION_CONTEXT(X)).
 set_context(X) :-
 	abort([X, ': FLORA-2 compiler BUG!! Invalid compiler context']).
 
 has_context(X) :-
+	atom(X),
+	!,
+	flora_get_counter(X,1).
+has_context(X) :-
 	compound(X),
 	!,
 	COMPILATION_CONTEXT(X).
-has_context(X) :-
-	flora_get_counter(X,1).
 
 clear_context(X) :-
 	atom(X),
@@ -2295,7 +2290,7 @@ clear_context(X) :-
 	retract(COMPILATION_CONTEXT(X)),
 	!.
 clear_context(_).
-clear_contextall(X) :- flora_retractall_substitute(COMPILATION_CONTEXT(X)).
+clear_contextall(X) :- retractall(COMPILATION_CONTEXT(X)).
 
 %% this one is exported
 flora_compilation_context(X) :- has_context(X).
@@ -2724,8 +2719,7 @@ compile_direct(DirectTerm,_,[Code],Status) :-
 	query_struct(Direct,QueryCode),
 	( no_errors_found(S1) -> 
 	    flora_intern_code([QueryCode],NULL,PrologCode,S2),
-	    ( no_errors_found(S2) -> 
-		call(PrologCode)
+	    ( no_errors_found(S2) -> call(PrologCode)
 	    ; true
 	    ),
 	    directive_struct(Direct,Code),
@@ -2754,8 +2748,7 @@ compile_direct(DirectTerm,_Idx,[Code],[]) :-
 %% :- compiler_options
 compile_direct(DirectTerm,Idx,[Code],[]) :-
 	is_flcmpopt(DirectTerm,OptList),
-	( memberchk(XSB_SPECREPR,OptList) ->
-	    report_option(XSB_SPECREPR,Idx)
+	( memberchk(XSB_SPECREPR,OptList) -> report_option(XSB_SPECREPR,Idx)
 	;
 	    true
 	),
@@ -2801,8 +2794,7 @@ compile_direct(DirectTerm,_Idx,[],Status) :-
 compile_ignoredep_list([],[],[]) :- !.
 compile_ignoredep_list([H|L],[HCode|LCode],Status) :-
         compile_body(H,HCode,S),
-	( no_errors_found(S) -> 
-            compile_ignoredep_list(L,LCode,Status)
+	( no_errors_found(S) -> compile_ignoredep_list(L,LCode,Status)
         ;
             Status = S
         ),
@@ -2815,8 +2807,7 @@ compile_ignoredep_list([H|L],[HCode|LCode],Status) :-
 compile_symbol_context_list([],[]) :- !.
 compile_symbol_context_list([H|L],Status) :-
         compile_symbol_literal(H,S),
-	( no_errors_found(S) -> 
-            compile_symbol_context_list(L,Status)
+	( no_errors_found(S) -> compile_symbol_context_list(L,Status)
         ;
             Status = S
         ),
@@ -2928,14 +2919,14 @@ compile_sensor_direct(SensCall,DelayCond,Code,Status) :-
 	    SensArity2 is SensArity-2,
 	    flprologlib_functor(SensCall,SensFunct),
 	    verify_symbol_context(SensFunct,SensArity2,
-					  SENSOR_SYMBOL,NONTRANSACTIONAL_SYMBOL,
-					  Status)
+				  SENSOR_SYMBOL,NONTRANSACTIONAL_SYMBOL,
+				  Status)
 	; Status = S2
 	),
 	!,
 	report_option(FLSYSLIB(FLLIBSENSOR),NO_INDEX),
 	prologterm_struct(flora_register_sensor,2,
-			 [SensCode,DelayCode],FLDELAYSUPPORTMOD,Code),
+			  [SensCode,DelayCode],FLDELAYSUPPORTMOD,Code),
 	clear_context(compiling_sensor_directive(SensName,SensArity)).
 	
 
@@ -2996,9 +2987,8 @@ compile_fact(Head,RuleList-RuleTail,FactList-FactTail,Status) :-
 					    RuleList-RuleTail,[]),
 		FactList = FactTail, %% empty fact diff list
 		(has_context(compiling_udf) -> S2 = []
-		%% for UDFs variables are checked separately
-		;
-		    check_head_vars_for_safety(Head,[],S2)
+		%% for UDFs, variables are checked separately
+		; check_head_vars_for_safety(Head,[],S2)
 		)
 	    ),
 	    append(S,S2,Status)
@@ -3043,9 +3033,9 @@ compile_factlist(F,RL-RL,[FCode|ListTail]-ListTail) :-
 	!,
         collect_prvars(F,FVars),
         get_dynrule_varlist(FVars,L),
-        sort(L,NL),
-        ( NL == [] ->
-	    fact_struct(F,FCode)
+        %%sort(L,NL), %% sorting does nothing here
+	NL = L,
+        ( NL == [] -> fact_struct(F,FCode)
         ;
             add_fact_attr_code(NL,F,AugmentedF),
             fact_struct(AugmentedF,FCode)
@@ -3238,12 +3228,12 @@ compile_export_predicate_list([],[],[]) :- !.
   compile_export_predicate(+ExportTerm,-Code,-Status)
 ****************************************************************************/
 compile_export_predicate(ExportTerm,Code,Status) :-
-	(
-	  is_flexport(ExportTerm,BodyTerm,ModuleList,IsUpdatable)
+	( is_flexport(ExportTerm,BodyTerm,ModuleList,IsUpdatable)
 	;
 	  is_flexport(ExportTerm,WS,BodyTerm,ModuleList,IsUpdatable)
 	),
 	is_flfact(BodyTerm,ParseBodyTerm),
+	!,
 	%% compile_fact expects the argument to be a list.
 	%% Hence the ParseBodyTerm is enclosed in a list.
 	%%if they are uninitialized, they will be taken care at run-time.
@@ -3280,6 +3270,7 @@ compile_export_list_convert(ListBodyTermCode - T, WSCode, ModuleListCode,IsUpdat
 ****************************************************************************/
 compile_export_extract_facts([H|T],InitTerm,WSCode,ModuleListCode,IsUpdatableCode,Code) :-
 	is_prfact(H,HTermCode),
+	!,
 	construct_export_struct(HTermCode,WSCode,IsUpdatableCode,ModuleListCode,HCode),
 	compile_export_extract_facts(T,[HCode|InitTerm],WSCode,ModuleListCode,IsUpdatableCode,Code).
 
@@ -4418,7 +4409,7 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	set_context(compiling_body_pathexp),
         ( is_fldelayquant(ParserTerm,Quant,Condition,Goal,Idx) ->
-		compile_fldelayquant(Quant,Condition,Goal,Idx,OidCode,BodyHeadList,Status)
+	    compile_fldelayquant(Quant,Condition,Goal,Idx,OidCode,BodyHeadList,Status)
 
 	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_fltermobj(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,Status)
@@ -4988,6 +4979,7 @@ compile_fltransactionalvar(Name,Index,VarObject) :-
 ****************************************************************************/
 compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status):-
 	var(BodyHeadList),
+	%% NO cut here!
 	\+ has_context(compiling_arithmetics),
     	flora_get_flatomvar_name(ParserTerm,Name),
 	has_user_defined_function(Name,0,[],Predicate,ReturnValue),
@@ -5185,6 +5177,7 @@ compile_fltransactionaltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,Co
 	;
 	  true
         ),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 
@@ -5235,7 +5228,8 @@ compile_fllist(ObjTermList,ObjTerm,Index,Object,OidCode,Code,Status) :-
 	compile_fllist(ObjTermList,ObjTerm,Index,0,Object,OidCode,Code,[],Status).
 
 compile_fllist(ObjTermList,ObjTerm,Index,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
-	(var(BodyHeadList) -> true; BodyHeadList1=[],BodyHeadList2=[]),
+	(var(BodyHeadList) -> true ; BodyHeadList1=[],BodyHeadList2=[]),
+	!,
 	compile_pathexplist(ObjTermList,Nesting,ObjList,OidCodeList,ObjListCode,BodyHeadList1,S),
 	( no_errors_found(S) ->
 	    ( ObjTerm == [] ->
@@ -5878,7 +5872,7 @@ allgvar_notin([H|L],Status,TS) :-
 allgvar_notin([H|T],[Msg|S],TS) :-
 	is_flvariable(H,Name,Index),
 	compiling_error(Index,GVAR_NOTIN,Msg),
-	remove_dupflvars(T,Name,L),
+	remove_named_flvar(T,Name,L),
 	allgvar_notin(L,S,TS).
 
 
@@ -5980,6 +5974,7 @@ compile_head_fltransactionaltermlit(Funct,N,Args,Code,H2BCodeHead,H2BCodeTail,Co
 	;
 	  true
         ),
+	!,
 	append(SymbolStatus,Status,CompileStatus).
 
 
@@ -6100,13 +6095,16 @@ compile_head_pathexp(ParserTerm,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    )
 	; 
 	  is_flbirelate(ParserTerm,OT1,RelType,OT2) ->
-	    compile_head_flbirelate(OT1,RelType,OT2,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_flbirelate(OT1,RelType,OT2,Object,Code,
+				    H2BCodeHead,H2BCodeTail,Status)
 
 	; is_flobjspec(ParserTerm,ObjTerm,Spec) ->
-	    compile_head_flobjspec(ObjTerm,Spec,Object,Code,H2BCodeHead,H2BCodeTail,Status)
-
+	    compile_head_flobjspec(ObjTerm,Spec,Object,Code,
+				   H2BCodeHead,H2BCodeTail,Status)
+	
         ; is_flobjref(ParserTerm,ObjTerm,RefType,AttTerm) -> 	 
-            compile_head_flobjref(ObjTerm,RefType,AttTerm,Object,Code,H2BCodeHead,H2BCodeTail,Status) 	 
+            compile_head_flobjref(ObjTerm,RefType,AttTerm,Object,Code,
+				  H2BCodeHead,H2BCodeTail,Status) 	 
 
 	; is_reifyop(ParserTerm,Formula) ->
 	    %% Code: code to get Object
@@ -6650,7 +6648,7 @@ compile_wspathexp(ParserTerm,WS,Object,OidCode,Code,BodyHeadList,Status) :-
 	    Code=NULL,
 	    Status = []
 	;
-	  is_flobjref(ParserTerm,ObjTerm,RefType,AttTerm),
+	  is_flobjref(ParserTerm,ObjTerm,RefType,AttTerm) ->
 	  BodyHeadList = [],
 	  compile_wsflobjref(ObjTerm,RefType,AttTerm,WS,Object,OidCode,Code,Status)
 
@@ -6735,17 +6733,20 @@ compile_wsflpathexp(ParserTerm,WS,Object,OidCode,Code,BodyHeadList,Status) :-
 compile_wsflpathexp(ParserTerm,WS,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	( is_flobjref(ParserTerm,ObjTerm,RefType,AttTerm) ->
 	    BodyHeadList = [],
-	    compile_wsflobjref(ObjTerm,RefType,AttTerm,WS,Object,OidCode,Code,Status)
+	    compile_wsflobjref(ObjTerm,RefType,AttTerm,WS,Object,
+			       OidCode,Code,Status)
 
 	; is_flobjspec(ParserTerm,ObjTerm,Spec) ->
-	    compile_wsflobjspec(ObjTerm,Spec,WS,Object,OidCode,Code,BodyHeadList,Status)
+	    compile_wsflobjspec(ObjTerm,Spec,WS,Object,OidCode,Code,
+				BodyHeadList,Status)
 
 	; is_flbirelate(ParserTerm,ObjTerm1,RelType,ObjTerm2) ->
 	    BodyHeadList = [],
 	    compile_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,Object,OidCode,Code,Status)
 
 	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
-	    compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,BodyHeadList,TRANSACTIONAL_SYMBOL,Status)
+	    compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,
+				BodyHeadList,TRANSACTIONAL_SYMBOL,Status)
 
 	; is_flterm(ParserTerm,Funct,N,Args) ->
 	    compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,
@@ -6757,10 +6758,12 @@ compile_wsflpathexp(ParserTerm,WS,Nesting,Object,OidCode,Code,BodyHeadList,Statu
 	    clear_context(compiling_arithmetics)
 
 	; is_fllist(ParserTerm,L,T,I) ->
-	    compile_wsfllist(L,T,I,WS,Nesting,Object,OidCode,Code,BodyHeadList,Status)
+	    compile_wsfllist(L,T,I,WS,Nesting,Object,OidCode,Code,
+			     BodyHeadList,Status)
 
 	; is_flworkspace(ParserTerm,P,NestedWS) ->
-	    compile_wspathexp(P,NestedWS,Object,OidCode,Code,BodyHeadList,Status)
+	    compile_wspathexp(P,NestedWS,Object,OidCode,Code,
+			      BodyHeadList,Status)
 
 	;
 	  %% workspace not distributive over nested aggregates
@@ -7037,9 +7040,11 @@ compile_wsflobjspec(ObjTerm,SpecBody,WS,Object,OidCode,Code,BodyHeadList,Status)
 		)
 	    )
 	; % oid spec plus object spec. something like a.b[c->d]@module
-	  compile_wsflpathexp(ObjTerm,WS,Object,ObjOidCode,ObjCode,BodyHeadList1,S),
+	  compile_wsflpathexp(ObjTerm,WS,Object,ObjOidCode,ObjCode,
+			      BodyHeadList1,S),
 	  ( no_errors_found(S) -> 
-	      compile_wsflspecbody(Object,SpecBody,WS,SpecOidCode,SpecCode,BodyHeadList2,Status),
+	      compile_wsflspecbody(Object,SpecBody,WS,SpecOidCode,SpecCode,
+				   BodyHeadList2,Status),
 	      ( no_errors_found(Status) -> 
 		  conjunct_code([ObjCode,SpecCode],Code),
 		  conjunct_code([ObjOidCode,SpecOidCode],OidCode)
@@ -7386,7 +7391,8 @@ compile_wsflspecbody(_Object,SpecTerm,_WS,NULL,Code,BodyHeadList,Status) :-
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	is_flmethspec(SpecTerm,MethTerm),
 	!,
-	compile_wsflpathexp(MethTerm,WS,MethObj,OidCode,MCode,BodyHeadList,Status),
+	compile_wsflpathexp(MethTerm,WS,MethObj,OidCode,MCode,
+			    BodyHeadList,Status),
 	( no_errors_found(Status) -> 
 	    attach_workspace(WS,
 			     methspec_struct(BODYLITERAL,Object,MethObj,SCode),
@@ -7402,7 +7408,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	is_flimethspec(SpecTerm,IMethTerm),
 	!,
-	compile_wsflpathexp(IMethTerm,WS,IMethObj,OidCode,IMCode,BodyHeadList,Status),
+	compile_wsflpathexp(IMethTerm,WS,IMethObj,OidCode,IMCode,
+			    BodyHeadList,Status),
 	( no_errors_found(Status) -> 
 	    attach_workspace(WS,
 			     imethspec_struct(BODYLITERAL,Object,IMethObj,SCode),
@@ -7418,7 +7425,8 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	is_fltranspec(SpecTerm,TranTerm),
 	!,
-	compile_wsflpathexp(TranTerm,WS,TranObj,OidCode,TCode,BodyHeadList,Status),
+	compile_wsflpathexp(TranTerm,WS,TranObj,OidCode,TCode,
+			    BodyHeadList,Status),
 	( no_errors_found(Status) -> 
 	    attach_workspace(WS,
 			     transpec_struct(BODYLITERAL,Object,TranObj,SCode),
@@ -9431,9 +9439,7 @@ code_line_and_file_by_prterm(_CompiledTerm,Line,File) :-
 	%% are not used where they are compiled, so the line number
 	%% (and likely) file name are going to be wrong.
 	%% Also, explicit line number & file name will prevent unification.
-	(has_context(goal_reification) ;
-	    has_context(compiling_clause_primitive)
-	),
+	(has_context(goal_reification);has_context(compiling_clause_primitive)),
 	!,
 	new_prvariable(NO_INDEX,Line),
 	new_prvariable(NO_INDEX,File).
@@ -9584,16 +9590,14 @@ verify_symbol_context_pairlist([(P,A,Idx)|PairList],Index,Context,Trans,Status) 
 	is_flatom(PObj,PA,Idx),
 	verify_symbol_context(PObj,A,Context,Trans,S1),
 	verify_symbol_context_pairlist(PairList,Index,Context,Trans,S2),
-	append(S2,S1,S3),
-	sort(S3,Status).
+	append(S2,S1,Status).
 verify_symbol_context_pairlist([P/A/Idx|PairList],Index,Context,Trans,Status) :-
 	(P = (PA,_) ; P=PA),
 	!,
 	is_flatom(PObj,PA,Idx),
 	verify_symbol_context(PObj,A,Context,Trans,S1),
 	verify_symbol_context_pairlist(PairList,Index,Context,Trans,S2),
-	append(S2,S1,S3),
-	sort(S3,Status).
+	append(S2,S1,Status).
 
 %% this takes predicate-arity pairs without the index
 make_runtime_modular_prolog_declarations(PairList,Code) :-
