@@ -33,7 +33,7 @@
 #define RULE_NUM                 rule_num
 #define DEFAULT_RULE_TAG         default_rule_tag
 #define NEWOID_COUNT        	 FL_NEWOID_PREFIX
-#define TMPOPTION	         tmpoption
+#define LIBOPTION	         liboption
 #define PERMAOPTION	         permaoption
 #define COMPILATION_CONTEXT	 compcontext
 #define DYNRULE_VARLIST          dynrule_varlist
@@ -47,8 +47,8 @@
 %% ruleoid is used for numbered anonymous oid generation
 :- dynamic ruleoid(_,_,_).
 :- index(ruleoid/3,0).
-:- dynamic TMPOPTION(_,_).
-:- index(TMPOPTION/2,trie).
+:- dynamic LIBOPTION(_,_).
+:- index(LIBOPTION/2,trie).
 %% do NOT use trie indexing for PERMAOPTION. We rely on duplicates
 :- dynamic PERMAOPTION(_).
 :- dynamic COMPILATION_CONTEXT(_).
@@ -721,7 +721,7 @@ ignorable_negated_head_conjunct(Goal) :-
   Discards NULLs
   If all are NULLs, returns NULL.
 ****************************************************************************/
-conjunct_code([Goal],Goal).
+conjunct_code([Goal],Goal) :- !.
 
 conjunct_code([NULL|GList],ConjGoal) :- !, conjunct_code(GList,ConjGoal).
 
@@ -2223,18 +2223,18 @@ vars_to_var_names([V|VarList],[Name|NameList]) :-
   clear_directive
   get_directive(-L)  
   report_directive(+Direct)
-  clear_options
-  get_options(-L)
+  clear_compilation_liboptions
+  flora_get_compilation_liboptions(-L)
   report_option(+Option,+Index)
   clear_dynrule_varlist
   report_dynrule_varlist(+Var,+Val)
   get_dynrule_varlist(-L)
   get_dynrule_varlist(+CompileVarList,-L)
 ****************************************************************************/
-clear_options :- flora_retractall_substitute(TMPOPTION(_,_)).
-%%clear_options :- retractall(TMPOPTION(_,_)).
-get_options(L) :- findall((O,Idx),TMPOPTION(O,Idx),L).
-report_option(Option,Idx) :- assert(TMPOPTION(Option,Idx)).
+%%clear_compilation_liboptions :- flora_retractall_substitute(LIBOPTION(_,_)).
+clear_compilation_liboptions :- retractall(LIBOPTION(_,_)).
+flora_get_compilation_liboptions(L) :- findall((O,Idx),LIBOPTION(O,Idx),L).
+report_option(Option,Idx) :- assert(LIBOPTION(Option,Idx)).
 
 %% Do not(!) check for \+ PERMAOPTION(X) here!
 %% So, do NOT use trie indexing!
@@ -2249,17 +2249,6 @@ flora_clear_compilation_permaoptions :- retractall(PERMAOPTION(_)).
 clear_one_permaoption(X) :- (retract(PERMAOPTION(X)) ; true), !.
 %% this is exported for others to use
 %%flora_compiler_permaoption(X) :- has_permaoption(X).
-
-/*
-clear_context(X) :- (retract(COMPILATION_CONTEXT(X)) ; true), !.
-clear_contextall(X) :- flora_retractall_substitute(COMPILATION_CONTEXT(X)).
-set_context(X) :-
-	(\+has_context(X)
-	-> asserta(COMPILATION_CONTEXT(X))
-	; true
-	).
-has_context(X) :- COMPILATION_CONTEXT(X).
-*/
 
 set_context(X) :-
 	atom(X),
@@ -2322,7 +2311,7 @@ report_semantic_options([H|T]) :-
 initialize_work :-
 	flora_reset_newvar,
 	%%clear_directive,
-	clear_options,
+	%%clear_compilation_liboptions,
 	clear_contextall(_),
         clear_dynrule_varlist.
 
@@ -2333,12 +2322,14 @@ flora_reset_compiler :-
 	reset_newpredicate,
 	reset_rulenum,
 	reset_defaultlabel,
+	clear_compilation_liboptions,
 	flora_clear_compiletime_uriprefixes,
+	flora_clear_compilation_symbols,
 	reset_newoid.
 
 
 /****************************************************************************
-  flora_compile_add(+ParserTerm,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-OptionList,-Status)
+  flora_compile_add(+ParserTerm,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-Status)
 
   This is the top level predicate that is called to compile code for
   adding code to module.
@@ -2348,12 +2339,12 @@ flora_reset_compiler :-
   FactDiffList is the same for facts
   UDFPredsDiffList is the same for the list of tabled predicates
 ****************************************************************************/
-flora_compile_add(NULL,R-R,F-F,U-U,[],[]) :- !.
+flora_compile_add(NULL,R-R,F-F,U-U,[]) :- !.
 	
-flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,OptionList,Status) :-
+flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,Status) :-
 	compile_add_internal(ParserTerm,(NULL,NULL),
 			     RuleDiffList,FactDiffList,UDFPredsDiffList,
-			     OptionList,Status),
+			     Status),
 /*
 	writeln(2,'------------result of add_compilation-------------'),
 	writeln(2,rules=RuleDiffList),
@@ -2365,9 +2356,9 @@ flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,OptionLi
 	!.
 	
 %% This rule is for debugging.
-flora_compile_add(_ParserTerm,[],[],[],[],[error(UNKNOWN_ERROR)]).
+flora_compile_add(_ParserTerm,[],[],[],[error(UNKNOWN_ERROR)]).
 
-compile_add_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,OptionList,Status) :-
+compile_add_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status) :-
 	%% extract the rule number
 	flora_increment_counter(RULE_NUM,1,_,_),
 	initialize_work,
@@ -2401,7 +2392,6 @@ compile_add_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,UDFPreds-UDF
         ),
 	!,
 	clear_context(compiling_for_addition),
-	get_options(OptionList),
 	clear_ruleoid.
 
 /****************************************************************************
@@ -2453,7 +2443,7 @@ compile_annotated_construct_add(Label,Contents,RuleList-RuleTail,Facts,Status) :
 	compile_label(Label,TagCode,MetaCode,Status1),
 	( no_errors_found(Status1) -> 
 	    compile_add_internal(Contents,(TagCode,MetaCode),
-				 RuleList1-[],Facts,_UDFPreds,_OptionList,Status),
+				 RuleList1-[],Facts,_UDFPreds,Status),
 	    append(RuleList1,RuleTail,RuleList)
 	;  Status = Status1
 	),
@@ -2461,7 +2451,7 @@ compile_annotated_construct_add(Label,Contents,RuleList-RuleTail,Facts,Status) :
 
 
 /****************************************************************************
-  flora_compile(+ParserTerm,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-OptionList,-Status)
+  flora_compile(+ParserTerm,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-Status)
 
   This is the top level procedure that is called to compile code.
 
@@ -2470,9 +2460,9 @@ compile_annotated_construct_add(Label,Contents,RuleList-RuleTail,Facts,Status) :
   FactDiffList is the same for facts
   UDFPredsDiffList is the same for the list of tabled predicates
 ****************************************************************************/
-flora_compile(NULL,R-R,F-F,U-U,[],[]) :- !.
+flora_compile(NULL,R-R,F-F,U-U,[]) :- !.
 
-flora_compile(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,OptionList,Status) :-
+flora_compile(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,Status) :-
 /*
 	writeln(2,'------------result of parsing-----------------'),
 	writeln(2,ParserTerm),
@@ -2480,7 +2470,7 @@ flora_compile(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,OptionList,S
 */
 	compile_internal(ParserTerm,(NULL,NULL),
 			 RuleDiffList,FactDiffList,UDFPredsDiffList,
-			 OptionList,Status),
+			 Status),
 /*
 	writeln(2,'------------result of compilation-----------------'),
 	writeln(2,rules=RuleDiffList),
@@ -2492,13 +2482,13 @@ flora_compile(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,OptionList,S
 	!.
 	
 %% This rule is for debugging.
-flora_compile(_ParserTerm,[],[],[],[],[error(UNKNOWN_ERROR)]).
+flora_compile(_ParserTerm,[],[],[],[error(UNKNOWN_ERROR)]).
 
 
 %% This does the main work
 %% LabelCode has the form (TagCode, MetaCode). TagCode is NULL or atom-object.
 %% MetaCode is a NULL or a list of codes.
-compile_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,OptionList,Status) :-
+compile_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status) :-
 	%% extract the rule number
 	flora_increment_counter(RULE_NUM,1,_,_),
 	initialize_work,
@@ -2533,7 +2523,6 @@ compile_internal(ParserTerm,LabelCode,RuleDiffList,FactDiffList,UDFPreds-UDFPred
 	    compile_user_defined_function(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status)
         ),
 	!,
-	get_options(OptionList),
 	clear_ruleoid.
 
 /***************************************************************************
@@ -3118,7 +3107,7 @@ compile_annotated_construct(Label,Contents,RuleList-RuleTail,Facts,Status) :-
 	compile_label(Label,TagCode,MetaCode,Status1),
 	( no_errors_found(Status1) -> 
 	    compile_internal(Contents,(TagCode,MetaCode),
-			     RuleList1-[],Facts,_UDFPreds,_OptionList,Status),
+			     RuleList1-[],Facts,_UDFPreds,Status),
 	    append(RuleList1,RuleTail,RuleList)
 	;  Status = Status1
 	),
@@ -4024,14 +4013,14 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 
 	%% Rule: can occur only inside reify_op as a top-level literal
 	; ParserTerm = [ReifiedRule|_],
-	    BodyHeadList = [],
 	    is_fldynrule(ReifiedRule,_H,_B,_Lab) ->
+	    BodyHeadList = [],
 	    compile_reifyop(ParserTerm,SpecCode,OidCode,Status)
 
 	%% Rule: can occur inside reify_op
 	; ParserTerm = [ReifiedRule|_],
-	    BodyHeadList = [],
 	    is_flruleworkspace(ReifiedRule,_RealRule,_WS) ->
+	    BodyHeadList = [],
 	    compile_reifyop(ParserTerm,SpecCode,OidCode,Status)
 
 	; is_fltablerefresh(ParserTerm,List) ->
@@ -4082,7 +4071,8 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    is_flatom(Op,_OpAtom,Index),
 	    compile_flatomvar(Module,ModCode),
 	    thismodule_struct(ThisModuleName),
-	    florasyslib_struct(Index,FLLIBNEWMODULE,2,[ThisModuleName,ModCode],SpecCode),
+	    florasyslib_struct(Index,FLLIBNEWMODULE,2,[ThisModuleName,ModCode],
+			       SpecCode),
 	    Status=[],
 	    OidCode=NULL
 
@@ -4091,7 +4081,8 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    is_flatom(Op,_OpAtom,Index),
 	    compile_flatomvar(Module,ModCode),
 	    thismodule_struct(ThisModuleName),
-	    florasyslib_struct(Index,FLLIBERASEMODULE,2,[ThisModuleName,ModCode],SpecCode),
+	    florasyslib_struct(Index,FLLIBERASEMODULE,2,
+			       [ThisModuleName,ModCode],SpecCode),
 	    Status=[],
 	    OidCode=NULL
 
@@ -5311,7 +5302,8 @@ compile_flobjspec(ObjTerm,SpecBody,Object,OidCode,Code,BodyHeadList,Status) :-
 	( SpecBody == [] ->
 	    %% Just objref, no body. Something like a.b.c. Possibly a.b.c[]
 	    ( is_flobjref(ObjTerm,OTerm,RefType,ATerm) ->
-		compile_pathexplist([OTerm,ATerm],[OObj,AObj],OidCode,ObjCode,BodyHeadList,Status),
+		compile_pathexplist([OTerm,ATerm],[OObj,AObj],OidCode,ObjCode,
+				    BodyHeadList,Status),
 		%% This is an optimization, which translates a.b[] as
 		%% a[b->?X] as opposed to a[b->?X],?X[].
 		%% The alternative case (compile_pathexp below),
@@ -5324,7 +5316,8 @@ compile_flobjspec(ObjTerm,SpecBody,Object,OidCode,Code,BodyHeadList,Status) :-
 		  true
 	        )
 	    ;
-	      compile_pathexp(ObjTerm,Object,OidCode,ObjCode,BodyHeadList,Status),
+	      compile_pathexp(ObjTerm,Object,OidCode,ObjCode,
+			      BodyHeadList,Status),
 	      ( no_errors_found(Status) -> 
 		  objexists_struct(BODYLITERAL,Object,ECode),
 		  conjunct_code([ECode,ObjCode],Code)
@@ -5335,7 +5328,8 @@ compile_flobjspec(ObjTerm,SpecBody,Object,OidCode,Code,BodyHeadList,Status) :-
 	; % oid spec plus object spec. something like a.b[c->d]
 	    compile_pathexp(ObjTerm,Object,ObjOidCode,ObjCode,BodyHeadList1,S),
 	    ( no_errors_found(S) -> 
-	        compile_flspecbody(Object,SpecBody,SpecOidCode,SpecCode,BodyHeadList2,Status),
+	        compile_flspecbody(Object,SpecBody,SpecOidCode,SpecCode,
+				   BodyHeadList2,Status),
 	        ( no_errors_found(Status) -> 
 		    conjunct_code([ObjCode,SpecCode],Code),
 		    conjunct_code([ObjOidCode,SpecOidCode],OidCode)
@@ -6123,16 +6117,20 @@ compile_head_pathexp(ParserTerm,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    H2BCodeTail = NULL
 
         ; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
-	    compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_fltermobj(Funct,N,Args,Object,Code,
+				   H2BCodeHead,H2BCodeTail,Status)
 
 	; is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_fltermobj(Funct,N,Args,Object,Code,
+				   H2BCodeHead,H2BCodeTail,Status)
         
 	; is_fllist(ParserTerm,L,T,I) ->
-	    compile_head_fllist(L,T,I,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_fllist(L,T,I,Object,Code,H2BCodeHead,
+				H2BCodeTail,Status)
 	;
-	  is_flworkspace(ParserTerm,P,WS),
-	  compile_head_wspathexp(P,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+	    is_flworkspace(ParserTerm,P,WS),
+	    compile_head_wspathexp(P,WS,Object,Code,H2BCodeHead,
+				   H2BCodeTail,Status)
         ),
 	!.
 
@@ -6188,7 +6186,8 @@ compile_head_flobjref(ObjTerm,RefType,AttTerm,Object,Code,H2BCodeHead,H2BCodeTai
   compile_head_flbirelate(+OT1,+RelType,+OT2,-Object,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
 ****************************************************************************/
 compile_head_flbirelate(ObjTerm1,RelType,ObjTerm2,Obj1,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	compile_head_pathexplist([ObjTerm1,ObjTerm2],[Obj1,Obj2],OCode,H2BCodeHead,H2BCodeTail,Status),
+	compile_head_pathexplist([ObjTerm1,ObjTerm2],[Obj1,Obj2],OCode,
+				 H2BCodeHead,H2BCodeTail,Status),
 	!,
 	( no_errors_found(Status) -> 
 	    birelate_struct(HEADLITERAL,Obj1,RelType,Obj2,TCode),
@@ -6203,9 +6202,11 @@ compile_head_flbirelate(ObjTerm1,RelType,ObjTerm2,Obj1,Code,H2BCodeHead,H2BCodeT
     Objspec is defined in the BNF at the top of flrparser.P
     It is pathexpression[ specbody ]
 ****************************************************************************/
-compile_head_flobjspec(ObjTerm,SpecBody,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_flobjspec(ObjTerm,SpecBody,Object,Code,
+		       H2BCodeHead,H2BCodeTail,Status) :-
 	( SpecBody == [] ->
-	    compile_head_pathexp(ObjTerm,Object,ObjCode,H2BCodeHead,H2BCodeTail,Status),
+	    compile_head_pathexp(ObjTerm,Object,ObjCode,
+				 H2BCodeHead,H2BCodeTail,Status),
 	    ( no_errors_found(Status) -> 
 		objexists_struct(HEADLITERAL,Object,ECode),
 		conjunct_struct(ObjCode,ECode,Code)
@@ -6213,9 +6214,11 @@ compile_head_flobjspec(ObjTerm,SpecBody,Object,Code,H2BCodeHead,H2BCodeTail,Stat
 	      true
 	    )
 	;
-	  compile_head_pathexp(ObjTerm,Object,ObjCode,ObjH2BCodeHead,ObjH2BCodeTail,S),
+	  compile_head_pathexp(ObjTerm,Object,ObjCode,
+			       ObjH2BCodeHead,ObjH2BCodeTail,S),
 	  ( no_errors_found(S) -> 
-	      compile_head_flspecbody(Object,SpecBody,SCode,SH2BCodeHead,SH2BCodeTail,Status),
+	      compile_head_flspecbody(Object,SpecBody,SCode,
+				      SH2BCodeHead,SH2BCodeTail,Status),
 	      ( no_errors_found(Status) -> 
 		      conjunct_struct(ObjCode,SCode,Code),
 		      conjunct_code([ObjH2BCodeHead,SH2BCodeHead],H2BCodeHead),
@@ -6244,7 +6247,8 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	compile_head_flspecbody(Object,L,LCode,LH2BCodeHead,LH2BCodeTail,S),
 	!,
 	( no_errors_found(S) -> 
-	    compile_head_flspecbody(Object,R,RCode,RH2BCodeHead,RH2BCodeTail,Status),
+	    compile_head_flspecbody(Object,R,RCode,
+				    RH2BCodeHead,RH2BCodeTail,Status),
 	    ( no_errors_found(Status) -> 
 		    conjunct_struct(LCode,RCode,Code),
 		    conjunct_code([LH2BCodeHead,RH2BCodeHead],H2BCodeHead),
@@ -6277,7 +6281,8 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 		H2BCodeTail = AH2BCodeTail,
 		Status=[]
 	    ;
-	      compile_head_mvdattspec(Object,AObj,RefType,VL,VCode,VH2BCodeHead,VH2BCodeTail,Status),
+	      compile_head_mvdattspec(Object,AObj,RefType,VL,VCode,
+				      VH2BCodeHead,VH2BCodeTail,Status),
 		( no_errors_found(Status) -> 
 		      conjunct_struct(ACode,VCode,Code),
 		      conjunct_code([AH2BCodeHead,VH2BCodeHead],H2BCodeHead),
@@ -6303,9 +6308,11 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 		H2BCodeTail = AH2BCodeTail,
 		Status=[]
 	    ;
-		compile_head_pathexp(ValTerm,ValObj,VCode,VH2BCodeHead,VH2BCodeTail,Status),
+		compile_head_pathexp(ValTerm,ValObj,VCode,
+				     VH2BCodeHead,VH2BCodeTail,Status),
 		( no_errors_found(Status) -> 
-		    sigattspec_struct(HEADLITERAL,Object,AttObj,RefType,ValObj,SCode),
+		    sigattspec_struct(HEADLITERAL,Object,AttObj,RefType,ValObj,
+				      SCode),
 		    conjunct_code([SCode,ACode,VCode],Code),
 		    conjunct_code([AH2BCodeHead,VH2BCodeHead],H2BCodeHead),
 		    conjunct_code([AH2BCodeTail,VH2BCodeTail],H2BCodeTail)
@@ -6332,15 +6339,22 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 		Status=[]
 	    ;
 		is_flsigconstr(ConstrTerm,Lower,Upper),
-		compile_head_pathexplist([Lower,Upper],[OLower,OUpper],CCode,CH2BCodeHead,CH2BCodeTail,S_C),
+		compile_head_pathexplist([Lower,Upper],[OLower,OUpper],CCode,
+					 CH2BCodeHead,CH2BCodeTail,S_C),
 		( no_errors_found(S_C) -> 
-		    compile_head_pathexp(ValTerm,ValObj,VCode,VH2BCodeHead,VH2BCodeTail,Status),
+		    compile_head_pathexp(ValTerm,ValObj,VCode,
+					 VH2BCodeHead,VH2BCodeTail,Status),
 		    ( no_errors_found(Status) -> 
-			sigattspec_struct(HEADLITERAL,Object,AttObj,RefType,ValObj,SCode),
-			sigattcondef_struct(HEADLITERAL,Object,AttObj,OLower,OUpper,RefType,ValObj,CSCode),
+			sigattspec_struct(HEADLITERAL,Object,AttObj,RefType,
+					  ValObj,SCode),
+			sigattcondef_struct(HEADLITERAL,Object,AttObj,
+					    OLower,OUpper,RefType,ValObj,
+					    CSCode),
 			conjunct_code([SCode,CSCode,ACode,CCode,VCode],Code),
-			conjunct_code([AH2BCodeHead,CH2BCodeHead,VH2BCodeHead],H2BCodeHead),
-			conjunct_code([AH2BCodeTail,CH2BCodeTail,VH2BCodeTail],H2BCodeTail)
+			conjunct_code([AH2BCodeHead,CH2BCodeHead,VH2BCodeHead],
+				      H2BCodeHead),
+			conjunct_code([AH2BCodeTail,CH2BCodeTail,VH2BCodeTail],
+				      H2BCodeTail)
 		    ;
 			true
 		    )
@@ -6357,7 +6371,8 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flboolsig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_head_pathexp(AttTerm,AttObj,ACode,H2BCodeHead,H2BCodeTail,Status),
+	compile_head_pathexp(AttTerm,AttObj,ACode,H2BCodeHead,H2BCodeTail,
+			     Status),
 	!,
 	( no_errors_found(Status) -> 
 	    boolsig_struct(HEADLITERAL,Object,AttObj,SCode),
@@ -6370,7 +6385,8 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_fliboolsig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_head_pathexp(AttTerm,AttObj,ACode,H2BCodeHead,H2BCodeTail,Status),
+	compile_head_pathexp(AttTerm,AttObj,ACode,H2BCodeHead,H2BCodeTail,
+			     Status),
 	!,
 	( no_errors_found(Status) -> 
 	    iboolsig_struct(HEADLITERAL,Object,AttObj,SCode),
@@ -6383,7 +6399,8 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_fltransig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_head_pathexp(AttTerm,AttObj,ACode,H2BCodeHead,H2BCodeTail,Status),
+	compile_head_pathexp(AttTerm,AttObj,ACode,H2BCodeHead,H2BCodeTail,
+			     Status),
 	!,
 	( no_errors_found(Status) -> 
 	    transig_struct(HEADLITERAL,Object,AttObj,SCode),
@@ -6396,7 +6413,8 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flitransig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_head_pathexp(AttTerm,AttObj,ACode,H2BCodeHead,H2BCodeTail,Status),
+	compile_head_pathexp(AttTerm,AttObj,ACode,H2BCodeHead,H2BCodeTail,
+			     Status),
 	!,
 	( no_errors_found(Status) -> 
 	    itransig_struct(HEADLITERAL,Object,AttObj,SCode),
@@ -6408,7 +6426,8 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flmethspec(SpecTerm,MethTerm),
 	!,
-	compile_head_pathexp(MethTerm,MethObj,MCode,H2BCodeHead,H2BCodeTail,Status),
+	compile_head_pathexp(MethTerm,MethObj,MCode,H2BCodeHead,H2BCodeTail,
+			     Status),
 	!,
 	( no_errors_found(Status) -> 
 	    methspec_struct(HEADLITERAL,Object,MethObj,SCode),
@@ -6420,7 +6439,8 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flimethspec(SpecTerm,IMethTerm),
 	!,
-	compile_head_pathexp(IMethTerm,IMethObj,IMCode,H2BCodeHead,H2BCodeTail,Status),
+	compile_head_pathexp(IMethTerm,IMethObj,IMCode,H2BCodeHead,H2BCodeTail,
+			     Status),
 	!,
 	( no_errors_found(Status) -> 
 	    imethspec_struct(HEADLITERAL,Object,IMethObj,SCode),
@@ -6432,7 +6452,8 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_fltranspec(SpecTerm,TranTerm),
 	!,
-	compile_head_pathexp(TranTerm,TranObj,TCode,H2BCodeHead,H2BCodeTail,Status),
+	compile_head_pathexp(TranTerm,TranObj,TCode,H2BCodeHead,H2BCodeTail,
+			     Status),
 	!,
 	( no_errors_found(Status) -> 
 	    transpec_struct(HEADLITERAL,Object,TranObj,SCode),
@@ -6444,11 +6465,13 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 
 compile_head_mvdattspec(_Object,_AttObj,_RefType,[],NULL,NULL,NULL,[]) :- !.
 
-compile_head_mvdattspec(Object,AttObj,RefType,[T|L],Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_mvdattspec(Object,AttObj,RefType,[T|L],Code,
+			H2BCodeHead,H2BCodeTail,Status) :-
 	!,
 	compile_head_pathexp(T,TObj,TCode,TH2BCodeHead,TH2BCodeTail,S),
 	( no_errors_found(S) -> 
-	    compile_head_mvdattspec(Object,AttObj,RefType,L,LCode,LH2BCodeHead,LH2BCodeTail,Status),
+	    compile_head_mvdattspec(Object,AttObj,RefType,L,LCode,
+				    LH2BCodeHead,LH2BCodeTail,Status),
 	    ( no_errors_found(Status) -> 
 		mvdattspec_struct(HEADLITERAL,Object,AttObj,RefType,TObj,SCode),
 		conjunct_struct(LCode,SCode,LSCode),
@@ -6474,7 +6497,8 @@ compile_head_mvdattspec(Object,AttObj,RefType,[T|L],Code,H2BCodeHead,H2BCodeTail
                 appended to the code of the body
 ****************************************************************************/
 compile_head_flobjeql(Obj1,Obj2,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	compile_head_pathexplist([Obj1,Obj2],[O1,O2],OCode,H2BCodeHead,H2BCodeTail,Status),
+	compile_head_pathexplist([Obj1,Obj2],[O1,O2],OCode,
+				 H2BCodeHead,H2BCodeTail,Status),
 	!,
 	( no_errors_found(Status) -> 
 	    objeql_struct(HEADLITERAL,O1,O2,OECode),
@@ -6524,7 +6548,8 @@ compile_floraliblit(ParserTerm,WS,Nesting,OidCode,Code,BodyHeadList,Status) :-
 	report_option(FLSYSMOD(WSName),Index),
 	atomobj_struct(WSName,Index,WSNameCode),
 	floralib_struct(WSNameCode,WSCode),
-	compile_wsliteral(ParserTerm,WSCode,Nesting,OidCode,Code,BodyHeadList,Status).
+	compile_wsliteral(ParserTerm,WSCode,Nesting,OidCode,Code,
+			  BodyHeadList,Status).
 
 
 /****************************************************************************
@@ -6539,10 +6564,12 @@ compile_floraliblit(ParserTerm,WS,Nesting,OidCode,Code,BodyHeadList,Status) :-
 %%        compile_wsliteral(ParserTerm,WS,0,OidCode,WSCode,[],Status).
 compile_wsliteral(ParserTerm,WS,Nesting,OidCode,WSCode,BodyHeadList,Status) :-
 	( is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
-	    compile_wstransactionaltermlit(Funct,N,Args,WS,Nesting,OidCode,WSCode,BodyHeadList,Status)
+	    compile_wstransactionaltermlit(Funct,N,Args,WS,Nesting,OidCode,
+					   WSCode,BodyHeadList,Status)
 
 	; is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_wstermlit(Funct,N,Args,WS,Nesting,OidCode,WSCode,BodyHeadList,Status)
+	    compile_wstermlit(Funct,N,Args,WS,Nesting,OidCode,
+			      WSCode,BodyHeadList,Status)
 
 	; is_flvariable(ParserTerm,VarName,Index) ->
 	    BodyHeadList = [],
@@ -6564,10 +6591,12 @@ compile_wsliteral(ParserTerm,WS,Nesting,OidCode,WSCode,BodyHeadList,Status) :-
 
 	; is_flbirelate(ParserTerm,ObjTerm1,RelType,ObjTerm2) ->
 	    BodyHeadList = [],
-	    compile_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,_Obj,OidCode,WSCode,Status)
+	    compile_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,_Obj,OidCode,
+				 WSCode,Status)
 
 	; is_flobjspec(ParserTerm,ObjTerm,Spec) ->
-	    compile_wsflobjspec(ObjTerm,Spec,WS,_Obj,OidCode,WSCode,BodyHeadList,Status)
+	    compile_wsflobjspec(ObjTerm,Spec,WS,_Obj,OidCode,WSCode,
+				BodyHeadList,Status)
 
 	; is_flobjeql(ParserTerm,O1,O2) ->
 	    BodyHeadList = [],
@@ -6588,7 +6617,8 @@ compile_wsliteral(ParserTerm,WS,Nesting,OidCode,WSCode,BodyHeadList,Status) :-
 	;
 	    BodyHeadList = [],
 	    attach_workspace(WS,
-			     transactionalatomlit_struct(BODYLITERAL,ParserTerm,Code),
+			     transactionalatomlit_struct(BODYLITERAL,ParserTerm,
+							 Code),
 			     Code,WSCode),
 	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
 				  TRANSACTIONAL_SYMBOL,Status),
@@ -6618,25 +6648,30 @@ compile_wspathexp(ParserTerm,WS,Object,OidCode,Code,BodyHeadList,Status) :-
 	(
 	  %% case of pred(%pathexp@mod), e.g., p(%a.b.c@foo)
 	  is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
-	    compile_wstransactionaltermobj(Funct,N,Args,WS,Object,OidCode,Code,BodyHeadList,Status)
+	    compile_wstransactionaltermobj(Funct,N,Args,WS,Object,OidCode,Code,
+					   BodyHeadList,Status)
 
 	%% case of pred(pathexp@mod), e.g., p(a.b.c@foo)
 	; is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_wstermobj(Funct,N,Args,WS,Object,OidCode,Code,BodyHeadList,Status)
+	    compile_wstermobj(Funct,N,Args,WS,Object,OidCode,Code,
+			      BodyHeadList,Status)
 
 	; is_flarith(ParserTerm,StrippdParseTerm) ->
 	  set_context(compiling_arithmetics),
-	  compile_wspathexp(StrippdParseTerm,WS,Object,OidCode,Code,BodyHeadList,Status),
+	  compile_wspathexp(StrippdParseTerm,WS,Object,OidCode,Code,
+			    BodyHeadList,Status),
 	  clear_context(compiling_arithmetics)
 
 	%% case like a[b->c:d@foo]
 	; is_flbirelate(ParserTerm,ObjTerm1,RelType,ObjTerm2) ->
 	    BodyHeadList = [],
-	    compile_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,Object,OidCode,Code,Status)
+	    compile_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,Object,OidCode,
+				 Code,Status)
 
 	%% case like a[b->c[d->e]@foo]
 	; is_flobjspec(ParserTerm,ObjTerm,Spec) ->
-	    compile_wsflobjspec(ObjTerm,Spec,WS,Object,OidCode,Code,BodyHeadList,Status)
+	    compile_wsflobjspec(ObjTerm,Spec,WS,Object,OidCode,Code,
+				BodyHeadList,Status)
 
 	%% pred(X@...)
 	%% Note: We have to create code to compute X@..., so we put
@@ -6650,7 +6685,8 @@ compile_wspathexp(ParserTerm,WS,Object,OidCode,Code,BodyHeadList,Status) :-
 	;
 	  is_flobjref(ParserTerm,ObjTerm,RefType,AttTerm) ->
 	  BodyHeadList = [],
-	  compile_wsflobjref(ObjTerm,RefType,AttTerm,WS,Object,OidCode,Code,Status)
+	  compile_wsflobjref(ObjTerm,RefType,AttTerm,WS,Object,OidCode,
+			     Code,Status)
 
 	; %% pred(Term@...) in body. Not allowed without explicit reification 
 	  approx_flindex(ParserTerm,Index),
