@@ -32,7 +32,7 @@
    from basics.
 :- import
 	call0/1,
-	is_acyclic/1,
+	is_cyclic/1,
 	term_arg/3
    from machine.
 %%:- import
@@ -100,6 +100,10 @@
 FLORA_TNOT_PREDICATE(Goal) :- FLORA_TNOT_PREDICATE(Goal,NULL,NULL).
 
 FLORA_TNOT_PREDICATE(Goal,_Line,_File) :-
+	is_cyclic(Goal),
+	!,
+	fail.
+FLORA_TNOT_PREDICATE(Goal,_Line,_File) :-
 #ifdef NEGATION_DEBUG_STATS
 	flrporting:flora_increment_counter(negtotal,1,_,_),
 #endif
@@ -113,7 +117,7 @@ FLORA_TNOT_PREDICATE(Goal,_Line,_File) :-
 	call0(NewCall).
 FLORA_TNOT_PREDICATE(Goal,Line,File) :-
 	flora_unwrap_negation_nocheck(Goal,UnwrappedGoal),
-	%% acyclicity og the goal is checked in make_negated_goal when needed
+	%% acyclicity of the goal is checked upfront
 	make_negated_goal(UnwrappedGoal,Goal,NewGoal),
 	catch(call0(NewGoal),error(typed_table_error(incremental_tabling),_,_),
 	      incr_tabling_error_handler(Line,File,UnwrappedGoal)).
@@ -215,13 +219,11 @@ make_negated_goal(FLLIBHYPOTHETICAL(Type,Goal), _OrigGoal, FLLIBHYPOTHETICAL(Rev
 #ifdef NEGATION_DEBUG_STATS
 	flrporting:flora_increment_counter(neghypo,1,_,_),
 #endif
-	is_acyclic(Goal),
 	(Type == FL_POSSIBLE -> ReverseType = FL_IMPOSSIBLE
 	; ReverseType = FL_POSSIBLE
 	).
 
 %% Simplification for ground calls: no need to numbervar and copy_term
-%% Since this is ground, not checking for acyclicity!
 make_negated_goal(UnwrappedGoal,OrigGoal,tnot(OrigGoal)) :-
 	ground(UnwrappedGoal),
 	!,
@@ -235,18 +237,16 @@ make_negated_goal(UnwrappedGoal,OrigGoal,tnot(OrigGoal)) :-
 %% TRANSACTIONAL: This is more rare than TABLED, so it comes after
 make_negated_goal(UnwrappedGoal,_OrigGoal,\+(UnwrappedGoal)) :-
 	flora_is_transactional_call(UnwrappedGoal),
-	!,
 #ifdef NEGATION_DEBUG_STATS
 	flrporting:flora_increment_counter(negtransactional,1,_,_),
 #endif
-	is_acyclic(UnwrappedGoal).
+	!.
 	
 %% General case
-make_negated_goal(UnwrappedGoal,OrigGoal,tnot(TempGoal)) :-
+make_negated_goal(_UnwrappedGoal,OrigGoal,tnot(TempGoal)) :-
 #ifdef NEGATION_DEBUG_STATS
 	flrporting:flora_increment_counter(neggenerl,1,_,_),
 #endif
-	is_acyclic(UnwrappedGoal),
 	copy_term(OrigGoal,TempGoal),
 	%% make TempGoal ground, so no checks would be necessary in tnot
 	numbervars(TempGoal,0,_,[attvar(bind)]),

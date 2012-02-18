@@ -98,6 +98,8 @@ is_flsemantics(FLSEMANTICS(A),A).
 is_flsetsemantics(FLSETSEMANTICS(A),A).
 is_flcmpopt(FLCMPOPT(OptList),OptList).
 
+is_flstopdelay(FLSTOPDELAY(Vars),Vars).
+
 is_fldefeasible(FLDEFEASIBLE(Module),Module).
 
 is_fldefeasible_rule_default(FLDEFEASIBLE_RULE_DEFAULT).
@@ -2023,8 +2025,10 @@ remove_caller_vars(InVars,OutVars) :-
 ****************************************************************************/
 collect_name_var_pairs(ParserTerm,QueryVars) :-
 	collect_flvars(ParserTerm,NameVs),
-	%%sort(NameVs,SortedNameVs), %% sorting does nothing kere
-	SortedNameVs = NameVs,
+	%% Sorting eliminated duplicate vars so that, for example,
+	%% Name-Var code in compile_query will have 1 pair per var name.
+	%% So, each var will be printed only once in the asnwers in the shell.
+	sort(NameVs,SortedNameVs),
 	indexvars(SortedNameVs,IndexVs),
 	keysort(IndexVs,SortedIndexVs),
 	namevars(SortedIndexVs,QueryVars).
@@ -4026,6 +4030,16 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	; is_fltablerefresh(ParserTerm,List) ->
 	    BodyHeadList = [],
 	    compile_flrefresh(List,SpecCode,Status),
+	    OidCode=NULL
+
+	%% !!{Vars}
+	; is_flstopdelay(ParserTerm,VarList) ->
+	    BodyHeadList = [],
+	    compile_pathexplist(VarList,VarListCode,_,_,Status),
+	    list_struct(VarListCode,[],ArgsCode),
+	    list_struct([],[],EmptyListCode),
+	    prologterm_struct(FLORA_DELAY_CHECKER,2,[ArgsCode,EmptyListCode],
+			      FLDELAYSUPPORTMOD,SpecCode),
 	    OidCode=NULL
 
 	; is_fltruthvalue(ParserTerm,Formula,Atom) ->

@@ -57,6 +57,7 @@
 
 :- import flora_parse_datatype/4 from flrdatatype_parse.
 :- import
+	flora_special_datatype_internal_representation/2,
 	flora_canonical_type_name/2
    from flrdatatype.
 

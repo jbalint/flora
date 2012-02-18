@@ -19,11 +19,13 @@
 :- compiler_options([xpp_on]).
 
 #include "flora_terms.flh"
+#include "flora_exceptions.flh"
 
 :- ensure_loaded('flrtruthvalue.P').
 
 :- import table_dump/2 from dump_table.
-:- import member/2 from basics.
+:- import print_incomplete_tables/0 from tables.
+:- import memberchk/2 from basics.
 :- import flora_unwrap_truthvalued_call/2 from usermod.
 
 :- import flora_unwrap_negation/2 from flrnegation.
@@ -35,15 +37,14 @@
 	flora_generalize_last/2
    from flrtrim.
 :- import
-	flora_abort/1,
+	flora_abort/2,
 	flora_file_op/2 
    from flrporting.
 
 :- import
-	flora_escape_atom/2,
+	%%flora_escape_atom/2,
 	flora_display_symbol/2,
-	flora_display_mode/1,
-	%%flora_write_oid/1,
+	%%flora_display_mode/1,
 	flora_decode_oid_as_atom_substitute_vars/2
    from flrdecode.
 
@@ -55,98 +56,72 @@
 */
 
 :- export
+	flora_print_incomplete_tables/1,
 	flora_dump_tables/2,
 	flora_dump_tables/3.
 
 
 flora_dump_tables(File,AtomicGoal) :-
-	flora_dump_tables(File,AtomicGoal,[summary]).
-%% Options: details/summary. Details trumps summary
-flora_dump_tables(File,AtomicGoal,Options) :-
+	flora_dump_tables(File,AtomicGoal,summary).
+%% Option: details/summary. Details trumps summary
+flora_dump_tables(File,AtomicGoal,Option) :-
 	atom(File),
 	!,
-	flora_file_op(tmpfilename,TmpFile),
-	/*
-	(member(details,Options) -> Options1 = [details(true)]
-	; Options1 = [summary(true)]
-	),
-	*/
-	((member(details,Options) ; Options == details) ->
-	    Options1 = [output(true),details(true)]
-	; Options1 = [output(true),summary(true)]
+	(memberchk(Option,[subgoals,subgoal,goal]) ->
+	    Options1 = [output(false),details(subgoals)]
+	; memberchk(Option,[summary,sum]) ->
+	    Options1 = [output(false),summary(true)]
+	; memberchk(Option,[answers,answer]) ->
+	    Options1 = [output(false),details(answers)]
+	;
+	    flora_decode_oid_as_atom_substitute_vars(Option,OptionDecoded),
+	    flora_abort(['_tabledump: invalid option in argument 3, ',OptionDecoded],FLORA_ABORT_NOTRACE)
 	),
 	convert_to_head_literal(AtomicGoal,AtomicGoalH),
 	flora_generalize_last(AtomicGoalH,FinalGoal),
-	tell(TmpFile),
-	dump_all(FinalGoal,Options1),
-	told,
-	see(TmpFile),
 	tell(File),
-	convert_to_flora,
-	told,
-	seen,
-	flora_file_op(rm,TmpFile).
-	%%true.
-flora_dump_tables(_File,_AtomicGoal,_Options) :-
-	flora_abort('flora_dump_tables: the first argument must be a file name or userout (for standard output)').
+	convert_tabledump_to_flora(FinalGoal,Options1),
+	told.
+flora_dump_tables(_File,_AtomicGoal,_Option) :-
+	flora_abort('_tabledump: argument 1 must be a file name or `userout'' (for standard output)', FLORA_ABORT_NOTRACE).
 
-convert_to_flora :-
+convert_tabledump_to_flora(AtomicGoal,Options) :-
 	repeat,
-	read(Term),
-	(Term == end_of_file, !
-	;
-	    nonvar(Term),
-	    (Term = (summary = Goal - subgoals(NSG) - total_times_called(NC) - total_answers(R)), NSG =\= 0
-	    ;
-		Term = (details = Goal - subgoals(NSG) - details(AnsList)), NSG =\= 0
-	    ),
-
-	    \+ irrelevant_goal(Goal),
-
+	( table_dump(AtomicGoal,[results(TblDescriptor)|Options]),
+	    nonvar(TblDescriptor),
+	    write_one_table_record(TblDescriptor),
 	    /*
-	    %% This hides too much. Better do it on a case-by-case basis
-	    %% hide whatever the debugger hides
-	    convert_to_body_literal(Goal,GoalB),
-	    functor(GoalB,FunctorB,_Arity),
-	    \+ hide_debug_goal(FunctorB,_Arity),
-	    */
-
-	    write_according_to_display_mode(Goal),
-	    write('[total_subgoals->'),
-	    write(NSG),
-	    write(', '),
-	    (nonvar(R)
-	    -> write('total_subgoal_answers->'), write(R),
-		write(', total_times_called->'), write(NC)
-	    ;
-		write('subgoal_details->{'),
-		write_answers_for_subgoals(AnsList),
-		write('}')
+	    (TblDescriptor = [Term1] -> write_one_table_record(Term1)
+	    ; TblDescriptor = [Term1,Term2]
+	    -> write_one_table_record(Term1),
+		write_one_table_record(Term2)
 	    ),
-	    flora_display_symbol(terminator,Terminator),
-	    write(']'), writeln(Terminator),
+	    */
+	    file_io:flush_output,
 	    fail
-	),
-	!.
-convert_to_flora.
+	; true
+	).
+convert_tabledump_to_flora(_,_).
 
-dump_all(AtomicGoal,Options) :-
-	table_dump(AtomicGoal,Options),
-	fail.
-dump_all(_,_).
 
 write_answers_for_subgoals([]) :- !.
 write_answers_for_subgoals([First|Rest]) :-
-	First = Subgoal - times_called(Calls) - answers(Answers) - AnsList - Status,
+	(First = Subgoal - times_called(Calls) - answers(Answers) - AnsList - Status
+	;
+	    First = Subgoal - times_called(Calls) - answers(Answers) - Status
+	),
 	%%flora_write_oid(Subgoal),
 	write_according_to_display_mode(Subgoal),
 	write('[total_answers->'), write(Answers),
 	write(', total_calls->'), write(Calls),
 	write(', status->'), write(Status),
-	write(', answer_list->['),
-	%%flora_write_oid(AnsList),
-	write_plain_list_of_answers(AnsList),
-	write(']]'),
+	(nonvar(AnsList) ->
+	    write(', answer_list->['),
+	    \+(\+ write_plain_list_of_answers(AnsList)),
+	    write(']')
+	; true
+	),
+	write(']'),
 	(Rest == [] -> true
 	;
 	    write(', '),
@@ -158,6 +133,78 @@ write_plain_list_of_answers([H|Tail]) :-
 	write_according_to_display_mode(H),
 	(Tail==[], ! ; write(',')),
 	write_plain_list_of_answers(Tail).
+
+%% dump incomplete tables then read them and write to File
+flora_print_incomplete_tables(File) :-
+	flora_file_op(tmpfilename,TmpFile),
+	tell(TmpFile),
+	print_incomplete_tables,
+	told,
+	flora_print_incomplete_tables(TmpFile,File),
+	flora_file_op(rm,TmpFile).
+
+%% Assume InFile has a dump of incomplete tables.
+%% Read it, convert to flora format and put the result in OutFile
+flora_print_incomplete_tables(InFile,OutFile) :-
+	see(InFile),
+	tell(OutFile),
+	convert_incomplete_tables_to_flora,
+	told,
+	seen.
+
+convert_incomplete_tables_to_flora :-
+	repeat,
+	read(SCCrecord),
+	(SCCrecord == end_of_file, !
+	;
+	    nonvar(SCCrecord),
+	    SCCrecord = Goal - scc(SN),
+	    \+ irrelevant_goal(Goal),
+	    write_according_to_display_mode(Goal),
+	    write('[scc->'),
+	    write(SN),
+	    flora_display_symbol(terminator,Terminator),
+	    write(']'), writeln(Terminator),
+	    fail
+	),
+	!.
+
+write_one_table_record(TblDescriptor) :-
+	(
+	  TblDescriptor = (summary = Goal - subgoals(NSG)
+		 - total_times_called(NC) - total_answers(R))
+	;
+	  TblDescriptor = (details = Goal - subgoals(NSG) - details(AnsList))
+	),
+	!,
+	NSG =\= 0,
+
+	\+ irrelevant_goal(Goal),
+
+	/*
+	%% This hides too much. Better do it on a case-by-case basis
+	%% hide whatever the debugger hides
+	convert_to_body_literal(Goal,GoalB),
+	functor(GoalB,FunctorB,_Arity),
+	\+ hide_debug_goal(FunctorB,_Arity),
+	*/
+	
+	write_according_to_display_mode(Goal),
+	write('[total_subgoals->'),
+	write(NSG),
+	write(', '),
+	(nonvar(R)
+	-> write('total_subgoal_answers->'), write(R),
+	    write(', total_times_called->'), write(NC)
+	;
+	    write('subgoal_details->{'),
+	    \+ (\+ write_answers_for_subgoals(AnsList)),
+	    write('}')
+	),
+	flora_display_symbol(terminator,Terminator),
+	write(']'), writeln(Terminator).
+
+
 
 /*
 %% Hiding rules taken from the debugger
@@ -197,8 +244,11 @@ irrelevant_goal(Goal) :-
 
 write_according_to_display_mode(Goal) :-
 	flora_decode_oid_as_atom_substitute_vars(Goal,FloraGoal),
+	write(FloraGoal).
+	/*
 	(flora_display_mode(silk) ->
 	    flora_escape_atom(FloraGoal,Escaped),
 	    write(Escaped)
 	;   write(FloraGoal)
 	).
+	*/

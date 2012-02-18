@@ -58,18 +58,18 @@
 /* take hilog term and a hilog apply op and return prolog term.
    If the apply term is != the one used in the hilog term, assume it is already
    a prolog term and don't convert */
-static prolog_term hilog2prolog(CTXTdeclc prolog_term hterm, char *apply, int unify_vars);
+static prolog_term hilog2prolog(CTXTdeclc prolog_term hterm, char *apply, Integer unify_vars);
 /* take prolog term and a symbol name of the apply operator and return hilog
    term. If prolog term already has the main functor==hilog apply, then don't
    convert. */
-static prolog_term prolog2hilog(CTXTdeclc prolog_term pterm, char *apply, int unify_vars);
+static prolog_term prolog2hilog(CTXTdeclc prolog_term pterm, char *apply, Integer unify_vars);
 static char *pterm2string(CTXTdeclc prolog_term term);
 inline static int is_hilog(prolog_term term, char *apply_funct);
 inline static int is_special_form(prolog_term term);
 inline static int is_formula(prolog_term term);
 inline static int is_protected_term(prolog_term term);
-static prolog_term map_special_form(CTXTdeclc prolog_term (*func)(), prolog_term term, char *apply, int unify_vars);
-static prolog_term map_list(CTXTdeclc prolog_term func(), prolog_term term, char *apply, int unify_vars);
+static prolog_term map_special_form(CTXTdeclc prolog_term (*func)(), prolog_term term, char *apply, Integer unify_vars);
+static prolog_term map_list(CTXTdeclc prolog_term func(), prolog_term term, char *apply, Integer unify_vars);
 
 static char errormessage[300];
 
@@ -117,7 +117,7 @@ DllExport xsbBool call_conv flora_plg2hlg (CTXTdecl) {
   prolog_term pterm = extern_reg_term(1);
   prolog_term hterm = extern_reg_term(2);
   prolog_term apply_t = extern_reg_term(3);
-  int unify_vars = extern_ptoc_int(4); /* whether to unify if both args are vars */
+  Integer unify_vars = extern_ptoc_int(4); /* whether to unify if both args are vars */
   prolog_term temp_term;
   char *apply;
 
@@ -167,7 +167,7 @@ static inline xsbBool is_scalar(prolog_term pterm)
 }
 
 
-static prolog_term hilog2prolog(CTXTdeclc prolog_term hterm, char *apply, int unify_vars)
+static prolog_term hilog2prolog(CTXTdeclc prolog_term hterm, char *apply, Integer unify_vars)
 {
   prolog_term pterm = extern_p2p_new();
   prolog_term pfunctor;
@@ -232,7 +232,7 @@ static prolog_term hilog2prolog(CTXTdeclc prolog_term hterm, char *apply, int un
 }
 
 
-static prolog_term prolog2hilog(CTXTdeclc prolog_term pterm, char *apply, int unify_vars)
+static prolog_term prolog2hilog(CTXTdeclc prolog_term pterm, char *apply, Integer unify_vars)
 {
   prolog_term hterm = extern_p2p_new();
   int arity, i;
@@ -284,7 +284,7 @@ static prolog_term prolog2hilog(CTXTdeclc prolog_term pterm, char *apply, int un
 }
 
 
-static prolog_term map_list(CTXTdeclc prolog_term func(), prolog_term termList, char *apply, int unify_vars)
+static prolog_term map_list(CTXTdeclc prolog_term func(), prolog_term termList, char *apply, Integer unify_vars)
 {
   prolog_term listHead, listTail;
   prolog_term outList=extern_p2p_new(), outListHead, outListTail;
@@ -316,7 +316,7 @@ static prolog_term map_list(CTXTdeclc prolog_term func(), prolog_term termList, 
   return outList;
 }
 
-static prolog_term map_special_form(CTXTdeclc prolog_term (*func)(), prolog_term special_form, char *apply, int unify_vars)
+static prolog_term map_special_form(CTXTdeclc prolog_term (*func)(), prolog_term special_form, char *apply, Integer unify_vars)
 {
   prolog_term formArg1_temp, formArg2_temp;
   prolog_term out_form=extern_p2p_new(), formArg1_out, formArg2_out;

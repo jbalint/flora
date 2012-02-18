@@ -63,7 +63,7 @@
 	print_backtrace/1
    from error_handler.
 
-:- import close_open_tables/1 from machine.
+%%:- import close_open_tables/1 from machine.
 
 :- import flora_undefined_predicate_hook/3 from flrundefhook.
 
@@ -128,5 +128,11 @@
 	flora_logforest_start/2,
 	flora_logforest_end/0
    from flrdebugger.
+
+:- import
+	flora_print_incomplete_tables/1,
+	flora_dump_tables/2,
+	flora_dump_tables/3
+   from flrtabledump.
 
 :- dynamic flora_warnings_level(_).

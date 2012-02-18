@@ -41,7 +41,10 @@
 :- import flora_set_xpp_options_for_read/1,
 	flora_set_xpp_options_for_read/0,
 	flora_clear_xpp_options/0 from flrutils.
-:- import flora_loader_message/1, flora_loader_message/2 from flrprint.
+:- import
+	flora_loader_message/1,
+	flora_loader_message/2
+   from flrprint.
 :- import '_isloaded'/1 from flora2.
 
 :- import
@@ -230,7 +233,12 @@ flora_logforest_end :-
 		flora_clear_switch(logforest),
 		logforest_tmp_file(TmpFile),
 		see(TmpFile),
-		(logforest_final_file(File) -> tell(File) ; true),
+		(logforest_final_file(File) 
+		->
+		    catch(tell(File),Ball,(seen,throw(Ball)))
+		;
+		    true
+		),
 		convert_to_flora,
 		seen,
 		(logforest_final_file(File) -> told	; true),
@@ -253,63 +261,67 @@ flora_manual_converter(CFile,File,Hides) :-
 
 convert_to_flora :-
 	repeat,
-	read(Term),
-	(Term == end_of_file, !
+	catch(read(Term),Ball,read_error_handler(Ball)),
+	(Term == end_of_file -> true
 	;
-		Term =.. [CTracePred|_],
-		(hide_this_ctrace_pred(CTracePred) -> fail ; true),
-		(Term = tc(S1,S2,Stage,Counter) ->
-		    hide_this_ctrace([S1,S2]),
-			flora_decode_oid_as_atom(S1,S1Flora),
-			flora_decode_oid_as_atom(S2,S2Flora),
-		    write_list(['call(',Counter,')[goal->',S1Flora,
-				', stage->',Stage,
-				', parent->',S2Flora,'].'])
-		; Term = na(A,S,Counter) ->
-		    hide_this_ctrace([A,S]),
-			flora_decode_oid_as_atom(A,AFlora),
-			flora_decode_oid_as_atom(S,SFlora),
-		    write_list(['answer(',Counter,')[goal->',SFlora,
-				', answer->',AFlora,'].'])
-		; Term = ar(A,S,ST,Counter) ->
-		    hide_this_ctrace([A,S,ST]),
-			flora_decode_oid_as_atom(A,AFlora),
-			flora_decode_oid_as_atom(S,SFlora),
-			flora_decode_oid_as_atom(ST,STFlora),
-		    write_list(['answer_to_consumer(',Counter,')[goal->',SFlora,
-				', answer->',AFlora,
-				', consumer->',STFlora,'].'])
-		; Term = cmp(S,SCCNum,Counter) ->
-		    hide_this_ctrace([S]),
-			flora_decode_oid_as_atom(S,SFlora),
-		    write_list(['completed(',Counter,')[goal->',SFlora,
-				', sccnum->',SCCNum,'].'])
-		; Term = ta(Goal,Counter) ->
-		    hide_this_ctrace([Goal]),
-		    functor(Goal,GPred,_),
-		    write_list(['table_abolished(',Counter,')[type->',GPred]),
-		    (Goal = all ->
-				write('].')
-		    ; Goal = pred(Pred/Arity) ->
-				write_list([', predicate->',Pred/Arity,'].'])
-		    ; Goal = subg(GoalToAbolish) ->
-				flora_decode_oid_as_atom(GoalToAbolish,GoalToAbolishFlora),
-				write_list([', goal->',GoalToAbolishFlora,'].'])
-		    ;
-				flora_abort(['[Debugger] invalid answer type in log-forest trace ', Goal], FLORA_ABORT_NOTRACE)
-		    )
-		; Term = err(S,Counter) ->
-		    hide_this_ctrace([S]),
-			flora_decode_oid_as_atom(S,SFlora),
-		    write_list(['error(',Counter,')[goal->',SFlora,'].'])
-		; 
-		    flora_abort(['[Debugger] invalid entry type in log-forest trace ', Term], FLORA_ABORT_NOTRACE)
-		),
+	    Term =.. [CTracePred|_],
+	    (hide_this_ctrace_pred(CTracePred) -> fail ; true),
+	    (Term = tc(S1,S2,Stage,Counter)
+	    ->
+		hide_this_ctrace([S1,S2]),
+		flora_decode_oid_as_atom(S1,S1Flora),
+		flora_decode_oid_as_atom(S2,S2Flora),
+		write_list(['call(',Counter,')[goal->',S1Flora, ', stage->',Stage, ', parent->',S2Flora,'].'])
+	    ; Term = na(A,S,Counter)
+	    ->
+		hide_this_ctrace([A,S]),
+		flora_decode_oid_as_atom(A,AFlora),
+		flora_decode_oid_as_atom(S,SFlora),
+		write_list(['answer(',Counter,')[goal->',SFlora, ', answer_list->',AFlora,'].'])
+	    ; Term = ar(A,S,ST,Counter)
+	    ->
+		hide_this_ctrace([A,S,ST]),
+		flora_decode_oid_as_atom(A,AFlora),
+		flora_decode_oid_as_atom(S,SFlora),
+		flora_decode_oid_as_atom(ST,STFlora),
+		write_list(['answer_to_consumer(',Counter,')[goal->',SFlora, ', answer_list->',AFlora, ', consumer->',STFlora,'].'])
+	    ; Term = cmp(S,SCCNum,Counter)
+	    ->
+		hide_this_ctrace([S]),
+		flora_decode_oid_as_atom(S,SFlora),
+		write_list(['completed(',Counter,')[goal->',SFlora, ', sccnum->',SCCNum,'].'])
+	    ; Term = ta(Goal,Counter)
+	    ->
+		hide_this_ctrace([Goal]),
+		functor(Goal,GPred,_),
+		write_list(['table_abolished(',Counter,')[type->',GPred]),
+		(Goal = all -> write('].')
+		; Goal = pred(Pred/Arity) ->
+		    write_list([', predicate->',Pred/Arity,'].'])
+		; Goal = subg(GoalToAbolish) ->
+		    flora_decode_oid_as_atom(GoalToAbolish,GoalToAbolishFlora),
+		    write_list([', goal->',GoalToAbolishFlora,'].'])
+		;
+		    flora_abort(['[Debugger] Invalid answer type in the log-forest trace ', Goal], FLORA_ABORT_NOTRACE)
+		)
+	    ; Term = err(S,Counter)
+	    ->
+		hide_this_ctrace([S]),
+		flora_decode_oid_as_atom(S,SFlora),
+		write_list(['error(',Counter,')[goal->',SFlora,'].'])
+	    ; 
+		flora_abort(['[Debugger] Invalid entry type in the log-forest trace ', Term], FLORA_ABORT_NOTRACE)
+	    ),
 	    nl,
 	    fail
 	),
 	!.
-convert_to_flora.
+
+read_error_handler(Ball) :-
+	seen,
+	told,
+	arg(2,Ball,Message),
+	flora_abort(['[Debugger] Syntax error in XSB''s log-forest trace:\n\t\t', Message],FLORA_ABORT_NOTRACE).
 
 %% write a list of Prolog terms
 write_list([]).

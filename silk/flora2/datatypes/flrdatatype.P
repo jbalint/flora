@@ -23,11 +23,14 @@
 
 :- import
 	flora_abort/1,
+	flora_get_substring/4,
 	flora_concat_atoms/2,
 	flora_concat_strings/2
    from flrporting.
 
 :- import flora_decode_oid_as_atom/2 from flrdecode.
+
+:- import flratom_begins_with/2 from flora_ground.
 
 :- import
 	flora_toLower/2,
@@ -61,6 +64,7 @@
 	flora_datatype_raw_value/2,
 	flora_datatype_name/2,
 	flora_dt_add/3,
+	flora_special_datatype_internal_representation/2,
 	flora_parsed_datatypelist/2.
 
 :- export
@@ -69,9 +73,14 @@
 	zoneSign/2, zoneHour/2, zoneMinute/2,
 	scheme/2, user/2, host/2, port/2, path/2, query/2, fragment/2.
 
+:- export
+	'_isiri'/1,
+	'_isstring'/1.
+
 
 flora_parsed_datatypelist(DtLst,LitList) :-
 	nonvar(DtLst),
+	DtLst \= '_$VAR'(_),
 	DtLst = FL_DATATYPELIST(LitList).
 
 /*
@@ -294,6 +303,16 @@ flora_printable_type_representation(FL_IRI(Protocol, % http://
 			     Repr),
         !.
 flora_printable_type_representation(FL_STRING(Val),[FL_STRING,Val]) :- !.
+%% this is used for special data types _iri and _string, as they are
+%% represented internally as atoms beginning with FL_IRI_TYPE_PREFIX
+%% and FL_STRING_TYPE_PREFIX
+flora_printable_type_representation(Val,[DatatypeName,DTVal]) :-
+	atom(Val),
+	flora_get_substring(Val,0,2,TypePrefix),
+	special_datatype_prefix(TypePrefix,DatatypeName),
+	!,
+	flora_get_substring(Val,2,-1,DTVal).
+
 %%flora_printable_type_representation(FL_INTEGER(Val),[FL_INTEGER,Val]) :- !.
 flora_printable_type_representation(FL_LONG(Val),[FL_LONG,Val]) :- !.
 flora_printable_type_representation(FL_DOUBLE(Val),[FL_DOUBLE,Val]) :- !.
@@ -457,6 +476,7 @@ fragment(FL_DATATYPE(T,_), Val) :- fragment(T,Val), !.
 fragment(FL_IRI(_Proto,_Separator,_User,_Host,_Port,_Path,_Query,Fragm),Fragm) :-
 	!.
 
+
 flora_datatype_raw_value(FL_DATATYPE(Val,Name), Raw) :-
 	compound(Val),
 	(\+is_list(Val); Name == FL_LISTTYPE),
@@ -471,8 +491,16 @@ flora_datatype_raw_value(FL_DATATYPE(Val,Name), Raw) :-
 	).
 flora_datatype_raw_value(Val,Raw) :-
 	is_charlist(Val),
+	!,
 	atom_codes(Raw,Val).
+flora_datatype_raw_value(Val,Raw) :-
+	atom(Val),
+	special_datatype_prefix(Prefix,_),
+	flratom_begins_with(Val,Prefix),
+	!,
+	flora_get_substring(Val,2,-1,Raw).
 flora_datatype_raw_value(Val,Val).
+
 
 flora_datatype_name(Var,_) :-
 	var(Var),
@@ -559,3 +587,16 @@ flora_dt_add(Val, Val1, Val2) :-
 
 flora_dt_add(Val, Val1, Val2) :-
 	number(Val), number(Val1), Val2 is Val+Val1.
+
+flora_special_datatype_internal_representation(FL_STRING(StringAtm),Repr) :-
+	!,
+	flora_concat_atoms([FL_STRING_TYPE_PREFIX,StringAtm],Repr).
+flora_special_datatype_internal_representation(FL_IRI(StringAtm),Repr) :-
+	!,
+	flora_concat_atoms([FL_IRI_TYPE_PREFIX,StringAtm],Repr).
+
+special_datatype_prefix(FL_STRING_TYPE_PREFIX,FL_STRING).
+special_datatype_prefix(FL_IRI_TYPE_PREFIX,FL_IRI).
+
+'_isstring'(X) :- atom(X), flratom_begins_with(X,FL_STRING_TYPE_PREFIX).
+'_isiri'(X)    :- atom(X), flratom_begins_with(X,FL_IRI_TYPE_PREFIX).

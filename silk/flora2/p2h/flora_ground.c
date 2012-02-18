@@ -23,17 +23,20 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #ifdef WIN_NT
 #define XSB_DLL
 #endif
 
+#include "builtin.h"
 #include "auxlry.h"
 #include "context.h"
 #include "cell_xsb.h"
 #include "error_xsb.h"
 #include "cinterf.h"
 #include "deref.h"
+#include "memory_xsb.h"
 
 
 #define FLORA_META_PREFIX         "_$_$_flora'mod"
@@ -46,9 +49,11 @@
 #define FL_TABLED_UNNUMBER_CALL   "tabled_unnumber_call"
 #define FL_UNDEFEATED             "undefeated"
 
+
 inline static int is_flora_form(prolog_term term);
 inline static int is_flora_tnot_predicate(prolog_term pterm);
-inline static int ground(CPtr term);
+inline static int local_ground(CPtr term);
+inline static int local_ground_cyc(CTXTc Cell term, int cycle_action);
 inline static prolog_term trim(CPtr pterm);
 inline static prolog_term trim_compound(prolog_term pterm, int arity);
 inline static prolog_term trim_list(prolog_term inList);
@@ -73,19 +78,70 @@ DllExport xsbBool call_conv flratom_char_code (CTXTdecl)
   return extern_p2p_unify(pcode,out);
 }
 
+DllExport xsbBool call_conv flratom_begins_with (CTXTdecl)
+{
+  char *big = ptoc_string(CTXTc 1);
+  char *small = ptoc_string(CTXTc 2);
+
+  while(*big != '\0' && *small != '\0') {
+    if (*big != *small) return FALSE;
+    big++;
+    small++;
+  }
+
+  if (*small == '\0') return TRUE;
+  return FALSE;
+}
+
+
+DllExport xsbBool call_conv flratom_ends_with (CTXTdecl)
+{
+  char *big = ptoc_string(CTXTc 1);
+  char *small = ptoc_string(CTXTc 2);
+  size_t difflen = strlen(big) - strlen(small);
+
+  if (difflen < 0) return FALSE;
+
+  big = big+difflen;
+  while(*big != '\0' && *small != '\0') {
+    if (*big != *small) return FALSE;
+    big++;
+    small++;
+  }
+
+  if (*small == '\0') return TRUE;
+  return FALSE;
+}
+
 DllExport xsbBool call_conv flrground (CTXTdecl)
 {
   prolog_term pterm = extern_reg_term(1);
 
-  return ground((CPtr) pterm);
+  return local_ground((CPtr) pterm);
 }
 
 DllExport xsbBool call_conv flrnonground (CTXTdecl)
 {
   prolog_term pterm = extern_reg_term(1);
 
-  return !ground((CPtr) pterm);
+  return !local_ground((CPtr) pterm);
 }
+
+DllExport xsbBool call_conv flrground_cyc(CTXTdecl)
+{ 
+  prolog_term pterm = extern_reg_term(1);
+
+  return local_ground_cyc(CTXTc (Cell) pterm,CYCLIC_FAIL);
+}
+
+DllExport xsbBool call_conv flrnonground_cyc(CTXTdecl)
+{ 
+  prolog_term pterm = extern_reg_term(1);
+
+  // we want to fail on cyclic terms always
+  return !local_ground_cyc(CTXTc (Cell) pterm,CYCLIC_SUCCEED);
+}
+
 
 
 DllExport xsbBool call_conv flrterm_vars (CTXTdecl)
@@ -140,7 +196,7 @@ DllExport xsbBool call_conv flrterm_vars_split (CTXTdecl)
 }
 
 
-int ground(CPtr pterm)
+int local_ground(CPtr pterm)
 {
   int j, arity;
 
@@ -158,7 +214,7 @@ int ground(CPtr pterm)
     return TRUE;
 
   case XSB_LIST:
-    if (!ground(clref_val(pterm)))
+    if (!local_ground(clref_val(pterm)))
       return FALSE;
     pterm = clref_val(pterm)+1;
     goto groundBegin;
@@ -167,7 +223,7 @@ int ground(CPtr pterm)
     arity = (int) get_arity(get_str_psc(pterm));
     if (arity == 0) return TRUE;
     for (j=1; j < arity ; j++)
-      if (!ground(clref_val(pterm)+j))
+      if (!local_ground(clref_val(pterm)+j))
 	return FALSE;
     if (is_flora_form((prolog_term)pterm))
       return TRUE;
@@ -471,3 +527,109 @@ static char *pterm2string(CTXTdeclc prolog_term term)
   return StrArgBuf->string;
 } 
 #endif
+
+
+#ifndef MULTI_THREAD
+CTptr cycle_trail = 0;
+int cycle_trail_size = 0;
+int cycle_trail_top = -1;
+#endif
+
+// modified from the XSB code. We need to take care of not counting the last
+// argument in FLORA-2 wrapper predicates
+int local_ground_cyc(CTXTdeclc Cell Term, int cycle_action) { 
+  Cell visited_string;
+
+  XSB_Deref(Term);
+  if (cell_tag(Term) != XSB_LIST && cell_tag(Term) != XSB_STRUCT) {
+    if (!isnonvar(Term) || is_attv(Term) )
+      return FALSE;
+    else
+      return TRUE;
+  }
+
+  if (cycle_trail == (CTptr) 0) {
+    cycle_trail_size = TERM_TRAVERSAL_STACK_INIT;
+    cycle_trail =
+      (CTptr) mem_alloc(cycle_trail_size*sizeof(Cycle_Trail_Frame),OTHER_SPACE);
+  }
+  visited_string = makestring(string_find("_$visited",1));
+
+  push_cycle_trail(Term);	
+  *clref_val(Term) = visited_string;
+
+  while (cycle_trail_top >= 0) {
+#ifdef FG_DEBUG
+    fprintf(stderr,"flrground_cyc: cycle_trail_top=%d\n", cycle_trail_top);
+#endif
+
+    if (cycle_trail[cycle_trail_top].arg_num > cycle_trail[cycle_trail_top].arity) {
+      pop_cycle_trail(Term);	
+#ifdef FG_DEBUG
+      fprintf(stderr,"flrground_cyc0: pterm=%s\n", pterm2string(CTXTc Term));
+#endif
+    }
+    else {
+      if (cycle_trail[cycle_trail_top].arg_num == 0) {
+	Term = cycle_trail[cycle_trail_top].value;
+#ifdef FG_DEBUG
+	fprintf(stderr,"flrground_cyc0.5: pterm=%s top=%d\n",pterm2string(CTXTc Term), cycle_trail_top);
+#endif
+      }
+      else {
+	 //printf("examining struct %p %d\n",clref_val(cycle_trail[cycle_trail_top].parent),cycle_trail[cycle_trail_top].arg_num);
+	Term = (Cell) (clref_val(cycle_trail[cycle_trail_top].parent)
+		       + cycle_trail[cycle_trail_top].arg_num);
+#ifdef FG_DEBUG
+	fprintf(stderr,"flrground_cyc1: pterm=%s\n", pterm2string(CTXTc Term));
+#endif
+      }
+      cycle_trail[cycle_trail_top].arg_num++;
+#ifdef FG_DEBUG
+      fprintf(stderr,"flrground_cyc11: pterm=%s  %d\n", pterm2string(CTXTc Term), cycle_trail[cycle_trail_top].arg_num);
+#endif
+      // printf("Term1 before %p\n",Term);
+      XSB_Deref(Term);
+      //printf("Term1 after %p\n",Term);
+#ifdef FG_DEBUG
+      fprintf(stderr,"flrground_cyc2: pterm=%s\n", pterm2string(CTXTc Term));
+#endif
+      if (cell_tag(Term) != XSB_LIST && cell_tag(Term) != XSB_STRUCT) {
+#ifdef FG_DEBUG
+	fprintf(stderr,"flrground_cyc3: pterm=%s\n", pterm2string(CTXTc Term));
+#endif
+        if (!isnonvar(Term) || is_attv(Term) ) { 
+	  unwind_cycle_trail;
+	  return FALSE; 
+        }   
+       }
+       else {
+	// printf("*clref_val(TERM) %d\n",*clref_val(Term));
+	if (*clref_val(Term) == visited_string) {
+           // printf("unwind_cycle_trail\n");
+	  unwind_cycle_trail;
+	  // cycle found
+	  if (cycle_action == CYCLIC_SUCCEED) 
+	    return TRUE;
+	  else return FALSE;
+	}
+	else {
+	  // printf("push_cycle_trail\n");
+#ifdef FG_DEBUG
+	  fprintf(stderr,"flrground_cyc4: pterm=%s\n",pterm2string(CTXTc Term));
+#endif
+	  push_cycle_trail(Term);	
+#ifdef FG_DEBUG
+	  fprintf(stderr,"flrground_cyc5: pterm=%s\n",pterm2string(CTXTc Term));
+#endif
+	  // printf("assign *clref_val(Term)\n");
+	  *clref_val(Term) = visited_string;
+#ifdef FG_DEBUG
+	  fprintf(stderr,"flrground_cyc6: pterm=%s\n",pterm2string(CTXTc Term));
+#endif
+	}
+       }
+    }
+  }
+  return TRUE;
+}

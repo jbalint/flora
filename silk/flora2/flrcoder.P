@@ -112,18 +112,25 @@ is_prdatatypelist(PRdtlist,List) :-
 is_table_directive(PRTABLE(PredSpecList), PredSpecList).
 
 %% construct datatype object to be used at runtime (new)
-%% datatype_struct(-ParsedDT,+TypeName,-Args,-DTObject)
-datatype_struct(ParsedDT,TypeName,_Args,DTObject) :-
+%% datatype_struct(-ParsedDT,+TypeName,-DTObject)
+datatype_struct(ParsedDT,TypeName,DTObject) :-
+	%% this needs to be fixed for _iri and _string
 	var(ParsedDT),
 	!,
 	DTObject = FL_DATATYPE(ParsedDT,TypeName).
-%% datatype_struct(+ParsedDT,-TypeName,-Args,-DTObject)
-datatype_struct(ParsedDT,TypeName,Args,DTObject) :-
-	( ParsedDT = FL_DATATYPE(TypeName,Args) % a non-builtin data type
+%% datatype_struct(+ParsedDT,-TypeName,-DTObject)
+datatype_struct(ParsedDT,_TypeName,DTObject) :-
+	%% data type with a special representation: _string, _iri
+	flora_special_datatype_internal_representation(ParsedDT,DTObject),
+	!.
+%% datatype_struct(+ParsedDT,-TypeName,-DTObject)
+datatype_struct(ParsedDT,TypeName,DTObject) :-
+	( ParsedDT = FL_DATATYPE(TypeName,_Args) % a non-builtin data type
 	-> true
-	; %% parsed system data type
-	    ParsedDT =.. [TypeName|Args]
+	; %% system data type
+	    ParsedDT =.. [TypeName|_Args]
 	),
+	!,
 	DTObject = FL_DATATYPE(ParsedDT,TypeName).
 
 is_prlist(PRLIST(L,T,I),L,T,I).
@@ -851,7 +858,7 @@ flora_write_struct(Term,_Context,Status) :-
 		-> flora_parse_datatype(DATATYPE(CanonTypeName,ParsedLit),
 					Index,ParsedDT,Status),
 		    (Status==[]
-		    -> datatype_struct(ParsedDT,CanonTypeName,_,DTCode),
+		    -> datatype_struct(ParsedDT,CanonTypeName,DTCode),
 			term_to_atom(DTCode,OutDTCode,
 				     [quoted(true),numbervars(true)]),
 			write(OutDTCode)
@@ -863,7 +870,7 @@ flora_write_struct(Term,_Context,Status) :-
 		flora_parse_datatype(DATATYPE(CanonTypeName,Literal),
 				     Index,ParsedDT,Status),
 		(Status==[]
-	        -> datatype_struct(ParsedDT,CanonTypeName,_,DTCode),
+	        -> datatype_struct(ParsedDT,CanonTypeName,DTCode),
 		    write_canonical(DTCode)
 		; true
 		)
@@ -1639,7 +1646,7 @@ flora_build_struct(Term,_DWS,_Context,VarList,Code,(Code,Index),Status) :-
 	->
 	    (is_prvariable(Literal,VarName,_)
 	    ->  coder_build_variable(VarName,VarList,VarCode),
-		datatype_struct(VarCode,CanonTypeName,[],Code),
+		datatype_struct(VarCode,CanonTypeName,Code),
 		Status=[]
 	    ; is_prdatatypelist(Literal)
 	    ->
@@ -1648,7 +1655,7 @@ flora_build_struct(Term,_DWS,_Context,VarList,Code,(Code,Index),Status) :-
 		-> flora_parse_datatype(DATATYPE(CanonTypeName,ParsedDTlist),
 					Index,ParsedDT,Status),
 		    (Status==[]
-		    -> datatype_struct(ParsedDT,CanonTypeName,_,Code)
+		    -> datatype_struct(ParsedDT,CanonTypeName,Code)
 		    ; true
 		    )
 		; Status=Stat2
@@ -1657,7 +1664,7 @@ flora_build_struct(Term,_DWS,_Context,VarList,Code,(Code,Index),Status) :-
 		flora_parse_datatype(DATATYPE(CanonTypeName,Literal),
 				     Index,ParsedDT,Status),
 		(Status==[]
-	        -> datatype_struct(ParsedDT,CanonTypeName,_,Code)
+	        -> datatype_struct(ParsedDT,CanonTypeName,Code)
 		; true
 		)
 	    )

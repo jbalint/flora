@@ -1072,6 +1072,9 @@ is_tablerefreshop(FL_REFRESH) :- !.
 %%is_newmoduleop(FL_NEWMODULE) :- !.
 %%is_callermoduleop(FL_CALLERMODULE) :- !.
 
+%% !!{...} - stop delaying calls hanging off of the given variables
+is_stopdelayop(FLORA_STOP_DELAY) :- !.
+
 is_catchop(FL_CATCH) :- !.
 is_throwop(FL_THROW) :- !.
 is_p2hop(FL_P2H) :- !.
@@ -1108,6 +1111,8 @@ is_tag_primitive_op(FL_TAG_PRIMITIVE) :- !.
 is_prefixprimitive_op(FL_PREFIX_PRIMITIVE) :- !.
 
 flrefresh_struct(List,FLREFRESH(List)).
+
+flstopdelay_struct(List,FLSTOPDELAY(List)).
 
 fltruthvalue_struct(Formula,OpName,FLTRUTHVALUE(Formula,OpName)).
 fllabelprimitive_struct(Label,Head,FLTAGPRIMITIVE(Label,Head)).
@@ -3865,6 +3870,33 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
 	;
 	    parse_tablerefresh(Args,DWS,Code,Status)
 	).
+
+%% !!{...} - stop delay of calls hanging off of the given vars
+parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),_DWS,Code,Status) :-
+	get_atom(Funct,Atom),
+	is_stopdelayop(Atom),
+	!,
+	(N == 0
+	->
+	    parsing_error(Ip,EXP_ARGS,Status)
+	;
+	    parse_varlist(Args,ArgCode,_,Status),
+	    flstopdelay_struct(ArgCode,Code)
+	).
+
+%% !!{...} - stop delay of calls hanging off of the given vars
+parse_body_literal(CANOTERM(Funct,_N,FL_PARENTHESIS,_Args,_If,Ip),_DWS,_Code,Status) :-
+	get_atom(Funct,Atom),
+	is_stopdelayop(Atom),
+	!,
+	parsing_error(Ip,STOP_DELAY_OP_SYNTAX,Status).
+
+%% !! - stop delay of calls hanging off of ALL vars - not implemented yet
+parse_body_literal(CanoniTerm,_DWS,_Code,Status) :-
+	get_atom(CanoniTerm,A),
+	is_stopdelayop(A),
+	!,
+	parsing_error(CanoniTerm,EXP_ARGS,Status).
 
 %% label{Label, Head}
 parse_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),DWS,_Code,Status) :-

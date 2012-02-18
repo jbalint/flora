@@ -33,15 +33,17 @@
     	flora_match_substring(?Y._rawValue,?X._rawValue,0)@_prolog(flrporting).
 ?X[_startsWith(?Y)] :-
     	atom(?X)@_prolog, atom(?Y)@_prolog,
-    	flora_match_substring(?Y,?X,0)@_prolog(flrporting).
+	!,
+	flratom_begins_with(?X._rawValue,?Y._rawValue)@_prolog(flora_ground).
 
 // endsWith
 ?X^^_string[_endsWith(?Y^^_string)] :-
 	!,
-    	flora_match_substring(?Y._rawValue,?X._rawValue,reverse,?,-1)@_prolog(flrporting).
+	flratom_ends_with(?X._rawValue,?Y._rawValue)@_prolog(flora_ground).
 ?X[_endsWith(?Y)] :-
     	atom(?X)@_prolog, atom(?Y)@_prolog,
-    	flora_match_substring(?Y,?X,reverse,?,-1)@_prolog(flrporting).
+	!,
+	flratom_ends_with(?X._rawValue,?Y._rawValue)@_prolog(flora_ground).
 
 // contains
 ?X^^_string[_contains(?Y^^_string)] :-
@@ -49,7 +51,7 @@
     	flora_match_substring(?Y._rawValue,?X._rawValue,?)@_prolog(flrporting).
 ?X[_contains(?Y)] :-
     	atom(?X)@_prolog, atom(?Y)@_prolog,
-    	flora_match_substring(?Y,?X,?)@_prolog(flrporting).
+    	flora_match_substring(?Y._rawValue,?X._rawValue,?)@_prolog(flrporting).
 
 // concat
 ?X^^_string[_concat(?Y^^_string) -> ?R] :-
@@ -58,8 +60,14 @@
 	_string[_toType(?R1)->?R].
 ?X[_concat(?Y) -> ?R] :-
     	atom(?X)@_prolog, atom(?Y)@_prolog,
+	(_isstring(?X) ; _isstring(?Y)),
 	!,
-    	flora_concat_atoms([?X,?Y],?R)@_prolog(flrporting).
+    	flora_concat_atoms([?X._rawValue,?Y._rawValue],?R1)@_prolog(flrporting),
+	flora_concat_atoms([FL_STRING_TYPE_PREFIX,?R1],?R)@_prolog(flrporting).
+?X[_concat(?Y) -> ?R] :-
+    	atom(?X)@_prolog, atom(?Y)@_prolog,
+	!,
+    	flora_concat_atoms([?X._rawValue,?Y._rawValue],?R)@_prolog(flrporting).
 ?X[_concat(?Y) -> ?R] :-
         _ischarlist(?X), _ischarlist(?Y),
 	!,
@@ -73,27 +81,47 @@
 	atom_codes(?R1,?CodesR)@_prolog,
 	_string[_toType(?R1)->?R].
 ?X[_reverse -> ?R] :-
-    	atom(?X)@_prolog,
+    	_isstring(?X),
 	!,
 	atom_codes(?X,?Codes)@_prolog,
-	reverse(?Codes,?CodesR)@_prolog(basics),
-	atom_codes(?R,?CodesR)@_prolog.
+	?Codes=[?p1,?p2|?CodesRaw],
+	reverse(?CodesRaw,?CodesRvrs)@_prolog(basics),
+	atom_codes(?R,[?p1,?p2|?CodesRvrs])@_prolog.
+?X[_reverse -> ?R] :-
+    	_isatom(?X),
+	?X\=[],
+	!,
+	atom_codes(?X,?Codes)@_prolog,
+	reverse(?Codes,?CodesRvrs)@_prolog(basics),
+	atom_codes(?R,?CodesRvrs)@_prolog.
+/*
+// this is done by the list type routines
+?X[_reverse -> ?R] :-
+    	_ischarlist(?X),
+	!,
+	reverse(?X,?R)@_prolog(basics).
+*/
 
 // length
 ?X^^_string[_length -> ?N] :-
 	!,
     	flora_atom_length(?X._rawValue,?N)@_prolog(flrporting).
 ?X[_length -> ?N] :-
-    	atom(?X)@_prolog,
+	// this takes care of ^^_strings and atoms
+    	_isatom(?X),
 	!,
-	?X \== [],
-    	flora_atom_length(?X,?N)@_prolog(flrporting).
+    	flora_atom_length(?X._rawValue,?N)@_prolog(flrporting).
 
 // toUpper
 ?X^^_string[_toUpper -> ?R] :-
 	!,
 	flora_toUpper(?X._rawValue,?R1)@_prolog(flrdatatype_utils),
 	_string[_toType(?R1)->?R].
+?X[_toUpper -> ?R] :-
+    	_isstring(?X),
+	!,
+	flora_toUpper(?X._rawValue,?R1)@_prolog(flrdatatype_utils),
+	flora_concat_atoms([FL_STRING_TYPE_PREFIX,?R1],?R)@_prolog(flrporting).
 ?X[_toUpper -> ?R] :-
     	atom(?X)@_prolog,
 	!,
@@ -110,6 +138,11 @@
 	flora_toLower(?X._rawValue,?R1)@_prolog(flrdatatype_utils),
 	_string[_toType(?R1)->?R].
 ?X[_toLower -> ?R] :-
+    	_isstring(?X),
+	!,
+	flora_toLower(?X._rawValue,?R1)@_prolog(flrdatatype_utils),
+	flora_concat_atoms([FL_STRING_TYPE_PREFIX,?R1],?R)@_prolog(flrporting).
+?X[_toLower -> ?R] :-
     	atom(?X)@_prolog,
 	!,
 	flora_toLower(?X,?R)@_prolog(flrdatatype_utils).
@@ -125,11 +158,17 @@
 	flora_get_substring(?X._rawValue,?Beg,?End,?R1)@_prolog(flrporting),
 	_string[_toType(?R1)->?R].
 ?X[_substring(?Beg,?End) -> ?R] :-
+    	_isstring(?X),
+	!,
+	flora_get_substring(?X._rawValue,?Beg,?End,?R1)@_prolog(flrporting),
+	flora_concat_atoms([FL_STRING_TYPE_PREFIX,?R1],?R)@_prolog(flrporting).
+?X[_substring(?Beg,?End) -> ?R] :-
     	atom(?X)@_prolog,
 	!,
 	flora_get_substring(?X,?Beg,?End,?R)@_prolog(flrporting).
 ?X[_substring(?Beg,?End) -> ?R] :-
         _ischarlist(?X),
 	!,
-	flora_get_substring(?X._rawValue,?Beg,?End,?R1)@_prolog(flrporting),
+	atom_codes(?XX,?X)@_prolog,
+	flora_get_substring(?XX,?Beg,?End,?R1)@_prolog(flrporting),
 	atom_codes(?R1,?R)@_prolog.
