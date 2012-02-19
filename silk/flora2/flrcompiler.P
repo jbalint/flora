@@ -37,6 +37,8 @@
 #define PERMAOPTION	         permaoption
 #define COMPILATION_CONTEXT	 compcontext
 #define DYNRULE_VARLIST          dynrule_varlist
+#define BODYVARS_PREDICATE       FLORA_SYMBOL('bodyvars')
+#define HEADVARS_PREDICATE       FLORA_SYMBOL('headvars')
 
 #define BODYLITERAL         	 1
 #define HEADLITERAL         	 2
@@ -58,6 +60,8 @@
 :- index(user_defined_function_var_substitute/5,2+1).
 :- dynamic symbol(_,_,_,_,_,_,_).
 :- dynamic nowarn_symbol(_,_,_,_,_).
+:- dynamic BODYVARS_PREDICATE/1.
+:- dynamic HEADVARS_PREDICATE/1.
 
 
 /****************************************************************************
@@ -98,7 +102,8 @@ is_flsemantics(FLSEMANTICS(A),A).
 is_flsetsemantics(FLSETSEMANTICS(A),A).
 is_flcmpopt(FLCMPOPT(OptList),OptList).
 
-is_flstopdelay(FLSTOPDELAY(Vars),Vars).
+is_flstopdelay(FLSTOPDELAY(Vars,I),Vars,I).
+is_flstopdelay(FLSTOPDELAY(I),I).
 
 is_fldefeasible(FLDEFEASIBLE(Module),Module).
 
@@ -2050,8 +2055,9 @@ indexvars([T|L],Vars) :-
 	!.
 
 
+% an Index-VarName list and creates a list of items ?Name = Varobj.
+%% This is used in queries to describe the variable bindings
 namevars([],[]) :- !.
-
 namevars([Index-Name|L],[NV|NVs]) :-
 	varobj_struct(Name,Index,VCode),
 	%% prepend '?' to var names in query answers
@@ -2316,6 +2322,8 @@ initialize_work :-
 	flora_reset_newvar,
 	%%clear_directive,
 	%%clear_compilation_liboptions,
+	flora_retractall_substitute(BODYVARS_PREDICATE(_)),
+	flora_retractall_substitute(HEADVARS_PREDICATE(_)),
 	clear_contextall(_),
         clear_dynrule_varlist.
 
@@ -2731,11 +2739,11 @@ compile_direct(DirectTerm,_Idx,CodeList,[]) :-
 
 %% prefix definition
 compile_direct(DirectTerm,_Idx,[Code],[]) :-
-	is_flprefixdef(DirectTerm,PrefixName,PrefixBody),
+	is_flprefixdef(DirectTerm,PrefixName,PrefixExpansion),
 	!,
-	FLLIBPREFIXDEF(PrefixName,PrefixBody),
+	FLLIBPREFIXDEF(PrefixName,PrefixExpansion),
 	thismodule_struct(ThisModule),
-	florasyslib_struct(FLLIBPREFIXDEF,3,[ThisModule,PrefixName,PrefixBody],Code1),
+	florasyslib_struct(FLLIBPREFIXDEF,3,[ThisModule,PrefixName,PrefixExpansion],Code1),
 	query_struct(Code1,Code).
 
 %% :- compiler_options
@@ -3074,7 +3082,7 @@ attrvar_code_delayed(Var,Val,AttrName,Code) :-
   FactDiffList = Facts-Facts: the empty diff list
 ****************************************************************************/
 compile_query(Body,RuleList-RuleTail,Facts-Facts,Status) :-
-	compile_body(Body,BCode,Status),
+	compile_body_top(Body,BCode,Status),
 	( no_errors_found(Status) -> 
 	    collect_prdatatypevars(BCode,DTVarsCode),
 	    append(DTVarsCode,[BCode],BCode1),
@@ -3429,12 +3437,12 @@ new_udf_predicate_funct(Name,NewPredicateFunct,NewName):-
   FactDiffList = Facts-Facts: the empty diff list
 ****************************************************************************/
 compile_rule(Head,Body,Annotation,RuleList-RuleTail,Facts-Facts,Status) :-
-	compile_head(Head,HeadCode,H2BCodeHead,H2BCodeTail,HeadStatusPre),
+	compile_head_top(Head,HeadCode,H2BCodeHead,H2BCodeTail,HeadStatusPre),
 	compile_conjunct2list(HeadCode,HeadCodeList),
 	no_mixed_sensor_nonsensor_heads(HeadCodeList,Head,DelayStatus),
 	append(HeadStatusPre,DelayStatus,HeadStatus),
 	( no_errors_found(HeadStatus) ->
-	    compile_body(Body,BCode1,BodyStatus),
+	    compile_body_top(Body,BCode1,BodyStatus),
 	    collect_prdatatypevars([HeadCodeList,BCode1],DTVarsCode),
 	    /*
 	    acyclicity_check_for_head(HeadCode,HeadAcyclicityCheckCode),
@@ -3679,6 +3687,12 @@ compile_conjunct2list(Code,[Code|ListTail],ListTail) :- !.
   H2BCodeTail - code passed from head to body, which is supposed to be
                 appended to the code of the body
 ****************************************************************************/
+compile_head_top(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
+	collect_flvars(ParserTerm,FlVars),
+	asserta(HEADVARS_PREDICATE(FlVars)),
+	compile_head(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status),
+	retract(HEADVARS_PREDICATE(FlVars)),
+	!.
 compile_head([],NULL,NULL,NULL,[]) :- !.
 
 compile_head([ParserTerm|ParserTermList],Code,H2BCodeHead,H2BCodeTail,Status) :-
@@ -3782,8 +3796,18 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 
 
 /****************************************************************************
+  compile_body_top(+ParserTerm,-Code,-Status)
   compile_body(+ParserTerm,-Code,-Status)
 ****************************************************************************/
+%% this is a top-level entry into the body compile. Called by compile_query/rule
+compile_body_top(ParserTerm,Code,Status) :-
+	collect_flvars(ParserTerm,FlVars),
+	asserta(BODYVARS_PREDICATE(FlVars)),
+	compile_body(ParserTerm,Code,Status),
+	retract(BODYVARS_PREDICATE(FlVars)),
+	!.
+
+
 compile_body(ParserTerm,Code,Status) :-
 	is_flconjunct(ParserTerm,L,R),
 	!,
@@ -4033,13 +4057,15 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    OidCode=NULL
 
 	%% !!{Vars}
-	; is_flstopdelay(ParserTerm,VarList) ->
+	; is_flstopdelay(ParserTerm,VarList,Idx) ->
 	    BodyHeadList = [],
-	    compile_pathexplist(VarList,VarListCode,_,_,Status),
-	    list_struct(VarListCode,[],ArgsCode),
-	    list_struct([],[],EmptyListCode),
-	    prologterm_struct(FLORA_DELAY_CHECKER,2,[ArgsCode,EmptyListCode],
-			      FLDELAYSUPPORTMOD,SpecCode),
+	    compile_stop_delay(VarList,Idx,SpecCode,Status),
+	    OidCode=NULL
+
+	%% !! without the vars
+	; is_flstopdelay(ParserTerm,Idx) ->
+	    BodyHeadList = [],
+	    compile_stop_delay(_,Idx,SpecCode,Status),
 	    OidCode=NULL
 
 	; is_fltruthvalue(ParserTerm,Formula,Atom) ->
@@ -8899,7 +8925,7 @@ compile_fldynrule(Op,R,RCode,Status) :-
 	is_fldynrule(R,Head,Body,Label),
         set_context(compile_with_var_module),
 	set_context(compiling_dynrule),
-	compile_head(Head,HeadCode1,H2BCodeHead,H2BCodeTail,HeadStatusPre),
+	compile_head_top(Head,HeadCode1,H2BCodeHead,H2BCodeTail,HeadStatusPre),
         new_prvariable(NO_INDEX,HVL),
 	compile_conjunct2list(HeadCode1,HeadCode2),
 	remove_empty_list(HeadCode2,HeadCode),
@@ -8911,7 +8937,7 @@ compile_fldynrule(Op,R,RCode,Status) :-
 	),
 	append(HeadStatusPre,DelayStatus,HeadStatus),
 	( no_errors_found(HeadStatus) -> 
-	    compile_body(Body,BodyCode1,BodyStatus),
+	    compile_body_top(Body,BodyCode1,BodyStatus),
 	    ( no_errors_found(BodyStatus) -> 
 	        collect_prdatatypevars([HeadCode,BodyCode1],DTVarsCode),
 		/*
@@ -8989,6 +9015,31 @@ remove_empty_list([H|L],[H|NL]) :-
 
 
 /****************************************************************************
+             compile_stop_delay(VarList,Code)
+     !!{...} and !! - immediate execution ofdelayed literals
+****************************************************************************/
+compile_stop_delay(_VarList,Idx,_Code,[Err]) :-
+	has_context(goal_reification),
+	!,
+	compiling_error(Idx,NO_IMMEDIATE_EXECUTION_OF_DELAY,Err).
+compile_stop_delay(VarList,_Idx,Code,Status) :-
+	(var(VarList)
+	->
+	    (BODYVARS_PREDICATE(BVarList) ; BVarList = []),
+	    !,
+	    (HEADVARS_PREDICATE(HVarList) ; HVarList = []),
+	    !,
+	    append(HVarList,BVarList,VarList)
+	; true
+	),
+	compile_pathexplist(VarList,VarListCode,_,_,Status),
+	list_struct(VarListCode,[],ArgsCode),
+	list_struct([],[],EmptyListCode),
+	prologterm_struct(FLORA_DELAY_CHECKER,2,[ArgsCode,EmptyListCode],
+			  FLDELAYSUPPORTMOD,Code).
+
+
+/****************************************************************************
              Table maintenance predicates
      refresh{...} removes the corresponding calls from Prolog tables.
 ****************************************************************************/
@@ -9026,7 +9077,7 @@ compile_flclause(Label,Mode,HeadList,Body,Code,Status) :-
 	    clear_context(compiling_headliteral),
 	    ( no_errors_found(S) -> 
 		list_struct(HLC,[],HeadListCode),
-		compile_body(Body,BodyCode,Status),
+		compile_body_top(Body,BodyCode,Status),
 		( no_errors_found(Status) -> 
 		    clause_struct(TagCode,MetaCode,ModeCode,HeadListCode,BodyCode,Code)
 		;
@@ -9198,8 +9249,8 @@ compile_execdirect(DirectTerm,WS,Code,Status) :-
 	;   %% Ensure that prefix definition is recorded in the current module
 	    %% to be used in other modules. For instance, if somebody make a
 	    %% reference to prefix#local@module
-	    is_flprefixdef(DirectTerm,PrefixName,PrefixBody) ->
-	    florasyslib_struct(FLLIBPREFIXDEF,3,[Mod,PrefixName,PrefixBody],Code),
+	    is_flprefixdef(DirectTerm,PrefixName,PrefixExpansion) ->
+	    florasyslib_struct(FLLIBPREFIXDEF,3,[Mod,PrefixName,PrefixExpansion],Code),
 	    Status = []
 
 	),

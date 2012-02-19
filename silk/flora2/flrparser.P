@@ -1112,7 +1112,8 @@ is_prefixprimitive_op(FL_PREFIX_PRIMITIVE) :- !.
 
 flrefresh_struct(List,FLREFRESH(List)).
 
-flstopdelay_struct(List,FLSTOPDELAY(List)).
+flstopdelay_struct(List,I,FLSTOPDELAY(List,I)).
+flstopdelay_struct(I,FLSTOPDELAY(I)).
 
 fltruthvalue_struct(Formula,OpName,FLTRUTHVALUE(Formula,OpName)).
 fllabelprimitive_struct(Label,Head,FLTAGPRIMITIVE(Label,Head)).
@@ -1208,7 +1209,7 @@ set_context(X) :-
 	!,
 	flora_set_counter(X,1).
 set_context(X) :-
-	abort([X, ': FLORA-2 compiler BUG!! Invalid parser context.']).
+	abort([X, ': FLORA-2 compiler BUG. Invalid parser context.']).
 
 has_context(X) :-
 	flora_get_counter(X,1).
@@ -3881,8 +3882,16 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),_DWS,Code,Status) :-
 	    parsing_error(Ip,EXP_ARGS,Status)
 	;
 	    parse_varlist(Args,ArgCode,_,Status),
-	    flstopdelay_struct(ArgCode,Code)
+	    flstopdelay_struct(ArgCode,Ip,Code)
 	).
+
+%% !! - stop delay of calls hanging off of ALL vars 
+parse_body_literal(CanoniTerm,_DWS,Code,[]) :-
+	get_atom(CanoniTerm,A),
+	is_stopdelayop(A),
+	!,
+	get_index(CanoniTerm,I),
+	flstopdelay_struct(I,Code).
 
 %% !!{...} - stop delay of calls hanging off of the given vars
 parse_body_literal(CANOTERM(Funct,_N,FL_PARENTHESIS,_Args,_If,Ip),_DWS,_Code,Status) :-
@@ -3890,13 +3899,6 @@ parse_body_literal(CANOTERM(Funct,_N,FL_PARENTHESIS,_Args,_If,Ip),_DWS,_Code,Sta
 	is_stopdelayop(Atom),
 	!,
 	parsing_error(Ip,STOP_DELAY_OP_SYNTAX,Status).
-
-%% !! - stop delay of calls hanging off of ALL vars - not implemented yet
-parse_body_literal(CanoniTerm,_DWS,_Code,Status) :-
-	get_atom(CanoniTerm,A),
-	is_stopdelayop(A),
-	!,
-	parsing_error(CanoniTerm,EXP_ARGS,Status).
 
 %% label{Label, Head}
 parse_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),DWS,_Code,Status) :-
@@ -7512,7 +7514,9 @@ parse_composer_datatype(Args,If,DWS,Code,Status) :-
 	    (is_flstring_struct(LiteralCode,Literal,Idx)
 	    ->
 		(flora_synonymous_type_names(Type,FL_IRI)
-		-> atom_codes(LitAtm,Literal), flatom_struct(LitAtm,If,Code),
+		-> atom_codes(LitAtm,Literal),
+		    flora_concat_atoms([FL_IRI_TYPE_PREFIX,LitAtm],IRI_atom),
+		    flatom_struct(IRI_atom,If,Code),
 		    flora_parse_datatype(DATATYPE(Type,Literal),If,_,Status)
 		; fldatatype_struct(SortCode,Literal,Idx,Code),
 		    Status = []
@@ -7521,7 +7525,8 @@ parse_composer_datatype(Args,If,DWS,Code,Status) :-
 	    -> 
 		(flora_synonymous_type_names(Type,FL_IRI)
 		-> atom_codes(LitAtm,Literal),
-		    fltransactionalatom_struct(LitAtm,If,Code),
+		    flora_concat_atoms([FL_IRI_TYPE_PREFIX,LitAtm],IRI_atom),
+		    fltransactionalatom_struct(IRI_atom,If,Code),
 		    flora_parse_datatype(DATATYPE(Type,Literal),If,_,Status)
 		; fldatatype_struct(SortCode,Literal,Idx,Code1),
 		    fltransactionalqname_struct(Code1,Code),

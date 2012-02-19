@@ -8324,6 +8324,80 @@ is of the \texttt{must}-variety, the engine will throw an error:
 \end{verbatim}
 %% 
 
+\index{!!}
+\index{immediate execution of delayed subgoals}
+\index{immediate execution operator}
+\paragraph{Forcing immediate execution of delayed subgoals.}
+Sometimes it is necessary to tell the system to stop delaying
+subgoals and force their immediate execution.
+For instance, in
+%% 
+\begin{verbatim}
+    ?- must(ground(?X) or ground(?Y))^wish(nonvar(?Z))^
+                       (p(?X), wish(nonvar(?W))^q(?W), foo[bar(?Y)->?Z]),
+        ...,
+        ...,
+        test(?X,?Y,?Z,?W).
+\end{verbatim}
+%% 
+the query \texttt{test} might be executed before the queries \texttt{p(?X)},
+\texttt{q(?W)}, and \texttt{foo[bar(?Y)->?Z])}, \emph{if} some of the
+delay quantifiers remain unsatisfied. If instead we want
+to make sure that those queries are executed before
+\texttt{test(?X,?Y,?Z,?W)}, \FLORA provides the \emph{immediate execution
+operator}, \texttt{!!},
+which forces immediate execution of all the ``reachable'' delayed subgoals:
+%% 
+\begin{verbatim}
+    ?- must(ground(?X) or ground(?Y))^wish(nonvar(?Z))^
+                       (p(?X), wish(nonvar(?W))^q(?W), foo[bar(?Y)->?Z]),
+        ...,
+        ...,
+        !!,
+        test(?X,?Y,?Z,?W).
+\end{verbatim}
+%% 
+In this example, the aforesaid queries will be executed before
+\texttt{test(?X,?Y,?Z,?W)}. 
+
+A delayed subgoal, $G$, is \emph{reachable} by an occurrence of
+the immediate execution
+operator \texttt{!!} 
+if $G$ is suspended on a ground/nonvar condition that
+involves a variable that appears in the the scope of the rule or the query
+where the aforesaid occurrence of \texttt{!!} is found. 
+What it means to be suspended on a variable is a little trickier.
+In the above example, if neither \texttt{?X} nor \texttt{?Y} is ground,
+then \texttt{p(?X)}, \texttt{q(?W)}, and \texttt{foo[bar(?Y)->?Z])} would
+be suspended on either \texttt{?X} or \texttt{?Y}. If one of these
+variables becomes ground, then these queries would be suspended on
+\texttt{?Z}, if \texttt{?Z} is still not bound.  Once \texttt{?Z}  gets bound,
+then \texttt{p(?X)} and \texttt{foo[bar(?Y)->?Z])} will no longer be
+suspended, but \texttt{q(?W)} will still be suspended on \texttt{?W} unless
+\texttt{?W} is already bound by that time.   
+
+Note, however, that \texttt{!!} will not have any effect on subgoals that
+are suspended on variables that are not in the scope of the rule or query
+containing this
+immediate execution operator. For instance, in
+%% 
+\begin{verbatim}
+p(?X) :- must(nonvar(?X))^foo(?X,?Y), wish(ground(?Z))^bar(?Z), moo(?Y,?X,?Z).
+moo(?Y,?X,?Z) :- ..., !!, ...
+?- p(?W), !!, writeln(?W)@_plg.
+\end{verbatim}
+%% 
+the variable \texttt{?W} is in scope for the query. Since
+\texttt{p(?W)} unifies with the head of the first rule, \texttt{?W} and
+\texttt{?X} become the same variable. This means that \texttt{foo(?X,?Y)}
+is reachable from \texttt{!!} and will be forced to execute by that operator.
+In contrast, \texttt{bar(?Z)} is suspended on the variable \texttt{?Z},
+which is not in the scope of the query. Therefore, \texttt{bar(?Z)} will
+not be forced to execute by the operator !! in the above query.   
+On the other hand, \texttt{?Z} is in the scope of the second rule above, so
+the occurrence of \texttt{!!} in \emph{that} rule will force the execution of
+\texttt{bar(?Z)}.   
+
 
 \section{Rule Labels and Meta-information.}
 \label{sec-rule-label}

@@ -212,6 +212,7 @@
    from flrwrapper.
 
 :- import      
+	flora_decode_oid_as_atom/2,
 	flora_write_fact/1,
 	flora_write_rule_head/1,
 	flora_write_oid/1,
