@@ -227,7 +227,7 @@ $GREP "missing" $LOG_FILE >> $RES_FILE
 $GREP "differ!" $LOG_FILE >> $RES_FILE
 $GREP "different!" $LOG_FILE >> $RES_FILE
 # when xsb aborts... it writes something like ! Aborting...
-$GREP "abort" $LOG_FILE >> $RES_FILE
+$GREP "abort" $LOG_FILE | $GREP -v "on_abort" >> $RES_FILE
 # for overflows (check for Overflow & overflow)
 $GREP "overflow" $LOG_FILE >> $RES_FILE
 # for ... missing command...
