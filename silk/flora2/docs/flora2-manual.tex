@@ -1,5 +1,7 @@
 \documentclass[11pt]{article}
 
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
 \usepackage{epsf,epsfig,subfigure,latexsym,amssymb,alltt}
 \usepackage{xspace,graphicx,makeidx}
 \usepackage{hyperref,url}
@@ -11009,6 +11011,81 @@ considerable time to dump these tables. In this case only the first option
 (and maybe the second, if you must) is recommended.
 
 
+\subsection{Examining Incomplete Tables}
+
+Sometimes it becomes necessary to examine incomplete tables (i.e., tables
+to subgoals that have not yet been completely evaluated)
+in the middle of execution or upon exception.
+
+\index{\_dump\_incomplete\_tables/1}
+To get a dump of all incomplete tables in the middle of the computation,
+one has to insert the predicate \texttt{\_dump\_incomplete\_tables} in an
+appropriate place in user's rule bodies. For instance,
+
+%% 
+\begin{verbatim}
+    r(0,?):- !, _dump_incomplete_tables(temp).
+    r(3,?A):- r(5,?A).
+    r(?N,?A):- ?N1 is ?N - 1, r(?N1,?A).
+    ?- r(5,foo(a)).
+\end{verbatim}
+%% 
+will put the following into the file \texttt{temp}:
+%% 
+\begin{verbatim}
+    ${r(5,foo(a))}[scc->1].
+    ${r(4,foo(a))}[scc->1].
+    ${r(3,foo(a))}[scc->1].
+    ${r(2,foo(a))}[scc->2].
+    ${r(1,foo(a))}[scc->3].
+    ${r(0,foo(a))}[scc->4].
+\end{verbatim}
+%% 
+It says that there are four strongly connected components of subgoals,
+numbered 1, 2, 3, and 4. All of these subgoals are still waiting to be
+fully computed, but at the moment their truth values are still unknown.
+
+More often, though, one might need to examine incomplete tables after an
+exception, if the user suspects that the exception has something to do with
+tabled subgoals. Such a table dump looks exactly like the dump produced by
+\texttt{\_dump\_incomplete\_tables/1} but it is requested differently.
+First, the program must execute the query
+\index{\_set\_dump\_incomplete\_tables\_on\_exception/0}
+%% 
+\begin{verbatim}
+    ?- _set_dump_incomplete_tables_on_exception.
+\end{verbatim}
+%% 
+Then, after an exception took place, the user should execute the query
+\index{\_dump\_incomplete\_tables\_after\_exception/1}
+%% 
+\begin{alltt}
+    ?- _dump_incomplete_tables_after_exception(\emph{filename}).
+\end{alltt}
+%% 
+For instance,
+\begin{verbatim}
+    q(0,?):- !, %abort@_sys.
+    q(3,?A):- q(5,?A).
+    q(?N,?A):- ?N1 is ?N - 1,q(?N1,?A).
+    ?- q(5,foo(a)).
+    ?- _dump_incomplete_tables_after_exception(temp).
+\end{verbatim}
+%%
+The dump of tables that were incomplete at the time of the abort 
+will be in the file \texttt{temp} and will have the same structure as before:
+%% 
+\begin{verbatim}
+    ${q(5,foo(a))}[scc->1].
+    ${q(4,foo(a))}[scc->1].
+    ${q(3,foo(a))}[scc->1].
+    ${q(2,foo(a))}[scc->2].
+    ${q(1,foo(a))}[scc->3].
+    ${q(0,foo(a))}[scc->4].
+\end{verbatim}
+%% 
+
+
 \subsection{Tracing Tabled Calls via Forest Logging}
 
 While the regular Call-Redo-Exit-Fail logging is useful in many cases, it
@@ -11452,7 +11529,7 @@ the first appearance of a rule or a fact, because such directives have
 effect only after they are found and processed.
 
 To better understand the issue, consider the following simple program
-(say, in file {\tt test.flr}):
+(say, in the file {\tt test.flr}):
 %%
 \begin{verbatim}
   :- _op(400,xfx,fff).

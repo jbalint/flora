@@ -108,12 +108,15 @@ check_module_to_AT_association(?) :- true.
 
 // Axioms for Courteous LP with general exclusions
 
-FL_DEFEATED(?_T,?H,?Mod) :-
+FL_DEFEATED(?T,?H,?Mod) :-
 	?Exclusion[opposers(?Mod)->?H],
+	FL_CANDIDATE(?T,?H,?Mod), // MK added 2/22/2012
 	naf ?Exclusion[FL_BEATER(?Mod)->?H].
 FL_DEFEATED(?T,?H,?Mod) :-
 	// this incorporates the classical mutex and user-defined _opposes/2
-	FL_OPPOSES_AUX(?Mod,?T,?H,?_OtherT,?OtherH),
+	FL_OPPOSES_AUX(?Mod,?T,?H,?OtherT,?OtherH),
+	FL_CANDIDATE(?T,?H,?Mod), // MK added 2/22/2012
+	FL_CANDIDATE(?OtherT,?OtherH,?Mod), // MK added 2/22/2012
 	naf FL_BEATER(?H,?OtherH,?Mod).
 FL_DEFEATED(?T,?H,?Mod) :- FL_DISQUALIFIED(?T,?H,?Mod).
 
@@ -179,7 +182,9 @@ FL_COMPETES(?H1,?H2,?Exclusion,?Mod) :-
 	?Exclusion[opposers(?Mod)->{?H1,?H2}],
 	?H1 != ?H2.
 FL_COMPETES(?H1,?H2,?Mod) :-
-	FL_OPPOSES_AUX(?Mod,?,?H1,?,?H2),
+	FL_OPPOSES_AUX(?Mod,?_T1,?H1,?_T2,?H2),
+	FL_CANDIDATE(?_T1,?H1,?Mod), // MK added 2/22/2012
+	FL_CANDIDATE(?_T2,?H2,?Mod), // MK added 2/22/2012
 	?H1 != ?H2.
 
 competitors(?H1,?H2,?Mod) :-
@@ -219,15 +224,18 @@ existsRuleWithNoOverrider(?Lit,?DomineeH,?Mod) :-
    This method finds out the caller module and replaces the module of Head
    with the caller module.
 */
-FL_STATUS(?_T,?H)[howDefeated -> notBeaterFor(?Exclusion)] :-
+FL_STATUS(?T,?H)[howDefeated -> notBeaterFor(?Exclusion)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
         ?Exclusion[opposers(?RealMod)->?HM],
+	FL_CANDIDATE(?T,?HM,?RealMod), // MK added 2/22/2012
 	naf ?Exclusion[FL_BEATER(?RealMod)->?HM].
 FL_STATUS(?T,?H)[howDefeated -> notBeaterFor(binaryExclusion(?HM,?BeatenH))] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
 	FL_OPPOSES_AUX(?RealMod,?T,?HM,?,?BeatenH),
+	FL_CANDIDATE(?T,?HM,?RealMod), // MK added 2/22/2012
+	FL_CANDIDATE(?,?BeatenH,?RealMod), // MK added 2/22/2012
 	naf FL_BEATER(?HM,?BeatenH,?RealMod).
 FL_STATUS(?T,?H)[howDefeated -> canceled] :-
 	caller{?Mod},
@@ -317,14 +325,16 @@ FL_CANDIDATE(?Tag,?Head,?Mod) :-
 	   deep (>100). */
 	current_prolog_flag(max_table_subgoal_depth,?TermDepth)@_prolog,
 	set_prolog_flag(max_table_subgoal_depth, 0)@_prolog,
-	tag{?Tag,?Head},
-	clause{@{?Tag} ?Head@?Mod, ?Body},
+	?ModHead = ?Head@?Mod,
+	tag{?Tag,?ModHead},
+	clause{@{?Tag} ?ModHead, ?Body},
 	?Body,
 	set_prolog_flag(max_table_subgoal_depth, ?TermDepth)@_prolog.
 
 // opposer without the rule tag
 ?Exclusion[opposers(?Mod)->?HH] :-
 	(?Exclusion:_Exclusion[_opposers->?H])@?Mod,
+	FL_CANDIDATE(?,?H,?Mod), // MK added 2/22/2012
 	?HH = ?H@?Mod.
 
 // FL_OPPOSES_AUX/5, FL_OVERRIDES_AUX/5, FL_CANCEL_AUX/3 are defined in
@@ -334,6 +344,7 @@ FL_CANDIDATE(?Tag,?Head,?Mod) :-
 
 beaten_by_strict_rule(?T,?H,?Mod) :- beaten_by_strict_rule(?T,?H,?,?,?Mod).
 beaten_by_strict_rule(?T,?H,?StrictT,?StrictH,?Mod) :-
+	FL_CANDIDATE(?T,?H,?Mod),  // MK added 2/22/2012
 	FL_OPPOSES_AUX(?Mod,?T,?H,?StrictT,?StrictH),
 	FL_STRICT_CANDIDATE(?StrictT,?StrictH,?Mod).
 
@@ -343,8 +354,9 @@ FL_STRICT_CANDIDATE(?Tag,?Head,?Mod) :-
 	   deep (>100). */
 	current_prolog_flag(max_table_subgoal_depth,?TermDepth)@_prolog,
 	set_prolog_flag(max_table_subgoal_depth, 0)@_prolog,
-	\+tag{?Tag,?Head}, // strict
-	clause{@{?Tag} ?Head@?Mod, ?Body},
+	?ModHead = ?Head@?Mod,
+	\+tag{?Tag,?ModHead}, // strict
+	clause{@{?Tag} ?ModHead, ?Body},
 	?Body,
 	set_prolog_flag(max_table_subgoal_depth, ?TermDepth)@_prolog.
 

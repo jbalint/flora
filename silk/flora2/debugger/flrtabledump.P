@@ -24,7 +24,10 @@
 :- ensure_loaded('flrtruthvalue.P').
 
 :- import table_dump/2 from dump_table.
-:- import print_incomplete_tables/0 from tables.
+:- import
+	get_scc_dumpfile/1,
+	print_incomplete_tables/0
+   from tables.
 :- import memberchk/2 from basics.
 :- import flora_unwrap_truthvalued_call/2 from usermod.
 
@@ -56,7 +59,8 @@
 */
 
 :- export
-	flora_print_incomplete_tables/1,
+	flora_dump_incomplete_tables/1,
+	flora_dump_incomplete_tables_after_exception/1,
 	flora_dump_tables/2,
 	flora_dump_tables/3.
 
@@ -135,17 +139,17 @@ write_plain_list_of_answers([H|Tail]) :-
 	write_plain_list_of_answers(Tail).
 
 %% dump incomplete tables then read them and write to File
-flora_print_incomplete_tables(File) :-
+flora_dump_incomplete_tables(File) :-
 	flora_file_op(tmpfilename,TmpFile),
 	tell(TmpFile),
 	print_incomplete_tables,
 	told,
-	flora_print_incomplete_tables(TmpFile,File),
+	flora_dump_incomplete_tables(TmpFile,File),
 	flora_file_op(rm,TmpFile).
 
 %% Assume InFile has a dump of incomplete tables.
 %% Read it, convert to flora format and put the result in OutFile
-flora_print_incomplete_tables(InFile,OutFile) :-
+flora_dump_incomplete_tables(InFile,OutFile) :-
 	see(InFile),
 	tell(OutFile),
 	convert_incomplete_tables_to_flora,
@@ -204,7 +208,15 @@ write_one_table_record(TblDescriptor) :-
 	flora_display_symbol(terminator,Terminator),
 	write(']'), writeln(Terminator).
 
-
+%% get incomplete tables from the file that was used to dump the SCCs on abort
+%% then convert to flora and dump into the DumpFile.
+%% Requires that the user calls
+%% ?- set_prolog_flag(exception_pre_action,print_incomplete_tables)
+%% before the abort
+flora_dump_incomplete_tables_after_exception(DumpFile) :-
+	get_scc_dumpfile(InFile),
+	flora_dump_incomplete_tables(InFile,DumpFile),
+	flora_file_op(rm,InFile).
 
 /*
 %% Hiding rules taken from the debugger

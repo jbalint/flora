@@ -129,10 +129,5 @@
 	flora_logforest_end/0
    from flrdebugger.
 
-:- import
-	flora_print_incomplete_tables/1,
-	flora_dump_tables/2,
-	flora_dump_tables/3
-   from flrtabledump.
 
 :- dynamic flora_warnings_level(_).
