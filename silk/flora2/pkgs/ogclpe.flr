@@ -28,7 +28,8 @@
 
 :- symbol_context
         defeated(?,?)@?,
-        FL_COMPETES(?,?,?)@?,
+        competes(?,?)@?,
+        prlg FL_COMPETES(?,?,?),
         prlg FL_REFUTES(?,?,?,?,?),
         prlg FL_REBUTS(?,?,?,?),
         prlg beaten_by_strict_rule(?,?,?,?,?).
@@ -38,6 +39,7 @@
 :- prolog FL_REBUTS/3, FL_REBUTS/4.
 :- prolog FL_DISQUALIFIED/3.
 :- prolog FL_DEFEATED/3.
+:- prolog FL_COMPETES/4, FL_COMPETES/3.
 //:- table FL_UNDEFEATED/3.  // DO NOT TABLE - useless
 :- prolog FL_UNDEFEATED/3.
 :- prolog beaten_by_strict_rule/3, beaten_by_strict_rule/5,
@@ -54,6 +56,8 @@
           FL_BEATER(?,?,?),
           opposes(?,?,?,?),
 	  overrides(?,?,?,?),
+	  competes(?,?),
+	  competes(?)(?,?),
 	  defeated(?,?).
 
 :- ignore_depchk %abort(?)@_system.
@@ -90,6 +94,9 @@ opposes(?T1,?H1,?T2,?H2) :-
 	change_module_nocheck(?H2,?Mod,?RealMod,?MH2),
 	FL_OPPOSES_AUX(?RealMod,?T1,?MH1,?T2,?MH2).
 
+competes(?E)(?H,?HH) :- FL_COMPETES(?H,?HH,?E,?).
+competes(?H,?HH) :- FL_COMPETES(?H,?HH,?).
+
 overrides(?T1,?H1,?T2,?H2) :-
 	caller{?Mod},
 	change_module_nocheck(?H1,?Mod,?RealMod,?MH1),
@@ -108,14 +115,16 @@ check_module_to_AT_association(?) :- true.
 
 // Axioms for Courteous LP with general exclusions
 
-FL_DEFEATED(?T,?H,?Mod) :-
-	?Exclusion[opposers(?Mod)->?H],
-	FL_CANDIDATE(?T,?H,?Mod), // MK added 2/22/2012
+FL_DEFEATED(?_T,?H,?Mod) :-
+	?Exclusion[opposers(?Mod)->{?H1,?H}],
+	?H1@?Mod != ?H@?Mod,
+	//FL_CANDIDATE(?,?H1,?Mod), // MK added 2/22/2012
 	naf ?Exclusion[FL_BEATER(?Mod)->?H].
 FL_DEFEATED(?T,?H,?Mod) :-
 	// this incorporates the classical mutex and user-defined _opposes/2
 	FL_OPPOSES_AUX(?Mod,?T,?H,?OtherT,?OtherH),
-	FL_CANDIDATE(?T,?H,?Mod), // MK added 2/22/2012
+	?OtherH@?Mod != ?H@?Mod,
+	//FL_CANDIDATE(?T,?H,?Mod), // MK added 2/22/2012
 	FL_CANDIDATE(?OtherT,?OtherH,?Mod), // MK added 2/22/2012
 	naf FL_BEATER(?H,?OtherH,?Mod).
 FL_DEFEATED(?T,?H,?Mod) :- FL_DISQUALIFIED(?T,?H,?Mod).
@@ -334,8 +343,8 @@ FL_CANDIDATE(?Tag,?Head,?Mod) :-
 // opposer without the rule tag
 ?Exclusion[opposers(?Mod)->?HH] :-
 	(?Exclusion:_Exclusion[_opposers->?H])@?Mod,
-	FL_CANDIDATE(?,?H,?Mod), // MK added 2/22/2012
-	?HH = ?H@?Mod.
+	?HH = ?H@?Mod,
+	FL_CANDIDATE(?,?H,?Mod). // MK added 2/22/2012
 
 // FL_OPPOSES_AUX/5, FL_OVERRIDES_AUX/5, FL_CANCEL_AUX/3 are defined in
 // genincludes/flrdefeasible.fli
