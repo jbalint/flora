@@ -547,8 +547,8 @@ get_name(OBJECT(IDENTIFIER(Name),I),Name,I)  :- !.
 get_name(OBJECT(QUOTED_ATOM(Name),I),Name,I) :- !.
 get_name(OBJECT(BUILTIN_IDENTIFIER(Name),I),Name,I) :- !.
 
-is_variable(OBJECT(VARIABLE(Name),I),Name,I).
-is_anonymous_variable(Obj,I) :- is_variable(Obj,FL_UNDERSCORE,I).
+%%is_variable(OBJECT(VARIABLE(Name),I),Name,I).
+%%is_anonymous_variable(Obj,I) :- is_variable(Obj,FL_UNDERSCORE,I).
 
 %% This is provided for other modules
 flora_get_flatomvar_name(FLTOKEN(Name,_),Name) :- !.
@@ -1305,7 +1305,7 @@ parse_directive(CanoniTerm,Code,Status) :-
 	; prolog_directive(CanoniTerm,CodeList,Status)
 	; table_directive(CanoniTerm,CodeList,Status)
 	; usesensor_directive(CanoniTerm,CodeList,Status)
-	; sensor_directive(CanoniTerm,CodeList,Status)
+	; defsensor_directive(CanoniTerm,CodeList,Status)
 	; usefunction_directive(CanoniTerm,CodeList,Status)
 	; setsemantics_directive(CanoniTerm,CodeList,Status)
 	; cmpopt_directive(CanoniTerm,CodeList,Status)
@@ -1351,7 +1351,7 @@ exec_directive(CanoniTerm,FloraModSpec,Code,Status) :-
 	; exec_table_directive(CanoniTerm,CodeList,Status)
 	; usesensor_directive(CanoniTerm,CodeList,Status)
 	; usefunction_directive(CanoniTerm,CodeList,Status)
-	; sensor_directive(CanoniTerm,CodeList,Status)
+	; defsensor_directive(CanoniTerm,CodeList,Status)
 	; exec_setsemantics_directive(CanoniTerm,CodeList,Status)
 	; exec_semantics_directive(CanoniTerm,CodeList,Status)
 	; prefixdef_directive(CanoniTerm,CodeList,Status)
@@ -2221,7 +2221,7 @@ usefunction_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Sta
 	
 
 /****************************************************************************
-      sensor_directive(+CanoTerm,-Code,-Status)
+      defsensor_directive(+CanoTerm,-Code,-Status)
       The compiler constructs a call to flrdelaysupport:flora_register_sensor/6
 
       The sensor directive has the form:
@@ -2234,26 +2234,24 @@ usefunction_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Sta
       The bindings for these vars are supplied by the compiler.
 ****************************************************************************/
 %% version with an explicit XSB module for sensor
-sensor_directive(CANOTERM(Funct,3,FL_PARENTHESIS,[SensorCall,SensorXSBMod,DelayCond],_If,Ip),Code,Status) :-
-	get_name(Funct,FL_SENSOR),
+defsensor_directive(CANOTERM(Funct,3,FL_PARENTHESIS,[SensorCall,SensorXSBMod,DelayCond],_If,Ip),Code,Status) :-
+	get_name(Funct,FL_DEFSENSOR),
 	!,
-	sensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,Code,Status).
+	defsensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,Code,Status).
 
 %% version without explicit XSB module
-sensor_directive(CANOTERM(Funct,2,FL_PARENTHESIS,[SensorCall,DelayCond],_If,Ip),Code,Status) :-
-	get_name(Funct,FL_SENSOR),
+defsensor_directive(CANOTERM(Funct,2,FL_PARENTHESIS,[SensorCall,DelayCond],_If,Ip),Code,Status) :-
+	get_name(Funct,FL_DEFSENSOR),
 	!,
-	sensor_directive_internal(SensorCall,usermod,DelayCond,Ip,Code,Status).
+	defsensor_directive_internal(SensorCall,usermod,DelayCond,Ip,Code,Status).
 
-sensor_directive(CANOTERM(Funct,_,FL_PARENTHESIS,_,_If,Ip),_,Status) :-
-	get_name(Funct,FL_SENSOR),
+defsensor_directive(CANOTERM(Funct,_,FL_PARENTHESIS,_,_If,Ip),_,Status) :-
+	get_name(Funct,FL_DEFSENSOR),
 	!,
 	parsing_error(Ip,INVALID_SENSOR_DECL,Status).
 
 
-sensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,[Code],Status) :-
-	%% first two args must be anon vars: will e substituted by File, Line
-	prepend_two_anon_args(SensorCall,SensorCall2),
+defsensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,[Code],Status) :-
 	%% XSB module is an atom
 	(fixup_object(SensorXSBMod,SensorModObj),
 	    get_name(SensorModObj,SensorModName)
@@ -2261,7 +2259,7 @@ sensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,[Code],Status) :-
 	    S1 = []
 	;   parsing_error(Ip,INVALID_SENSOR_MOD, S1)
 	),
-	parse_pure_prolog_term(SensorCall2,SensorModName,SensorCallCode,VarNameList1-Tail1,S2),
+	parse_pure_prolog_term(SensorCall,SensorModName,SensorCallCode,VarNameList1-Tail1,S2),
 	%% parse_pure_prolog_term returns its own error codes, so
 	%% we change them to a more appropriate error for this particular case
 	(S2 == [] -> S22 = []
@@ -2279,10 +2277,6 @@ sensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,[Code],Status) :-
 	merge_status([S1,S22,S33,S4],Status),
 	flsensordirect_struct(SensorCallCode,DelayCondCode,Code).
 
-prepend_two_anon_args(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),
-		      CANOTERM(Funct,N2,FL_PARENTHESIS,[AnonArg,AnonArg|Args],If,Ip)) :-
-	is_anonymous_variable(AnonArg,NO_INDEX),
-	N2 is N+2.
 
 /****************************************************************************
   setsemantics_directive(+CanoniTerm,-CodeList,-Status)

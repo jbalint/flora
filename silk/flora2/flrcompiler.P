@@ -767,6 +767,9 @@ modularized_atom_struct(Atom,Idx,PRMODULARIZEDATOM(Atom,Idx)).
 modularized_atom_struct(Atom,Mod,Idx,PRMODULARIZEDATOM(Atom,Mod,Idx)).
 is_modularized_atom(PRMODULARIZEDATOM(Atom,Idx),Atom,Idx) :- !.
 is_modularized_atom(PRMODULARIZEDATOM(Atom,_Mod,Idx),Atom,Idx) :- !.
+scrambled_atom_struct(Atom,Idx,Struct) :-
+	flora_scramble_atom(Atom,ScrambledA),
+	atomobj_struct(ScrambledA,Idx,Struct).
 
 transactionalatomobj_struct(FLTRANSACTIONALATOM(Atom,I),PRATOM(Atom,I)) :- !.
 
@@ -989,7 +992,7 @@ termlit_struct(_Context,FObj,N,ObjList,Code) :-
 	(is_pratom(FObj,AtomName)
 	; is_prbuiltin_identifier(FObj,AtomName)
 	),
-	(has_permaoption(prolog(AtomName,N)) ->
+	(has_permaoption(atomreplacement(AtomName,N,_)) ->
 	    termlit_replacement(FObj,N,NewFObj),
 	    prologterm_struct(NewFObj,N,ObjList,Code)
 	; flora_prlgdef(AtomName,N) ->
@@ -2639,6 +2642,16 @@ compile_direct(DirectTerm,_,[Code],Status) :-
 	maplist(prolog_option(_,_),PairList,PermaOptions),
 	make_runtime_modular_prolog_declarations(PermaOptions,Code),
 	set_permaoptions(PermaOptions).
+%% for sensor predicates, we do not define them as prolog here:
+%% this is done by the sensor directive itself.
+prolog_option((P,N,_Idx),_) :- 
+	has_permaoption(defsensor(P,N)),
+	!,
+	fail.
+prolog_option(P/N/_Idx,_) :- 
+	has_permaoption(defsensor(P,N)),
+	!,
+	fail.
 prolog_option((P,N,_Idx),prolog(P,N)) :- 
 	!,
 	flora_define_modular_prolog(P,N),
@@ -2650,7 +2663,8 @@ prolog_option(P/N/_Idx,prolog(P,N)) :-
 compile_direct(DirectTerm,_,[CodeTbl,CodePrlg],Status) :-
 	is_fltabledirect(DirectTerm,PredSpecList,Idx),
 	!,
-	verify_symbol_context_pairlist(PredSpecList,Idx, PROLOG_SYMBOL,
+	maplist(skip_sensor_spec(_,_),PredSpecList,PredSpecListSansSensors),
+	verify_symbol_context_pairlist(PredSpecListSansSensors,Idx,PROLOG_SYMBOL,
 				       NONTRANSACTIONAL_SYMBOL,Status),
 	maplist(prolog_option(_,_),PredSpecList,PermaOptions),
 	make_runtime_modular_prolog_declarations(PermaOptions,CodePrlg),
@@ -2659,9 +2673,23 @@ compile_direct(DirectTerm,_,[CodeTbl,CodePrlg],Status) :-
 	list2commalist(TableSpecList,TableSpec),
 	table_directive_struct(TableSpec,Direct),
 	directive_struct(Direct,CodeTbl).
+%% for sensor predicates, the table directive works differently:
+%% it creates a sensor predicate name and tables it with arity+2
+table_option(P/N/_Idx,PMod/N2) :-
+	has_permaoption(defsensor(P,N)),
+	%% N+2 because the actual sensor predicate has 2 extra arguments, but
+	%% :- table is using the declared # of args in the :- sensor directive
+	N2 is N+2,
+	!,
+	scrambled_atom_struct(P,NO_INDEX,PMod).
 table_option(P/N/_Idx,PMod/N1) :-
 	N1 is N+1, %% because of the caller argument
 	modularized_atom_struct(P,NO_INDEX,PMod).
+skip_sensor_spec(P/N/_Idx,_) :-
+	has_permaoption(defsensor(P,N)),
+	!,
+	fail.
+skip_sensor_spec(P/N/Idx,P/N/Idx).
 
 compile_direct(DirectTerm,_,[Code],Status) :-
 	is_flusesensordirect(DirectTerm,PairList,Idx),
@@ -2677,7 +2705,7 @@ compile_direct(DirectTerm,_,[Code],Status) :-
 	report_option(FLSYSLIB(FLLIBRECORDSENSORS),NO_INDEX),
 	query_struct(Code1,Code).
 %% used in converting usesensor pred list
-make_sensor_permaoption(P/N/_Idx,sensor(P,N)).
+make_sensor_permaoption(P/N/_Idx,usesensor(P,N)).
 %% strip the index part from pred/arity/idx
 strip_pairlist_index(P/N/_Idx,P/N) :- !.
 strip_pairlist_index((P,N,_Idx),(P,N)).
@@ -2716,7 +2744,7 @@ usefunction_option(FunName/Arity/_Idx,PermaOption) :-
 compile_direct(DirectTerm,_,[Code],Status) :-
 	is_flsensordirect(DirectTerm,SensCall,DelayCond),
 	!,
-	compile_sensor_direct(SensCall,DelayCond,Direct,S1),
+	compile_defsensor_direct(SensCall,DelayCond,Direct,S1),
 	query_struct(Direct,QueryCode),
 	( no_errors_found(S1) -> 
 	    flora_intern_code([QueryCode],NULL,PrologCode,S2),
@@ -2889,37 +2917,38 @@ compile_flatomvar(T,Code) :-
 	!.
 
 /****************************************************************************
-        compile_sensor_direct(+SensCall,+DelayCond,-Direct,-Status)
+   compile_defsensor_direct(+SensCall,+DelayCond,-Direct,-Status)
 
    Compile a sensor directive.
 ****************************************************************************/
-compile_sensor_direct(SensCall,DelayCond,Code,Status) :-
+compile_defsensor_direct(SensCall,DelayCond,Code,Status) :-
 	(flprologlib_atom_arity(SensCall,SensName,SensArity)
 	%% sensor defined in a .flr file: declare it as prolog
 	->
 	    flora_scramble_atom(SensName,SensNameWithFloraPrefix),
-	    set_permaoption(atomreplacement(SensName,SensArity,SensNameWithFloraPrefix)),
-	    %%flora_define_prolog(SensNameWithFloraPrefix,SensArity)
-	    %% trmporarily record as prolog
-	    set_permaoption(prolog(SensName,SensArity))
+	    SensArity2 is SensArity+2,
+	    set_permaoption(atomreplacement(SensName,SensArity2,SensNameWithFloraPrefix)),
+	    %% temporarily record as sensor
+	    set_permaoption(defsensor(SensName,SensArity))
 	; flprologlib_atom_arity_mod(SensCall,SensName,SensArity,ModName),
+	    SensArity2 is SensArity+2,
 	    %% sensor defined in a prolog module
-	    flora_define_prolog(SensName,SensArity,ModName)
+	    flora_define_prolog(SensName,SensArity2,ModName)
 	),
-	set_context(compiling_sensor_directive(SensName,SensArity)),
+	set_context(compiling_sensor_directive(SensName,SensArity2)),
 	%% flprologlib_call converts flplib into flterm.
 	%% This is needed because atomreplacement takes place in
 	%% termlit_struct, which takes flterm's.
 	flprologlib_call(SensCall,SensFLtermCall),
-	compile_body_literal(SensFLtermCall,SensCode,S1),
+	prepend_two_anon_args_to_flterm(SensFLtermCall,SensFLtermCall2),
+	compile_body_literal(SensFLtermCall2,SensCode,S1),
 	(no_errors_found(S1) -> compile_body_literal(DelayCond,DelayCode,S2)
 	; S2 = S1
 	),
 	(no_errors_found(S2) ->
 	    %% record symbol as sensor symbol, for error checking
-	    SensArity2 is SensArity-2,
 	    flprologlib_functor(SensCall,SensFunct),
-	    verify_symbol_context(SensFunct,SensArity2,
+	    verify_symbol_context(SensFunct,SensArity,
 				  SENSOR_SYMBOL,NONTRANSACTIONAL_SYMBOL,
 				  Status)
 	; Status = S2
@@ -2928,7 +2957,7 @@ compile_sensor_direct(SensCall,DelayCond,Code,Status) :-
 	report_option(FLSYSLIB(FLLIBSENSOR),NO_INDEX),
 	prologterm_struct(flora_register_sensor,2,
 			  [SensCode,DelayCode],FLDELAYSUPPORTMOD,Code),
-	clear_context(compiling_sensor_directive(SensName,SensArity)).
+	clear_context(compiling_sensor_directive(SensName,SensArity2)).
 	
 
 
@@ -3394,7 +3423,6 @@ new_udf_predicate(Name,N,OrigArgs,Args,NewPredicateCode,NewPredicateOrigArgs,NPN
 	NPN is N+1,
 	flterm_struct(NPFunct,NPN,NPArgs,NewPredicateCode),
 	flterm_struct(NPFunct,NPN,NPOrigArgs,NewPredicateOrigArgs),
-	%%flora_define_prolog(NPName,NPN).
 	flora_define_modular_prolog(NPName,NPN).
 
 new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody):-
@@ -4556,7 +4584,11 @@ verify_symbol_context(Funct,Arity,_WS,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,[
 
 verify_symbol_context(Funct,Arity,_WS,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,[]):-
 	flora_get_flatomvar_name(Funct,Name),
-	has_context(compiling_sensor_directive(Name,Arity)),
+	(has_context(compiling_sensor_directive(Name,Arity))
+	;
+	    Arity2 is Arity-2,
+	    has_permaoption(defsensor(Name,Arity2))
+	),
 	!.
 
 %% do not check workspace for function symbols
@@ -4831,7 +4863,8 @@ make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,U
 			      Err),
 	    ContextStatus=[Err]
 	; UsedContext==PROLOG_SYMBOL,
-	    (UsedArity\=SymbolArity
+	    %% prolog symbol that comes from a sensor has 2 more args: file+line
+	    (UsedArity=\=SymbolArity
 	    -> compiling_warning(SymbolIndex,
 				 [ERROR_SENSOR_PROLOG_SYMBOL,ERRLINE_NO,
 				  UsedLine,UsedFileMsg],
@@ -5151,8 +5184,8 @@ clearUDFVarSubstitute(Nesting) :-
 %% Terms declared with :- usesensor are treated here
 compile_fltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) :-
 	is_flatom(Funct, FAtom, FunctIdx),
-	(has_permaoption(sensor(FAtom,N))
-	; has_permaoption(sensor((FAtom,PlMod),N))
+	(has_permaoption(usesensor(FAtom,N))
+	; has_permaoption(usesensor((FAtom,PlMod),N))
 	; compiling_flrshell_command,
 	    (flora_delayed_sensor_literal(FAtom,N,FLORA_DEFAULT_WORKSPACE)
 	    ; flora_delayed_sensor_literal((FAtom,PlMod),N,
@@ -8920,7 +8953,7 @@ compile_fldynrule(_Op,R,RCode,Status) :-
 	Status=[].
 
 %% Note: prolog-headed rules (declared as :- prolog), including sensors,
-%%       are not allowed to be dynamic in Flora-2.
+%%       are not allowed to be dynamic in FLORA-2.
 compile_fldynrule(Op,R,RCode,Status) :-
 	is_fldynrule(R,Head,Body,Label),
         set_context(compile_with_var_module),
@@ -9206,7 +9239,7 @@ compile_execdirect(DirectTerm,WS,Code,Status) :-
 	    Status = []
 
 	; is_flsensordirect(DirectTerm,SensCall,DelayCond) ->
-	    compile_sensor_direct(SensCall,DelayCond,Direct,Status),
+	    compile_defsensor_direct(SensCall,DelayCond,Direct,Status),
 	    directive_struct(Direct,Code)
 
 	%% This runtime usesensor directive enables to use sensors in the shell
@@ -9443,7 +9476,7 @@ is_defined_as_sensor(Head) :-
 	prologterm_atom_arity(Head,Funct,Arity),
 	is_pratom(Funct,Atom,_),
 	!,
-	has_permaoption(sensor(Atom,Arity)).
+	has_permaoption(usesensor(Atom,Arity)).
 
 %% Code that generates a prolog liblit with a given name.
 %% **** This is PR code that goes to the coder.
@@ -9657,6 +9690,10 @@ maplist(Pred,[X|Rest],[Y|MapRest]) :-
 	arg(1,PredNew,X),
 	arg(2,PredNew,Y),
 	call(PredNew),
+	!,
+	maplist(Pred,Rest,MapRest).
+%% if call(PredNew) fails, skip the item
+maplist(Pred,[_|Rest],MapRest) :-
 	maplist(Pred,Rest,MapRest).
 
 %% This replaces atoms with scrambled or modularized atoms
@@ -9718,3 +9755,9 @@ term_to_prologterm_struct(Term,PTermStruct) :-
 	N1 is N+1,
 	append(Args,[ThisMod],Args1), %% add curent module
 	prologterm_struct(Funct,N1,Args1,PTermStruct).
+
+prepend_two_anon_args_to_flterm(FlTerm,OutFlTerm) :-
+	is_flterm(FlTerm,Funct,N,Args),
+	is_anonymous_flvariable(AnonArg,NO_INDEX),
+	N2 is N+2,
+	is_flterm(OutFlTerm,Funct,N2,[AnonArg,AnonArg|Args]).

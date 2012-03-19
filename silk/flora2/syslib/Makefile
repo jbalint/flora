@@ -64,6 +64,7 @@ ALLOBJS = flranswer$(OBJEXT) \
 	  flrhypothetical$(OBJEXT) \
 	  flrcheckcard$(OBJEXT) \
 	  flrunify_handlers$(OBJEXT) \
+	  flrtesting$(OBJEXT) \
 	  flrprefixdef$(OBJEXT)
 
 FLORA_INCLUDES_DIR = ../flrincludes
