@@ -8010,7 +8010,7 @@ hard-to-find error is likely to creep up into the user program.\footnote{
 \index{sensor}
 %%
 Sometimes it is useful to define predicates that have fixed
-invocation patterns: requirements that certain arguments must be
+invocation patterns: the requirements that certain arguments must be
 bound (non-variable) or be ground.
 \FLORA provides special support for this kind of predicates, which are
 called \textbf{\emph{sensors}}. Namely, if a predicate is registered as a
@@ -8030,86 +8030,122 @@ The overall scenario for sensor use is as follows:
   \index{defsensor directive}
   \index{directive!defsensor}
 \item  Sensors are \emph{used} and \emph{defined} in separate files.
+  Sensors must also be \emph{declared}. 
   Declaration is done via the
-  \texttt{defsensor} directive and they are defined via rules.
+  \texttt{defsensor} directive; definitions are done by means of the
+  regular rules.
 \item
-  Sensors can be defined in \texttt{.P} files
-  using the Prolog syntax (Type 1 sensors)  or in
-  \texttt{.flr} files using the \FLORA syntax (Type 2 sensors). 
+  A sensors can be defined in a \texttt{.P} file
+  using the Prolog syntax (P-sensors)  or in
+  \texttt{.flr} files using the \FLORA syntax (F-sensors). 
   Accordingly,
   two different directives are provided.
   Usually all sensor declarations are collected in one \texttt{.flr}
   file, which should be loaded into a separate \FLORA module. That
   \texttt{.flr} file 
-  will also contain the rules that define Type 2 sensors. 
+  should also contain the rules that define F-sensors. 
 \item 
   \FLORA files containing sensor definitions \emph{cannot} be added to
   another \FLORA module (e.g., loaded 
   using the \texttt{\_add} command).
 \item
   There are no restrictions on how sensors are to be defined. For instance,
-  they can be recursive. However, there are certain conventions to abide by.
+  they can be recursive. However, there are certain conventions to abide by
+  for P-sensors.
   \index{usesensor directive}
   \index{directive!usesensor}
-\item  Sensors are \emph{used} in modules other than those where they
-  are defined. To use a sensor, it has to be declared with the
-  \texttt{usesensor} directive.
+\item  Sensors are \emph{used} in modules \emph{other} than those where they
+  are defined. To \emph{use} a sensor in a file, it has to be declared
+  in that file with the \texttt{usesensor} directive.
 \item \FLORA also provides executable versions of the directives 
   \texttt{defsensor} and \texttt{usesensor}.  
 \end{itemize}
 %% 
 
 
+\paragraph{Declaring a sensor.}
 There are two forms of the \texttt{defsensor} directive. The first is used for
-Type 1 sensors (defined in \texttt{.P} files); the second is used for Type
-2 sensors, which are defined using \FLORA syntax in \texttt{.flr} files.   
+P-sensors (defined in \texttt{.P} files in Prolog); the second is used for
+F-sensors (defined using \FLORA syntax in \texttt{.flr} files).
 %% 
 \begin{verbatim}
-:- defsensor(sens1(?Y,?X), sensorfoo, (nonvar(?X),ground(?Y))).
-:- defsensor(sens2(?Y,?X), (ground(?X),ground(?Y))).
+:- defsensor(sens1(?Y,?X), sensorfoo, (nonvar(?X),ground(?Y))). // P-sensor
+:- defsensor(sens2(?Y,?X), (ground(?X),ground(?Y))).            // F-sensor
 \end{verbatim}
 %% 
-The first argument shows a sensor invocation template.  The last argument
-is a \emph{guard}: a Boolean expression consisting of \texttt{nonvar/1} and
+The first argument is a sensor invocation template.  The last argument
+is a \emph{guard}: a Boolean combination of \texttt{nonvar/1} and
 \texttt{ground/1} predicates applied to the input variables of the
 sensor. The sensor will be \emph{delayed} by the \FLORA engine until the
 guard is satisfied (or until the engine determines that the guard cannot be
 satisfied).
 
-In the first \texttt{defsensor} directive, the middle argument is the name of the
-Prolog module in which the Prolog sensor is defined. 
-In our case, \texttt{sens1} is declared as a sensor defined by 
-rules in the Prolog module \texttt{sensorfoo}. In that case, \FLORA
+In the first \texttt{defsensor} directive, which applies only to P-sensors,
+the middle argument is the name
+of the Prolog module in which the P-sensor is defined. 
+In our case, \texttt{sens1} is declared as a P-sensor
+in the Prolog module \texttt{sensorfoo}. In that case, \FLORA
 will expect those rules to be in a file named \texttt{sensorfoo.P}
-and that file should be found somewhere on the \FLORA load path.
+and that file should be found somewhere on the \FLORA search path (e.g., in
+the current directory).
 
-From the perspective of the \emph{user} of a sensor,
-the above sensors are binary predicates. However, 
-from the perspective of the \emph{developer} of a sensor, sensors have two
-additional ``hidden'' arguments. These arguments 
+\paragraph{Defining an F-sensor.}
+The F-sensor \texttt{sens2} above is declared using a
+two-argument \texttt{defsensor}  directive, so its definition is expected to be in a
+\texttt{.flr} file and then loaded into a separate \FLORA module.
+Here is an example of such a definition:
+%% 
+\begin{verbatim}
+   sens2(abc,cde) :- !, %writeln(details=_?F+_?L)@_io.
+   sens2(?X,?Y) :-
+        if \+ground(?X) // only ?X must be ground
+        then
+           %abort(['In file ', _?F, ', line ', _?L, ': ',
+                   'Instantiation error in arg 3 in sens2'])@_sys,
+        ?Y is ?X/2,
+        writeln(Y=?Y)@_prolog,
+        sens2(abc,cde).
+\end{verbatim}
+%%
+The above rules are quite standard except for the special tokens
+\texttt{\_?F} and \texttt{\_?L}. When these tokens occur in the body of a
+sensor definition, \texttt{\_?F} is replaced with the file name from which
+the sensor was called; the token \texttt{\_?L} is replaced with the line
+number in the file where the call to the sensor occurred.
+A typical use of these tokens is to report errors or issue warnings in case
+the sensor guard is not satisfied at the time the sensor is called, as
+illustrated in the above example.
+
+\paragraph{Defining an P-sensor.}
+From the perspective of the \emph{user}, the above P-sensor
+\texttt{sens1} is
+a binary predicate. However, 
+from the perspective of the \emph{developer}, a P-sensor has two
+``hidden'' extra arguments. These arguments 
 are automatically prepended by the compiler to the list of the arguments
 that the user specified in a \texttt{defsensor} directive. 
 
-In any actual call to a sensor, the first argument will be \emph{always}
-bound (at compile time) to the
-file in which the sensor is used (note: the file where the sensor is
-used, not where it is defined) and the second 
+In any actual call (in a .flr file) to a P-sensor, the first argument will
+\emph{always} be bound (at compile time) to the
+file in which the sensor is used and the second 
 argument will be bound to the line number
 on which the call to the sensor occurs.
-This is useful in case the sensor needs to issue an error
-message to enable the user to quickly locate the offending call. 
-Thus, in the actual rules that define sensors,
-the first two arguments  of the sensors must be
-variables.
-The remaining arguments are up to the developer of the sensor's rules.
+This is done in order to make it possible to program the sensors so that they
+would issue useful runtime errors to
+enable the user to quickly locate the offending call. 
+Thus, in the actual rules that define a P-sensor,
+the first two arguments to the sensor must be distinct variables, and this
+is the responsibility of the P-sensor developer.
+The remaining arguments are up to the developer to choose.
 
-The upshot of the above is that,
-to define \texttt{sens1} and \texttt{sens2}, one usees
-predicates of arity 4, not 2.  
+The upshot of the above is that
+to define \texttt{sens1} one uses
+a predicate of arity 4, not 2.  
 Here is an example of a definition for \texttt{sens1} in a Prolog file
 \texttt{sensorfoo.P}. As we have just
 explained, the actual predicate to be defined here must be \texttt{sens1}
-and its first two arguments are reserved for file names and line numbers
+and its first two arguments must be distinct variables 
+reserved for file names and line numbers
 (Prolog variables \texttt{F} and \texttt{L}).  
 %% 
 \begin{verbatim}
@@ -8117,43 +8153,25 @@ and its first two arguments are reserved for file names and line numbers
    sens1(F,L,X,Y) :-
         (var(X)       // X must be nonvar
         ->  abort(['In file ', F, ', line ', L, ': ',
-                   'Instantiation error in arg 3 in in sens1/4'])
+                   'Instantiation error in arg 1 in in sens1/2'])
         ; \+ground(Y) // Y must be ground
         ->  abort(['In file ', F, ', line ', L, ': ',
-                    'Instantiation error in arg 4 in sens1/4'])
+                    'Instantiation error in arg 2 in sens1/2'])
         ),
         Z is X+Y,
         writeln(z=Z).
 \end{verbatim}
-%% 
-
-The sensor \texttt{sens2} 
-is declared using a
-two-argument sensor-directive, so its definition is expected to be in a
-\texttt{.flr} file and then loaded into a separate \FLORA module. As before, the actual predicate to be defined must
-have 4 arguments:
-%% 
-\begin{verbatim}
-   sens2(?F,?L,abc,cde) :- !, %writeln(details=?F+?L)@_io.
-   sens2(?F,?L,?X,?Y) :-
-        if \+ground(?X) // only ?X must be ground
-        then
-           %abort(['In file ', ?F, ', line ', ?L, ': ',
-                   'Instantiation error in arg 3 in sens2'])@_sys,
-        ?Y is ?X/2,
-        writeln(Y=?Y)@_prolog,
-        sens2(?F,?L,abc,cde).
-\end{verbatim}
 %%
-The last line in the above definition
-emphasizes the fact
-that in a sensor definition for \texttt{sens2} the
-sensor developer must be aware of the hidden arguments, so the recursive
-call to \texttt{sens2}
-must have 4 arguments.
-However, when sensors are
-used in \emph{other} \FLORA modules, they must be referred to without the
-hidden file/line arguments. They also must be declared using the
+
+It should be noted that F-sensors are also internally represented by
+predicates that have two extra arguments. However, the transformations that
+add these arguments are done by the \FLORA compiler completely
+transparently to both the users and the developers of F-sensors.
+
+\paragraph{Using a sensor.}
+When sensors are
+used in \FLORA modules (which are different from the modules where the
+sensors are defined), they must be declared using the
 \texttt{usesensor} directive.  For instance,
 %% 
 \begin{verbatim}
@@ -8161,13 +8179,6 @@ hidden file/line arguments. They also must be declared using the
    ?- sens1(?X,?Y), ?X=123, ?Y=aaaaa, sens2(?X,?Y), ?Y=345, ?X=bbbbb.
 \end{verbatim}
 %% 
-Note: there should be no
-\texttt{@\_prolog} specification: the
-compiler knows how to properly render sensor calls. 
-
-{\bf Unimplemented}: In the future, sensor definitions will have the same
-number of arguments as sensor declarations. The extra arguments will be
-added by the compiler.
 
 Note that if the definition of a sensor is recursive, tabling might be
 needed in order to ensure termination. In a \texttt{.P} file, this is done
@@ -8179,10 +8190,17 @@ directive for sensors defined in \texttt{.flr} files:
    :- table sens2/2.
 \end{verbatim}
 %% 
-This directive is to be placed in the file that contains the rules defining
+This directive is to be placed in the file that contains the rules \emph{defining}
 the sensor and the number of arguments must match the number used in the
-sensor declaration (i.e., two in our case, not four).
+F-sensor declaration.
 It must come \emph{after} the \texttt{defsensor} directive.  
+For P-sensors, the arity must match the number of arguments used in the
+sensor definition, i.e.,
+%% 
+\begin{verbatim}
+   :- table sens1/4.
+\end{verbatim}
+%% 
 
 
 Sensors are viewed as low-level non-logical predicates, analogous to
