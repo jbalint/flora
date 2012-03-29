@@ -58,7 +58,7 @@
 :- import
 	%%flora_define_prolog/1,
 	flora_define_prolog/2,
-	flora_define_prolog/3,
+	%%flora_define_prolog/3,
 	flora_define_modular_prolog/2,
 	flora_prlgdef_repl/4,
 	flora_modular_prlgdef/2,

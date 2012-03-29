@@ -37,6 +37,9 @@
 #define  FLORA_HEADLIT_CALLER_ARGS_VAR_NAME  '_CallerModuleArgsVar'
 #define  FLORA_DYNRULE_HEADLIT_CALLER_INFOVAR_NAME  '_DynRuleCallerInfoVar'
 
+#define  FLORA_FILE_VAR_NAME  '_FileNameVar'
+#define  FLORA_LINE_VAR_NAME  '_LineNumberVar'
+
 
 /****************************************************************************
   utilities
@@ -222,6 +225,9 @@ is_prnewpred(PRNEWPRED(Name,_N,Vars),Name,Vars).
 
 %% with textual information
 is_prnewoid(PRNEWOID(Oid,I),Oid,I).
+
+%% _?F, _?L
+is_prspecialvar(PRSPECIALVAR(Type),Type).
 
 
 %% is_flogic/4 is dynamic & indexed on 1+2 (in flrcoder.H) to make things faster
@@ -799,6 +805,15 @@ flora_write_struct(Term,_Context,[]) :-
 	!,
 	flora_write_atom(FLORA_DYNRULE_HEADLIT_CALLER_INFOVAR_NAME).
 
+flora_write_struct(Term,_Context,[]) :-
+	is_prspecialvar(Term,Type),
+	!,
+	(Type == FL_SPECIAL_FILE_TOKEN
+	-> flora_write_atom(FLORA_FILE_VAR_NAME)
+	; Type == FL_SPECIAL_LINE_TOKEN
+	-> flora_write_atom(FLORA_LINE_VAR_NAME)
+	).
+
 flora_write_struct(Term,_Context,Status) :-
 	is_prreify(Term,Term1),
 	!,
@@ -1254,8 +1269,8 @@ coder_write_syslib(Lib,N,Args,Context,Status) :-
 	    %% 'prolog' and use it as p@? then this might be triggered
 	    %% but is not supposed to happen, since the compiler should
 	    %% ignore the module in this case
-	    flrprint:flora_error_line('[Coder] internal error: unexpected construct ~w passed as FLORA-2 library call', [P]),
-	    flrutils:flora_abort('', FLORA_SILENT_ABORT)
+	    flora_error_line('[Coder] internal error: unexpected construct ~w passed as FLORA-2 library call', [P]),
+	    flora_abort('', FLORA_SILENT_ABORT)
 	),
 	!,
 	( Lib == FLLIBMODLIT ->
@@ -1298,8 +1313,8 @@ coder_write_syslib(Lib,N,Args,Context,Status) :-
 	    %% 'prolog' and use it as p@? then this might be triggered
 	    %% but is not supposed to happen, since the compiler should
 	    %% ignore the module in this case
-	    flrprint:flora_error_line('[Coder] internal error: unexpected construct ~w passed as FLORA-2 library call', [P]),
-	    flrutils:flora_abort('', FLORA_SILENT_ABORT)
+	    flora_error_line('[Coder] internal error: unexpected construct ~w passed as FLORA-2 library call', [P]),
+	    flora_abort('', FLORA_SILENT_ABORT)
 	),
 	!,
 	negate_wrapper(Wrap,NegWrap),
@@ -1949,6 +1964,10 @@ flora_build_struct(Term,_DWS,_Context,_VarList,Code,(_V,NO_INDEX),[]) :-
 flora_build_struct(Term,DWS,_Context,_VarList,DWS,(DWS,NO_INDEX),[]) :-
 	is_prthismodule(Term),
 	!.
+
+%% this is used only for dependency checking, so the code does not matter
+flora_build_struct(Term,_DWS,_Context,_VarList,_Code,(_V,NO_INDEX),[]) :-
+	is_prspecialvar(Term,_Type).
 
 flora_build_struct(Term,DWS,_Context,_VarList,Code,(Code,NO_INDEX),[]) :-
 	is_prthisfdbstorage(Term),

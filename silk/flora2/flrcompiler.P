@@ -300,7 +300,8 @@ is_fltransactionalnumber(FLTRANSACTIONALNUMBER(Number,_I),Number).
 is_flstring(FLSTRING(String,_I),String).
 is_fltransactionalstring(FLTRANSACTIONALSTRING(String,_I),String).
 is_fltoken(FLTOKEN(Token,I),Token,I).
-is_fltoken(FLTOKEN(Token,Num,I),Token,Num,I).
+%% this can be _#Number or _?Letter
+is_fltoken(FLTOKEN(Token,Suffix,I),Token,Suffix,I).
 
 is_fldatatype(FLDATATYPE(Sort,Literal,Index),Sort,Literal,Index).
 is_fltransactionaldatatype(FLTRANSACTIONALPREDSPEC(FLDATATYPE(Sort,Literal,Index)),Sort,Literal,Index).
@@ -354,7 +355,7 @@ approx_flindex(FLTRANSACTIONALNUMBER(_N,I),I)  :- !.
 approx_flindex(FLSTRING(_String,I),I)          :- !.
 approx_flindex(FLTRANSACTIONALSTRING(_S,I),I)  :- !.
 approx_flindex(FLTOKEN(_Token,I),I)            :- !.
-approx_flindex(FLTOKEN(_Token,_Num,I),I)       :- !.
+approx_flindex(FLTOKEN(_Token,_Suffix,I),I)    :- !.
 approx_flindex(FLVAR(_Name,I),I)               :- !.
 approx_flindex(FLTRANSACTIONALVAR(_Var,I),I)   :- !.
 approx_flindex(FLLIST(_List,_T,I),I)           :- !.
@@ -869,6 +870,7 @@ builtin_identifier_struct(FLBUILTIN_IDENTIFIER(Builtin,I),
 
 newoid_struct(Oid,Index,PRNEWOID(Oid,Index)).
 cut_struct(Index,PRCUT(Index)).
+special_variable_struct(Type,PRSPECIALVAR(Type)).
 
 list_struct(List,Term,Index,PRLIST(List,Term,Index)).
 list_struct(List,Term,PRLIST(List,Term,NO_INDEX)).
@@ -992,7 +994,11 @@ termlit_struct(_Context,FObj,N,ObjList,Code) :-
 	(is_pratom(FObj,AtomName)
 	; is_prbuiltin_identifier(FObj,AtomName)
 	),
-	(has_permaoption(atomreplacement(AtomName,N,_)) ->
+	( has_permaoption(defsensor(AtomName,N)) ->
+	    compile_sensor_literal(_,FObj,N,ObjList,Code)
+	; has_permaoption(defsensor(AtomName,N,PrlgModName)) ->
+	    compile_sensor_literal(PrlgModName,FObj,N,ObjList,Code)
+	; has_permaoption(atomreplacement(AtomName,N,_)) ->
 	    termlit_replacement(FObj,N,NewFObj),
 	    prologterm_struct(NewFObj,N,ObjList,Code)
 	; flora_prlgdef(AtomName,N) ->
@@ -1840,7 +1846,7 @@ collect_flvars(ParserTerm,Vars,Vars) :-
 	  is_fltransactionalnumber(ParserTerm,_Number);
 	  is_fltransactionalstring(ParserTerm,_String);
 	  is_fltoken(ParserTerm,_Token,_I);
-	  is_fltoken(ParserTerm,_Token,_Num,_I) 
+	  is_fltoken(ParserTerm,_Token,_Suffix,_I) 
         ),
 	!.
 
@@ -2926,22 +2932,23 @@ compile_defsensor_direct(SensCall,DelayCond,Code,Status) :-
 	%% sensor defined in a .flr file: declare it as prolog
 	->
 	    flora_scramble_atom(SensName,SensNameWithFloraPrefix),
-	    SensArity2 is SensArity+2,
-	    set_permaoption(atomreplacement(SensName,SensArity2,SensNameWithFloraPrefix)),
+	    set_permaoption(atomreplacement(SensName,SensArity,SensNameWithFloraPrefix)),
 	    %% temporarily record as sensor
 	    set_permaoption(defsensor(SensName,SensArity))
 	; flprologlib_atom_arity_mod(SensCall,SensName,SensArity,ModName),
-	    SensArity2 is SensArity+2,
 	    %% sensor defined in a prolog module
-	    flora_define_prolog(SensName,SensArity2,ModName)
+	    %%SensArity2 is SensArity+2,
+	    set_permaoption(defsensor(SensName,SensArity,ModName))
+	    %%flora_define_prolog(SensName,SensArity2,ModName)
 	),
-	set_context(compiling_sensor_directive(SensName,SensArity2)),
+	set_context(compiling_sensor_directive(SensName,SensArity)),
 	%% flprologlib_call converts flplib into flterm.
 	%% This is needed because atomreplacement takes place in
 	%% termlit_struct, which takes flterm's.
 	flprologlib_call(SensCall,SensFLtermCall),
-	prepend_two_anon_args_to_flterm(SensFLtermCall,SensFLtermCall2),
-	compile_body_literal(SensFLtermCall2,SensCode,S1),
+	%%prepend_two_anon_args_to_flterm(SensFLtermCall,SensFLtermCall2),
+	%%compile_body_literal(SensFLtermCall2,SensCode,S1),
+	compile_body_literal(SensFLtermCall,SensCode,S1),
 	(no_errors_found(S1) -> compile_body_literal(DelayCond,DelayCode,S2)
 	; S2 = S1
 	),
@@ -2957,7 +2964,7 @@ compile_defsensor_direct(SensCall,DelayCond,Code,Status) :-
 	report_option(FLSYSLIB(FLLIBSENSOR),NO_INDEX),
 	prologterm_struct(flora_register_sensor,2,
 			  [SensCode,DelayCode],FLDELAYSUPPORTMOD,Code),
-	clear_context(compiling_sensor_directive(SensName,SensArity2)).
+	clear_context(compiling_sensor_directive(SensName,SensArity)).
 	
 
 
@@ -4394,8 +4401,11 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    transactionalatomobj_struct(ParserTerm,Object)
 
 	; is_fltoken(ParserTerm,FL_THISMODULE,_Index) ->
+	    /*
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
+	    */
+	    Status = [],
 	    BodyHeadList=[],
 	    thismodule_struct(Object)
 
@@ -4407,6 +4417,7 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
+	    Status = [],
 	    BodyHeadList=[],
 	    new_oidobj(Index,Object)
 
@@ -4417,9 +4428,21 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
+	    Status = [],
 	    BodyHeadList=[],
 	    flora_get_counter(RULE_NUM, Rule_num), 
 	    new_oidobj(Rule_num,Num,Index,Object)
+
+	; is_fltoken(ParserTerm,FL_SPECIAL_VAR_TOKEN,Suffix,Index) ->
+	    (memberchk(Suffix, [FL_SPECIAL_FILE_TOKEN,FL_SPECIAL_LINE_TOKEN])
+	    ->
+		Status = [],
+		BodyHeadList=[],
+		special_variable_struct(Suffix,Object)
+	    ; 
+		compiling_error(Index,UNSUPPORTED_SPECIAL_TOKEN,TokenErr),
+		Status = [TokenErr]
+	    )
 
 	; (is_flnumber(ParserTerm,_N) ; number(ParserTerm)) ->
 	    BodyHeadList=[],
@@ -4586,8 +4609,7 @@ verify_symbol_context(Funct,Arity,_WS,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,[
 	flora_get_flatomvar_name(Funct,Name),
 	(has_context(compiling_sensor_directive(Name,Arity))
 	;
-	    Arity2 is Arity-2,
-	    has_permaoption(defsensor(Name,Arity2))
+	    has_permaoption(defsensor(Name,Arity))
 	),
 	!.
 
@@ -4761,18 +4783,21 @@ make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,U
 			       UsedLine,UsedFileMsg],
 			      Err),
 	    ContextStatus=[Err]
-	; UsedContext==SENSOR_SYMBOL, UsedArity==SymbolArity ->
-	    (\+compiling_flrshell_command ->
-		compiling_error(SymbolIndex,
-				[ERROR_PREDICATE_SENS_SYMBOL,ERRLINE_NO,
-				 UsedLine,UsedFileMsg],
-				Err),
-		ContextStatus=[Err]
-	    %% do not issue error if querying interactively
-	    ; ContextStatus = []
-	    )
+	; UsedContext==SENSOR_SYMBOL, UsedArity==SymbolArity,
+	    \+compiling_flrshell_command ->
+	    compiling_error(SymbolIndex,
+			    [ERROR_PREDICATE_SENS_SYMBOL,ERRLINE_NO,
+			     UsedLine,UsedFileMsg],
+			    Err),
+	    ContextStatus=[Err]
+	; UsedContext==SENSOR_SYMBOL, \+compiling_flrshell_command ->
+	    compiling_warning(SymbolIndex,
+			      [ERROR_PREDICATE_SENS_SYMBOL,ERRLINE_NO,
+			      UsedLine,UsedFileMsg],
+			      Err),
+	    ContextStatus=[Err]
 	;
-		ContextStatus=[]
+	    ContextStatus=[]
 	),
 	!.
 
@@ -9756,8 +9781,24 @@ term_to_prologterm_struct(Term,PTermStruct) :-
 	append(Args,[ThisMod],Args1), %% add curent module
 	prologterm_struct(Funct,N1,Args1,PTermStruct).
 
+%% compile sensor literals in the file where defsensor is specified.
+%% these literals get 2 arguments prepended
+compile_sensor_literal(PrlgModName,FObj,N,ArgList,Code) :-
+	special_variable_struct(FL_SPECIAL_FILE_TOKEN,FileVariableCode),
+	special_variable_struct(FL_SPECIAL_LINE_TOKEN,LineVariableCode),
+	NewArgList = [FileVariableCode,LineVariableCode|ArgList],
+	termlit_replacement(FObj,N,NewFObj),
+	SensArity2 is N+2,
+	(var(PrlgModName) ->
+	    prologterm_struct(NewFObj,SensArity2,NewArgList,Code)
+	;
+	    prologterm_struct(NewFObj,SensArity2,NewArgList,PrlgModName,Code)
+	).
+
+/*
 prepend_two_anon_args_to_flterm(FlTerm,OutFlTerm) :-
 	is_flterm(FlTerm,Funct,N,Args),
 	is_anonymous_flvariable(AnonArg,NO_INDEX),
 	N2 is N+2,
 	is_flterm(OutFlTerm,Funct,N2,[AnonArg,AnonArg|Args]).
+*/

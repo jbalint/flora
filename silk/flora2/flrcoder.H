@@ -28,10 +28,14 @@
 :- import term_to_atom/3 from string.
 
 :- import
+	%%flora_abort/1,
+	flora_abort/2,
 	flora_write_quoted_atom/1,
 	flora_write_atom/1,
 	flora_concat_atoms/2
    from flrporting.
+
+:- import flora_error_line/2 from flrprint.
 
 :- import
 	negate_wrapper/2,
