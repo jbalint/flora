@@ -737,7 +737,8 @@ see_operand(OPRND(X),_TS,_OS,N,O,_Term,_Status) :-
 ***************************************************************************/
 see_infix(OPRND(O),TS,OS,N,S,L,R,P,Term,Status) :-
 	!,
-	solve_infix([OPRND(O)|TS],OS,N,S,L,R,P,Term,Status).
+	get_indexing_tag(OS,IndexTag),
+	solve_infix(IndexTag,[OPRND(O)|TS],OS,N,S,L,R,P,Term,Status).
 
 see_infix(SUFOP(_S1,_A,P1,N1),TS,OS,N2,S2,L,R,P2,Term,Status) :-
 	!,
@@ -749,7 +750,8 @@ see_infix(SUFOP(_S1,_A,P1,N1),TS,OS,N2,S2,L,R,P2,Term,Status) :-
 	    report_error(N1,N2,WRONG_ASSOCIATE),
 	    fail
 	;
-	  solve_infix(TS,OS,N2,S2,L,R,P2,Term,Status)
+	    get_indexing_tag(OS,IndexTag),
+	    solve_infix(IndexTag,TS,OS,N2,S2,L,R,P2,Term,Status)
         ).
 
 see_infix(BRACE(_B,_I),_TS,_OS,N,_O,_L,_R,_P,_Term,_Status) :-
@@ -832,7 +834,8 @@ see_prefix(SUFOP(_S1,_A1,_P1,_N1),_TS,_OS,N2,_S2,_A2,_P2,_Term,_Status) :-
 ***************************************************************************/
 see_suffix(OPRND(O),TS,OS,N,S,A,P,Term,Status) :-
 	!,
-	solve_suffix([OPRND(O)|TS],OS,N,S,A,P,Term,Status).
+	get_indexing_tag(OS,IndexTag),
+	solve_suffix(IndexTag,[OPRND(O)|TS],OS,N,S,A,P,Term,Status).
 
 see_suffix(SUFOP(_S1,_A1,P1,N1),TS,OS,N2,S2,A2,P2,Term,Status) :-
 	!,
@@ -844,7 +847,8 @@ see_suffix(SUFOP(_S1,_A1,P1,N1),TS,OS,N2,S2,A2,P2,Term,Status) :-
 	    report_error(N1,N2,WRONG_ASSOCIATE),
 	    fail
 	;
-	  solve_suffix(TS,OS,N2,S2,A2,P2,Term,Status)
+	    get_indexing_tag(OS,IndexTag),
+	    solve_suffix(IndexTag,TS,OS,N2,S2,A2,P2,Term,Status)
         ).
 
 see_suffix(BRACE(_B,_I),_TS,_OS,N,_S,_A,_P,_Term,_Status) :-
@@ -906,15 +910,17 @@ see_left(SUFOP(_S,_A,_P,_I),_TS,_OS,N,_B,_Term,_Status) :-
 ***************************************************************************/
 see_right(OPRND(O),TS,OS,N,B,Term,Status) :-
 	!,
-	solve_right([OPRND(O)|TS],OS,N,B,Term,Status).
+	get_indexing_tag(OS,IndexTag),
+	solve_right(IndexTag,[OPRND(O)|TS],OS,N,B,Term,Status).
 
 see_right(BRACE(B1,N1),TS,OS,N2,B2,Term,Status) :-
 	!,
-	solve_right([BRACE(B1,N1)|TS],[BRACE(B1,N1)|OS],N2,B2,Term,Status).
+	solve_right(BRACE,[BRACE(B1,N1)|TS],[BRACE(B1,N1)|OS],N2,B2,Term,Status).
 
 see_right(SUFOP(_O,_A,_P,_I),TS,OS,N,B,Term,Status) :-
 	!,
-	solve_right(TS,OS,N,B,Term,Status).
+	get_indexing_tag(OS,IndexTag),
+	solve_right(IndexTag,TS,OS,N,B,Term,Status).
 
 see_right(INFOP(_S,_L,_R,_P,_I),_TS,_OS,N,_B,_Term,_Status) :-
 	!,
@@ -938,11 +944,13 @@ see_right(NULL,[],[],N,_B,_Term,_Status) :-
 ***************************************************************************/
 see_end(OPRND(O),TS,OS,N,Term,Status) :-
 	!,
-	solve_end([OPRND(O)|TS],OS,N,Term,Status).
+	get_indexing_tag(OS,IndexTag),
+	solve_end(IndexTag,[OPRND(O)|TS],OS,N,Term,Status).
 
 see_end(SUFOP(_S,_A,_P,_I),TS,OS,N,Term,Status) :-
 	!,
-	solve_end(TS,OS,N,Term,Status).
+	get_indexing_tag(OS,IndexTag),
+	solve_end(IndexTag,TS,OS,N,Term,Status).
 
 see_end(BRACE(_B,_I),_TS,_OS,N,_Term,_Status) :-
 	!,
@@ -966,33 +974,35 @@ see_end(NULL,[],[],N,_Term,_Status) :-
 
 
 /***************************************************************************
-  solve_infix(+TmStack,+OpStack,+N,+Operator,+L,+R,+P,-Term,-Status)
+  solve_infix(+IndexingTag,+TmStack,+OpStack,+N,+Operator,+L,+R,+P,-Term,-Status)
   is called when an infix operator that is just read results in solving
   the stacks.
+  IndexingTag is the functor of the first member in the 2nd argument list.
+  Used for better indexing.
 ***************************************************************************/
-%%:- index solve_infix/9-2.
-solve_infix(TS,[],N,O,L,R,P,Term,Status) :-
+solve_infix([],TS,[],N,O,L,R,P,Term,Status) :-
 	!,
 	flora_compose(INFOP(O,L,R,P,N),TS,[],N+1,Term,Status).
 
 %% catches the case when an infix operator binds rule descriptors, e.g., 
 %% @foo+bar rule  or  @foo,bar rule
 %% give an error in this case
-solve_infix(_,[marker(_,_)],N,_,_,_,_,_,_) :-
+solve_infix(marker,_,[marker(_,_)],N,_,_,_,_,_,_) :-
 	!,
 	report_error(N,UNEXP_OPERATOR),
 	fail.
 
-solve_infix(TS,[BRACE(B,I)|OS],N,O,L,R,P,Term,Status) :-
+solve_infix(BRACE,TS,[BRACE(B,I)|OS],N,O,L,R,P,Term,Status) :-
 	!,
 	flora_compose(INFOP(O,L,R,P,N),TS,[BRACE(B,I)|OS],N+1,Term,Status).
 
-solve_infix(TS,[INFOP(S1,L1,R1,P1,N1)|OS],N2,S2,L2,R2,P2,Term,Status) :-
+solve_infix(INFOP,TS,[INFOP(S1,L1,R1,P1,N1)|OS],N2,S2,L2,R2,P2,Term,Status) :-
 	!,
 	TS=[OPRND(O2),OPRND(O1)|Opnds],
 	( P1 < P2 ->
 	    infix_struct(S1,O1,O2,N1,T),
-	    solve_infix([OPRND(T)|Opnds],OS,N2,S2,L2,R2,P2,Term,Status)
+	    get_indexing_tag(OS,IndexTag),
+	    solve_infix(IndexTag,[OPRND(T)|Opnds],OS,N2,S2,L2,R2,P2,Term,Status)
 
         ; P1 == P2 ->
 	    ( L2 == y ->
@@ -1003,7 +1013,8 @@ solve_infix(TS,[INFOP(S1,L1,R1,P1,N1)|OS],N2,S2,L2,R2,P2,Term,Status) :-
 		  NewStatus=Status
 	        ),
 		infix_struct(S1,O1,O2,N1,T),
-		solve_infix([OPRND(T)|Opnds],OS,N2,S2,L2,R2,P2,Term,NewStatus)
+		get_indexing_tag(OS,IndexTag),
+		solve_infix(IndexTag,[OPRND(T)|Opnds],OS,N2,S2,L2,R2,P2,Term,NewStatus)
 
 	    ; R1 == x ->
 	        report_error(N1,N2,WRONG_ASSOCIATE),
@@ -1017,12 +1028,13 @@ solve_infix(TS,[INFOP(S1,L1,R1,P1,N1)|OS],N2,S2,L2,R2,P2,Term,Status) :-
 		        N2+1,Term,Status)
         ).
 
-solve_infix(TS,[PREOP(S1,A,P1,N1)|OS],N2,S2,L,R,P2,Term,Status) :-
+solve_infix(PREOP,TS,[PREOP(S1,A,P1,N1)|OS],N2,S2,L,R,P2,Term,Status) :-
 	!,
 	TS=[OPRND(O)|Opnds],
 	( P1 < P2 ->
 	    prefix_struct(S1,O,N1,T),
-	    solve_infix([OPRND(T)|Opnds],OS,N2,S2,L,R,P2,Term,Status)
+	    get_indexing_tag(OS,IndexTag),
+	    solve_infix(IndexTag,[OPRND(T)|Opnds],OS,N2,S2,L,R,P2,Term,Status)
 
         ; P1 == P2 ->
 	    ( L == y ->
@@ -1033,7 +1045,8 @@ solve_infix(TS,[PREOP(S1,A,P1,N1)|OS],N2,S2,L,R,P2,Term,Status) :-
 		  NewStatus=Status
 	        ),
 		prefix_struct(S1,O,N1,T),
-		solve_infix([OPRND(T)|Opnds],OS,N2,S2,L,R,P2,Term,NewStatus)
+		get_indexing_tag(OS,IndexTag),
+		solve_infix(IndexTag,[OPRND(T)|Opnds],OS,N2,S2,L,R,P2,Term,NewStatus)
 
 	    ; A == x ->
 	        report_error(N1,N2,WRONG_ASSOCIATE),
@@ -1049,26 +1062,29 @@ solve_infix(TS,[PREOP(S1,A,P1,N1)|OS],N2,S2,L,R,P2,Term,Status) :-
 
 
 /***************************************************************************
-  solve_suffix(+TmStack,+OpStack,+N,+Operator,+A,+P,-Term,-Status)
+  solve_suffix(+IndexingTag,+TmStack,+OpStack,+N,+Operator,+A,+P,-Term,-Status)
   is called when a suffix operator that is just read results in solving
   the stacks.
+  IndexingTag is the functor of the first member in the 2nd argument list.
+  Used for better indexing.
 ***************************************************************************/
-solve_suffix([OPRND(O)|TS],[],N,S,A,P,Term,Status) :-
+solve_suffix([],[OPRND(O)|TS],[],N,S,A,P,Term,Status) :-
 	!,
 	suffix_struct(S,O,N,T),
 	flora_compose(SUFOP(S,A,P,N),[OPRND(T)|TS],[],N+1,Term,Status).
 
-solve_suffix([OPRND(O)|TS],[BRACE(B,I)|OS],N,S,A,P,Term,Status) :-
+solve_suffix(BRACE,[OPRND(O)|TS],[BRACE(B,I)|OS],N,S,A,P,Term,Status) :-
 	!,
 	suffix_struct(S,O,N,T),
 	flora_compose(SUFOP(S,A,P,N),[OPRND(T)|TS],[BRACE(B,I)|OS],N+1,Term,Status).
 
-solve_suffix(TS,[INFOP(S1,L,R,P1,N1)|OS],N2,S2,A,P2,Term,Status) :-
+solve_suffix(INFOP,TS,[INFOP(S1,L,R,P1,N1)|OS],N2,S2,A,P2,Term,Status) :-
 	!,
 	TS=[OPRND(O2),OPRND(O1)|Opnds],
 	( P1 < P2 ->
 	    infix_struct(S1,O1,O2,N1,T),
-	    solve_suffix([OPRND(T)|Opnds],OS,N2,S2,A,P2,Term,Status)
+	    get_indexing_tag(OS,IndexTag),
+	    solve_suffix(IndexTag,[OPRND(T)|Opnds],OS,N2,S2,A,P2,Term,Status)
 
         ; P1 == P2 ->
 	    ( A == y ->
@@ -1079,7 +1095,8 @@ solve_suffix(TS,[INFOP(S1,L,R,P1,N1)|OS],N2,S2,A,P2,Term,Status) :-
 		  NewStatus=Status
 	        ),
 		infix_struct(S1,O1,O2,N1,T),
-		solve_suffix([OPRND(T)|Opnds],OS,N2,S2,A,P2,Term,NewStatus)
+		get_indexing_tag(OS,IndexTag),
+		solve_suffix(IndexTag,[OPRND(T)|Opnds],OS,N2,S2,A,P2,Term,NewStatus)
 
 	    ; R == x ->
 	        report_error(N1,N2,WRONG_ASSOCIATE),
@@ -1095,12 +1112,13 @@ solve_suffix(TS,[INFOP(S1,L,R,P1,N1)|OS],N2,S2,A,P2,Term,Status) :-
  		        [INFOP(S1,L,R,P1,N1)|OS],N2+1,Term,Status)
         ).
 
-solve_suffix(TS,[PREOP(S1,A1,P1,N1)|OS],N2,S2,A2,P2,Term,Status) :-
+solve_suffix(PREOP,TS,[PREOP(S1,A1,P1,N1)|OS],N2,S2,A2,P2,Term,Status) :-
 	!,
 	TS=[OPRND(O)|Opnds],
 	( P1 < P2 ->
 	    prefix_struct(S1,O,N1,T),
-	    solve_suffix([OPRND(T)|Opnds],OS,N2,S2,A2,P2,Term,Status)
+	    get_indexing_tag(OS,IndexTag),
+	    solve_suffix(IndexTag,[OPRND(T)|Opnds],OS,N2,S2,A2,P2,Term,Status)
 
         ; P1 == P2 ->
 	    ( A2 == y ->
@@ -1111,7 +1129,8 @@ solve_suffix(TS,[PREOP(S1,A1,P1,N1)|OS],N2,S2,A2,P2,Term,Status) :-
 		  NewStatus=Status
 	        ),
 		prefix_struct(S1,O,N1,T),
-		solve_suffix([OPRND(T)|Opnds],OS,N2,S2,A2,P2,Term,NewStatus)
+		get_indexing_tag(OS,IndexTag),
+		solve_suffix(IndexTag,[OPRND(T)|Opnds],OS,N2,S2,A2,P2,Term,NewStatus)
 
 	    ; A1 == x ->
 	        report_error(N1,N2,WRONG_ASSOCIATE),
@@ -1129,22 +1148,26 @@ solve_suffix(TS,[PREOP(S1,A1,P1,N1)|OS],N2,S2,A2,P2,Term,Status) :-
 
 
 /***************************************************************************
-  solve_right(+TmStack,+OpStack,+N,+Brace,-Term,-Status)
+  solve_right(+IndexingTag,+TmStack,+OpStack,+N,+Brace,-Term,-Status)
   is called when a right brace is just read.
+  IndexingTag is the functor of the first member in the 2nd argument list.
+  Used for better indexing.
 ***************************************************************************/
-solve_right(TS,[INFOP(S,_L,_R,_P,I)|OS],N,B,Term,Status) :-
+solve_right(INFOP,TS,[INFOP(S,_L,_R,_P,I)|OS],N,B,Term,Status) :-
 	!,
 	TS=[OPRND(O2),OPRND(O1)|Opnds],
 	infix_struct(S,O1,O2,I,T),
-	solve_right([OPRND(T)|Opnds],OS,N,B,Term,Status).
+	get_indexing_tag(OS,IndexTag),
+	solve_right(IndexTag,[OPRND(T)|Opnds],OS,N,B,Term,Status).
 
-solve_right(TS,[PREOP(S,_A,_P,I)|OS],N,B,Term,Status) :-
+solve_right(PREOP,TS,[PREOP(S,_A,_P,I)|OS],N,B,Term,Status) :-
 	!,
 	TS=[OPRND(O)|Opnds],
 	prefix_struct(S,O,I,T),
-	solve_right([OPRND(T)|Opnds],OS,N,B,Term,Status).
+	get_indexing_tag(OS,IndexTag),
+	solve_right(IndexTag,[OPRND(T)|Opnds],OS,N,B,Term,Status).
 
-solve_right(TS,[BRACE(B1,N1)|OS],N2,B2,Term,Status) :-
+solve_right(BRACE,TS,[BRACE(B1,N1)|OS],N2,B2,Term,Status) :-
 	!,
 	( B1 \== B2 ->
 	    report_error(N1,N2,UNMATCHED_LEFT),
@@ -1178,31 +1201,40 @@ solve_right(TS,[BRACE(B1,N1)|OS],N2,B2,Term,Status) :-
 	    )
         ).
 
-solve_right(_TS,[],N2,_B2,_Term,_Status) :-
+solve_right([],_TS,[],N2,_B2,_Term,_Status) :-
 	!,
 	report_error(N2,UNMATCHED_RIGHT),
 	fail.
 
 
 /***************************************************************************
-  solve_end(+TmStack,+OpStack,+N,-Term,-Status)
+  solve_end(+IndexingTag,+TmStack,+OpStack,+N,-Term,-Status)
   is called when a rule delimeter is just read.
+  IndexingTag is the functor of the first member in the 2nd argument list.
+  Used for better indexing.
 ***************************************************************************/
-solve_end(TS,[INFOP(S,_L,_R,_P,I)|OS],N,Term,Status) :-
+solve_end(INFOP,TS,[INFOP(S,_L,_R,_P,I)|OS],N,Term,Status) :-
 	!,
 	TS=[OPRND(O2),OPRND(O1)|Opnds],
 	infix_struct(S,O1,O2,I,T),
-	solve_end([OPRND(T)|Opnds],OS,N,Term,Status).
+	get_indexing_tag(OS,IndexTag),
+	solve_end(IndexTag,[OPRND(T)|Opnds],OS,N,Term,Status).
 
-solve_end(TS,[PREOP(S,_A,_P,I)|OS],N,Term,Status) :-
+solve_end(PREOP,TS,[PREOP(S,_A,_P,I)|OS],N,Term,Status) :-
 	!,
 	TS=[OPRND(O)|Opnds],
 	prefix_struct(S,O,I,T),
-	solve_end([OPRND(T)|Opnds],OS,N,Term,Status).
+	get_indexing_tag(OS,IndexTag),
+	solve_end(IndexTag,[OPRND(T)|Opnds],OS,N,Term,Status).
 
-solve_end([OPRND(Term)],[],_N,Term,[]) :- !.
+solve_end([],[OPRND(Term)],[],_N,Term,[]) :- !.
 
-solve_end(_TS,[BRACE(_B,I)|_OS],N,_Term,_Status) :-
+solve_end(BRACE,_TS,[BRACE(_B,I)|_OS],N,_Term,_Status) :-
 	!,
 	report_error(I,N,UNMATCHED_LEFT),
 	fail.
+
+
+%% this is used to optmize solve_* clauses
+get_indexing_tag([],[]) :- !.
+get_indexing_tag([First|_],IndexTag) :- functor(First,IndexTag,_).
