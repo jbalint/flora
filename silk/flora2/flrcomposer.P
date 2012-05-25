@@ -33,7 +33,7 @@
 ** The fictitious infix operator which is assumed to invisibly exist
 ** between the annotation (with metadata) and the following term.
 */
-#define LABELING_INFOP         INFOP(FL_LABELFUNC,x,x,2000,0)
+#define DESCRIPTOR_INFOP         INFOP(FL_DESCRIPTORFUNC,x,x,2000,0)
 
 #include "flora_characters.flh"
 #include "flora_errors.flh"
@@ -120,10 +120,21 @@ is_flora_gpp_markup(QUOTED_ATOM(FLORA_GPP_MARKUP,_)).
 
 
 /**************************************************************************
-  is_labeling_construct(+Object)
+  is_descriptor_function(+Object)
 **************************************************************************/
-is_labeling_construct(FUNCTION(OBJECT(SYMBOL_TOKEN(FL_LABELINGOP),_),_Arg)).
+is_descriptor_function(FUNCTION(OBJECT(SYMBOL_TOKEN(FL_DESCRIPTOROP),_),_Arg)).
+is_descriptor_op(OBJECT(SYMBOL_TOKEN(FL_DESCRIPTOROP),TokenN),TokenN).
+is_descriptor_token(SYMBOL_TOKEN(FL_DESCRIPTOROP,_)).
+descriptor_funct_struct(Arg,Struct) :-
+	argument_struct(FL_BRACE,Arg,0,0,ArgStruct),
+	is_descriptor_op(DescrToken,0),
+	function_struct(DescrToken,ArgStruct,Struct).
 
+is_ruleid_op(OBJECT(SYMBOL_TOKEN(FL_RULE_ID_OP),TokenN),TokenN).
+ruleid_funct_struct(Arg,Struct) :-
+	argument_struct(FL_BRACE,Arg,0,0,ArgStruct),
+	is_ruleid_op(RuleidToken,0),
+	function_struct(RuleidToken,ArgStruct,Struct).
 
 /**************************************************************************
   Symbol tokens are allowed to be operands. They are equal to quoted atoms.
@@ -135,9 +146,7 @@ is_sole_operand(NUMBER(_,_)) :- !.
 is_sole_operand(ASCII_STRING(_,_)) :- !.
 is_sole_operand(SPECIAL_TOKEN(_,_)) :- !.
 
-/*********************************************************************
-	support for numbered anon oids
-**********************************************************************/
+%%  support for numbered anon oids
 is_sole_operand(SPECIAL_TOKEN(_,_,_)) :- !.
 
 is_sole_operand(TRANSACTIONAL_IDENTIFIER(_,_)) :- !.
@@ -157,7 +166,6 @@ is_sole_operand(SYMBOL_TOKEN(ST,_)) :-
 	\+ flora_opdef(_,_,ST), \+ flora_op_synonym(ST,_), !.
 is_sole_operand(BUILTIN_IDENTIFIER(BI,_)) :-
 	\+ flora_opdef(_,_,BI), \+ flora_op_synonym(BI,_), !.
-
 
 /***************************************************************************
   These symbol tokens are not allowed to be directly used as atoms.
@@ -223,6 +231,7 @@ is_prefix(O,A,P) :-
 	flora_opdef(P,S,O),
 	%%atom_codes(S,[CH_f,AChar]),
 	%%atom_codes(A,[AChar]).
+	machine:str_len(S,2),
 	flratom_char_code(S,0,CH_f),
 	%%str_match(f,S,forward,0,1),
 	substring(S,1,2,A).
@@ -233,6 +242,7 @@ is_suffix(O,A,P) :-
 	flora_opdef(P,S,O),
 	%%atom_codes(S,[AChar,CH_f]),
 	%%atom_codes(A,[AChar]).
+	machine:str_len(S,2),
 	flratom_char_code(S,1,CH_f),
 	%%str_match(f,S,forward,1,2),
 	substring(S,0,1,A).
@@ -257,8 +267,8 @@ prefix_struct(S,O,I,PREFIX(S,O,I)).
 
 suffix_struct(S,O,I,SUFFIX(S,O,I)).
 
+%% S = brace, O - object
 argument_struct(S,O,I1,I2,ARGUMENT(S,O,I1,I2)).
-
 argument_struct(S,I1,I2,ARGUMENT(S,I1,I2)).
 
 function_struct(F,A,FUNCTION(F,A)).
@@ -427,25 +437,51 @@ flora_compose(PrevToken,TmStack,OpStack,N,Term,Status) :-
         ).
 
 %% flora_compose/7
-%% Here we intercept the rule descriptor construct and attach it to the next term
-%% using FL_LABELFUNC (which is the operator in the fictitious LABELING_INFOP)
-flora_compose(OPRND(O),TmStack,OpStack,N,CurToken,Term,Status) :-
-	is_labeling_construct(O),
-	!,
-	(CurToken = WHITESPACE(_)
-	-> see_whitespace(OPRND(O),TmStack,OpStack,N,Term,Status)
-	;
-	    /*
-	    %% this version does not allow operators after the annotation:
-	    %% @{foo,bar} neg p :- q.
-	    object_struct(CurToken,N,CurTokObj),
-	    flora_compose(OPRND(CurTokObj),
-			  [OPRND(O)|TmStack],[LABELING_INFOP|OpStack],
-			  N+1,Term,Status)
-	    */
-	    flora_compose(LABELING_INFOP,[OPRND(O)|TmStack],OpStack,N,Term,Status)
-	).
 
+%%flora_compose(PrevToken,TmStack,OpStack,N,CurToken,_Term,_Status) :-
+%%	writeln(11111111=PrevToken+CurToken+TmStack+OpStack+N),
+%%	fail.
+
+%% Case of rule descriptor enclosed in braces -- for backward compatibility:
+%% @{...} rule
+%% Here we intercept the rule descriptor construct and attach it to next term
+%% using FL_DESCRIPTORFUNC (which is the operator used in the
+%% fictitious DESCRIPTOR_INFOP)
+flora_compose(OPRND(O),TmStack,OpStack,N,CurToken,Term,Status) :-
+	is_descriptor_function(O),
+	CurToken \= WHITESPACE(_),
+	!,
+	flora_compose(DESCRIPTOR_INFOP,[OPRND(O)|TmStack],OpStack,N,Term,Status).
+
+/* Case where
+       @descriptor rule
+   occurs WITHOUT braces: {, (, [.
+   We then read the descriptor as much as possible.
+   The trick is that we push a marker to
+   the op-stack and some other clause checks for this marker.
+   So, flora_compose returns instead of failing even though the above construct
+   is not composed normally.
+*/
+flora_compose(NULL,[],[],N,CurToken,Term,Status) :-
+	is_descriptor_token(CurToken),
+	M is N+1,
+	%%writeln(aaaaa1111=M),
+	flora_compose(marker(M,NxtN),[],[],M,Descr,DescrStatus),
+	%%writeln(bbbb=NxtN+Descr),
+	!, %% cut should be after composing the descriptor
+	(DescrStatus == []
+	->
+	    %% Should simplify and get rid of the @ function completely.
+	    %% (Will break backward compatibility for @{foo} rule.)
+	    %% Then we won't need to create descriptor_funct_struct here.
+	    %% This should be reflected in the parser.
+	    Descr = OPRND(Descr0),
+	    descriptor_funct_struct(Descr0,DescrStruct),
+	    flora_compose(NULL,[],[],NxtN,RestStmt,Status),
+	    %%writeln(cccc=RestStmt),
+	    infix_struct(FL_DESCRIPTORFUNC,DescrStruct,RestStmt,0,Term)
+	; Status = DescrStatus
+	).
 
 flora_compose(PrevToken,TmStack,OpStack,N,WHITESPACE(_),Term,Status) :-
 	!,
@@ -465,6 +501,28 @@ flora_compose(PrevToken,TmStack,OpStack,N,CurToken,Term,Status) :-
 	is_sole_operator(CurToken,Op),
 	!,
 	compose_sole_operator(PrevToken,TmStack,OpStack,N,Op,Term,Status).
+
+/*
+   Catch the case when a descriptor that is not enclosed in braces is composed.
+   This is determined by finding the fictitious marker operation previously
+   inserted. The marker also captures the last token number of the descriptor.
+   Currently this can handle only the cases of descriptors of the form
+   @term[...] rule
+   which is all we need at this stage.
+*/
+flora_compose(OPRND(Obj),[],[marker(_N,N1)],N1,_CurTk,OPRND(Obj),[]) :-
+	\+is_ruleid_op(Obj,_),
+	!.
+flora_compose(OPRND(Obj),[],[marker(_N,NxtN)],_N3,_CurTk,OPRND(Term),Status) :-
+	is_ruleid_op(Obj,N2),
+	M is N2+1,
+	flora_compose(marker(M,NxtN),[],[],M,Descr,Status),
+	(Status == []
+	->  Descr = OPRND(Descr0),
+	    ruleid_funct_struct(Descr0,Term)
+	; true
+	),
+	!.
 
 %% Handle infix operators that must be immediately enclosed in
 %% parentheses, like # (IRI prefix op).  This is not ideal here: it
@@ -610,12 +668,16 @@ see_comment(P,TS,OS,N,Term,Status) :-
 
 /***************************************************************************
   see_operand(+PrevToken,+TmStack,+OpStack,+N,+Operand,-Term,-Status)
-  is called when a token interpreted as an operand is read.
+  is called when a token that is interpreted as an operand is read.
 ***************************************************************************/
 see_operand(NULL,[],[],N,O,Term,Status) :-
 	!,
 	object_struct(O,N,T),
 	flora_compose(OPRND(T),[],[],N+1,Term,Status).
+see_operand(marker(N1,N2),[],[],N,O,Term,Status) :-
+	!,
+	object_struct(O,N,T),
+	flora_compose(OPRND(T),[],[marker(N1,N2)],N+1,Term,Status).
 
 see_operand(INFOP(S,L,R,P,I),TS,OS,N,O,Term,Status) :-
 	!,
@@ -623,8 +685,8 @@ see_operand(INFOP(S,L,R,P,I),TS,OS,N,O,Term,Status) :-
 	    report_error(I,UNEXP_ENDCLAUSE),
 	    fail
 	;
-	  object_struct(O,N,T),
-	  flora_compose(OPRND(T),TS,[INFOP(S,L,R,P,I)|OS],N+1,Term,Status)
+	    object_struct(O,N,T),
+	    flora_compose(OPRND(T),TS,[INFOP(S,L,R,P,I)|OS],N+1,Term,Status)
 	).
 
 see_operand(BRACE(B,I),TS,OS,N,O,Term,Status) :-
@@ -633,8 +695,8 @@ see_operand(BRACE(B,I),TS,OS,N,O,Term,Status) :-
 	    report_error(I,UNEXP_ENDCLAUSE),
 	    fail
 	;
-	  object_struct(O,N,T),
-	  flora_compose(OPRND(T),[BRACE(B,I)|TS],[BRACE(B,I)|OS],N+1,Term,Status)
+	    object_struct(O,N,T),
+	    flora_compose(OPRND(T),[BRACE(B,I)|TS],[BRACE(B,I)|OS],N+1,Term,Status)
 	).
 
 see_operand(PREOP(S,A,P,I),TS,OS,N,O,Term,Status) :-
@@ -643,8 +705,8 @@ see_operand(PREOP(S,A,P,I),TS,OS,N,O,Term,Status) :-
 	    report_error(I,UNEXP_ENDCLAUSE),
 	    fail
 	;
-	  object_struct(O,N,T),
-	  flora_compose(OPRND(T),TS,[PREOP(S,A,P,I)|OS],N+1,Term,Status)
+	    object_struct(O,N,T),
+	    flora_compose(OPRND(T),TS,[PREOP(S,A,P,I)|OS],N+1,Term,Status)
 	).
 
 see_operand(SUFOP(_S,_A,_P,I),_TS,_OS,N,O,_Term,_Status) :-
@@ -652,7 +714,7 @@ see_operand(SUFOP(_S,_A,_P,I),_TS,_OS,N,O,_Term,_Status) :-
 	( is_flora_gpp_markup(O) ->
 	    report_error(I,UNEXP_ENDCLAUSE)
 	;
-	  report_error(N,UNEXP_OPERAND)
+	    report_error(N,UNEXP_OPERAND)
 	),
 	fail.
 
@@ -908,9 +970,18 @@ see_end(NULL,[],[],N,_Term,_Status) :-
   is called when an infix operator that is just read results in solving
   the stacks.
 ***************************************************************************/
+%%:- index solve_infix/9-2.
 solve_infix(TS,[],N,O,L,R,P,Term,Status) :-
 	!,
 	flora_compose(INFOP(O,L,R,P,N),TS,[],N+1,Term,Status).
+
+%% catches the case when an infix operator binds rule descriptors, e.g., 
+%% @foo+bar rule  or  @foo,bar rule
+%% give an error in this case
+solve_infix(_,[marker(_,_)],N,_,_,_,_,_,_) :-
+	!,
+	report_error(N,UNEXP_OPERATOR),
+	fail.
 
 solve_infix(TS,[BRACE(B,I)|OS],N,O,L,R,P,Term,Status) :-
 	!,

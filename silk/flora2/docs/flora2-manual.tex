@@ -11304,23 +11304,59 @@ answers. In both cases, limiting the depth can terminate a run-away
 computation.
 Timeouts are useful when it is desirable to stop the computation if it does
 not finish within a preset amount of time.
-To control these features, \FLORA provides the following predicates:
+To control these features, \FLORA provides the following predicates.
 
+\paragraph{Timeouts.} The following calls can be used to control various
+types of timeouts:
+%%
 \index{flora\_set\_timeout}
 \index{flora\_clear\_timeout}
 %% 
 \begin{alltt}
     ?- flora_set_timeout(\emph{Time},fail)@_prolog(flrerrhandler).
     ?- flora_set_timeout(\emph{Time},abort)@_prolog(flrerrhandler).
+    ?- flora_set_timeout(repeating(\emph{Time}),\emph{Handler})@_prolog(flrerrhandler).
     ?- flora_clear_timeout@_prolog(flrerrhandler).
 \end{alltt}
 %% 
 where \emph{Time} is an integer that specifies the number of seconds after
-which queries should be terminated. The first form will cause long-running
-queries to fail and the second will abort them. Note that once one of these
+which queries should be interrupted. The first form will cause long-running
+queries (those running $> Timeout$) to fail and the second will abort them.
+The third form is a way to interrupt queries periodically in order to
+perform the desired tasks. Namely, the queries will be interrupted each
+\emph{Time} number of seconds and \emph{Handler} will be called at each
+interrupt.
+Note that once one of these
 commands is issued, it applies to all subsequent queries.
-The last command resets the timeout to infinity.
+The last command resets the timeout to infinity and thus undoes the
+effect of the first three commands.
 
+For the repeated interrupts above, the interrupt handler must satisfy the
+following restrictions:
+%% 
+\begin{itemize}
+\item   Its first argument must be an unbound variable. This variable will
+  be bound to the query being executed so the handler will know on behalf
+  of which goal it is being called.
+\item \emph{Handler} must be either a Prolog predicate definitionned in some
+  Prolog module or a \FLORA predicate declared using the \texttt{:- prolog}  
+  directive. In the latter case, it should be reified.
+\end{itemize}
+%% 
+For instance,
+%% 
+\begin{verbatim}
+   :- prolog periodic_handler/1.
+   periodic_handler(?Goal) :- writeln(aaaaa=?Goal)@_plg.
+   ?- flora_set_timeout(repeating(1)@_plg,${periodic_handler(?)})@_plg(flrerrhandler).
+\end{verbatim}
+%% 
+In this example, the \FLORA predicate \texttt{periodic\_handler/1} will be
+called each second. 
+
+\paragraph{Subgoal depth control.} The following calls enable subgoal depth
+control:
+%%
 \index{flora\_set\_subgoal\_depth}
 %% 
 \begin{alltt}
@@ -11336,6 +11372,8 @@ depth 1) and \emph{ListDepth} specifies the maximum length of lists. Number
 whose depth exceeds one of the specified limits. The second form will abort
 the query.  
 
+\paragraph{Answer depth control.} The following calls enable the user to
+control the answer depth:
 \index{flora\_set\_answer\_depth}
 %% 
 \begin{alltt}
@@ -11346,6 +11384,11 @@ the query.
 This command controls the depth of the returned answers. The meaning of the
 arguments in the same as in the case of \texttt{flora\_set\_subgoal\_depth}.
 
+\paragraph{Unification mode.} The default unification mode in \FLORA is
+unsound, in general. That is, non-unifiable terms might be unified, as
+explained below. The following calls can be used to change the unification
+mode:
+%%
 \index{flora\_set\_unification\_mode}
 %% 
 \begin{alltt}
