@@ -438,9 +438,12 @@ flora_compose(PrevToken,TmStack,OpStack,N,Term,Status) :-
 
 %% flora_compose/7
 
-%%flora_compose(PrevToken,TmStack,OpStack,N,CurToken,_Term,_Status) :-
-%%	writeln(11111111=PrevToken+CurToken+TmStack+OpStack+N),
-%%	fail.
+/*
+%% Debigging
+flora_compose(PrevToken,TmStack,OpStack,N,CurToken,_Term,_Status) :-
+	writeln(11111111=PrevToken+CurToken+TmStack+OpStack+N),
+	fail.
+*/
 
 %% Case of rule descriptor enclosed in braces -- for backward compatibility:
 %% @{...} rule
@@ -465,9 +468,9 @@ flora_compose(OPRND(O),TmStack,OpStack,N,CurToken,Term,Status) :-
 flora_compose(NULL,[],[],N,CurToken,Term,Status) :-
 	is_descriptor_token(CurToken),
 	M is N+1,
-	%%writeln(aaaaa1111=M),
+	%% writeln(aaaaa1111=M), % Debugging
 	flora_compose(marker(M,NxtN),[],[],M,Descr,DescrStatus),
-	%%writeln(bbbb=NxtN+Descr),
+	%% writeln(bbbb1111=NxtN+Descr), % Debugging
 	!, %% cut should be after composing the descriptor
 	(DescrStatus == []
 	->
@@ -478,7 +481,7 @@ flora_compose(NULL,[],[],N,CurToken,Term,Status) :-
 	    Descr = OPRND(Descr0),
 	    descriptor_funct_struct(Descr0,DescrStruct),
 	    flora_compose(NULL,[],[],NxtN,RestStmt,Status),
-	    %%writeln(cccc=RestStmt),
+	    %% writeln(cccc=RestStmt),  % Debugging
 	    infix_struct(FL_DESCRIPTORFUNC,DescrStruct,RestStmt,0,Term)
 	; Status = DescrStatus
 	).
@@ -512,7 +515,9 @@ flora_compose(PrevToken,TmStack,OpStack,N,CurToken,Term,Status) :-
 */
 flora_compose(OPRND(Obj),[],[marker(_N,N1)],N1,_CurTk,OPRND(Obj),[]) :-
 	\+is_ruleid_op(Obj,_),
+	\+is_descriptor_op(Obj,_),
 	!.
+%% the case of @!foo
 flora_compose(OPRND(Obj),[],[marker(_N,NxtN)],_N3,_CurTk,OPRND(Term),Status) :-
 	is_ruleid_op(Obj,N2),
 	M is N2+1,
@@ -520,6 +525,18 @@ flora_compose(OPRND(Obj),[],[marker(_N,NxtN)],_N3,_CurTk,OPRND(Term),Status) :-
 	(Status == []
 	->  Descr = OPRND(Descr0),
 	    ruleid_funct_struct(Descr0,Term)
+	; true
+	),
+	!.
+%% the case of  @@strict/@@defeasible
+flora_compose(OPRND(Obj),[],[marker(_N,NxtN)],_N3,_CurTk,OPRND(Term),Status) :-
+	is_descriptor_op(Obj,N2),
+	M is N2+1,
+	flora_compose(marker(M,NxtN),[],[],M,Descr,Status),
+	(Status == []
+	->  Descr = OPRND(Descr0),
+	    %% change this to something else
+	    descriptor_funct_struct(Descr0,Term)
 	; true
 	),
 	!.
