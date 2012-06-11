@@ -4,7 +4,8 @@
 
     # RUN this in the ./admin/ directory!
 
-files=" ./flora2/Makefile ./flora2/NMakefile.mak \
+files=" \
+        ./flora2/Makefile ./flora2/NMakefile.mak \
     	./flora2/makeflora ./flora2/makeflora.bat \
         ./flora2/*.sh ./flora2/*.xwam ./flora2/*.flh\
     	./flora2/closure/Makefile ./flora2/closure/NMakefile.mak \

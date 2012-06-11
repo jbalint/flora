@@ -35,8 +35,13 @@ files="./flora2/INSTALLATION \
 	./flora2/lib/include/*flh \
     	./flora2/libinc/*.flh \
     	./flora2/p2h/prolog2hilog.* ./flora2/p2h/*.P \
-        ./flora2/p2h/Makefile ./flora2/p2h/NMakefile.mak \
-        ./flora2/p2h/windows/*.dll \
+    	./flora2/p2h/flora_ground.* \
+        ./flora2/p2h/Makefile \
+	./flora2/p2h/NMakefile.mak ./flora2/p2h/NMakefile64.mak \
+        ./flora2/p2h/windows/*.dll ./flora2/p2h/windows/*.exp \
+    	./flora2/p2h/windows/*.lib \
+        ./flora2/p2h/windows64/*.dll ./flora2/p2h/windows64/*.exp \
+    	./flora2/p2h/windows64/*.lib \
     	./flora2/pkgs/Makefile ./flora2/pkgs/NMakefile.mak \
         ./flora2/pkgs/*.flr ./flora2/pkgs/prolog/*.P \
 	./flora2/pkgs/include/*.flh \
