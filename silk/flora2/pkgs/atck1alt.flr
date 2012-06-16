@@ -28,7 +28,10 @@
 
 :- symbol_context
         defeated(?,?)@?,
-        prlg FL_COMPETES(?,?,?,?),
+        competes(?,?)@?,
+        candidate(?,?)@?,
+        strict_candidate(?,?)@?,
+        prlg FL_COMPETES(?,?,?),
         prlg FL_REFUTES(?,?,?,?,?),
         prlg FL_REBUTS(?,?,?,?),
         prlg beaten_by_strict_rule(?,?,?,?,?).
@@ -38,7 +41,7 @@
 :- prolog FL_REBUTS/3, FL_REBUTS/4.
 :- prolog FL_DISQUALIFIED/3.
 :- prolog FL_DEFEATED/3.
-:- prolog FL_COMPETES/3, FL_COMPETES/4.
+:- prolog FL_COMPETES/4, FL_COMPETES/3.
 //:- table FL_UNDEFEATED/3.  // DO NOT TABLE - useless
 :- prolog FL_UNDEFEATED/3.
 :- prolog beaten_by_strict_rule/3, beaten_by_strict_rule/5,
@@ -55,6 +58,10 @@
           FL_BEATER(?,?,?),
           opposes(?,?,?,?),
 	  overrides(?,?,?,?),
+	  competes(?,?),
+	  competes(?)(?,?),
+	  candidate(?,?),
+	  strict_candidate(?,?),
 	  defeated(?,?).
 
 :- ignore_depchk %abort(?)@_system.
@@ -76,6 +83,13 @@
 FL_UNDEFEATED(?T,?H,?Mod) :-
 	naf FL_DEFEATED(?T,?H,?Mod).
 
+candidate(?T,?H) :-
+	caller{?Mod},
+	FL_CANDIDATE(?T,?H,?Mod).
+strict_candidate(?T,?H) :-
+	caller{?Mod},
+	FL_STRICT_CANDIDATE(?T,?H,?Mod).
+
 // These are mostly for debugging
 // Note: when ?H,?H1,?H2 are bound by the user, they should be reified
 // For instance: defeated(?T,${neg a})@_gcl.
@@ -90,6 +104,9 @@ opposes(?T1,?H1,?T2,?H2) :-
 	change_module_nocheck(?H1,?Mod,?RealMod,?MH1),
 	change_module_nocheck(?H2,?Mod,?RealMod,?MH2),
 	FL_OPPOSES_AUX(?RealMod,?T1,?MH1,?T2,?MH2).
+
+competes(?E)(?H,?HH) :- FL_COMPETES(?H,?HH,?E,?).
+competes(?H,?HH) :- FL_COMPETES(?H,?HH,?).
 
 overrides(?T1,?H1,?T2,?H2) :-
 	caller{?Mod},
@@ -110,11 +127,15 @@ check_module_to_AT_association(?) :- true.
 // Axioms for Courteous LP with general exclusions
 
 FL_DEFEATED(?_T,?H,?Mod) :-
-	?Exclusion[opposers(?Mod)->?H],
+	?Exclusion[opposers(?Mod)->{?H1,?H}],
+	?H1@?Mod != ?H@?Mod,
+	//FL_CANDIDATE(?,?H1,?Mod), // MK added 2/22/2012
 	naf ?Exclusion[FL_BEATER(?Mod)->?H].
 FL_DEFEATED(?T,?H,?Mod) :-
 	// this incorporates the classical mutex and user-defined _opposes/2
-	FL_OPPOSES_AUX(?Mod,?T,?H,?_OtherT,?OtherH),
+	FL_OPPOSES_AUX(?Mod,?T,?H,?OtherT,?OtherH),
+	?OtherH@?Mod != ?H@?Mod,
+	FL_CANDIDATE(?OtherT,?OtherH,?Mod), // MK added 2/22/2012
 	naf FL_BEATER(?H,?OtherH,?Mod).
 FL_DEFEATED(?T,?H,?Mod) :- FL_DISQUALIFIED(?T,?H,?Mod).
 
@@ -180,7 +201,7 @@ FL_COMPETES(?H1,?H2,?Exclusion,?Mod) :-
 	?Exclusion[opposers(?Mod)->{?H1,?H2}],
 	?H1 != ?H2.
 FL_COMPETES(?H1,?H2,?Mod) :-
-	FL_OPPOSES_AUX(?Mod,?,?H1,?,?H2),
+	FL_OPPOSES_AUX(?Mod,?_T1,?H1,?_T2,?H2),
 	?H1 != ?H2.
 
 competitors(?H1,?H2,?Mod) :-
@@ -220,15 +241,19 @@ existsRuleWithNoOverrider(?Lit,?DomineeH,?Mod) :-
    This method finds out the caller module and replaces the module of Head
    with the caller module.
 */
-FL_STATUS(?_T,?H)[howDefeated -> notBeaterFor(?Exclusion)] :-
+FL_STATUS(?T,?H)[howDefeated -> notBeaterFor(?Exclusion)] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
-        ?Exclusion[opposers(?RealMod)->?HM],
+        ?Exclusion[opposers(?RealMod)->{?HM,?H2}],
+	?HM@?RealMod != ?H2@?RealMod,
+	FL_CANDIDATE(?T,?HM,?RealMod), // MK added 2/22/2012
 	naf ?Exclusion[FL_BEATER(?RealMod)->?HM].
 FL_STATUS(?T,?H)[howDefeated -> notBeaterFor(binaryExclusion(?HM,?BeatenH))] :-
 	caller{?Mod},
 	change_module(?H,?Mod,?RealMod,?HM),
 	FL_OPPOSES_AUX(?RealMod,?T,?HM,?,?BeatenH),
+	FL_CANDIDATE(?T,?HM,?RealMod),     // MK added 2/22/2012
+	FL_CANDIDATE(?,?BeatenH,?RealMod), // MK added 2/22/2012
 	naf FL_BEATER(?HM,?BeatenH,?RealMod).
 FL_STATUS(?T,?H)[howDefeated -> canceled] :-
 	caller{?Mod},
@@ -327,7 +352,8 @@ FL_CANDIDATE(?Tag,?Head,?Mod) :-
 // opposer without the rule tag
 ?Exclusion[opposers(?Mod)->?HH] :-
 	(?Exclusion:_Exclusion[_opposers->?H])@?Mod,
-	?HH = ?H@?Mod.
+	?HH = ?H@?Mod,
+	FL_CANDIDATE(?,?H,?Mod). // MK added 2/22/2012
 
 // FL_OPPOSES_AUX/5, FL_OVERRIDES_AUX/5, FL_CANCEL_AUX/3 are defined in
 // genincludes/flrdefeasible.fli
@@ -336,6 +362,7 @@ FL_CANDIDATE(?Tag,?Head,?Mod) :-
 
 beaten_by_strict_rule(?T,?H,?Mod) :- beaten_by_strict_rule(?T,?H,?,?,?Mod).
 beaten_by_strict_rule(?T,?H,?StrictT,?StrictH,?Mod) :-
+	FL_CANDIDATE(?T,?H,?Mod),  // MK added 2/22/2012
 	FL_OPPOSES_AUX(?Mod,?T,?H,?StrictT,?StrictH),
 	FL_STRICT_CANDIDATE(?StrictT,?StrictH,?Mod).
 
