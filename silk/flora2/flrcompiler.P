@@ -1087,8 +1087,10 @@ has_prologlit([H|Rest],Idx) :-
 attach_workspace(WS,Generator,GeneratorCode,WSCode) :- 
 	set_context(literal_workspace(WS)),
 	call(Generator),
-	(is_prologterm(GeneratorCode)
-	->
+	(is_modularizedprologterm(GeneratorCode) ->
+	    workspacelit_struct(GeneratorCode,WS,WSCode),
+	    clear_context(literal_workspace(WS))
+	;   is_prologterm(GeneratorCode) ->
 	    %% If prolog term occurs under the scope of a FLORA-2 module, 
 	    %% ignore the module
 	    WSCode = GeneratorCode
@@ -1185,6 +1187,10 @@ prologliblit_struct(PrologTerm,PROLOGLIBLIT(PrologTerm)).
 
 is_prologterm(Term)    :- is_prologterm(Term,_,_,_), !.
 is_prologterm(Term)    :- is_prologterm(Term,_,_,_,_).
+
+is_modularizedprologterm(Term) :-
+	is_prologterm(Term,Fun,_N,_Args),
+	is_modularized_atom(Fun,_,_).
 
 prologterm_atom_arity(Term,Atom,Arity) :-
 	is_prologterm(Term,Struct,Arity,_),
@@ -4260,8 +4266,7 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    OidCode=NULL
 
 	; is_flobjeql(ParserTerm,O1,O2) ->
-	    BodyHeadList = [],
-	    compile_flobjeql(O1,O2,OidCode,SpecCode,Status)
+	    compile_flobjeql(O1,O2,OidCode,SpecCode,BodyHeadList,Status)
 
 	; is_fldirective(ParserTerm,DirectList,_Idx) ->
 	    BodyHeadList = [],
@@ -4981,7 +4986,14 @@ compile_pathexplist(ParsTrmLst,ObjList,OidCode,Code,BodyHdLst,Status) :-
 compile_pathexplist([],_,[],NULL,NULL,[],[]) :- !.
 compile_pathexplist([T|L],Nesting,[TObj|LObj],OidCode,Code,BodyHdLst,Status) :-
 	(var(BodyHdLst) -> true; BodyHdLst1=[],BodyHdLst2=[]),
-	compile_pathexp(T,Nesting,TObj,OidCodeHead,TCode,BodyHdLst1,S),
+	(L==[], has_context(compile_varname_udf) ->
+	    set_context(compile_varname_udf_arg),
+	    compile_pathexp(T,Nesting,TObj,OidCodeHead,TCode,BodyHdLst1,S),
+	    clear_context(compile_varname_udf_arg),
+	    clear_context(compile_varname_udf)
+	;
+	    compile_pathexp(T,Nesting,TObj,OidCodeHead,TCode,BodyHdLst1,S)
+	),
 	!,
 	clear_context(compiling_term_name),
 	( no_errors_found(S) ->
@@ -5070,17 +5082,11 @@ compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status):-
 	var(BodyHeadList),
 	%% NO cut here!
 	\+ has_context(compiling_arithmetics),
-    	flora_get_flatomvar_name(ParserTerm,Name),
-	has_user_defined_function(Name,0,[],Predicate,ReturnValue),
+	has_user_defined_function(ParserTerm,0,[],[],Predicate,ReturnValue),
 	!,
 	verify_symbol_context(ParserTerm,0,UDF_SYMBOL,
 			      NONTRANSACTIONAL_SYMBOL,SymStatus),
-	new_prvariable(NO_INDEX,Object),
-	prvar_to_flvar_struct(Object,Var),
-	approx_flindex(ParserTerm,Index),
-	formUDFVarSubstitute([Var],[ReturnValue],Nesting,Index),
-	compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,S),
-	clearUDFVarSubstitute(Nesting),
+	compile_udf_body_literal(ParserTerm,[],[],Predicate,ReturnValue,Nesting,Object,PCode,PBodyHeadList,S),
 	( no_errors_found(S) -> 
 	    append(PBodyHeadList,[PCode],BodyHeadList),
 	    append(S,SymStatus,Status)
@@ -5113,17 +5119,11 @@ compile_fltermobj(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,CompileS
 	var(BodyHeadList),
 	!,
 	( \+ has_context(compiling_arithmetics),
-	    flora_get_flatomvar_name(Funct,Name),
-	    has_user_defined_function(Name,N,FArgs,Predicate,ReturnValue)
+	    has_user_defined_function(Funct,N,Args,FArgs,Predicate,ReturnValue)
 	-> 
 	    OidCode=NULL,
 	    Code=NULL,
-	    new_prvariable(NO_INDEX,Object),
-	    prvar_to_flvar_struct(Object,Var),
-	    approx_flindex(Funct,Index),
-	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],Nesting,Index),
-	    compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,S),
-	    clearUDFVarSubstitute(Nesting),
+	    compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,Nesting,Object,PCode,PBodyHeadList,S),
 	    SymbolContext = UDF_SYMBOL,
 	    ( no_errors_found(S) -> 
 		append(PBodyHeadList,[PCode],BodyHeadList),
@@ -5166,15 +5166,67 @@ compile_fltermobj(Funct,N,Args,_Nesting,Object,OidCode,Code,[],CompileStatus) :-
 
 
 /****************************************************************************
-  has_user_defined_function(+Name,+N,-FArgs,-Predicate,-ReturnValue) 
+  compile_udf_body_literal(+Funct,+Args,+FArgs,+Predicate,+ReturnValue,+Nesting,-Object,-PCode,-PBodyHeadList,-Status)
+
+  Compile a UDF literal in the body.
+  Has two cases: the UDF symbol is a constant and when it is a variable
+****************************************************************************/
+compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,Nesting,Object,PCode,PBodyHeadList,Status) :-
+	approx_flindex(Funct,Index),
+	(is_flvariable(Funct,_VarName,_Idx) ->
+	    Object = ReturnValue,
+	    set_context(compile_varname_udf),
+	    compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,Status)
+	;
+	    new_prvariable(NO_INDEX,Object),
+	    prvar_to_flvar_struct(Object,Var),
+	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],Nesting,Index),
+	    compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,Status),
+	    clearUDFVarSubstitute(Nesting)
+	).
+
+/****************************************************************************
+  has_user_defined_function(+Funct,+N,+Args,-FArgs,-Predicate,-ReturnValue) 
 
   Compile term in the OID position.
 ****************************************************************************/
-has_user_defined_function(Name,N,FArgs,Predicate,ReturnValue) :-
+has_user_defined_function(Funct,N,_Args,FArgs,Predicate,ReturnValue) :-
+	flora_get_flatomvar_name(Funct,Name),
 	has_permaoption(user_defined_function(Name,N,FArgs,Predicate,ReturnValue)),
 	!.
-has_user_defined_function(Name,N,FArgs,Predicate,ReturnValue) :-
-	flora_used_udf_registry(Name,N,FArgs,Predicate,ReturnValue).
+has_user_defined_function(Funct,N,_Args,FArgs,Predicate,ReturnValue) :-
+	flora_get_flatomvar_name(Funct,Name),
+	flora_used_udf_registry(Name,N,FArgs,Predicate,ReturnValue),
+	!.
+/*has_user_defined_function(Funct,N,Args,Args,Predicate,ReturnValue) :-
+	N\=0,
+	Args\=[],
+	Args\=null,
+	is_flvariable(Funct,_VarName,_Idx),
+	\+ has_context(compile_varname_udf_arg),
+	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue)*/
+
+/****************************************************************************
+  form_udf_hilog_predicate(+Funct,+N,+Args,-Predicate,-ReturnValue) 
+
+  form predicate for UDF with term names (hilog).
+****************************************************************************/
+/*form_udf_hilog_predicate(Funct,N,Args,NewPredicateCode,NewReturnValueObj):-
+	get_udf_hilog_predicate_funct(NPFunct,NPName),
+	new_prvariable(NO_INDEX,NewReturnValueObj),
+	prvar_to_flvar_struct(NewReturnValueObj,NewReturnValue),
+	fllist_struct(Args,[],NO_INDEX,FArgs),
+	flterm_struct(Funct,N,Args,OrigPredicateCode),
+	flterm_struct(NPFunct,5,[Funct,N,FArgs,OrigPredicateCode,NewReturnValue],NewPredicateCode),
+	flora_define_modular_prolog(NPName,5).*/
+
+/****************************************************************************
+  get_udf_hilog_predicate_funct(-Funct,-Name) 
+
+  form predicate functor for UDF with term names (hilog).
+****************************************************************************/
+/*get_udf_hilog_predicate_funct(Funct,UDFHILOGPREDICATENAME):-
+	flatom_struct(UDFHILOGPREDICATENAME,NO_INDEX,Funct).*/
 
 /****************************************************************************
   FormUDFVarSubstitute(+Args,+FArgs,+Nesting)
@@ -5969,10 +6021,15 @@ allgvar_notin([H|T],[Msg|S],TS) :-
 
 
 /****************************************************************************
-  compile_flobjeql(+Obj1,+Obj2,-OidCode,-Code,-Status)
+  compile_flobjeql(+Obj1,+Obj2,-OidCode,-Code,?BodyHeadList,-Status)
+ 
+ ?BodyHeadList - code to add at the beginning of the body
+                 (mostly for user defined fnctions),
+		 it is output argument, but if it is initialized to
+		 empty ([]) ignores user defined functions
 ****************************************************************************/
-compile_flobjeql(Obj1,Obj2,OidCode,Code,Status) :-
-	compile_pathexplist([Obj1,Obj2],[O1,O2],OidCode,OCode,Status),
+compile_flobjeql(Obj1,Obj2,OidCode,Code,BodyHeadList,Status) :-
+	compile_pathexplist([Obj1,Obj2],[O1,O2],OidCode,OCode,BodyHeadList,Status),
 	( no_errors_found(Status) -> 
 	    objeql_struct(BODYLITERAL,O1,O2,OECode),
 	    conjunct_code([OCode,OECode],Code)
@@ -5986,17 +6043,11 @@ compile_flobjeql(Obj1,Obj2,OidCode,Code,Status) :-
 ****************************************************************************/
 compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
 	( \+ has_context(compiling_arithmetics),
-	    flora_get_flatomvar_name(Funct,Name),
-	    has_user_defined_function(Name,N,FArgs,Predicate,ReturnValue)
+	    has_user_defined_function(Funct,N,Args,FArgs,Predicate,ReturnValue)
 	->
 	    Code=NULL,
 	    H2BCodeTail=NULL,
-	    new_prvariable(NO_INDEX,Object),
-	    prvar_to_flvar_struct(Object,Var),
-	    approx_flindex(Funct,Index),
-	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],0,Index),
-	    compile_body_literal(Predicate,0,PCode,PH2BCodeHead,S),
-	    clearUDFVarSubstitute(0),
+	    compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,0,Object,PCode,PH2BCodeHead,S),
 	    SymbolContext = UDF_SYMBOL,
 	    ( no_errors_found(S) -> 
 		append(PH2BCodeHead,[PCode],List),
@@ -6962,17 +7013,11 @@ compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,BodyHeadList,Tra
 	var(BodyHeadList),
 	!,
         ( \+ has_context(compiling_arithmetics),
-	    flora_get_flatomvar_name(Funct,Name),
-	    has_user_defined_function(Name,N,FArgs,Predicate,ReturnValue)
+	    has_user_defined_function(Funct,N,Args,FArgs,Predicate,ReturnValue)
 	->
 	    OidCode=NULL,
 	    Code=NULL,
-	    new_prvariable(NO_INDEX,Object),
-	    prvar_to_flvar_struct(Object,Var),
-	    approx_flindex(Funct,Index),
-	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],Nesting,Index),
-	    compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,S),
-	    clearUDFVarSubstitute(Nesting),
+	    compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,Nesting,Object,PCode,PBodyHeadList,S),
 	    SymbolContext = UDF_SYMBOL,
 	    ( no_errors_found(S) -> 
 		append(PBodyHeadList,[PCode],BodyHeadList),
@@ -8199,17 +8244,11 @@ compile_head_wstransactionaltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BC
 ****************************************************************************/
 compile_head_wsfltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
         ( \+ has_context(compiling_arithmetics),
-	    flora_get_flatomvar_name(Funct,Name),
-	    has_user_defined_function(Name,N,FArgs,Predicate,ReturnValue)
+	    has_user_defined_function(Funct,N,Args,FArgs,Predicate,ReturnValue)
 	->
 	    H2BCodeTail=NULL,
 	    Code=NULL,
-	    new_prvariable(NO_INDEX,Object),
-	    prvar_to_flvar_struct(Object,Var),
-	    approx_flindex(Funct,Index),
-	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],0,Index),
-	    compile_body_literal(Predicate,0,PCode,PH2BCodeHead,S),
-	    clearUDFVarSubstitute(0),
+	    compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,0,Object,PCode,PH2BCodeHead,S),
 	    SymbolContext = UDF_SYMBOL,
 	    ( no_errors_found(S) -> 
 		append(PH2BCodeHead,[PCode],List),
@@ -8851,7 +8890,7 @@ compile_fldelete_list([H|T],CodeList,Status) :-
 	%% overridden by an explicity directive.
 	is_flobjeql(H,O1,O2),
 	!,
-	compile_flobjeql(O1,O2,OidCode,SpecCode,S),
+	compile_flobjeql(O1,O2,OidCode,SpecCode,[],S),
 	conjunct_code([OidCode,SpecCode],HCode),
 	approx_flindex(O1,Idx),
 	report_option(FLOBJEQLDEF,Idx),
