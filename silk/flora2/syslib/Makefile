@@ -35,6 +35,7 @@ ALLOBJS = flranswer$(OBJEXT) \
 	  flraggmax$(OBJEXT) \
 	  flraggmin$(OBJEXT) \
 	  flraggsum$(OBJEXT) \
+	  flraggsortby$(OBJEXT) \
 	  flrstorageutils$(OBJEXT) \
 	  flrstoragebase$(OBJEXT) \
 	  flrdbop$(OBJEXT) \
