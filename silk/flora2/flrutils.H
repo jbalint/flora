@@ -42,6 +42,7 @@
 	flora_increment_counter/4,
 	flora_concat_atoms/2,
 	flora_concat_items/2,
+	flora_match_substring/3,
 	flora_copy_input/2,
 	flora_write_atom/1,
 	flora_delete_from_list/3,
@@ -113,7 +114,10 @@
 
 :- import flora_reset_operator/0 from flroperator.
 
-:- import flora_reset_prolog/0 from flrprolog.
+:- import
+	flora_user_modular_prlgdefs/2,
+	flora_reset_prolog/0
+   from flrprolog.
 
 :- import
 	flora_parse_term_external/3,
@@ -136,6 +140,8 @@
 
 :- import
 	%%flora_divide_program/3,
+	flora_coder_write_prolog_bridge_rule/3,
+	flora_coder_write_conditional_prolog_bridge_rule/2,
 	flora_extern_code/2,
 	flora_build_struct/7,
 	flora_intern_code/4
@@ -152,6 +158,7 @@
 	flora_trailer_registry/2,
 	flora_used_udf_registry/5,
 	flora_defined_udf_registry/4,
+	flora_modular_prolog_registry/3,
 	flora_module_registry/1
    from flrregistry.
 
@@ -200,6 +207,7 @@
 :- import prettyprint_stdin/0 from flrpretifydump.
 
 :- import
+	flora_modularize_atom/3,
 	flora_check_module_name/1,
 	valid_flora_module_name/1,
 	flora_is_system_module_name/1,

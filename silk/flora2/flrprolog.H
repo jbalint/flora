@@ -22,7 +22,6 @@
 :- dynamic flora_dynprlg(_,_).
 :- dynamic flora_dynprlg(_,_,_).
 :- dynamic modular_dynprlg(_,_).
-:- dynamic modular_dynprlg(_,_,_).
 
 
 /*
@@ -35,12 +34,11 @@
 
 :- import
 	%%flora_compiler_permaoption/1,
+	compiling_flrshell_command/0,
 	flora_compilation_context/1
    from flrcompiler.
 
-:- import
-	flora_modular_prolog_registry/2
-   from flrregistry.
+:- import flora_modular_prolog_registry/3 from flrregistry.
 
 :- export
 	flora_reset_prolog/0,
@@ -51,6 +49,8 @@
 	flora_modular_prlgdef/2,
 	flora_modular_prlgdef/3,
 	flora_modular_prlgdefs/2,
+	flora_builtin_modular_prlgdefs/2,
+	flora_user_modular_prlgdefs/2,
 	flora_negatable_prlgdef/3,
 	flora_define_modular_prolog/1,
 	flora_define_modular_prolog/2,

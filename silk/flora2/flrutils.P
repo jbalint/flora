@@ -723,6 +723,9 @@ flora_flload(FlrFile,Workspace) :-
 	%% the call to flora_cleanup_udf/1 would abolish the predicates
 	%% that we've just loaded!
 	flora_cleanup_udf(Workspace),
+	%% Ditto with modular prolog: must abolish them
+	%% before loading but not adding
+	abolish_modular_prolog_predicates(Workspace),
 	consult(WSXWAMFile),
 	flora_cputime(T1),
 	T is T1-T0,
@@ -1407,6 +1410,12 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBF
 		flora_current_out_line('#ifndef FLORA_TABLING_METHODS_INCLUDED'),
 		flora_current_out_line('#include "flora_tabling_methods.flh"'),
 		flora_current_out_line('#endif'),
+		non_udf_user_modular_prlgdefs(ModularPlgPredLst),
+		(ModularPlgPredLst \== []
+		->
+		    util_add_conditional_modular_prlg_bridge_rules(ModularPlgPredLst)
+		; true
+		),
 		(FactList == [] -> true
 		; insert_code_for_loaddyn_data(DBFile)
 		),
@@ -1623,6 +1632,13 @@ generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBFile,
 	    write_index_directives(IndexList),
 	    ( HeaderStatus == FLORA_FAILURE -> FileStatus=FLORA_FAILURE
 	    ;
+		findall(P/A,flora_user_modular_prlgdefs(P,A),ModularPlgPredLst),
+		(ModularPlgPredLst \== []
+		->
+		    util_add_modular_prlg_bridge_rules(ModularPlgPredLst,
+						       beginning)
+		; true
+		),
 		(FactList == [] -> true
 		; insert_code_for_loaddyn_data(DBFile)
 		),
@@ -1633,8 +1649,12 @@ generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBFile,
 		%% (to allow any relevant declarations to be taken into account)
 		insert_code_for_loaddyn_data(FLS2File),
 		( CoderStatus == [] ->
-		    util_include_file([FLTRAILER,FLDYNZLIB,FLPREDDEF],
-				       FileStatus)
+		    util_include_file([FLTRAILER,FLDYNZLIB,FLPREDDEF],FileStatus),
+		    (ModularPlgPredLst \== [], FileStatus == FLORA_SUCCESS
+		    -> 
+			util_add_modular_prlg_bridge_rules(ModularPlgPredLst,end)
+		    ; true
+		    )
 		;
 		    print_errors([coder(CoderStatus)]),
 		    FileStatus=FLORA_FAILURE
@@ -4110,6 +4130,7 @@ flora_cleanup_udf(Module) :-
 	flora_fls_storage_name(Module,FLSStorage),
 	flora_db_delete_all(FLSStorage),
 	abolish_udf_predicates(Module).
+
 abolish_udf_predicates(Module) :-
 	repeat,
 	( flora_defined_udf_registry(Module,_Fun,FunArity,FunPred),
@@ -4121,9 +4142,30 @@ abolish_udf_predicates(Module) :-
 	; true
 	),
 	retractall(flora_defined_udf_registry(_,_,_,_)).
-abolish_udf_predicates(_).
 
-	
+abolish_modular_prolog_predicates(Module) :-
+	repeat,
+	( flora_modular_prolog_registry(P,Arity,Module),
+	    %% modular Prolog predicate's arity is arity+1 (caller)
+	    flora_modularize_atom(P,Module,ModularName),
+	    Arity1 is Arity+1,
+	    current_predicate(ModularName/Arity1),
+	    %% very strange: changing the line below to
+	    %% abolish(ModularName/Arity1) gives a type error
+	    abolish(ModularName,Arity1),
+	    fail
+	; true
+	),
+	retractall(flora_modular_prolog_registry(_,_,_)).
+
+non_udf_user_modular_prlgdefs(ModularPlgPredLst) :-
+	findall(P/A,
+		(
+		  flora_user_modular_prlgdefs(P,A),
+		  \+flora_match_substring(NEWUDFPREDICATENAME,P,0)
+		),
+		ModularPlgPredLst).
+
 
 %% This is used because retractall/1 is either slow by itself
 %% or is prone to invoke garbage collection too often
@@ -4168,6 +4210,16 @@ flora_print_define_filename_statement(FilePath,DefName):-
 	flora_concat_atoms(['#define ',DefName,' "',Base,'.',Ext,'"'],DefCommand),
 	flora_current_out_line(DefCommand).
 
+%% Mode: beginning/end. Specifies which bridge rules to write: dyn_a or dyn_z
+util_add_modular_prlg_bridge_rules([],_) :- !.
+util_add_modular_prlg_bridge_rules([P/A|ModularPrlgPredList],Mode) :-
+	flora_coder_write_prolog_bridge_rule(P,A,Mode),
+	util_add_modular_prlg_bridge_rules(ModularPrlgPredList,Mode).
+
+util_add_conditional_modular_prlg_bridge_rules([]) :- !.
+util_add_conditional_modular_prlg_bridge_rules([P/A|ModularPrlgPredList]) :-
+	flora_coder_write_conditional_prolog_bridge_rule(P,A),
+	util_add_conditional_modular_prlg_bridge_rules(ModularPrlgPredList).
 
 
 /*

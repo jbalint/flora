@@ -22,6 +22,7 @@
 :- import format/2 from format.
 
 :- import
+	length/2,
 	append/3
    from basics.
 
@@ -30,10 +31,13 @@
 :- import
 	%%flora_abort/1,
 	flora_abort/2,
+	%%flora_term_to_atom_quote/2,
 	flora_write_quoted_atom/1,
 	flora_write_atom/1,
 	flora_concat_atoms/2
    from flrporting.
+
+%%:- import flratom_char_code/3 from flora_ground.
 
 :- import flora_error_line/2 from flrprint.
 
@@ -74,6 +78,8 @@
 	flora_build_struct/7.
 
 :- export
+	flora_coder_write_prolog_bridge_rule/3,
+	flora_coder_write_conditional_prolog_bridge_rule/2,
 	is_prrule/3,
 	is_prfact/2,
 	is_prdirective/2,

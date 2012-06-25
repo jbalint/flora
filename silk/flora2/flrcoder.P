@@ -1545,6 +1545,107 @@ coder_write_dynrulelist([H|L],Status) :-
 
 
 /****************************************************************************
+  flora_coder_write_prolog_bridge_rule(+PredName,+Arity,+Type)
+
+  Writes a bridge rule of the form
+
+  FLORA_THIS_WORKSPACE(PredName)(Args,Caller) :-
+	  FLORA_THIS_WORKSPACE(FLDYNAPREFIX(PredName))(Args,Caller)
+  or
+  FLORA_THIS_WORKSPACE(PredName)(Args,Caller) :-
+	  FLORA_THIS_WORKSPACE(FLDYNZPREFIX(PredName))(Args,Caller)
+
+  Also writes a dynamic declaration as
+  :- dynamic FLORA_THIS_WORKSPACE(FLDYNAPREFIX(PredName))/Arity+1 as FLORA_DYNAMICS_TYPE.
+  :- dynamic FLORA_THIS_WORKSPACE(FLDYNZPREFIX(PredName))/Arity+1 as FLORA_DYNAMICS_TYPE.
+
+ Type = beginning or end
+     
+****************************************************************************/
+flora_coder_write_prolog_bridge_rule(PredName,Arity,Type) :-
+	length(ArgLst,Arity),
+	flora_concat_atoms(['FLORA_THIS_WORKSPACE(',PredName,')'],HeadPred),
+	(Type == end ->
+	    flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNZPREFIX_UNQ(',
+				PredName,
+				'))'],
+			       BodyPred)
+	; 
+	    flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNAPREFIX_UNQ(',
+				PredName,
+				'))'],
+			       BodyPred)
+	),
+	TrueArity is Arity+1,
+	%% declaration :- dynamic Pred^dyna/z/TrueArity as FLORA_DYNAMICS_TYPE.
+	write(':- dynamic '),
+	flora_write_atom(BodyPred),
+	put(CH_SLASH),
+	write(TrueArity),
+	write(' as FLORA_DYNAMICS_TYPE.\n'),
+	%% write rule:  Pred(Args,Caller) :- Pred^dynz(Args,Caller)
+	flora_write_atom(HeadPred),
+	put(CH_LPAREN),
+	util_write_arglist(ArgLst),
+	write('Caller) :- '),
+	flora_write_atom(BodyPred),
+	put(CH_LPAREN),
+	util_write_arglist(ArgLst),
+	write('Caller).\n').
+
+%% this adds a comma at the end, which we need for the Caller argument
+util_write_arglist([]) :- !.
+util_write_arglist([A|Rest]) :-
+	write(A),
+	put(CH_COMMA),
+	util_write_arglist(Rest).
+
+
+/****************************************************************************
+  flora_coder_write_conditional_prolog_bridge_rule(+PredName,+Arity)
+
+  Writes a conditional bridge rule for added files of the form
+
+  ?- (current_predicate(FLORA_THIS_WORKSPACE(PredName)(Args,Caller)) ->
+        (dynamic FLORA_THIS_WORKSPACE(FLDYNAPREFIX(PredName))/Arity+1 as FLORA_DYNAMICS_TYPE),
+        (dynamic FLORA_THIS_WORKSPACE(FLDYNZPREFIX(PredName))/Arity+1 as FLORA_DYNAMICS_TYPE),
+	assert((FLORA_THIS_WORKSPACE(PredName)(Args,Caller) :-
+		    FLORA_THIS_WORKSPACE(FLDYNAPREFIX(PredName))(Args,Caller))),
+	assert((FLORA_THIS_WORKSPACE(PredName)(Args,Caller) :-
+		    FLORA_THIS_WORKSPACE(FLDYNZPREFIX(PredName))(Args,Caller)))
+     ; true
+     ).
+****************************************************************************/
+flora_coder_write_conditional_prolog_bridge_rule(PredName,Arity) :-
+	length(ArgLst,Arity),
+	flora_concat_atoms(['FLORA_THIS_WORKSPACE(',PredName,')'],HeadPred),
+	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNAPREFIX_UNQ(',PredName,'))'], BodyPredA),
+	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNZPREFIX_UNQ(',PredName,'))'], BodyPredZ),
+	TrueArity is Arity+1,
+	write('?- (current_predicate('),
+	flora_write_atom(HeadPred),put(CH_SLASH),write(TrueArity),
+	flora_write_atom(') -> true ; '),
+	%% declaration :- dynamic Pred^dyna/z/TrueArity as FLORA_DYNAMICS_TYPE.
+	write('(dynamic '),
+	flora_write_atom(BodyPredA), put(CH_SLASH), write(TrueArity),
+	write(' as FLORA_DYNAMICS_TYPE), '),
+	write('(dynamic '),
+	flora_write_atom(BodyPredZ), put(CH_SLASH), write(TrueArity),
+	write(' as FLORA_DYNAMICS_TYPE), '),
+	%% write rule:  Pred(Args,Caller) :- Pred^dyna(Args,Caller)
+	write('assert(('),
+	flora_write_atom(HeadPred),
+	put(CH_LPAREN), util_write_arglist(ArgLst), write('Caller) :- '),
+	flora_write_atom(BodyPredA),
+	put(CH_LPAREN),util_write_arglist(ArgLst),write('Caller))), '),
+	%% write rule:  Pred(Args,Caller) :- Pred^dynz(Args,Caller)
+	write('assert(('),
+	flora_write_atom(HeadPred),
+	put(CH_LPAREN), util_write_arglist(ArgLst), write('Caller) :- '),
+	flora_write_atom(BodyPredZ),
+	put(CH_LPAREN),util_write_arglist(ArgLst),write('Caller))) ).').
+
+/****************************************************************************
   coder_write_newoid(+Oid)
 ****************************************************************************/
 coder_write_newoid(Oid) :-

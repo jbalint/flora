@@ -131,7 +131,7 @@
    from flrparser.
 
 :- import
-	flora_modular_prolog_registry/2,
+	%%flora_modular_prolog_registry/2,
 	flora_used_udf_registry/5
    from flrregistry.
 
@@ -156,6 +156,7 @@
 	flora_compile/5,
 	flora_clear_compilation_symbols/0,
 	%%flora_compiler_permaoption/1,
+	compiling_flrshell_command/0,
 	symbol/7,
 	nowarn_symbol/5,
 	make_symbol_context_status/10,
