@@ -91,5 +91,4 @@
 	fldirective_struct/3,
 	flatom_struct/3,
 	flterm_struct/4,
-	fllist_struct/4,
 	flconjunct_struct/3.

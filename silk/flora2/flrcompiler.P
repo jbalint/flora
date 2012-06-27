@@ -4985,14 +4985,7 @@ compile_pathexplist(ParsTrmLst,ObjList,OidCode,Code,BodyHdLst,Status) :-
 compile_pathexplist([],_,[],NULL,NULL,[],[]) :- !.
 compile_pathexplist([T|L],Nesting,[TObj|LObj],OidCode,Code,BodyHdLst,Status) :-
 	(var(BodyHdLst) -> true; BodyHdLst1=[],BodyHdLst2=[]),
-	(L==[], has_context(compile_varname_udf) ->
-	    set_context(compile_varname_udf_arg),
-	    compile_pathexp(T,Nesting,TObj,OidCodeHead,TCode,BodyHdLst1,S),
-	    clear_context(compile_varname_udf_arg),
-	    clear_context(compile_varname_udf)
-	;
-	    compile_pathexp(T,Nesting,TObj,OidCodeHead,TCode,BodyHdLst1,S)
-	),
+	compile_pathexp(T,Nesting,TObj,OidCodeHead,TCode,BodyHdLst1,S),
 	!,
 	clear_context(compiling_term_name),
 	( no_errors_found(S) ->
@@ -5171,18 +5164,20 @@ compile_fltermobj(Funct,N,Args,_Nesting,Object,OidCode,Code,[],CompileStatus) :-
   Has two cases: the UDF symbol is a constant and when it is a variable
 ****************************************************************************/
 compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,Nesting,Object,PCode,PBodyHeadList,Status) :-
-	approx_flindex(Funct,Index),
-	(is_flvariable(Funct,_VarName,_Idx) ->
-	    Object = ReturnValue,
-	    set_context(compile_varname_udf),
-	    compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,Status)
-	;
-	    new_prvariable(NO_INDEX,Object),
-	    prvar_to_flvar_struct(Object,Var),
-	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],Nesting,Index),
-	    compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,Status),
-	    clearUDFVarSubstitute(Nesting)
-	).
+	    approx_flindex(Funct,Index),
+	    (is_flvariable(Funct,VarName,Idx) ->
+		Object = ReturnValue,
+		set_context(compiling_udf_varname(VarName,Idx)),
+	        compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,Status),
+		clear_context(compiling_udf_varname(VarName,Idx))
+	    ;
+	    	new_prvariable(NO_INDEX,Object),
+	    	prvar_to_flvar_struct(Object,Var),
+	        formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],Nesting,Index),
+	        compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,Status),
+	        clearUDFVarSubstitute(Nesting)
+	    ).
+
 
 /****************************************************************************
   has_user_defined_function(+Funct,+N,+Args,-FArgs,-Predicate,-ReturnValue) 
@@ -5197,35 +5192,38 @@ has_user_defined_function(Funct,N,_Args,FArgs,Predicate,ReturnValue) :-
 	flora_get_flatomvar_name(Funct,Name),
 	flora_used_udf_registry(Name,N,FArgs,Predicate,ReturnValue),
 	!.
-/*has_user_defined_function(Funct,N,Args,Args,Predicate,ReturnValue) :-
+
+has_user_defined_function(Funct,N,Args,Args,Predicate,ReturnValue) :-
 	N\=0,
 	Args\=[],
 	Args\=null,
-	is_flvariable(Funct,_VarName,_Idx),
-	\+ has_context(compile_varname_udf_arg),
-	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue)*/
+	is_flvariable(Funct,VarName,Idx),
+	\+ has_context(compiling_udf_varname(VarName,Idx)),
+	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
+
 
 /****************************************************************************
   form_udf_hilog_predicate(+Funct,+N,+Args,-Predicate,-ReturnValue) 
 
   form predicate for UDF with term names (hilog).
 ****************************************************************************/
-/*form_udf_hilog_predicate(Funct,N,Args,NewPredicateCode,NewReturnValueObj):-
+%% form_udf_hilog_predicate(Funct,N,Args,NewPredicateCode,NewReturnValue):-
+form_udf_hilog_predicate(Funct,N,Args,NewPredicateCode,NewReturnValueObj):-
 	get_udf_hilog_predicate_funct(NPFunct,NPName),
 	new_prvariable(NO_INDEX,NewReturnValueObj),
 	prvar_to_flvar_struct(NewReturnValueObj,NewReturnValue),
-	fllist_struct(Args,[],NO_INDEX,FArgs),
+	%% fllist_struct(Args,[],NO_INDEX,FArgs),
 	flterm_struct(Funct,N,Args,OrigPredicateCode),
-	flterm_struct(NPFunct,5,[Funct,N,FArgs,OrigPredicateCode,NewReturnValue],NewPredicateCode),
-	flora_define_modular_prolog(NPName,5).*/
+	flterm_struct(NPFunct,3,[OrigPredicateCode,N,NewReturnValue],NewPredicateCode),
+	flora_define_modular_prolog(NPName,3).
 
 /****************************************************************************
   get_udf_hilog_predicate_funct(-Funct,-Name) 
 
   form predicate functor for UDF with term names (hilog).
 ****************************************************************************/
-/*get_udf_hilog_predicate_funct(Funct,UDFHILOGPREDICATENAME):-
-	flatom_struct(UDFHILOGPREDICATENAME,NO_INDEX,Funct).*/
+get_udf_hilog_predicate_funct(Funct,UDFHILOGPREDICATENAME):-
+	flatom_struct(UDFHILOGPREDICATENAME,NO_INDEX,Funct).
 
 /****************************************************************************
   FormUDFVarSubstitute(+Args,+FArgs,+Nesting)
