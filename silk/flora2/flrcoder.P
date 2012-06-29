@@ -1565,24 +1565,21 @@ coder_write_dynrulelist([H|L],Status) :-
 flora_coder_write_prolog_bridge_rule(PredName,Arity,Type) :-
 	length(ArgLst,Arity),
 	flora_concat_atoms(['FLORA_THIS_WORKSPACE(',PredName,')'],HeadPred),
-	(Type == end ->
-	    flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNZPREFIX_UNQ(',
-				PredName,
-				'))'],
-			       BodyPred)
-	; 
-	    flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNAPREFIX_UNQ(',
-				PredName,
-				'))'],
-			       BodyPred)
+	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNAPREFIX_UNQ(', PredName, '))'], BodyPredA),
+	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNZPREFIX_UNQ(', PredName, '))'], BodyPredZ),
+	(Type == end -> BodyPred = BodyPredZ
+	; BodyPred = BodyPredA
 	),
-	TrueArity is Arity+1,
-	%% declaration :- dynamic Pred^dyna/z/TrueArity as FLORA_DYNAMICS_TYPE.
-	write(':- dynamic '),
-	flora_write_atom(BodyPred),
-	put(CH_SLASH),
-	write(TrueArity),
-	write(' as FLORA_DYNAMICS_TYPE.\n'),
+	(Type \== end ->
+	    TrueArity is Arity+1,
+	    %% write :- dynamic Pred^dyna/z/TrueArity as FLORA_DYNAMICS_TYPE.
+	    write(':- dynamic '),
+	    flora_write_atom(BodyPredA), put(CH_SLASH), write(TrueArity),
+	    write(', '),
+	    flora_write_atom(BodyPredZ), put(CH_SLASH), write(TrueArity),
+	    write(' as FLORA_DYNAMICS_TYPE.\n')
+	; true
+	),
 	%% write rule:  Pred(Args,Caller) :- Pred^dynz(Args,Caller)
 	flora_write_atom(HeadPred),
 	put(CH_LPAREN),
@@ -1628,8 +1625,7 @@ flora_coder_write_conditional_prolog_bridge_rule(PredName,Arity) :-
 	%% declaration :- dynamic Pred^dyna/z/TrueArity as FLORA_DYNAMICS_TYPE.
 	write('(dynamic '),
 	flora_write_atom(BodyPredA), put(CH_SLASH), write(TrueArity),
-	write(' as FLORA_DYNAMICS_TYPE), '),
-	write('(dynamic '),
+	write(', '),
 	flora_write_atom(BodyPredZ), put(CH_SLASH), write(TrueArity),
 	write(' as FLORA_DYNAMICS_TYPE), '),
 	%% write rule:  Pred(Args,Caller) :- Pred^dyna(Args,Caller)
