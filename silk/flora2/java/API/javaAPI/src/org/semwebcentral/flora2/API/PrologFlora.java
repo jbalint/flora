@@ -272,6 +272,30 @@ public class PrologFlora extends FloraConstants
 	}
     }
 
+    /**
+     * A simplified version of TermModel.toString() that doesn't put commas between nested children, for e.g.&nbsp; the message produced by <tt>?- silk:flora("type_error(atom, f(1), foo/1, 1)@_prolog(error_handler).");</tt>.
+     */
+    public String toStringNoCommas(TermModel tm)
+    {
+	if (tm.getChildCount()==0)
+	    return tm.node.toString();
+	else if (tm.isList())
+	    return tm.toString();
+	else if ((tm.node.equals("/") && (tm.children.length == 2)))
+	    return "" + tm.children[0] + tm.node + tm.children[1];
+	else 
+	    {
+		StringBuffer retval = new StringBuffer();
+
+		for (int i=0; i < tm.children.length; i++)
+		    {
+			retval.append(toStringNoCommas(tm.children[i]));
+		    }
+
+		return retval.toString();
+	    }
+    }
+
     public void findException(Object[] solutions) {
     	//look for exception (?Ex binding) in solution and throw it
     	//An exception will look like error(type-of-error(message,...) ...)
@@ -279,6 +303,7 @@ public class PrologFlora extends FloraConstants
     	if (solutions != null && solutions.length != 0) {
     		TermModel tm = (TermModel)solutions[0];
     		objName = PrologFlora.findValue(tm,"?Ex");
+		logger.info("findException:  " + objName);
     		if (objName == null)
     			throw new FlrException("Flora returned no exception info - probably a bug");
     		else if (objName.node instanceof String) {
@@ -288,11 +313,29 @@ public class PrologFlora extends FloraConstants
     				Integer id = (Integer) ((TermModel) objName.getChild(0)).node;
     				Exception ex = exceptionStore.remove(id);
     				throw (FlrException) ex;
-    			}
-    			else
-				throw new FlrException(objName.node,
-						       ((TermModel) objName.getChild(0)).node,
-						       ((TermModel) objName.getChild(1)).node);
+    			} 
+    			else {
+			    if (objName.children == null) {
+				// message from XSB throw(message)
+				throw new FlrException(objName.node.toString());
+			    } else {
+				switch (objName.children.length) {
+				case 2:
+				    // Flora exception
+				    throw new FlrException(objName.node,
+							   ((TermModel) objName.getChild(0)).node,
+							   ((TermModel) objName.getChild(1)).node);
+				case 3:
+				    // XSB exception - objName.node.equals("error")
+				    throw new FlrException(((TermModel) objName.getChild(0)).toString(),
+							   // ((TermModel) objName.getChild(1)),
+							   toStringNoCommas((TermModel) objName.getChild(1)),
+							   ((TermModel) objName.getChild(2)));
+				default:
+				    throw new FlrException("Flora returned non-standard exception with " + objName.children.length + " children - " + objName);
+				}
+			    }
+			}
     		}
     		else
     			throw new FlrException("Flora returned non-standard exception info - probably a bug - " + objName.toString());
