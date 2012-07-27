@@ -718,10 +718,12 @@ flora_flload(FlrFile,Workspace) :-
         ),
 	flora_call_hooks(Workspace,LOADTOMODULE,FlrFile,before,AroundHookLink),
 	flora_cputime(T0),
-	%% We clean out UDF predicates before loading (not adding!) a module
-	%% This *cannot* be done from within flrdefinition.flh because then
-	%% the call to flora_cleanup_udf/1 would abolish the predicates
-	%% that we've just loaded!
+	%% We clean out UDF predicates before loading (NOT adding!) a module.
+	%% See comment about this where flora_cleanup_udf/1 is defined.
+	%% Note: cleaning up UDFs *cannot* be done from within
+	%% flrdefinition.flh because then %% the call to flora_cleanup_udf/1
+	%% would abolish the predicates that we've just loaded!
+	%% This is why we do the cleanup here.
 	flora_cleanup_udf(Workspace),
 	%% Ditto with modular prolog: must abolish them
 	%% before loading but not adding
@@ -1196,6 +1198,8 @@ flora_not_end_of_input(Status) :- memberchk(FLORA_NOT_EOF,Status), !.
 
 /*************************************************************************
   reset_modules_for_file(+FullFileName)
+  reset_modules_for_load(+FullFileName)
+  reset_modules_for_add(+FullFileName)
 *************************************************************************/
 reset_modules_for_file(FullFileName) :-
 	flora_reset_composer,
@@ -1208,6 +1212,13 @@ reset_modules_for_file(FullFileName) :-
 	assert(flora_compiler_environment(file,FullFileName)),
 	(retract(util_stop_merging(true)) ; true),
 	!.
+
+reset_modules_for_load(FullFileName) :-
+	reset_modules_for_file(FullFileName),
+	flora_reset_modular_prolog.
+
+reset_modules_for_add(FullFileName) :-
+	reset_modules_for_file(FullFileName).
 
 
 /*************************************************************************
@@ -1241,7 +1252,7 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLTFile,Fi
 	seeing(PreInFile),
 	%% Disable the compilation for FLORA template include file.
 	%%flora_set_counter(flora_compile_include_file,0),
-	reset_modules_for_file(InputFile),
+	reset_modules_for_add(InputFile),
 	xpp_process_file(InputFile,XPP_process,IOportFromProc),
 	see(IOportFromProc),
 	flora_measure_time(
@@ -1455,7 +1466,7 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLTFile,FileSt
 	seeing(PreInFile),
 	%% Disable the compilation for FLORA template include file.
 	%%flora_set_counter(flora_compile_include_file,0),
-	reset_modules_for_file(InputFile),
+	reset_modules_for_load(InputFile),
 	xpp_process_file(InputFile,XPP_process,IOportFromProc),
 	see(IOportFromProc),
 	flora_measure_time(
@@ -4121,7 +4132,13 @@ write_tabled_udf_predicates([(PredName,PredArity),UDFPreds]):-
 
 write_tabled_udf_predicates(_).
 
-%% This is called when a new module is loaded
+%% This is called when a new module is loaded, but not when added.
+%% This is because we want UDFs and modular prolog predicates to be inherited
+%% by added files. If the loaded context has a symbol, foo/N,
+%% which is declared as modular prolog or a UDF and we are adding another file
+%% in which foo/N is compiled differently, then there would be a loading error.
+%% So, this inheritance is safe.
+%% 
 flora_cleanup_udf(Module) :-
 	(Module == FLORA_DEFAULT_WORKSPACE ->
 	    retractall(flora_used_udf_registry(_,_,_,_,_))

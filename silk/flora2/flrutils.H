@@ -116,6 +116,7 @@
 
 :- import
 	flora_user_modular_prlgdefs/2,
+	flora_reset_modular_prolog/0,
 	flora_reset_prolog/0
    from flrprolog.
 

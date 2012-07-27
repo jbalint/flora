@@ -2369,6 +2369,11 @@ flora_reset_compiler :-
 flora_compile_add(NULL,R-R,F-F,U-U,[]) :- !.
 	
 flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,Status) :-
+/*
+	writeln(2,'------------result of parsing-----------------'),
+	writeln(2,ParserTerm),
+	writeln(2,'----------------------------------------------'),
+*/
 	compile_add_internal(ParserTerm,(NULL,NULL),
 			     RuleDiffList,FactDiffList,UDFPredsDiffList,
 			     Status),
@@ -3337,15 +3342,18 @@ construct_export_struct(TermCode,WSCode,IsUpdatableCode,ModuleListCode,Code) :-
 /****************************************************************************
   compile_user_defined_function(+Function,+Body,+ReturnValue,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-Status)
 
+  Compile a UDF definition. Create a predicate representing the UDF, its rule.
+
   RuleDiffList is a difference list in the form of [...|T]-T. It is for
   the optimization of append.
   FactDiffList is the same for facts
   UDFPredsDiffList is the same for the list of tabled predicates
 ****************************************************************************/
 %% UDFs are always compiled as STATIC rules, even the facts.
-%% If a file is added to a module and difines the same function, the added UDFs
-%% would use the same predicate, so the new would override the old.
-%% In this case we issue an error.
+%% If a file is added to a module and the file has a definition for
+%% the same function, the added UDFs are
+%% represented by the same predicate, so the new definition overrides the old.
+%%  To avoid this error-prone situation, in this case we issue an error.
 %% When overriding a module, we abolish new_udf_predicates_FUN and
 %% retractall flora_defined_udf_registry/4.
 %% If overriding module FLORA_DEFAULT_WORKSPACE, we also
@@ -3365,7 +3373,7 @@ compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactLi
 	    flora_get_flatomvar_name(Funct,Name) ->
 	    new_udf_predicate(Name,N,Args,NewArgs,NewPredicate,NewPredicateOrigArgs,NewPredName,NewPredArity,NewReturnValue),
 	    ( \+ has_permaoption(user_defined_function(Name,N,_,_,_)) ->
-		%% account for the caller argument
+		%% +1 for the caller argument
 		NewPredArity1 is NewPredArity+1,
 		UDFPreds = [(NewPredName,NewPredArity1),UDFPredsTail],
 		set_permaoption(user_defined_function(Name,N,NewArgs,NewPredicate,NewReturnValue))
@@ -3428,13 +3436,12 @@ new_udf_args(N,[Var|NewArgs]):-
 	new_udf_args(N1,NewArgs).
 
 new_udf_predicate(Name,N,OrigArgs,Args,NewPredicateCode,NewPredicateOrigArgs,NPName,NPN,NewReturnValue):-
-	new_udf_predicate_funct(Name,NPFunct,NPName),
+	new_udf_predicate_funct(Name,N,NPFunct,NPName,NPN),
 	new_prvariable(NO_INDEX,NewReturnValueObj),
 	prvar_to_flvar_struct(NewReturnValueObj,NewReturnValue),
 	new_udf_args(N,Args),
 	append(Args,[NewReturnValue],NPArgs),
 	append(OrigArgs,[NewReturnValue],NPOrigArgs),
-	NPN is N+1,
 	flterm_struct(NPFunct,NPN,NPArgs,NewPredicateCode),
 	flterm_struct(NPFunct,NPN,NPOrigArgs,NewPredicateOrigArgs),
 	flora_define_modular_prolog(NPName,NPN).
@@ -3448,23 +3455,10 @@ new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody):-
 	flterm_struct(ExprFunct,2,[NewReturnValueInBody,ReturnValue],ExprCode),
 	flconjunct_struct(Body,ExprCode,NewBody).
 
-/*
-new_udffact(FuncName,N,Args,ReturnValue,Fact):-
-	new_udf_predicate_funct(FuncName,NPFunct,NPName),
-	append(Args,[ReturnValue],NPArgs),
-	NPN is N+1,
-	flterm_struct(NPFunct,NPN,NPArgs,Fact),
-	%%flora_define_prolog(NPName,NPN).
-	flora_define_modular_prolog(NPName,NPN).
-*/
-
-new_udf_predicate_funct(Name,NewPredicateFunct,NewName):-
-	/*
-	flora_get_counter(FLORA_COMPILATION_COUNTER,Counter),
-	flora_concat_atoms([NEWUDFPREDICATENAME,Name,Counter],NewName),
-	*/
+new_udf_predicate_funct(Name,Arity,NewPredicateFunct,NewName,NPArity):-
 	flora_concat_atoms([NEWUDFPREDICATENAME,Name],NewName),
-	flatom_struct(NewName,NO_INDEX,NewPredicateFunct).
+	flatom_struct(NewName,NO_INDEX,NewPredicateFunct),
+	NPArity is Arity+1.
 
 
 /****************************************************************************
@@ -5182,7 +5176,7 @@ compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,Nesting,Object,P
 /****************************************************************************
   has_user_defined_function(+Funct,+N,+Args,-FArgs,-Predicate,-ReturnValue) 
 
-  Compile term in the OID position.
+  Indicate if there is an active UDF
 ****************************************************************************/
 has_user_defined_function(Funct,N,_Args,FArgs,Predicate,ReturnValue) :-
 	flora_get_flatomvar_name(Funct,Name),
@@ -5260,11 +5254,9 @@ compile_fltermlit(Funct,N,Args,Nesting,OidCode,Code,BodyHeadList,CompileStatus) 
 	is_flatom(Funct, FAtom, FunctIdx),
 	(has_permaoption(usesensor(FAtom,N))
 	; has_permaoption(usesensor((FAtom,PlMod),N))
-	; compiling_flrshell_command,
-	    (flora_delayed_sensor_literal(FAtom,N,FLORA_DEFAULT_WORKSPACE)
-	    ; flora_delayed_sensor_literal((FAtom,PlMod),N,
-					   FLORA_DEFAULT_WORKSPACE)
-	    )
+	%% the below allows _add'ed files to inherite the usesensor directive 
+	; flora_delayed_sensor_literal(FAtom,N,FLORA_DEFAULT_WORKSPACE)
+	; flora_delayed_sensor_literal((FAtom,PlMod),N, FLORA_DEFAULT_WORKSPACE)
 	),
 	!,
 	verify_symbol_context(Funct,N,SENSOR_SYMBOL,
