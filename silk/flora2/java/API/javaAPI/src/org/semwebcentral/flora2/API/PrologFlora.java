@@ -60,6 +60,8 @@ public class PrologFlora extends FloraConstants
     HashMap<Integer,Exception> exceptionStore = new HashMap<Integer,Exception>();
     int numExceptions = 0;
     
+    private String loadProgressHandlerPredicate = null;
+    
     /* Function for setting Initialization commands */
     void initCommandStrings(String FloraRootDir)
     {
@@ -97,7 +99,7 @@ public class PrologFlora extends FloraConstants
     public boolean loadFile(String fileName,String moduleName)
     {
 	boolean cmdsuccess = false; 
-	String cmd = "'_load'('"+fileName + "'>>" + moduleName+")";
+	String cmd = wrapAsTimedCall("'_load'('"+fileName + "'>>" + moduleName+")");
 	try {
 	    cmdsuccess = engine.deterministicGoal(cmd);
 	    // Don't use command: it is not error-sensitive
@@ -117,7 +119,7 @@ public class PrologFlora extends FloraConstants
     public boolean compileFile(String fileName,String moduleName)
     {
 	boolean cmdsuccess = false; 
-	String cmd = "'_compile'('"+fileName + "'>>" + moduleName+")";
+	String cmd = wrapAsTimedCall("'_compile'('"+fileName + "'>>" + moduleName+")");
 	try {
 	    cmdsuccess = engine.deterministicGoal(cmd);
 	    // command is not error-sensitive
@@ -137,7 +139,7 @@ public class PrologFlora extends FloraConstants
     public boolean addFile(String fileName,String moduleName)
     {
     boolean cmdsuccess = false;
-	String cmd = "'_add'('"+fileName + "'>>" + moduleName+")";
+	String cmd = wrapAsTimedCall("'_add'('"+fileName + "'>>" + moduleName+")");
 	try {
 	    cmdsuccess = engine.deterministicGoal(cmd);
 	    //cmdsuccess = engine.command(cmd);
@@ -156,7 +158,7 @@ public class PrologFlora extends FloraConstants
     public boolean compileaddFile(String fileName,String moduleName)
     {
 	boolean cmdsuccess = false; 
-	String cmd = "'_compileadd'('"+fileName + "'>>" + moduleName+")";
+	String cmd = wrapAsTimedCall("'_compileadd'('"+fileName + "'>>" + moduleName+")");
 	try {
 	    cmdsuccess = engine.deterministicGoal(cmd);
 	    //cmdsuccess = engine.command(cmd);
@@ -167,8 +169,20 @@ public class PrologFlora extends FloraConstants
         return cmdsuccess;
     }
     
-    
-
+    /** Causes Prolog goal handler(_G) to be called periodically during file compilation and loading command goals.
+     _G will be bound to the current command. If handler is null, progress will not be reported */
+    public void setLoadProgressHandler(String handler){
+    	loadProgressHandlerPredicate = handler;
+    }
+        
+	private String wrapAsTimedCall(String G) {
+		if (loadProgressHandlerPredicate==null) return G;
+		else {
+			logger.info("preparing timed_call to "+G);
+			return "timed_call( ("+G+ "), repeating(1000), "+loadProgressHandlerPredicate+"(("+G+")), nesting)";
+		}
+	}
+	
     /* Call the flora_query/5 predicate of FLORA-2
     ** Binds FLORA-2 variables to the returned values
     ** and returns an array of answers. Each answer is an Interprolog

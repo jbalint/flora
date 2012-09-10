@@ -172,6 +172,11 @@ public class FloraSession extends FloraConstants
 	return flora.compileaddFile(fileName,moduleName);
     }
     
+    /** Delegates to same method in PrologFlora. 
+    @see org.semwebcentral.flora2.API.PrologFlora#setLoadProgressHandler(String) */
+    public void setLoadProgressHandler(String handler){
+    	flora.setLoadProgressHandler(handler);
+    }
     
     /* Execute a query with variables
     **
