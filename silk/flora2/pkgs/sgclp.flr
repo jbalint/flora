@@ -5,8 +5,8 @@
 ** Contact:   kifer@cs.stonybrook.edu
 **
 ** Copyright (C) by
-**      The Research Foundation of the State University of New York, 2008 - 2010;
-**      and Vulcan, Inc., 2012.
+**      The Research Foundation of the State University of New York, 2008 - 2012;
+**      and Vulcan, Inc., 2008 - 2012.
 **
 ** All rights reserved.
 **
@@ -17,7 +17,7 @@
 */
 
 
-/*** This argumentation theory is what one might'd call "strong GCLP"
+/*** This argumentation theory is what one might call "strong GCLP"
      It raises the truth value of the rules that override other rules
      and penalizes rules that are overridden.
 */
@@ -25,19 +25,21 @@
 #include "flora_terms.flh"
 #include "flora_porting.flh"
 
-:- symbol_context defeated(?,?)@?.
-:- symbol_context
-      prlg beaten_by_strict_rule(?,?,?,?,?).
+:- symbol_context defeated(?,?)@?, candidate(?,?)@?, strict_candidate(?,?)@?.
+:- symbol_context prlg beaten_by_strict_rule(?,?,?,?,?).
 
+// if FL_CANDIDATE, FL_STRICT_CANDIDATE are not tabled, memory requirements
+// are lower (5-25%) but this may slow things down by 100% or more.
 :- table FL_CANDIDATE/3, FL_STRICT_CANDIDATE/3.
+
 :- prolog FL_REFUTES/5, FL_REBUTS/5.
 :- prolog FL_DEFEATS/5.
 :- prolog FL_REFUTED/3, FL_REBUTTED/3.
 :- prolog FL_CONFLICTS/5.
 :- prolog FL_DISQUALIFIED/3.
-:- prolog FL_DEFEATED/3.
-//:- table FL_UNDEFEATED/3.  // DO NOT TABLE - useless
-:- prolog FL_UNDEFEATED/3.
+:- prolog FL_DEFEATED/3, FL_DEFEATED_ID/4.
+//:- table FL_UNDEFEATED/4.  // DO NOT TABLE - useless
+:- prolog FL_UNDEFEATED/4.
 :- prolog beaten_by_strict_rule/3, beaten_by_strict_rule/5,
 	  change_module/4, change_module_nocheck/4,
 	  check_module_to_AT_association/1.
@@ -47,12 +49,14 @@
 	  ?[info->?].
 :- export opposes(?,?,?,?),
 	  overrides(?,?,?,?),
+	  candidate(?,?),
+	  strict_candidate(?,?),
 	  defeated(?,?).
 
 :- ignore_depchk %abort(?)@_system.
 
 /*
-  Note 1: FL_UNDEFEATED/3 must be called with the third argument bound to
+  Note 1: FL_UNDEFEATED/4 must be called with the fourth argument bound to
           the user module name in which defeasible theory is invoked.
           This is done by the compiler.
   Note 2: ?R and ?Mod must be ground. Otherwise FL_UNDEFEATED is delayed.
@@ -60,8 +64,16 @@
           If ?R is non-ground, the result is incorrect: false{defeated} ==
           not Exists defeated, while we need Exists not defeated.
 */
-FL_UNDEFEATED(?T,?H,?Mod) :-
-	naf FL_DEFEATED(?T,?H,?Mod).
+FL_UNDEFEATED(?Id,?_Vars,?_H,?Mod) :-
+	is_strict_rule(?Id,?Mod)@_prolog(flrdescriptor_support),
+	!.
+FL_UNDEFEATED(?Id,?Vars,?H,?Mod) :-
+	is_defeasible_rule(?Id,?Mod)@_prolog(flrdescriptor_support),
+	!,
+	naf FL_DEFEATED_ID(?Id,?Vars,?H,?Mod).
+FL_DEFEATED_ID(?Id,?Vars,?H,?Mod) :-
+	get_rule_tag_by_id_vars(?Id,?Mod,?Vars,?T)@_prolog(flrdescriptor_support),
+	FL_DEFEATED(?T,?H,?Mod).
 
 // These are mostly for debugging
 // Note: when ?H,?H1,?H2 are bound by the user, they should be reified
@@ -81,7 +93,16 @@ overrides(?T1,?H1,?T2,?H2) :-
 	caller{?Mod},
 	change_module_nocheck(?H1,?Mod,?RealMod,?MH1),
 	change_module_nocheck(?H2,?Mod,?RealMod,?MH2),
-	FL_OVERRIDES_AUX(?RealMod,?T1,?MH1,?T2,?MH2).
+	synonymous_tag(?T1,?RealMod,?T11)@_plg(flrdescriptor_support),
+	synonymous_tag(?T2,?RealMod,?T22)@_plg(flrdescriptor_support),
+	FL_OVERRIDES_AUX(?RealMod,?T11,?MH1,?T22,?MH2).
+
+candidate(?T,?H) :-
+	caller{?Mod},
+	FL_CANDIDATE(?T,?H,?Mod).
+strict_candidate(?T,?H) :-
+	caller{?Mod},
+	FL_STRICT_CANDIDATE(?T,?H,?Mod).
 
 check_module_to_AT_association(?Mod) :-
 	\+flora_defeasible_module_registry(?Mod,_@)@_prolog(flrregistry),
@@ -99,9 +120,11 @@ FL_DEFEATED(?T,?H,?Mod) :- FL_DEFEATS(?,?,?T,?H,?Mod).
 FL_DEFEATED(?T,?H,?Mod) :- FL_DISQUALIFIED(?T,?H,?Mod).
 
 FL_DEFEATS(?T1,?H1,?T2,?H2,?Mod) :-
-	FL_REFUTES(?T1,?H1,?T2,?H2,?Mod), naf FL_OVERRIDES_AUX(?Mod,?T2,?H2,?T1,?H1).
+	FL_REFUTES(?T1,?H1,?T2,?H2,?Mod),
+	naf FL_OVERRIDES_AUX(?Mod,?T2,?H2,?T1,?H1).
 FL_DEFEATS(?T1,?H1,?T2,?H2,?Mod) :-
-	FL_REBUTS(?T1,?H1,?T2,?H2,?Mod), naf FL_OVERRIDES_AUX(?Mod,?T2,?H2,?T1,?H1).
+	FL_REBUTS(?T1,?H1,?T2,?H2,?Mod),
+	naf FL_OVERRIDES_AUX(?Mod,?T2,?H2,?T1,?H1).
 FL_DEFEATS(?T1,?H1,?T2,?H2,?Mod) :-
 	FL_OVERRIDES_AUX(?Mod,?T1,?H1,?T2,?H2),
 	FL_OPPOSES_AUX(?Mod,?T1,?H1,?T2,?H2),
@@ -122,8 +145,29 @@ FL_DISQUALIFIED(?T,?H,?Mod) :- FL_DISQUALIFIED_AUX(?T,?H,?Mod).
 FL_REFUTES(?T1,?H1,?T2,?H2,?Mod) :-
 	// This order is potentially better, since normally
 	// there are fewer overrides than conflicts.
-	FL_OVERRIDES_AUX(?Mod,?T1,?H1,?T2,?H2),
-	FL_CONFLICTS(?T1,?H1,?T2,?H2,?Mod).
+	nonvar(?T1),
+	!,
+	synonymous_tag(?T1,?Mod,?T11)@_plg(flrdescriptor_support),
+	FL_OVERRIDES_AUX(?Mod,?T11,?H1,?T22,?H2),
+	synonymous_tag(?T22,?Mod,?T2)@_plg(flrdescriptor_support),
+	FL_CONFLICTS(?T11,?H1,?T22,?H2,?Mod).
+FL_REFUTES(?T1,?H1,?T2,?H2,?Mod) :-
+	// This order is potentially better, since normally
+	// there are fewer overrides than conflicts.
+	nonvar(?T2),
+	!,
+	synonymous_tag(?T2,?Mod,?T22)@_plg(flrdescriptor_support),
+	FL_OVERRIDES_AUX(?Mod,?T11,?H1,?T22,?H2),
+	synonymous_tag(?T11,?Mod,?T1)@_plg(flrdescriptor_support),
+	FL_CONFLICTS(?T11,?H1,?T22,?H2,?Mod).
+FL_REFUTES(?T1,?H1,?T2,?H2,?Mod) :-
+	// This order is potentially better, since normally
+	// there are fewer overrides than conflicts.
+	FL_OVERRIDES_AUX(?Mod,?T11,?H1,?T22,?H2),
+	synonymous_tag(?T11,?Mod,?T1)@_plg(flrdescriptor_support),
+	synonymous_tag(?T22,?Mod,?T2)@_plg(flrdescriptor_support),
+	FL_CONFLICTS(?T11,?H1,?T22,?H2,?Mod).
+
 FL_REBUTS(?T1,?H1,?T2,?H2,?Mod)  :-
 	FL_CONFLICTS(?T1,?H1,?T2,?H2,?Mod),
 	naf FL_REFUTED(?T1,?H1,?Mod),
@@ -133,7 +177,7 @@ FL_REBUTS(?T1,?H1,?T2,?H2,?Mod)  :-
 /************************ Debugging ***************************************/
 
 /*
-   FL_STATUS(Id,Head)[howDefeated->Reason] can be used to find out what is
+   FL_STATUS(T,Head)[howDefeated->Reason] can be used to find out what is
    defeated and why. No need to reify the ?H argument or attach a module to it.
    This method finds out the caller module and replaces the module of Head
    with the caller module.
@@ -179,7 +223,7 @@ FL_STATUS(?T,?H)[info->candidate] :-
 // ?RealNewMod is the module of the final OutA
 // (the module is not changed if it is not _@).
 change_module(?InA,?Mod,?RealNewMod,?OutA) :-
-	flora_change_module(?InA,?OutA,(_@,?Mod),?RealNewMod,['In ',FL_STATUS,'(Id,Head)[...]@',_@,': Head must be bound'])@_prolog(flrwrapper),
+	flora_change_module(?InA,?OutA,(_@,?Mod),?RealNewMod,['In ',FL_STATUS,'(Tag,Head)[...]@',_@,': Head must be bound'])@_prolog(flrwrapper),
 	check_module_to_AT_association(?RealNewMod).
 
 
@@ -194,30 +238,27 @@ change_module_nocheck(?InA,?Mod,?RealNewMod,?OutA) :-
 
 
 /***************************** Auxiliary Predicates ***********************/
-// Given a rule Id and possibly Head, find body and test if it is satisfied.
+// Given a rule Tag and possibly Head, find body and test if it is satisfied.
 // This predicate's tables are abolished after each query by an
 // after-query hook because sometimes it is called with Tag/Head as a var.
 // It may succeed for one query and will be tabled.
 // If it is, then when called for another query, wrong result may be returned.
-FL_CANDIDATE(?Tag,?Head,?Mod) :-
-	/*
-	// Unclear if naf FL_CANCEL_AUX is needed. It adds table space
-	// but may not speed up cancellation
-        naf FL_CANCEL_AUX(?Mod,?Tag,?Head),
-	*/
-	/* Must reset term-depth limit, since both tag{...} and clause{...} can
+FL_CANDIDATE(?T,?Head,?Mod) :-
+	/* Must reset term-depth limit, since show_rule_by_id/4 can
 	   retrieve rules with very large bodies. As terms they will be very
 	   deep (>100).
 	*/
 	current_prolog_flag(max_table_subgoal_depth,?TermDepth)@_prolog,
 	set_prolog_flag(max_table_subgoal_depth, 0)@_prolog,
 	?ModHead = ?Head@?Mod,
-	tag{?Tag,?ModHead},
-	clause{@{?Tag} ?ModHead, ?Body},
+	get_rule_id_by_tag(?T,?Mod,?Id)@_prolog(flrdescriptor_support),
+	is_defeasible_rule(?Id,?Mod)@_prolog(flrdescriptor_support),
+	// maybe we have to include the descriptor VarTerm here
+	show_rule_by_id(?Id, ?Mod, ?ModHead, ?Body)@_plg(flrcanon),
 	?Body,
 	set_prolog_flag(max_table_subgoal_depth, ?TermDepth)@_prolog.
 
-// Find out if two tags (Id,Head) are in conflict.
+// Find out if two rules (Tag,Head) are in conflict
 // One of the tags might be a variable
 FL_CONFLICTS(?T1,?H1,?T2,?H2,?Mod) :-
 	// FL_OPPOSES_AUX(?Mod,?T1,?H1,?T2,?H2) should be at the beginning,
@@ -237,15 +278,16 @@ beaten_by_strict_rule(?T,?H,?Tstrict,?Hstrict,?Mod) :-
 	FL_OPPOSES_AUX(?Mod,?T,?H,?Tstrict,?Hstrict),
 	FL_STRICT_CANDIDATE(?Tstrict,?Hstrict,?Mod).
 
-FL_STRICT_CANDIDATE(?Tag,?Head,?Mod) :-
-	/* Must reset term-depth limit, since both tag{...} and clause{...} can
+FL_STRICT_CANDIDATE(?T,?Head,?Mod) :-
+	/* Must reset term-depth limit, since show_rule_by_id/4 can
 	   retrieve rules with very large bodies. As terms they will be very
 	   deep (>100). */
 	current_prolog_flag(max_table_subgoal_depth,?TermDepth)@_prolog,
 	set_prolog_flag(max_table_subgoal_depth, 0)@_prolog,
 	?ModHead = ?Head@?Mod,
-	\+tag{?Tag,?ModHead}, // strict
-	clause{@{?Tag} ?ModHead, ?Body},
+	get_rule_id_by_tag(?T,?Mod,?Id)@_prolog(flrdescriptor_support),
+	is_strict_rule(?Id,?Mod)@_prolog(flrdescriptor_support),
+	show_rule_by_id(?Id, ?Mod, ?ModHead, ?Body)@_plg(flrcanon),
 	?Body,
 	set_prolog_flag(max_table_subgoal_depth, ?TermDepth)@_prolog.
 
