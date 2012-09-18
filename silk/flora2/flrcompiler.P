@@ -634,6 +634,30 @@ neg_struct(Goal,Idx,_,[Err]) :-
 	!,
 	compiling_error(Idx,ILLEGAL_NEGBODY,Err).
 
+%% :- prolog predicate: workspaced and not
+neg_struct(Goal,_Idx,Code,[]) :-
+	(  workspace_struct(L,WS,Goal),
+	    is_prologterm(L,Struct,Arity,Args),
+	    is_modularized_atom(Struct,Atom,Idx),
+	    (is_pratom(WS,Mod,_) ; is_prbuiltin_identifier(WS,Mod,_))
+	->
+	    %% to check if this is a negatable prolog, reduce arity by 1:
+	    %% modularized prolog has one extra caller argument
+	    Arity1 is Arity-1,
+	    flora_negatable_prlgdef(Atom,Arity1,NegAtm),
+	    modularized_atom_struct(NegAtm,Mod,Idx,FCode),
+	    prologterm_struct(FCode,Arity,Args,Code)
+	; is_prologterm(Goal,Struct,Arity,Args),
+	    is_modularized_atom(Struct,Atom,Idx)
+	->
+	    %% to check if this is a negatable prolog, reduce arity by 1:
+	    %% modularized prolog has one extra caller argument
+	    Arity1 is Arity-1,
+	    flora_negatable_prlgdef(Atom,Arity1,NegAtm),
+	    modularized_atom_struct(NegAtm,Idx,FCode),
+	    prologterm_struct(FCode,Arity,Args,Code)
+	).
+
 neg_struct(Goal,_Idx,Code,[]) :-
 	(workspace_struct(PRNEG(L),WS,Goal)
 	-> workspace_struct(L,WS,Code) % double negation
@@ -652,14 +676,6 @@ neg_struct(Goal,_Idx,Code,[]) :-
 	    callerargsterm_struct(ThisModule,CallerInfo),
 	    atomobj_struct(FL_INVALIDMODULE,Mod),
 	    florasyslib_struct(Idx,FLNEGLIBMODLIT,3,[Goal,Mod,CallerInfo],Code)
-	; is_prologterm(Goal,Struct,Arity,Args),
-	    is_modularized_atom(Struct,Atom,Idx),
-	    %% to check if this is a negatable prolog, reduce arity by 1:
-	    %% modularized prolog has one extra caller argument
-	    Arity1 is Arity-1,
-	    flora_negatable_prlgdef(Atom,Arity1,NegAtm),
-	    modularized_atom_struct(NegAtm,Idx,FCode),
-	    prologterm_struct(FCode,Arity,Args,Code)
 	;   Code = PRNEG(Goal)
 	).
 
@@ -767,9 +783,11 @@ atomobj_struct(Atm,PRATOM(Atm,NO_INDEX)) :- atomic(Atm).
 atomobj_struct(Atm,Index,PRATOM(Atm,Index)).
 
 %% A prolog atom that has FLORA-2 prefix and workspace in it.
-%% Currently, only FLORA_THIS_WORKSPACE is used
+%% This one is for THIS_WORKSPACE
 modularized_atom_struct(Atom,Idx,PRMODULARIZEDATOM(Atom,Idx)).
+%%  Mod is expected to be an atom
 modularized_atom_struct(Atom,Mod,Idx,PRMODULARIZEDATOM(Atom,Mod,Idx)).
+
 is_modularized_atom(PRMODULARIZEDATOM(Atom,Idx),Atom,Idx) :- !.
 is_modularized_atom(PRMODULARIZEDATOM(Atom,_Mod,Idx),Atom,Idx) :- !.
 scrambled_atom_struct(Atom,Idx,Struct) :-
@@ -1080,27 +1098,35 @@ has_prologlit([H|Rest],Idx) :-
 
 
 /*
-   attach_workspace(+WS,+Generator,-GeneratorCode,-WSCode)
+   attach_workspace(+WS,+Generator,-GeneratorCode,-WSCode,-Status)
 
    Attaches workspace code to the code produced by Generator
    Generator is a predicate, that produces code for a flora syntactic construct.
    GeneratorCode must be the variable where Generator deposits the code
    it produces.
-   WSCode is a var where the final code is produced.
+   WSCode is where the final code is produced.
 */
-attach_workspace(WS,Generator,GeneratorCode,WSCode) :- 
+attach_workspace(WS,Generator,GeneratorCode,WSCode,Status) :- 
 	set_context(literal_workspace(WS)),
 	call(Generator),
 	(is_modularizedprologterm(GeneratorCode) ->
-	    workspacelit_struct(GeneratorCode,WS,WSCode),
-	    clear_context(literal_workspace(WS))
+	    (is_flvariable(WS,_,Idx)
+	    -> compiling_error(Idx,NO_PROLOG_WITH_VARMODULE,Err),
+		Status = [Err]
+	    ;
+		workspacelit_struct(GeneratorCode,WS,WSCode),
+		clear_context(literal_workspace(WS)),
+		Status = []
+	    )
 	;   is_prologterm(GeneratorCode) ->
 	    %% If prolog term occurs under the scope of a FLORA-2 module, 
 	    %% ignore the module
-	    WSCode = GeneratorCode
+	    WSCode = GeneratorCode,
+	    Status = []
 	;
 	    workspacelit_struct(GeneratorCode,WS,WSCode),
-	    clear_context(literal_workspace(WS))
+	    clear_context(literal_workspace(WS)),
+	    Status = []
 	),
 	!.
 
@@ -6718,18 +6744,16 @@ compile_wsliteral(ParserTerm,WS,Nesting,OidCode,WSCode,BodyHeadList,Status) :-
 	    %% Is this possible? Should be taken care by the libmodlit code
 	    attach_workspace(WS,
 			     compile_flvar(VarName,Index,VarCode),
-			     VarCode,WSCode),
-	    OidCode = NULL,
-	    Status = []
+			     VarCode,WSCode,Status),
+	    OidCode = NULL
 
 	; is_fltransactionalvariable(ParserTerm,VarName,Index) ->
 	    BodyHeadList = [],
 	    %% Is this possible? Should be taken care by the libmodlit code
 	    attach_workspace(WS,
 			     compile_fltransactionalvar(VarName,Index,VarCode),
-			     VarCode,WSCode),
-	    OidCode = NULL,
-	    Status = []
+			     VarCode,WSCode,Status),
+	    OidCode = NULL
 
 	; is_flbirelate(ParserTerm,ObjTerm1,RelType,ObjTerm2) ->
 	    BodyHeadList = [],
@@ -6752,18 +6776,24 @@ compile_wsliteral(ParserTerm,WS,Nesting,OidCode,WSCode,BodyHeadList,Status) :-
 	    BodyHeadList = [],
 	    attach_workspace(WS,
 			     atomlit_struct(BODYLITERAL,ParserTerm,Code),
-			     Code,WSCode),
+			     Code,WSCode,WSStatus),
 	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
-				  NONTRANSACTIONAL_SYMBOL,Status),
+				  NONTRANSACTIONAL_SYMBOL,SymbolStatus),
+	    (WSStatus == [] -> Status = SymbolStatus
+	    ; Status = WSStatus
+	    ),
 	    OidCode=NULL
 	;
 	    BodyHeadList = [],
 	    attach_workspace(WS,
 			     transactionalatomlit_struct(BODYLITERAL,ParserTerm,
 							 Code),
-			     Code,WSCode),
+			     Code,WSCode,WSStatus),
 	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
-				  TRANSACTIONAL_SYMBOL,Status),
+				  TRANSACTIONAL_SYMBOL,SymbolStatus),
+	    (WSStatus == [] -> Status = SymbolStatus
+	    ; Status = WSStatus
+	    ),
 	    OidCode=NULL
 	),
 	!.
@@ -7066,33 +7096,37 @@ compile_wstermlit(Funct,N,Args,WS,Nesting,OidCode,Code,BodyHeadList,CompileStatu
 	verify_symbol_context(Funct,N,WS,PREDICATE_SYMBOL,
 			      Transactionality,SymbolStatus),
 	set_context(compiling_term_name),
-	compile_wsflpathexplist([Funct|Args],WS,Nesting,[FObj|AObj],OidCode,ObjCode,BodyHeadList,Status),
-	( no_errors_found(Status) -> 
+	compile_wsflpathexplist([Funct|Args],WS,Nesting,[FObj|AObj],OidCode,ObjCode,BodyHeadList,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     termlit_struct(BODYLITERAL,FObj,N,AObj,TCode),
-			     TCode,WSCode),
+			     TCode,WSCode,WSStatus),
 	    conjunct_code([WSCode,ObjCode],Code)
 	;
-	  true
+	    WSStatus = []
         ),
 	!,
-	append(SymbolStatus,Status,CompileStatus).
+	(WSStatus == [] -> append(SymbolStatus,PathexpStatus,CompileStatus)
+	; CompileStatus = WSStatus
+	).
 
 compile_wstransactionaltermlit(Funct,N,Args,WS,Nesting,OidCode,Code,BodyHeadList,CompileStatus) :-
 	verify_symbol_context(Funct,N,WS,PREDICATE_SYMBOL,
 			      TRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
-	compile_wsflpathexplist([Funct|Args],WS,Nesting,[FObj|AObj],OidCode,ObjCode,BodyHeadList,Status),
-	( no_errors_found(Status) -> 
+	compile_wsflpathexplist([Funct|Args],WS,Nesting,[FObj|AObj],OidCode,ObjCode,BodyHeadList,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     transactionaltermlit_struct(BODYLITERAL,FObj,N,AObj,TCode),
-			     TCode,WSCode),
+			     TCode,WSCode,WSStatus),
 	    conjunct_code([WSCode,ObjCode],Code)
 	;
-	  true
+	    WSStatus = []
         ),
 	!,
-	append(SymbolStatus,Status,CompileStatus).
+	(WSStatus == [] -> append(SymbolStatus,PathexpStatus,CompileStatus)
+	; CompileStatus = WSStatus
+	).
 
 /****************************************************************************
   compile_wsfllist(+ObjTermList,+ObjTerm,+Index,+WS,+Nesting,-Object,-OidCode,-Code,?BodyHeadList,-Status)
@@ -7141,35 +7175,41 @@ compile_wsfllist(ObjTermList,ObjTerm,Index,WS,Nesting,Object,OidCode,Code,BodyHe
   An objref can be more complex, e.g., a[f->g].b[h->p].c[k->u]@module
 ****************************************************************************/
 compile_wsflobjref(ObjTerm,RefType,AttTerm,WS,Object,OidCode,Code,Status) :-
-	compile_wsflpathexplist([ObjTerm,AttTerm],WS,[Obj,Att],OidCodeList,OACode,Status),
+	compile_wsflpathexplist([ObjTerm,AttTerm],WS,[Obj,Att],OidCodeList,OACode,PathexpStatus),
 	!,
-	( no_errors_found(Status) -> 
+	( no_errors_found(PathexpStatus) -> 
 	    %% Approximate the textual information for the new variable.
 	    approx_flindex(AttTerm,Index),
 	    attach_workspace(WS,
 			    body_objref_struct(Obj,RefType,Att,Index,Object,TCode),
-			     TCode,WTCode),
+			     TCode,WTCode,WSStatus),
 	    Code = OACode,
 	    conjunct_code([OidCodeList,WTCode],OidCode)
 	;
-	  true
-        ).
+	    WSStatus = []
+        ),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
+	).
 
 
 /****************************************************************************
   compile_wsflbirelate(+ObjTerm1,+RelType,+ObjTerm2,+Workdpace,-Object,-OidCode,-Code,-Status)
 ****************************************************************************/
 compile_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,Obj1,OidCode,Code,Status) :-
-	compile_wsflpathexplist([ObjTerm1,ObjTerm2],WS,[Obj1,Obj2],OidCode,OCode,Status),
+	compile_wsflpathexplist([ObjTerm1,ObjTerm2],WS,[Obj1,Obj2],OidCode,OCode,PathexpStatus),
 	!,
-	( no_errors_found(Status) -> 
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     birelate_struct(BODYLITERAL,Obj1,RelType,Obj2,TCode),
-			     TCode,WTCode),
+			     TCode,WTCode,WSStatus),
 	    conjunct_code([WTCode,OCode],Code)
 	;
-	  true
-        ).
+	    WSStatus = []
+        ),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
+	).
 
 
 /****************************************************************************
@@ -7189,26 +7229,32 @@ compile_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,Obj1,OidCode,Code,Status) :-
 compile_wsflobjspec(ObjTerm,SpecBody,WS,Object,OidCode,Code,BodyHeadList,Status) :-
 	( SpecBody == [] ->
 	    ( is_flobjref(ObjTerm,OTerm,RefType,ATerm) ->
-		compile_wsflpathexplist([OTerm,ATerm],WS,[OObj,AObj],OidCode,ObjCode,BodyHeadList,Status),
-		( Status == [] ->
+		compile_wsflpathexplist([OTerm,ATerm],WS,[OObj,AObj],OidCode,ObjCode,BodyHeadList,PathexpStatus),
+		( no_errors_found(PathexpStatus) ->
 		    approx_flindex(ATerm,Index),
 		    attach_workspace(WS,
 				     body_objref_struct(OObj,RefType,AObj,Index,Object,TCode),
-				     TCode,WTCode),
+				     TCode,WTCode,WSStatus),
 		    conjunct_code([WTCode,ObjCode],Code)
 		;
-		  true
-	        )
+		    WSStatus = []
+	        ),
+		(WSStatus == [] -> Status = PathexpStatus
+		; Status = WSStatus
+		)
 	    ;
 		%% object exists test: a.b.c[]@module
-		compile_wsflpathexp(ObjTerm,WS,Object,OidCode,ObjCode,BodyHeadList,Status),
-		( no_errors_found(Status) -> 
+		compile_wsflpathexp(ObjTerm,WS,Object,OidCode,ObjCode,BodyHeadList,PathexpStatus),
+		( no_errors_found(PathexpStatus) -> 
 		    attach_workspace(WS,
 				     objexists_struct(BODYLITERAL,Object,ECode),
-				     ECode,WSECode),
+				     ECode,WSECode,WSStatus),
 		    conjunct_code([WSECode,ObjCode],Code)
 		;
-		    true
+		    WSStatus = []
+		),
+		(WSStatus == [] -> Status = PathexpStatus
+		; Status = WSStatus
 		)
 	    )
 	; % oid spec plus object spec. something like a.b[c->d]@module
@@ -7353,10 +7399,9 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	    ( ValTermList == [] ->
 		attach_workspace(WS,
 				 mvdattdef_struct(BODYLITERAL,Object,AttObj,RefType,SCode),
-				 SCode,WSCode),
+				 SCode,WSCode,Status),
 		%% Fold OidCode in front of molecule
-		conjunct_code([AOidCode,ACode,WSCode],Code),
-		Status=[]
+		conjunct_code([AOidCode,ACode,WSCode],Code)
 	    ;
 	      compile_wsmvdattspec(Object,AttObj,RefType,ValTermList,WS,VOidCode,WSCode,Status),
 	      ( no_errors_found(Status) -> 
@@ -7382,19 +7427,21 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 		%% This is SIGDEF: occurs when we have a[b=> ()]
 		attach_workspace(WS,
 				 sigattdef_struct(BODYLITERAL,Object,AttObj,RefType,SCode),
-				 SCode,WSCode),
+				 SCode,WSCode,Status),
 		conjunct_code([AOidCode,ACode,WSCode],Code),
-		Status=[],
 		BodyHeadList = BodyHeadList1
 	    ;
-		compile_wsflpathexp(ValTerm,WS,ValObj,VOidCode,VCode,BodyHeadList2,Status),
-		( no_errors_found(Status) -> 
+		compile_wsflpathexp(ValTerm,WS,ValObj,VOidCode,VCode,BodyHeadList2,PathexpStatus),
+		( no_errors_found(PathexpStatus) -> 
 		    attach_workspace(WS,
 				     sigattspec_struct(BODYLITERAL,Object,AttObj,RefType,ValObj,SCode),
-				     SCode,WSCode),
+				     SCode,WSCode,WSStatus),
 		    conjunct_code([AOidCode,VOidCode,ACode,VCode,WSCode],Code)
 		;
-		    true
+		    WSStatus = []
+		),
+		(WSStatus == [] -> Status = PathexpStatus
+		; Status = WSStatus
 		),
 		append(BodyHeadList1,BodyHeadList2,BodyHeadList)
 	    )
@@ -7413,25 +7460,27 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 		%% This is SIGDEF: occurs when we have a[b=> ()]
 		attach_workspace(WS,
 				 sigattdef_struct(BODYLITERAL,Object,AttObj,RefType,SCode),
-				 SCode,WSCode),
+				 SCode,WSCode,Status),
 		conjunct_code([AOidCode,ACode,WSCode],Code),
-		Status=[],
 		BodyHeadList = BodyHeadList1
 	    ;
 		is_flsigconstr(ConstrTerm,Lower,Upper),
 		compile_wsflpathexplist([Lower,Upper],WS,[OLower,OUpper],COidCode,CCode,BodyHeadList2,S_C),
 		( no_errors_found(S_C) -> 
-		    compile_wsflpathexp(ValTerm,WS,ValObj,VOidCode,VCode,BodyHeadList3,Status),
-		    ( no_errors_found(Status) -> 
+		    compile_wsflpathexp(ValTerm,WS,ValObj,VOidCode,VCode,BodyHeadList3,PathexpStatus),
+		    ( no_errors_found(PathexpStatus) -> 
 			attach_workspace(WS,
 					 sigattspec_struct(BODYLITERAL,Object,AttObj,RefType,ValObj,SCode),
-					 SCode,WSCode),
+					 SCode,WSCode,WSStatus1),
 			attach_workspace(WS,
 					 sigattconstr_struct(BODYLITERAL,Object,AttObj,OLower,OUpper,RefType,CSCode),
-					 CSCode,CWSCode),
+					 CSCode,CWSCode,WSStatus2),
 			conjunct_code([AOidCode,VOidCode,ACode,VCode,WSCode,COidCode,CCode,CWSCode],Code)
 		    ;
-			true
+			WSStatus1 = [], WSStatus2 = []
+		    ),
+		    (WSStatus1 == [], WSStatus2 == [] -> Status = PathexpStatus
+		    ; append(WSStatus1,WSStatus2,Status)
 		    )
 		;
 		    Status = S_C
@@ -7449,14 +7498,17 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	is_flboolsig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_wsflpathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList,Status),
-	( no_errors_found(Status) -> 
+	compile_wsflpathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     boolsig_struct(BODYLITERAL,Object,AttObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    conjunct_code([AOidCode,ACode,WSCode],Code)
 	;
-	    true
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
 	),
 	!.
 
@@ -7464,14 +7516,17 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	is_fliboolsig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_wsflpathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList,Status),
-	( no_errors_found(Status) -> 
+	compile_wsflpathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     iboolsig_struct(BODYLITERAL,Object,AttObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    conjunct_code([AOidCode,ACode,WSCode],Code)
 	;
-	    true
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
 	),
 	!.
 
@@ -7479,14 +7534,17 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	is_fltransig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_wsflpathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList,Status),
-	( no_errors_found(Status) -> 
+	compile_wsflpathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     transig_struct(BODYLITERAL,Object,AttObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    conjunct_code([AOidCode,ACode,WSCode],Code)
 	;
-	    true
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
 	),
 	!.
 
@@ -7494,14 +7552,17 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	is_flitransig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_wsflpathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList,Status),
-	( no_errors_found(Status) -> 
+	compile_wsflpathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     itransig_struct(BODYLITERAL,Object,AttObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    conjunct_code([AOidCode,ACode,WSCode],Code)
 	;
-	    true
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
 	),
 	!.
 
@@ -7510,16 +7571,19 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	is_flincattspec(SpecTerm,AttTerm,RefType,ValTerm),
 	!,
-	compile_wsflpathexplist([AttTerm,ValTerm],WS,[AttObj,ValObj],OidCode,OCode,BodyHeadList,Status),
-	( no_errors_found(Status) -> 
+	compile_wsflpathexplist([AttTerm,ValTerm],WS,[AttObj,ValObj],OidCode,OCode,BodyHeadList,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     incattspec_struct(Object,AttObj,RefType,ValObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    %% Fold OidCode in front of molecule
 	    conjunct_code([OidCode,WSCode,OCode],Code)
 	;
-	  true
-        ),
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
+	),
 	!.
 
 %% same for ->->@module
@@ -7527,15 +7591,18 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	is_fltolistattspec(SpecTerm,AttTerm,RefType,ValTerm),
 	!,
-	compile_wsflpathexplist([AttTerm,ValTerm],WS,[AttObj,ValObj],OidCode,OCode,BodyHeadList,Status),
-	( no_errors_found(Status) -> 
+	compile_wsflpathexplist([AttTerm,ValTerm],WS,[AttObj,ValObj],OidCode,OCode,BodyHeadList,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     tolistattspec_struct(Object,AttObj,RefType,ValObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    conjunct_code([OidCode,WSCode,OCode],Code)
 	;
-	  true
-        ),
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
+	),
 	!.
 
 %% Obj[true], Obj[fail], Obj[!] translate as true, fail, and !
@@ -7564,15 +7631,18 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	is_flmethspec(SpecTerm,MethTerm),
 	!,
 	compile_wsflpathexp(MethTerm,WS,MethObj,OidCode,MCode,
-			    BodyHeadList,Status),
-	( no_errors_found(Status) -> 
+			    BodyHeadList,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     methspec_struct(BODYLITERAL,Object,MethObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    conjunct_code([OidCode,MCode,WSCode],Code)
 	;
-	  true
-        ),
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
+	),
 	!.
 
 %% for O[*BoolMeth]@module
@@ -7581,16 +7651,19 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	is_flimethspec(SpecTerm,IMethTerm),
 	!,
 	compile_wsflpathexp(IMethTerm,WS,IMethObj,OidCode,IMCode,
-			    BodyHeadList,Status),
-	( no_errors_found(Status) -> 
+			    BodyHeadList,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     imethspec_struct(BODYLITERAL,Object,IMethObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    %% Fold OidCode in front of molecule
 	    conjunct_code([OidCode,IMCode,WSCode],Code)
 	;
-	  true
-        ),
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
+	),
 	!.
 
 %% O[%M]@module
@@ -7598,15 +7671,18 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	is_fltranspec(SpecTerm,TranTerm),
 	!,
 	compile_wsflpathexp(TranTerm,WS,TranObj,OidCode,TCode,
-			    BodyHeadList,Status),
-	( no_errors_found(Status) -> 
+			    BodyHeadList,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     transpec_struct(BODYLITERAL,Object,TranObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    conjunct_code([OidCode,TCode,WSCode],Code)
 	;
-	  true
-        ),
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
+	),
 	!.
 
 
@@ -7617,15 +7693,18 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 ****************************************************************************/
 compile_wsmvdattspec(Object,AttObj,RefType,[T],WS,OidCode,Code,Status) :-
 	!,
-	compile_wsflpathexp(T,WS,TObj,OidCode,TCode,Status),
-	( no_errors_found(Status) -> 
+	compile_wsflpathexp(T,WS,TObj,OidCode,TCode,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     mvdattspec_struct(BODYLITERAL,Object,AttObj,RefType,TObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    conjunct_code([WSCode,TCode],Code)
 	;
-	  true
-        ),
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
+	),
 	!.
 
 compile_wsmvdattspec(Object,AttObj,RefType,[T|L],WS,OidCode,Code,Status) :-
@@ -7648,14 +7727,17 @@ compile_wsmvdattspec(Object,AttObj,RefType,[T|L],WS,OidCode,Code,Status) :-
   compile_wsflobjeql(+Obj1,+Obj2,+Workspace,-OidCode,-Code,-Status)
 ****************************************************************************/
 compile_wsflobjeql(Obj1,Obj2,WS,OidCode,Code,Status) :-
-	compile_wsflpathexplist([Obj1,Obj2],WS,[O1,O2],OidCode,OCode,Status),
-	( no_errors_found(Status) -> 
+	compile_wsflpathexplist([Obj1,Obj2],WS,[O1,O2],OidCode,OCode,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     objeql_struct(BODYLITERAL,O1,O2,OECode),
-			     OECode,WSCode),
+			     OECode,WSCode,WSStatus),
 	    conjunct_code([OCode,WSCode],Code)
 	;
-	  true
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
 	),
 	!.
 
@@ -8090,33 +8172,37 @@ compile_head_wsliteral(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    %% Is this possible? Should be taken care by the libmodlit code
 	    attach_workspace(WS,
 			     compile_flvar(VarName,Index,VarCode),
-			     VarCode,Code),
+			     VarCode,Code,Status),
 	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL,
-            Status=[]
+	    H2BCodeTail=NULL
 
         ; is_fltransactionalvariable(ParserTerm,VarName,Index) ->
 	    %% Is this possible? Should be taken care by the libmodlit code
 	    attach_workspace(WS,
 			     compile_fltransactionalvar(VarName,Index,VarCode),
-			     VarCode,Code),
+			     VarCode,Code,Status),
 	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL,
-            Status=[]
+	    H2BCodeTail=NULL
 	;
 	    attach_workspace(WS,
 			     atomlit_struct(HEADLITERAL,ParserTerm,ACode),
-			     ACode,Code),
+			     ACode,Code,WSStatus),
 	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
-				  NONTRANSACTIONAL_SYMBOL,Status),
+				  NONTRANSACTIONAL_SYMBOL,SymbolStatus),
+	    (WSStatus == [] -> Status = SymbolStatus
+	    ; append(SymbolStatus,WSStatus,Status)
+	    ),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL
 	;
 	    attach_workspace(WS,
 			     transactionalatomlit_struct(HEADLITERAL,ParserTerm,ACode),
-			     ACode,Code),
+			     ACode,Code,WSStatus),
 	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
-				  TRANSACTIONAL_SYMBOL,Status),
+				  TRANSACTIONAL_SYMBOL,SymbolStatus),
+	    (WSStatus == [] -> Status = SymbolStatus
+	    ; append(SymbolStatus,WSStatus,Status)
+	    ),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL
 	),
@@ -8278,32 +8364,36 @@ compile_head_wstermlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatu
 	),
 	verify_symbol_context(Funct,N,WS,PREDICATE_SYMBOL,Transactionality,SymbolStatus),
 	set_context(compiling_term_name),
-	compile_head_wsflpathexplist([Funct|Args],WS,[FObj|AObj],ObjCode,H2BCodeHead,H2BCodeTail,Status),
-	( no_errors_found(Status) -> 
+	compile_head_wsflpathexplist([Funct|Args],WS,[FObj|AObj],ObjCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     termlit_struct(HEADLITERAL,FObj,N,AObj,TObj),
-			     TObj,WSTObj),
+			     TObj,WSTObj,WSStatus),
 	    conjunct_struct(ObjCode,WSTObj,Code)
 	;
-	  true
+	    WSStatus = []
         ),
 	!,
-	append(SymbolStatus,Status,CompileStatus).
+	(WSStatus == [] -> append(SymbolStatus,PathexpStatus,CompileStatus)
+	; CompileStatus = WSStatus
+	).
 
 compile_head_wstransactionaltermlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
 	verify_symbol_context(Funct,N,WS,PREDICATE_SYMBOL,TRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
-	compile_head_wsflpathexplist([Funct|Args],WS,[FObj|AObj],ObjCode,H2BCodeHead,H2BCodeTail,Status),
-	( no_errors_found(Status) -> 
+	compile_head_wsflpathexplist([Funct|Args],WS,[FObj|AObj],ObjCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     transactionaltermlit_struct(HEADLITERAL,FObj,N,AObj,TObj),
-			     TObj,WSTObj),
+			     TObj,WSTObj,WSStatus),
 	    conjunct_struct(ObjCode,WSTObj,Code)
 	;
-	  true
+	    WSStatus = []
         ),
 	!,
-	append(SymbolStatus,Status,CompileStatus).
+	(WSStatus == [] -> append(SymbolStatus,PathexpStatus,CompileStatus)
+	; CompileStatus = WSStatus
+	).
 
 
 
@@ -8340,36 +8430,42 @@ compile_head_wsfllist(ObjTermList,ObjTerm,Index,WS,Object,Code,H2BCodeHead,H2BCo
   compile_head_wsflobjref(+ObjT,+RefType,+AttT,+WS,-Object,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
 ****************************************************************************/
 compile_head_wsflobjref(ObjTerm,RefType,AttTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	compile_head_wsflpathexplist([ObjTerm,AttTerm],WS,[Obj,Att],OACode,OAH2BCodeHead,OAH2BCodeTail,Status),
+	compile_head_wsflpathexplist([ObjTerm,AttTerm],WS,[Obj,Att],OACode,OAH2BCodeHead,OAH2BCodeTail,PathexpStatus),
 	!,
-	( no_errors_found(Status) -> 
+	( no_errors_found(PathexpStatus) -> 
 	    %% Approximate the textual information for the new variable.
 	    approx_flindex(AttTerm,Index),
 	    attach_workspace(WS,
 			     head_objref_struct(Obj,RefType,Att,Index,Object,TCode),
-			     TCode,WTCode),
+			     TCode,WTCode,WSStatus),
 	    OAH2BCodeHead = H2BCodeHead,
 	    conjunct_code([OAH2BCodeTail,WTCode],H2BCodeTail),
 	    Code = OACode
 	;
-	  true
-        ).
+	    WSStatus = []
+        ),
+	(WSStatus == [] -> Status = PathexpStatus
+	;  Status = WSStatus
+	).
 
 
 /****************************************************************************
   compile_head_wsflbirelate(+OT1,+RelType,+OT2,+WS,-Object,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
 ****************************************************************************/
 compile_head_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,Obj1,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	compile_head_wsflpathexplist([ObjTerm1,ObjTerm2],WS,[Obj1,Obj2],OCode,H2BCodeHead,H2BCodeTail,Status),
+	compile_head_wsflpathexplist([ObjTerm1,ObjTerm2],WS,[Obj1,Obj2],OCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
 	!,
-	( no_errors_found(Status) -> 
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     birelate_struct(HEADLITERAL,Obj1,RelType,Obj2,TCode),
-			     TCode,WTCode),
+			     TCode,WTCode,WSStatus),
 	    conjunct_struct(OCode,WTCode,Code)
 	;
-	  true
-        ).
+	    WSStatus = []
+        ),
+	(WSStatus == [] -> Status = PathexpStatus
+	;  Status = WSStatus
+	).
 
 
 /****************************************************************************
@@ -8380,15 +8476,18 @@ compile_head_wsflobjspec(ObjTerm,SpecBody,WS,Object,Code,H2BCodeHead,H2BCodeTail
 	    ( is_flobjref(ObjTerm,OTerm,RefType,ATerm) ->
 		compile_head_wsflobjref(OTerm,RefType,ATerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
 	    ;
-	      compile_head_wsflpathexp(ObjTerm,WS,Object,ObjCode,H2BCodeHead,H2BCodeTail,Status),
-	      ( no_errors_found(Status) -> 
-		  attach_workspace(WS,
-				   objexists_struct(HEADLITERAL,Object,ECode),
-				   ECode,WSECode),
-		  conjunct_struct(ObjCode,WSECode,Code)
-	      ;
-	        true
-	      )
+		compile_head_wsflpathexp(ObjTerm,WS,Object,ObjCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+		( no_errors_found(PathexpStatus) -> 
+		    attach_workspace(WS,
+				     objexists_struct(HEADLITERAL,Object,ECode),
+				     ECode,WSECode,WSStatus),
+		    conjunct_struct(ObjCode,WSECode,Code)
+		;
+		    WSStatus = []
+		),
+		(WSStatus == [] -> Status = PathexpStatus
+		; Status = WSStatus
+		)
 	    )
 	;
 	  compile_head_wsflpathexp(ObjTerm,WS,Object,ObjCode,ObjH2BCodeHead,ObjH2BCodeTail,S),
@@ -8434,11 +8533,10 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 	    ( VL == [] ->
 		attach_workspace(WS,
 				 mvdattdef_struct(HEADLITERAL,Object,AObj,RefType,SCode),
-				 SCode,WSSCode),
+				 SCode,WSSCode,Status),
 		conjunct_struct(ACode,WSSCode,Code),
 		H2BCodeHead=AH2BCodeHead,
-		H2BCodeTail=AH2BCodeTail,
-		Status=[]
+		H2BCodeTail=AH2BCodeTail
 	    ;
 	      compile_head_wsmvdattspec(Object,AObj,RefType,VL,WS,VCode,VH2BCodeHead,VH2BCodeTail,Status),
 	      ( no_errors_found(Status) -> 
@@ -8457,43 +8555,52 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flmethspec(SpecTerm,MethTerm),
 	!,
-	compile_head_wsflpathexp(MethTerm,WS,MethObj,MCode,H2BCodeHead,H2BCodeTail,Status),
-	( no_errors_found(Status) -> 
+	compile_head_wsflpathexp(MethTerm,WS,MethObj,MCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     methspec_struct(HEADLITERAL,Object,MethObj,SCode),
-			     SCode,WSSCode),
+			     SCode,WSSCode,WSStatus),
 	    conjunct_struct(MCode,WSSCode,Code)
 	;
-	  true
+	    WSStatus = []
         ),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
+	),
 	!.
 
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flimethspec(SpecTerm,IMethTerm),
 	!,
-	compile_head_wsflpathexp(IMethTerm,WS,IMethObj,IMCode,H2BCodeHead,H2BCodeTail,Status),
-	( no_errors_found(Status) -> 
+	compile_head_wsflpathexp(IMethTerm,WS,IMethObj,IMCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     imethspec_struct(HEADLITERAL,Object,IMethObj,SCode),
-			     SCode,WSSCode),
+			     SCode,WSSCode,WSStatus),
 	    conjunct_struct(IMCode,WSSCode,Code)
 	;
-	  true
+	    WSStatus = []
         ),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
+	),
 	!.
 
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_fltranspec(SpecTerm,TranTerm),
 	!,
-	compile_head_wsflpathexp(TranTerm,WS,TranObj,TCode,H2BCodeHead,H2BCodeTail,Status),
-	( no_errors_found(Status) -> 
+	compile_head_wsflpathexp(TranTerm,WS,TranObj,TCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     transpec_struct(HEADLITERAL,Object,TranObj,SCode),
-			     SCode,WSSCode),
+			     SCode,WSSCode,WSStatus),
 	    conjunct_struct(TCode,WSSCode,Code)
 	;
-	  true
+	    WSStatus = []
         ),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
+	),
 	!.
 
 
@@ -8507,22 +8614,24 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 		%% This is SIGDEF: occurs when we have a[b=> ()]
 		attach_workspace(WS,
 				 sigattdef_struct(HEADLITERAL,Object,AttObj,RefType,SCode),
-				 SCode,WSSCode),
+				 SCode,WSSCode,Status),
 		conjunct_struct(ACode,WSSCode,Code),
 		H2BCodeHead=AH2BCodeHead,
-		H2BCodeTail=AH2BCodeTail,
-		Status=[]
+		H2BCodeTail=AH2BCodeTail
 	    ;
-		compile_head_wsflpathexp(ValTerm,WS,ValObj,VCode,VH2BCodeHead,VH2BCodeTail,Status),
-		( no_errors_found(Status) -> 
+		compile_head_wsflpathexp(ValTerm,WS,ValObj,VCode,VH2BCodeHead,VH2BCodeTail,PathexpStatus),
+		( no_errors_found(PathexpStatus) -> 
 		    attach_workspace(WS,
 				     sigattspec_struct(HEADLITERAL,Object,AttObj,RefType,ValObj,SCode),
-				     SCode,WSSCode),
+				     SCode,WSSCode,WSStatus),
 		    conjunct_code([ACode,VCode,WSSCode],Code),
 		    conjunct_code([AH2BCodeHead,VH2BCodeHead],H2BCodeHead),
 		    conjunct_code([AH2BCodeTail,VH2BCodeTail],H2BCodeTail)
 		;
-		    true
+		    WSStatus = []
+		),
+		(WSStatus == [] -> Status = PathexpStatus
+		; Status = WSStatus
 		)
 	    )
 	;
@@ -8539,28 +8648,30 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 		%% This is SIGDEF: occurs when we have a[b=> ()]
 		attach_workspace(WS,
 				 sigattdef_struct(HEADLITERAL,Object,AttObj,RefType,SCode),
-				 SCode,WSSCode),
+				 SCode,WSSCode,Status),
 		conjunct_struct(ACode,WSSCode,Code),
 		H2BCodeHead = AH2BCodeHead,
-		H2BCodeTail = AH2BCodeTail,
-		Status=[]
+		H2BCodeTail = AH2BCodeTail
 	    ;
 		is_flsigconstr(ConstrTerm,Lower,Upper),
 		compile_head_wsflpathexplist([Lower,Upper],WS,[OLower,OUpper],CCode,CH2BCodeHead,CH2BCodeTail,S_C),
 		( no_errors_found(S_C) -> 
-		    compile_head_wsflpathexp(ValTerm,WS,ValObj,VCode,VH2BCodeHead,VH2BCodeTail,Status),
-		    ( no_errors_found(Status) -> 
+		    compile_head_wsflpathexp(ValTerm,WS,ValObj,VCode,VH2BCodeHead,VH2BCodeTail,PathexpStatus),
+		    ( no_errors_found(PathexpStatus) -> 
 			attach_workspace(WS,
 					 sigattspec_struct(HEADLITERAL,Object,AttObj,RefType,ValObj,SCode),
-					 SCode,WSSCode),
+					 SCode,WSSCode,WSStatus1),
 			attach_workspace(WS,
 					 sigattcondef_struct(HEADLITERAL,Object,AttObj,OLower,OUpper,RefType,ValObj,CSCode),
-					 CSCode,CWSSCode),
+					 CSCode,CWSSCode,WSStatus2),
+			(WSStatus1==[], WSStatus2==[] -> Status = PathexpStatus
+			; append(WSStatus1,WSStatus2,Status)
+			),
 			conjunct_code([ACode,CCode,VCode,WSSCode,CWSSCode],Code),
 			conjunct_code([AH2BCodeHead,CH2BCodeHead,VH2BCodeHead],H2BCodeHead),
 			conjunct_code([AH2BCodeTail,CH2BCodeTail,VH2BCodeTail],H2BCodeTail)
 		    ;
-			true
+			Status = PathexpStatus
 		    )
 		;
 		    Status = S_C
@@ -8576,14 +8687,17 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flboolsig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_head_wsflpathexp(AttTerm,WS,AttObj,ACode,H2BCodeHead,H2BCodeTail,Status),
-	( no_errors_found(Status) -> 
+	compile_head_wsflpathexp(AttTerm,WS,AttObj,ACode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     boolsig_struct(HEADLITERAL,Object,AttObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    conjunct_struct(ACode,WSCode,Code)
 	;
-	    true
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
 	),
 	!.
 
@@ -8591,14 +8705,17 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_fliboolsig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_head_wsflpathexp(AttTerm,WS,AttObj,ACode,H2BCodeHead,H2BCodeTail,Status),
-	( no_errors_found(Status) -> 
+	compile_head_wsflpathexp(AttTerm,WS,AttObj,ACode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     iboolsig_struct(HEADLITERAL,Object,AttObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    conjunct_struct(ACode,WSCode,Code)
 	;
-	    true
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
 	),
 	!.
 
@@ -8606,14 +8723,17 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_fltransig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_head_wsflpathexp(AttTerm,WS,AttObj,ACode,H2BCodeHead,H2BCodeTail,Status),
-	( no_errors_found(Status) -> 
+	compile_head_wsflpathexp(AttTerm,WS,AttObj,ACode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     transig_struct(HEADLITERAL,Object,AttObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    conjunct_struct(ACode,WSCode,Code)
 	;
-	    true
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
 	),
 	!.
 
@@ -8621,14 +8741,17 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	is_flitransig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_head_wsflpathexp(AttTerm,WS,AttObj,ACode,H2BCodeHead,H2BCodeTail,Status),
-	( no_errors_found(Status) -> 
+	compile_head_wsflpathexp(AttTerm,WS,AttObj,ACode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     itransig_struct(HEADLITERAL,Object,AttObj,SCode),
-			     SCode,WSCode),
+			     SCode,WSCode,WSStatus),
 	    conjunct_struct(ACode,WSCode,Code)
 	;
-	    true
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
 	),
 	!.
 
@@ -8640,9 +8763,10 @@ compile_head_wsmvdattspec(Object,AttObj,RefType,[T|L],WS,Code,H2BCodeHead,H2BCod
 	( no_errors_found(S) -> 
 	    attach_workspace(WS,
 			     mvdattspec_struct(HEADLITERAL,Object,AttObj,RefType,TObj,SCode),
-			     SCode,WSSCode),
+			     SCode,WSSCode,WSStatus),
 	    conjunct_struct(TCode,WSSCode,TSCode),
-	    compile_head_wsmvdattspec(Object,AttObj,RefType,L,WS,LCode,LH2BCodeHead,LH2BCodeTail,Status),
+	    compile_head_wsmvdattspec(Object,AttObj,RefType,L,WS,LCode,LH2BCodeHead,LH2BCodeTail,AttspecStatus),
+	    append(AttspecStatus,WSStatus,Status),
 	    ( no_errors_found(Status) -> 
 		    conjunct_struct(TSCode,LCode,Code),
 		    conjunct_code([TH2BCodeHead,LH2BCodeHead],H2BCodeHead),
@@ -8663,14 +8787,17 @@ compile_head_wsmvdattspec(Object,AttObj,RefType,[T|L],WS,Code,H2BCodeHead,H2BCod
                 appended to the code of the body
 ****************************************************************************/
 compile_head_wsflobjeql(Obj1,Obj2,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	compile_head_wsflpathexplist([Obj1,Obj2],WS,[O1,O2],OCode,H2BCodeHead,H2BCodeTail,Status),
-	( no_errors_found(Status) -> 
+	compile_head_wsflpathexplist([Obj1,Obj2],WS,[O1,O2],OCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	( no_errors_found(PathexpStatus) -> 
 	    attach_workspace(WS,
 			     objeql_struct(HEADLITERAL,O1,O2,OECode),
-			     OECode,WSCode),
+			     OECode,WSCode,WSStatus),
 	    conjunct_struct(OCode,WSCode,Code)
 	;
-	  true
+	    WSStatus = []
+	),
+	(WSStatus == [] -> Status = PathexpStatus
+	; Status = WSStatus
 	),
 	!.
 
@@ -8687,8 +8814,10 @@ compile_head_wsflneg(PosPart,WS,Idx,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	( no_errors_found(S) -> 
 	    attach_workspace(WS,
 			     head_neg_struct(PosCode,Idx,NegCode,Status1),
-			     NegCode,Code),
-	    append(S,Status1,Status)
+			     NegCode,Code,WSStatus),
+	    (WSStatus == [] -> append(S,Status1,Status)
+	    ; append(Status1,WSStatus,Status)
+	    )
 	; Status = S
 	),
 	!.
@@ -9423,6 +9552,13 @@ is_head_neg_negatable_literal(PRIBOOLSIG(_,_,_)) :- !.
 is_head_neg_negatable_literal(PRMVDSIGDEF(_,_,_)) :- !.
 is_head_neg_negatable_literal(PRIMVDSIGDEF(_,_,_)) :- !.
 
+is_head_neg_negatable_literal(X) :-
+	is_prologterm(X,Struct,Arity,_Args),
+	is_modularized_atom(Struct,Atom,_),
+	Arity1 is Arity-1,
+	flora_negatable_prlgdef(Atom,Arity1,_),
+	!.
+
 is_body_neg_negatable_literal(X) :- is_head_neg_negatable_literal(X), !.
 is_body_neg_negatable_literal(X) :-
 	workspace_struct(L,_WS,X),
@@ -9456,7 +9592,6 @@ is_body_neg_passthrough_literal(X) :-
 	is_prologterm(X,Struct,4,_Args),
 	is_modularized_atom(Struct,UDFHILOGPREDICATENAME,_),
 	!.
-
 /*
 is_unimplemented_neg_negatable_literal(X) :-
 	is_florasyslib_struct(X, _I,_F,_N,_Args).
