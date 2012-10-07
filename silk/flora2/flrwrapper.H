@@ -78,6 +78,7 @@
 	flora_decode_predicate/7,
 	flora_decode_module_name/2,
 	flora_decode_module_prefix/1,
+	flora_get_symbol_module/2,
 	flora_is_flogic_wrapper/3,
 
 	flora_is_fdb_storage/1,

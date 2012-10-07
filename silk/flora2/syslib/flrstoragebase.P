@@ -27,6 +27,8 @@
 #include "trie_defs.h"
 
 :- export
+	flora_adaptive_assert/1,
+	flora_adaptive_retract/1,
 	flora_db_insert_base/2,
 	flora_db_insert_base_fast/2, %% for loading of facts only
 	flora_db_delete_base/2,
@@ -40,6 +42,9 @@
 	flora_storage_fast_insert_fact/3,
 	flora_storage_find_fact/2.
 
+:- import incr_assert/1, incr_assert/3, incr_retract/1 from increval.
+:- import predicate_property/2 from curr_sym.
+:- import assert/3 from assert.
 
 :- import
 	storage_insert_fact_bt/5,
@@ -65,6 +70,8 @@
 	%%flora_abolish_table_call/1,
 	flora_refresh_tables/1
    from flrtables.
+
+:- import flora_abort/1 from flrporting.
 
 :- import flora_call_hooks/5 from flrhooks.
 
@@ -284,3 +291,59 @@ flora_db_insert_base_fast(StorageName,Call) :-
 	flrtrim_last(Call,Fact),
 	flora_storage_fast_insert_fact(StorageName,INCREMENTAL_TRIE,Fact).
 	%%flora_abolish_table_call(Call).
+
+%% In assert this means: use better register allocation. Assert last.
+#define CONSERVE_REGISTERS  3
+%% Tell assert on which argument to index. This actually has no effect,
+%% as the ':- index' directive takes precedence
+#define INDEXED_ARG         1
+
+%% We need to make these adaptive ops depend on whether the rule is
+%% in an incremental module or not
+flora_adaptive_assert(Rule) :-
+	Rule = (H:- _),
+	!,
+	(predicate_property(H,opaque)
+	->
+	    assert(Rule,CONSERVE_REGISTERS,INDEXED_ARG)
+	; predicate_property(H,incremental)
+	->
+	    incr_assert(Rule,CONSERVE_REGISTERS,INDEXED_ARG)
+	;
+	    functor(H,F,A),
+	    %% Inserting new predicate as opaque.
+	    %% Incremental updates seem to go through opaque dynamic preds.
+	    (dynamic F/A as opaque),
+	    assert(Rule,CONSERVE_REGISTERS,INDEXED_ARG)
+	).
+flora_adaptive_assert(Fact) :-
+	(predicate_property(Fact,opaque)
+	->
+	    assert(Fact)
+	; predicate_property(Fact,incremental)
+	->
+	    incr_assert(Fact)
+	;
+	    functor(Fact,F,A),
+	    %% Inserting new predicate as opaque.
+	    %% Incremental updates seem to go through opaque dynamic preds.
+	    (dynamic F/A as opaque),
+	    assert(Fact)
+	).
+
+flora_adaptive_retract(Rule) :-
+	Rule = (H:- _),
+	!,
+	(predicate_property(H,opaque) -> retract(Rule)
+	; predicate_property(H,incremental) -> incr_retract(Rule)
+	;
+	    flora_abort(['internal error: deletion of a rule whose head is not opaque or dynamic: ', Rule])
+	).
+
+flora_adaptive_retract(Fact) :-
+	(predicate_property(Fact,opaque) -> retract(Fact)
+	; predicate_property(Fact,incremental) -> incr_retract(Fact)
+	;
+	    flora_abort(['internal error: deletion of a fact that is not opaque or dynamic: ', Fact])
+	).
+

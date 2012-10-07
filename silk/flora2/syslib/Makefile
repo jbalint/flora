@@ -61,6 +61,7 @@ ALLOBJS = flranswer$(OBJEXT) \
 	  flrcallflora$(OBJEXT) \
 	  flrcommon_definitions$(OBJEXT) \
 	  flrrulesigops$(OBJEXT) \
+	  flrdescriptor_support$(OBJEXT) \
 	  flrdelaysupport$(OBJEXT) \
 	  flrhypothetical$(OBJEXT) \
 	  flrcheckcard$(OBJEXT) \

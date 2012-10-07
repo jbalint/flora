@@ -127,9 +127,9 @@
 
 :- import
 	flora_clear_compilation_permaoptions/0,
-	flora_reset_compiler/0,
+	flora_reset_compiler/1,
 	flora_compile_pathexp/3,
-	flora_compile/5,
+	flora_compile/6,
         flora_compile_add/5,
 	flora_get_compilation_liboptions/1,
 	symbol/7,
@@ -229,7 +229,7 @@
    from flrdecode.
 
 :- import
-        matching_rule_signature/8
+        matching_rule_signature/6
    from flrcanon.
 
 :- import check_for_dependencies/2 from flrdependency.
@@ -295,6 +295,7 @@
 
 	flora_read_canonical_and_insert/2,
 	flora_read_symbols_canonical_and_insert/3,
+	flora_read_descriptor_metafacts_canonical_and_insert/0,
 	flora_load_system_module_util/1,
 	flora_measure_time/2,
 	

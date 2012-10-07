@@ -82,6 +82,10 @@
 	flora_parse_datatype/4
    from flrdatatype_parse.
 
+:- import
+	flora_simple_primitive/4
+   from flrsimpleprimitive.
+
 :- export
 	flora_get_flatomvar_name/2,
 	flora_get_module_from_spec/3,

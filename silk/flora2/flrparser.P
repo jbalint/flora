@@ -26,9 +26,14 @@
 #define CANOBRACE	canobrace
 #define CANOEMPTYTERM	canoemptyterm
 
+%% Types of DB literal parsing:
+%%    - insert
 #define FLINS		flins
+%%    - delete
 #define FLDEL		fldel
+%%    - refresh
 #define FLREF           flref
+%%    - clause
 #define FLCLS           flcls
 
 %% @_module - system module
@@ -78,7 +83,8 @@ Directive := ':-' ExportDirective | OperatorDirective | SetSemanticsDirective
 	             | IgnoreDependencyCheckDirective | ImportModuleDirective
                      | PrefixDirective | CompilerDirective | IndexDirective
 
-Annotation := '@{' Label (HeadLiteral| Term '=' Term)* '}'
+     ***** revise descriptor syntax!
+Annotation := '@{' Descriptor (HeadLiteral| Term '=' Term)* '}'
 
 Head := HeadLiteral
 Head := Head (',' | 'and') Head
@@ -632,7 +638,7 @@ is_query(CANOTERM(Funct,1,FL_PARENTHESIS,[Query],_If,_Ip),Query) :-
 
 is_rule_or_fact(CanoTerm) :- \+is_query(CanoTerm,_), \+is_directive(CanoTerm,_).
 
-is_labeled_construct(CANOTERM(Funct,2,FL_PARENTHESIS,[Label,Construct],_If,_Ip),Label,Construct) :-
+is_annotated_statement(CANOTERM(Funct,2,FL_PARENTHESIS,[Descriptor,Statement],_If,_Ip),Descriptor,Statement) :-
 	get_name(Funct,FL_DESCRIPTORFUNC).
 
 is_user_defined_function(CANOTERM(Funct,1,FL_PARENTHESIS,[CANOTERM(Funct2,2,FL_PARENTHESIS,[CANOTERM(Funct3,2,FL_PARENTHESIS,[Function,ReturnValue],_,_),Body],_,_)],_If,_Ip),Function,Body,ReturnValue) :-
@@ -690,9 +696,9 @@ is_reification(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),Args,N,Ip) :-
 	get_atom(Funct,Atom),
 	is_reifyop(Atom).
 
-annotated_construct_struct(LabelCode,ContentCode,FLTAGGEDCONSTRUCT(LabelCode,ContentCode)).
+annotated_construct_struct(DescriptorsCode,ContentCode,FLTAGGEDCONSTRUCT(DescriptorsCode,ContentCode)).
 
-annotation_struct(IdPart,MetaPart,Idx,FLTAG(IdPart,MetaPart,Idx)).
+annotation_struct(IdConstruct,Type,Idx,FLDESCRIPTOR(IdConstruct,Type,Idx)).
 
 %% Binary relationship, like : or ::
 is_birelop(FL_ISA)    :- !.
@@ -789,7 +795,7 @@ flexport_struct_list(TermList,FLEXPORT_LIST(TermList)).
 
 flprefixdef_struct(PrefixName,PrefixStr,FLPREFIXDEF(PrefixName,PrefixStr)).
 
-fldynrule_struct(Head,Body,Label,FLDYNRULE(Head,Body,Label)).
+fldynrule_struct(Head,Body,Descriptors,FLDYNRULE(Head,Body,Descriptors)).
 
 flimportmodule_struct(Module,FLIMPORTMOD(Module)).
 
@@ -1100,8 +1106,6 @@ is_clauseop(FL_CLAUSE) :- !.
 
 is_reifyop(FL_REIFYOP) :- !.
 
-%%is_labelingop(FL_DESCRIPTOROP) :- !.
-
 is_truthvalue_op(FL_TRUE) :- !.
 is_truthvalue_op(FL_FALSE) :- !.
 is_truthvalue_op(FL_FAIL) :- !.
@@ -1116,7 +1120,7 @@ flstopdelay_struct(List,I,FLSTOPDELAY(List,I)).
 flstopdelay_struct(I,FLSTOPDELAY(I)).
 
 fltruthvalue_struct(Formula,OpName,FLTRUTHVALUE(Formula,OpName)).
-fllabelprimitive_struct(Label,Head,FLTAGPRIMITIVE(Label,Head)).
+fltag_primitive_struct(Descriptors,Head,FLTAGPRIMITIVE(Descriptors,Head)).
 flprefixprimitive_struct(Prefix,Expansion,Module,FLPREFIXPRIMITIVE(Prefix,Expansion,Module)).
 
 flinsert_struct(Op,List,Cond,FLINSERT(Op,List,Cond)).
@@ -1129,10 +1133,14 @@ flerasemodule_struct(Op,Mod,FLERASEMODULE(Op,Mod)).
 flcallermodule_struct(Op,Var,FLCALLERMODULE(Op,Var)).
 flupdaterule_struct(Op,RuleList,FLUPDATERULE(Op,RuleList)).
 
+flsimpleprimitive_struct(Primitive,Args,FLSIMPLEPRIMITIVE(Primitive,Args)).
+%% Use _@! instead of thisruleid{?X}
+%%flthisruleid_struct(Arg,FLTHISRULEID(Arg)).
+
 flclause_struct(Head,Body,FLCLAUSE(Head,Body)).
 flclause_struct(Mode,Head,Body,FLCLAUSE(Mode,Head,Body)).
-fllabeledclause_struct(Label,Head,Body,FLTAGGEDCLAUSE(Label,Head,Body)).
-fllabeledclause_struct(Label,Mode,Head,Body,FLTAGGEDCLAUSE(Label,Mode,Head,Body)).
+flclause_with_descriptor_struct(Descriptors,Head,Body,FLTAGGEDCLAUSE(Descriptors,Head,Body)).
+flclause_with_descriptor_struct(Descriptors,Mode,Head,Body,FLTAGGEDCLAUSE(Descriptors,Mode,Head,Body)).
 
 is_flcallermodule_struct(FLCALLERMODULE(_,_)).
 is_flupdaterule_struct(FLUPDATERULE(_,_)).
@@ -1271,8 +1279,9 @@ parse_canonical(CanoniTerm,Code,Status) :-
 	; is_query(CanoniTerm,Query) ->
 	    flora_parse_query(Query,Code,Status)
 
-	; is_labeled_construct(CanoniTerm,Label,Construct) ->
-	    parse_labeled_toplevel_construct(Label,Construct,Code,Status)
+	; get_statement_descriptors(CanoniTerm,Descriptors,Statement),
+	    Descriptors \== [] ->
+	    parse_toplevel_annotated_statement(Descriptors,Statement,Code,Status)
 
 	; is_user_defined_function(CanoniTerm,Function,Body,ReturnValue) ->
 	    flora_parse_user_defined_function(Function,Body,ReturnValue,Code,Status)
@@ -2684,22 +2693,22 @@ flora_parse_user_defined_function_fact(Function,Value,Code,Status) :-
 
 
 /****************************************************************************
-   parse_labeled_toplevel_construct(+Label,+Construct,-Code,-Status)
+   parse_toplevel_annotated_statement(+Descriptors,+Statement,-Code,-Status)
 ****************************************************************************/
-parse_labeled_toplevel_construct(Label,Construct,Code,Status) :-
-	(is_rule_or_fact(Construct)
+parse_toplevel_annotated_statement(Descriptors,Statement,Code,Status) :-
+	(is_rule_or_fact(Statement)
 	->
-	    parse_canonical(Construct,Code1,Status1),
+	    parse_canonical(Statement,Code1,Status1),
 	    (Status1 == []
 	    ->
-		(is_rule(Construct,_,_)
+		(is_rule(Statement,_,_)
 		-> CodeConstr = Code1
-		; % if labeled fact, convert it to a rule:  fact :- true.
+		; %% if annotated fact, convert it to a rule:  fact :- true.
 		    flfact_struct(Head,Code1), % unwrap flfact
 		    flatom_struct(FL_TRUE,NO_INDEX,BodyCode),
 		    flrule_struct(Head,BodyCode,CodeConstr)
 		),
-		parse_label(Label,fail,CodeLab,Status),
+		parse_descriptor_list(Descriptors,false,CodeLab,Status),
 		(Status == []
 		-> annotated_construct_struct(CodeLab,CodeConstr,Code)
 		;  true
@@ -2707,9 +2716,9 @@ parse_labeled_toplevel_construct(Label,Construct,Code,Status) :-
 	    ; Status = Status1
 	    )
 
-	; %%% Ignore labels and metadata for directives and queries.
+	; %%% Ignore descriptors in directives and queries.
 	  %%% Might use this information later, especially for queries.
-	    parse_canonical(Construct,Code,Status)
+	    parse_canonical(Statement,Code,Status)
 	).
 
 
@@ -2822,15 +2831,16 @@ parse_head(CANOTERM(Funct,_N,FL_PARENTHESIS,_G,If,_Ip),_CodeList,Status) :-
 	parsing_error(If,NO_NEGATION,Status).
 
 parse_head(CanoniTerm,Code,Status) :-
-	is_labeled_construct(CanoniTerm,Label,Construct),
+	get_statement_descriptors(CanoniTerm,Descriptors,Statement),
+	Descriptors \== [],
 	!,
-	(is_rule(Construct,_,_)
+	(is_rule(Statement,_,_)
 	->
-	    get_index(Label,I),
+	    get_index(Descriptors,I),
 	    parsing_error(I,DESCRIPTOR_CONSTR_RULEHEAD,Status)
 	;
-	    %% currently we ignore labeling & metadata constructs in rule head
-	    parse_head(Construct,Code,Status)
+	    %% currently we ignore descriptors in rule head
+	    parse_head(Statement,Code,Status)
 	).
 
 parse_head(CanoniTerm,[Code],Status) :-
@@ -2867,7 +2877,7 @@ parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_DWS,_Code,Stat
 parse_head_literal(CANOTERM(Funct,N,FL_PARENTHESIS,_Args,If,_Ip),_DWS,_Code,Status) :-
 	get_atom(Funct,F),
 	flora_nodefp(F,N),
-	\+ has_context(parsing_label),
+	\+ has_context(parsing_descriptor),
 	!,
 	parsing_error(If,NO_REDEFINITION,Status).
 
@@ -3174,9 +3184,8 @@ parse_rule_body(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),WS,DWS,Code,Status) :-
 	(N > 1
 	-> list_to_conjunct(Args, Conjunct, If, Ip),
 	    parse_rule_body(Conjunct,WS,DWS,Code,Status)
-	;
-	    Args = [Arg],
-	    parse_rule_body(Arg,WS,DWS,Code,Status)
+	;  Args = [Arg] -> parse_rule_body(Arg,WS,DWS,Code,Status)
+	;  parsing_error(Ip,EXP_ARGS,Status)
 	).
 
 %% Literal is a rule and we are inside reification
@@ -3350,18 +3359,18 @@ parse_rule_body(CanoniTerm,FloraModSpec,FloraModSpec,Code,Status) :-
 	).
 
 parse_rule_body(CanoniTerm,WS,_DWS,Code,Status) :-
-	is_labeled_construct(CanoniTerm,_Label,Construct),
+	is_annotated_statement(CanoniTerm,_Descriptors,Statement),
 	has_context(reifying),
-	is_rule(Construct,_,_),
+	is_rule(Statement,_,_),
 	!,
 	parse_dynrule(CanoniTerm,WS,Code,Status).
 
 parse_rule_body(CanoniTerm,WS,DWS,Goal,Status) :-
-	is_labeled_construct(CanoniTerm,_Label,Construct),
+	is_annotated_statement(CanoniTerm,_Descriptors,Statement),
 	!,
-	%% currently we ignore labeling & metadata constructs in rule body
+	%% currently we ignore descriptors in rule body
 	%% unless reified rule
-	parse_rule_body(Construct,WS,DWS,Goal,Status).
+	parse_rule_body(Statement,WS,DWS,Goal,Status).
 
 %% At this point, CanoniTerm is neither a logical formula nor a 
 %% if-then-else statement, nor some other special builtin 
@@ -3903,24 +3912,24 @@ parse_body_literal(CANOTERM(Funct,_N,FL_PARENTHESIS,_Args,_If,Ip),_DWS,_Code,Sta
 	!,
 	parsing_error(Ip,STOP_DELAY_OP_SYNTAX,Status).
 
-%% label{Label, Head}
+%% tag{Tag, Head} - tag language primitive
 parse_body_literal(CANOTERM(Funct,N,FL_BRACE,_Args,If,_Ip),DWS,_Code,Status) :-
 	get_name(Funct,Atom),
 	is_tag_primitive_op(Atom),
-	( DWS \== NULL -> parsing_error(If,ERROR_LABELPRIMITIVEMOD,Status)
-	; N \= 2 -> parsing_error(If,ERROR_LABELPRIMITIVEARITY,Status)
+	( DWS \== NULL -> parsing_error(If,ERROR_TAGPRIMITIVEMOD,Status)
+	; N \= 2 -> parsing_error(If,ERROR_TAGPRIMITIVEARITY,Status)
 	).
 
-%% label{?Label,?Head}.  label{...}@Mod is not supported
-parse_body_literal(CANOTERM(Funct,2,FL_BRACE,[Label,Head],_If,_Ip),DWS,Code,Status) :-
+%% tag{?Tag,?Head}.  tag{...}@Mod is not supported
+parse_body_literal(CANOTERM(Funct,2,FL_BRACE,[Descriptors,Head],_If,_Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_tag_primitive_op(Atom),
 	!,
-	parse_term_or_var(Label,LabelCode,S1),
+	parse_term_or_var(Descriptors,DescriptorsCode,S1),
 	(S1 == [] ->
 	    parse_dbliteral_list(FLCLS,[Head],DWS,HeadCodeList,Status),
 	    ( Status == []
-	    -> fllabelprimitive_struct(LabelCode,HeadCodeList,Code)
+	    -> fltag_primitive_struct(DescriptorsCode,HeadCodeList,Code)
 	    ; true
 	    )
 	;
@@ -4020,6 +4029,24 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,Code,Status) :-
 	    parsing_error(Ip,ERROR_WSNAME,Status)
 	).
 
+/*
+%% Use _@! instead of thisruleid{?X}
+%% thisruleid{Var}
+parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,_Ip),DWS,Code,Status) :-
+	get_name(Funct,FL_THISRULEID),
+	!,
+	parse_body_pathexp(Arg,DISALLOW_TRANS,DWS,ArgCode,Status),
+	flthisruleid_struct(ArgCode,Code).
+*/
+
+%% simple primitive liek primName{Args}
+parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,_Ip),DWS,Code,Status) :-
+	get_name(Funct,PrimitiveName),
+	flora_simple_primitive(PrimitiveName,N,_,_),
+	!,
+	parse_body_pathexplist(Args,DWS,ArgCode,Status),
+	flsimpleprimitive_struct(PrimitiveName,ArgCode,Code).
+
 %% insertrule_a{...}, insertrule_z{...}, deleterule_a{...},
 %% deleterule_z{...}, or deleterule{...}
 parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),DWS,Code,Status) :-
@@ -4049,20 +4076,23 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	DWS==NULL,
 	!,
 	set_context(clause_construct),
-	(Args = [Arg], is_labeled_construct(Arg,Label,Construct) ->
-	    parse_label(Label,true,LabCode,S1),
+	(Args = [Arg],
+	    get_statement_descriptors(Arg,Descriptors,Statement),
+	    Descriptors \== []
+	->
+	    parse_descriptor_list(Descriptors,true,LabCode,S1),
 	    (S1 == []
 	    ->
-		Construct = CANOTERM(_F,_N,_Par,ClauseArgs,_,_),
+		Statement = CANOTERM(_F,_N,_Par,ClauseArgs,_,_),
 		length(ClauseArgs,ClN),
-		NewConstruct = CANOTERM(Funct,ClN,FL_BRACE,ClauseArgs,If,Ip),
-		parse_body_literal(NewConstruct,DWS,Code1,Status),
+		NewStatement = CANOTERM(Funct,ClN,FL_BRACE,ClauseArgs,If,Ip),
+		parse_body_literal(NewStatement,DWS,Code1,Status),
 		(Status == []
 		-> 
 		    (flclause_struct(H,B,Code1)
-		    -> fllabeledclause_struct(LabCode,H,B,Code)
+		    -> flclause_with_descriptor_struct(LabCode,H,B,Code)
 		    ; flclause_struct(Mode,H,B,Code1)
-		    -> fllabeledclause_struct(LabCode,Mode,H,B,Code)
+		    -> flclause_with_descriptor_struct(LabCode,Mode,H,B,Code)
 		    )
 		; true
 		)
@@ -5054,9 +5084,8 @@ parse_pure_term(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	(N > 1
 	-> list_to_conjunct(Args,Conjunct,If,Ip),
 	    parse_reify(Conjunct,DWS,Code,Status)
-	;
-	    Args = [Arg],
-	    parse_reify(Arg,DWS,Code,Status)
+	;  Args = [Arg] -> parse_reify(Arg,DWS,Code,Status)
+	;  parsing_error(Ip,EXP_ARGS,Status)
 	).
 
 parse_pure_term(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
@@ -5409,6 +5438,11 @@ parse_body_pathexp(CANOLIST(L,T,_N,I,_Ib),_TransFlag,DWS,Code,Status) :-
 
 
 %% ${...} - reification
+parse_body_pathexp(CANOTERM(Funct,0,FL_BRACE,[],_If,Ip),_TransFlag,_DWS,_Code,Status) :-
+	get_atom(Funct,Atom),
+	is_reifyop(Atom),
+	!,
+	parsing_error(Ip,EXP_ARGS,Status).
 parse_body_pathexp(CANOTERM(Funct,N,FL_BRACE,[Arg|Rest],If,Ip),_TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,Atom),
 	is_reifyop(Atom),
@@ -6134,9 +6168,8 @@ parse_head_pathexp(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code,Sta
 	(N > 1
 	-> list_to_conjunct(Args,Conjunct,If,Ip),
 	    parse_reify(Conjunct,DWS,Code,Status)
-	;
-	    Args = [Arg],
-	    parse_reify(Arg,DWS,Code,Status)
+	;  Args = [Arg] -> parse_reify(Arg,DWS,Code,Status)
+	;  parsing_error(Ip,EXP_ARGS,Status)
 	).
 
 parse_head_pathexp(CANOTERM(_Funct,_N,FL_BRACE,_Args,_If,Ip),_TransFlag,_DWS,_Code,Status) :-
@@ -6619,7 +6652,7 @@ parse_stripped_dbliteral(Mode,CanoniTerm,_DWS,_Code,Status) :-
 parse_stripped_dbliteral(Mode,CanoniTerm,DWS,Code,Status) :-
 	CanoniTerm = CANOTERM(Funct,2,FL_PARENTHESIS,_Args,_If,_Ip),
 	(get_atom(Funct,FL_IMPLYOP)
-	; is_labeled_construct(CanoniTerm,_,_)
+	; is_annotated_statement(CanoniTerm,_,_)
 	),
 	!,
 	(Mode == FLINS ->
@@ -6930,9 +6963,8 @@ parse_db_pathexp(_Mode,CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code
 	(N > 1
 	-> list_to_conjunct(Args,Conjunct,If,Ip),
 	    parse_reify(Conjunct,DWS,Code,Status)
-	;
-	    Args = [Arg],
-	    parse_reify(Arg,DWS,Code,Status)
+	;  Args = [Arg] -> parse_reify(Arg,DWS,Code,Status)
+	;  parsing_error(Ip,EXP_ARGS,Status)
 	).
 
 parse_db_pathexp(Mode,CANOLIST(L,T,_N,I,_Ib),_TransFlag,DWS,Code,Status) :-
@@ -7223,19 +7255,19 @@ parse_dynrule(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),_DWS,CodeList,Statu
 	).
 
 parse_dynrule(CanoniTerm,DWS,[Code],Status) :-
-	%% insertion of a rule without workspace, NULL is nitial label code
-	parse_dynrule_no_module(CanoniTerm,DWS,NULL,Code,Status).
+	%% insert a rule without workspace, [] is initial descriptor code
+	parse_dynrule_no_module(CanoniTerm,DWS,[],Code,Status).
 
 
 /****************************************************************************
-  parse_dynrule_no_module(+CanoniTerm,+DWS,+Label,-Code,-Status)
+  parse_dynrule_no_module(+CanoniTerm,+DWS,+Descriptors,-Code,-Status)
 ****************************************************************************/
-parse_dynrule_no_module(CanoniTerm,DWS,Label,Code,Status) :-
+parse_dynrule_no_module(CanoniTerm,DWS,Descriptors,Code,Status) :-
         ( is_rule(CanoniTerm,Head,Body) ->
 	    parse_dynhead(Head,DWS,HCL,S),
 	    ( S == [] ->
 		parse_rule_body(Body,DWS,DWS,BodyCode,Status),
-		fldynrule_struct(HCL,BodyCode,Label,RuleCode),
+		fldynrule_struct(HCL,BodyCode,Descriptors,RuleCode),
 		%% add default workspace, if any
                 (flora_get_module_from_spec(DWS,_ModuleType,Module) ->
                     flmodule_struct(RuleCode,Module,FLORARULEWORKSPACE,Code)
@@ -7246,13 +7278,13 @@ parse_dynrule_no_module(CanoniTerm,DWS,Label,Code,Status) :-
 		Status=S
             )
 
-	; is_rule_or_fact(CanoniTerm), Label \== NULL ->
-	    %% means: it is a labeled fact, since the preious cond failed
+	; is_rule_or_fact(CanoniTerm), Descriptors \== [] ->
+	    %% means: it is an annotated fact, since the previous cond failed
 	    parse_dynhead(CanoniTerm,DWS,HCL,Status),
 	    ( Status == [] ->
-		%% convert labeled fact to rule by adding ":- true"
+		%% convert annotated fact to rule by adding ":- true"
 		flatom_struct(FL_TRUE,NO_INDEX,BodyCode),
-		fldynrule_struct(HCL,BodyCode,Label,RuleCode),
+		fldynrule_struct(HCL,BodyCode,Descriptors,RuleCode),
 		%% add default workspace, if any
                 (flora_get_module_from_spec(DWS,_ModuleType,Module) ->
                     flmodule_struct(RuleCode,Module,FLORARULEWORKSPACE,Code)
@@ -7263,10 +7295,12 @@ parse_dynrule_no_module(CanoniTerm,DWS,Label,Code,Status) :-
 		true
             )
 
-	; is_labeled_construct(CanoniTerm,NewLabel,Construct) ->
-	    parse_label(NewLabel,fail,NewLabCode,S),
+	; get_statement_descriptors(CanoniTerm,NewDescriptors,Statement),
+	    NewDescriptors \== []
+	->
+	    parse_descriptor_list(NewDescriptors,true,NewDescriptorsCodeList,S),
 	    (S == [] ->
-		parse_dynrule_no_module(Construct,DWS,NewLabCode,Code,Status)
+		parse_dynrule_no_module(Statement,DWS,NewDescriptorsCodeList,Code,Status)
 	    ;
 		Status = S
 	    )
@@ -7456,63 +7490,106 @@ flora_parse_term_external(ComposerTerm,ParsedTerm,Status) :-
 	parse_body_pathexp(CanoniTerm,ALLOW_TRANS,NULL,ParsedTerm,Status),
 	!.
 
+get_statement_descriptors(CanoTerm,[Descriptor1|RestDescriptors],Statement) :-
+	is_annotated_statement(CanoTerm,Descriptor1,RestStatement),
+	!,
+	get_statement_descriptors(RestStatement,RestDescriptors,Statement).
+get_statement_descriptors(CanoTerm,[],CanoTerm).
 
-%% Parse the annotation construct
-parse_label(CANOTERM(_Funct,_N,DelimType,Args,If,_Ip),VarsOK,Code,Status) :-
+%% Parse descriptors
+parse_descriptor_list([],_,[],[]) :- !.
+parse_descriptor_list([Descr|RestDescr],VarsOK,[Code1|RestCode],Status) :-
+	parse_descriptor(Descr,VarsOK,Code1,S1),
+	(S1 == []
+	-> parse_descriptor_list(RestDescr,VarsOK,RestCode,Status)
+	; Status = S1
+	).
+parse_descriptor(CANOTERM(Funct,_N,DelimType,Args,If,_Ip),VarsOK,Code,Status) :-
 	DelimType = FL_BRACE,
 	!,
-	parse_label_aux(Args,If,VarsOK,Code,Status).
-parse_label(CANOTERM(_Funct,_N,_DelimType,_Args,If,_Ip),_VarsOK,_Code,Status) :-
+	get_atom(Funct,FName),
+	set_context(parsing_descriptor),
+	parse_descriptor_aux(FName,Args,If,VarsOK,Code,Status),
+	clear_context(parsing_descriptor).
+parse_descriptor(CANOTERM(_Funct,_N,_DelimType,_Args,If,_Ip),_VarsOK,_Code,Status) :-
 	parsing_error(If,INVALID_RULE_DESCRIPTOR,Status).
 
-parse_label_aux(Args,If,VarsOK,Code,Status) :-
-	set_context(parsing_label),
-	( Args = [First|Rest],
-	    ((is_obj_identifier_struct(First) ; get_spectoken(First,FL_NEWOID))
-	    %% First element in list is Id const
-	    ->
-		flobject_struct(First,IdCode),
-		IdStat = []
-	    ;  %% or a term
-		is_term_struct(First,IdFunc,IdArity,IdArgs)
-	    ->
-		parse_body_term(IdFunc,IdArity,IdArgs,DISALLOW_TRANS,NULL,
-			   IdCode,IdStat)
-	    ;   %% VarsOK is set if we have a variable in Id position
-		%% in clause{@{?Var,...} ...}
-		VarsOK, get_flvar_struct(First,IdCode)
-	    ->
-		IdStat = []
-	    ;   %% just a variable in the Id position in meta (and not
-		%% in clause{...}) means it is a placeholder that skips the Id
-		get_flvar_struct(First,_),
-		IdCode = FL_SKIP_TAG,
-		IdStat = []
-	    )
+parse_descriptor_aux(FL_RULEID_OP,[Descr],If,VarsOK,[Code],Status) :-
+	!,
+	( VarsOK, parse_dbliteral_list(FLCLS,[Descr],NULL,PreCode,Status), Status == []
+	-> annotation_struct(PreCode,FLRULEID,If,Code)
+	; parse_head_literal_list([Descr],NULL,PreCode,Status), Status == []
+	-> annotation_struct(PreCode,FLRULEID,If,Code)
+	; get_integer(Descr,_)
+	-> flobject_struct(Descr,PreCode),
+	    annotation_struct([PreCode],FLRULEID,If,Code),
+	    Status=[]
 	;
-	    %% only metapart or nothing
-	    IdCode = NULL,
-	    Rest = Args,
-	    IdStat = []
-	),
-	(Rest == []
-	-> Status1 = [], MetaCode = NULL
-	;
-	    (VarsOK,
-		parse_dbliteral_list(FLCLS,Rest,NULL,MetaCode,Status1),
-		!
-	    ; parse_head_literal_list(Rest,NULL,MetaCode,Status1)
-	    )
-	),
-	(IdStat == [], Status1 == []
-	-> 
-	    annotation_struct(IdCode,MetaCode,If,Code),
+	    parsing_error(If,INVALID_ID_DESCRIPTOR,Status)
+	).
+parse_descriptor_aux(FL_RULEID_OP,_Args,If,_,_,Status) :-
+	!,
+	parsing_error(If,INVALID_ID_DESCRIPTOR,Status).
+parse_descriptor_aux(FL_BOOL_DESCR_OP,[Descr],If,VarsOK,[Code],Status) :-
+	!,
+	((is_obj_identifier_struct(Descr) ; get_spectoken(Descr,FL_NEWOID))
+	%% element in list is atom
+	->
+	    flobject_struct(Descr,PreCode),
+	    annotation_struct(PreCode,FLBOOLDESCRIPTOR,If,Code),
+	    Status = []
+	; %% or a term
+	    is_term_struct(Descr,Func,Arity,Args)
+	->
+	    parse_body_term(Func,Arity,Args,DISALLOW_TRANS,NULL,PreCode,Status),
+	    annotation_struct(PreCode,FLBOOLDESCRIPTOR,If,Code)
+	; %% VarsOK is true if we are parsing clause{@{@?Var,...} ...}
+	    VarsOK, get_flvar_struct(Descr,PreCode)
+	->
+	    annotation_struct(PreCode,FLBOOLDESCRIPTOR,If,Code),
 	    Status = []
 	;
-	    parsing_error(If,INVALID_META_IN_LABEL,Status)
+	    parsing_error(If,INVALID_BOOL_DESCRIPTOR,Status)
+	).
+parse_descriptor_aux(FL_BOOL_DESCR_OP,_,If,_,_,Status) :-
+	!,
+	parsing_error(If,INVALID_BOOL_DESCRIPTOR,Status).
+parse_descriptor_aux(FL_DESCRIPTOROP,[],_If,_VarsOK,[],[]) :- !.
+parse_descriptor_aux(FL_DESCRIPTOROP,[First|Rest],If,VarsOK,[FirstCode|RestCode],Status) :-
+	((is_obj_identifier_struct(First) ; get_spectoken(First,FL_NEWOID) ; get_integer(First,_))
+	%% First element in list is a tag const
+	->
+	    flobject_struct(First,PreCode),
+	    annotation_struct(PreCode,FLTAG,If,FirstCode),
+	    Stat1 = []
+	; %% or a term
+	    is_term_struct(First,Func,Arity,Args)
+	->
+	    parse_body_term(Func,Arity,Args,DISALLOW_TRANS,NULL,PreCode,Stat1),
+	    annotation_struct(PreCode,FLTAG,If,FirstCode)
+	; %% VarsOK is true if we are parsing clause{@{?Var,...} ...}
+	    VarsOK, get_flvar_struct(First,PreCode),
+	    annotation_struct(PreCode,FLTAG,If,FirstCode)
+	->
+	    annotation_struct(PreCode,FLTAG,If,FirstCode),
+	    Stat1 = []
+	;
+	    parsing_error(If,INVALID_TAG_DESCRIPTOR,Stat1)
 	),
-	clear_context(parsing_label).
+	(Stat1 == []
+	-> parse_descriptor_aux(FL_DESCRIPTOROP,Rest,If,VarsOK,RestCode,Status)
+	; Status = Stat1
+	).
 
+/*
+is_ruleid_descriptor(CANOTERM(Funct,1,FL_BRACE,Descr,_If,_Ip),Descr) :-
+	get_atom(Funct,FL_RULEID_OP).
+is_boolean_descriptor(CANOTERM(Funct,1,FL_BRACE,Descr,_If,_Ip),Descr) :-
+	get_atom(Funct,FL_BOOL_DESCR_OP).
+is_descriptor_op(FL_DESCRIPTOROP) :- !.
+is_ruleid_descriptor_op(FL_RULEID_OP) :- !.
+is_boolean_descriptor_op(FL_BOOL_DESCR_OP) :- !.
+*/
 
 %% FL_IRIs are treated as atoms. We only parse them to check for errors
 parse_composer_datatype(Args,If,DWS,Code,Status) :-

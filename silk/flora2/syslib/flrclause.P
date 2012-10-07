@@ -31,12 +31,17 @@
 
 :- import
         matching_rule_signature/6,
+	rule_signature_member/3,
         flora_build_pred_signature/2,
         flora_preprocess_headlist/2
    from flrcanon.
 :- import
 	flora_decode_predicate/6
    from flrwrapper.
+
+:- import
+	get_module_from_metafacts/2
+   from flrdescriptor_support.
 
 :- import
         flora_warning_line/2
@@ -62,50 +67,41 @@ flora_clause_prefix(DYNAMIC_CLAUSE,FL_NEGDYNZPREFIX).
 
 
 /***********************************************************************
- FLLIBCLAUSE(+Tag,+Meta,+Mode,+HeadList,?RuleBody)
+ FLLIBCLAUSE(+RuleId,+Mode,+HeadList,?RuleBody)
  Mode: STATIC_CLAUSE, DYNA_CLAUSE, DYNZ_CLAUSE, DYNAMIC_CLAUSE
 ************************************************************************/ 
-FLLIBCLAUSE(Tag,Meta,Mode,HeadList,Body) :-
-	construct_meta_term(Meta,NewMeta),
-	construct_id_term(Tag,NewTag),
-        fllibclause_exec(NewTag,NewMeta,Mode,HeadList,Body).
+FLLIBCLAUSE(RuleId,DescrVarTerm,MetaFacts,Mode,HeadList,Body) :-
+        fllibclause_exec(RuleId,DescrVarTerm,MetaFacts,Mode,HeadList,Body).
 
-fllibclause_exec(Tag,Meta,Mode,[Head],Body) :-
+fllibclause_exec(RuleId,DescrVarTerm,MetaFacts,Mode,[Head],Body) :-
         !,
         flora_clause_prefix(Mode,Prefix),
-        matching_rule_signature(Tag,Prefix,Head,Body,Meta,_RuleSig).
+	call(MetaFacts),
+	get_module_from_metafacts(MetaFacts,Module),
+        matching_rule_signature(RuleId,DescrVarTerm,Prefix,Head,Body,RuleSig),
+	rule_signature_member(module,RuleSig,Module).
 
-fllibclause_exec(Tag,Meta,Mode,[H|L],Body) :-
+fllibclause_exec(RuleId,DescrVarTerm,MetaFacts,Mode,[H|L],Body) :-
         flora_clause_prefix(Mode,Prefix),
-        matching_rule_signature(Tag,Prefix,H,Body,Meta,_RuleSig),
-        flora_clause_list(Tag,Meta,Prefix,L,Body). 
+	call(MetaFacts),
+	get_module_from_metafacts(MetaFacts,Module),
+        matching_rule_signature(RuleId,DescrVarTerm,Prefix,H,Body,RuleSig),
+	rule_signature_member(module,RuleSig,Module),
+        flora_clause_list(RuleId,DescrVarTerm,Prefix,Module,L,Body). 
 
-flora_clause_list(_Tag,_Meta,_Prefix,[],_Body) :- 
+
+flora_clause_list(_RuleId,_DescrVarTerm,_Prefix,_Mod,[],_Body) :- 
         !.
-
-flora_clause_list(Tag,Meta,Prefix,[H|L],Body) :-
-        matching_rule_signature(Tag,Prefix,H,Body,Meta,_RuleSig),
-        flora_clause_list(Tag,Meta,Prefix,L,Body). 
-
-construct_meta_term(Meta,NewMeta) :-
-	(Meta == NULL -> NewMeta = _NewVar
-	; Meta = [MVar], var(MVar) -> NewMeta = MVar
-	; reverse(Meta,[Last|PrefR]),
-	    (var(Last) -> reverse(PrefR,Pref), append(Pref,Last,NewMeta)
-	    ; append(Meta,_,NewMeta)
-	    )
-	).
-
-construct_id_term(Tag,NewTag) :-
-	(Tag == NULL -> NewTag = _NewVar
-	; NewTag = Tag
-	).
+flora_clause_list(RuleId,DescrVarTerm,Prefix,Mod,[H|L],Body) :-
+        matching_rule_signature(RuleId,DescrVarTerm,Prefix,H,Body,RuleSig),
+	rule_signature_member(module,RuleSig,Mod),
+        flora_clause_list(RuleId,DescrVarTerm,Prefix,Mod,L,Body). 
 
         
 /***********************************************************************
- FLLIBINSRULESIG(+WS,+HeadList,+RuleBody,+Meta,+DefeatCond,+NewPred)
+ FLLIBINSRULESIG(+RuleId,+DescrVarsTerm,+WS,+HeadList,+RuleBody,+Meta,+DefeatCond,+NewPred)
 ************************************************************************/ 
-FLLIBINSRULESIG(Tag,WS,HeadList,Body,Meta,DefeatCond,NewPred) :-
+FLLIBINSRULESIG(RuleId,DescrVarsTerm,WS,HeadList,Body,DefeatCond,NewPred) :-
         %% multiple atoms appear in the rule head
         is_list(HeadList),
         !,
@@ -114,9 +110,9 @@ FLLIBINSRULESIG(Tag,WS,HeadList,Body,Meta,DefeatCond,NewPred) :-
 	%% multi-headed rules. This is because the variables in Head/Body
 	%% would be different from the variables in the head/bridge rules.
 	copy_term(BridgeRule,BridgeRule1),
-        flora_insrulesig_list(Tag,WS,HeadList,Body,Meta,DefeatCond,NewPred,BridgeRule1).
+        flora_insrulesig_list(RuleId,DescrVarsTerm,WS,HeadList,Body,DefeatCond,NewPred,BridgeRule1).
 
-FLLIBINSRULESIG(Tag,WS,Head,Body,Meta,DefeatCond,_NewPred) :-
+FLLIBINSRULESIG(RuleId,DescrVarsTerm,WS,Head,Body,DefeatCond,_NewPred) :-
         %% only a single atom appears in the rule head
 	flora_decode_predicate(Head,Type,_,_,_,_),
 	((Type == (hilog) ; Type == (flogic)) -> HeadPrefix = FL_HEADPREFIX
@@ -124,7 +120,7 @@ FLLIBINSRULESIG(Tag,WS,Head,Body,Meta,DefeatCond,_NewPred) :-
 	; Type == neg_flora -> HeadPrefix = FL_NEGPREFIX
 	; HeadPrefix = FL_NEGHEADPREFIX
 	),
-        flora_record_rule_signature(Tag,HeadPrefix,WS,Head,Body,Meta,DefeatCond,[],[]).
+        flora_record_rule_signature(RuleId,DescrVarsTerm,HeadPrefix,WS,Head,Body,DefeatCond,[],[]).
         
 
 /****************************************************************************
@@ -135,8 +131,8 @@ FLLIBINSRULESIG(Tag,WS,Head,Body,Meta,DefeatCond,_NewPred) :-
 	     newpredicateXYZ :- r.
       The last rule is called the bridge rule.
 ****************************************************************************/
-flora_insrulesig_list(_Tag,_WS,[],_Body,_Meta,_DefeatCond,_NewPred,_BridgeRule) :- !.
-flora_insrulesig_list(Tag,WS,[Head|RestH],Body,Meta,DefeatCond,NewPred,BridgeRule) :- 
+flora_insrulesig_list(_RuleId,_DescrVarsTerm,_WS,[],_Body,_DefeatCond,_NewPred,_BridgeRule) :- !.
+flora_insrulesig_list(RuleId,DescrVarsTerm,WS,[Head|RestH],Body,DefeatCond,NewPred,BridgeRule) :- 
 	flora_decode_predicate(Head,Type,_,_,_,_),
 	((Type == (hilog) ; Type == (flogic)) -> HeadPrefix = FL_HEADPREFIX
 	; Type == (flora) -> HeadPrefix = FL_EMPTYPREFIX
@@ -149,5 +145,5 @@ flora_insrulesig_list(Tag,WS,[Head|RestH],Body,Meta,DefeatCond,NewPred,BridgeRul
 	%% would be different from the variables in the head/bridge rules.
 	copy_term(HeadRule,HeadRule1),
 	copy_term(DefeatCond,DefeatCond1),
-        flora_record_rule_signature(Tag,HeadPrefix,WS,Head,Body,Meta,DefeatCond1,[HeadRule1],[BridgeRule]),
-        flora_insrulesig_list(Tag,WS,RestH,Body,Meta,DefeatCond,NewPred,BridgeRule).
+        flora_record_rule_signature(RuleId,DescrVarsTerm,HeadPrefix,WS,Head,Body,DefeatCond1,[HeadRule1],[BridgeRule]),
+        flora_insrulesig_list(RuleId,DescrVarsTerm,WS,RestH,Body,DefeatCond,NewPred,BridgeRule).

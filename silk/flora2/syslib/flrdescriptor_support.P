@@ -1,0 +1,285 @@
+/* File:      flrdescriptor_support.P
+**
+** Author(s): Michael Kifer
+**
+** Contact:   kifer@cs.stonybrook.edu
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 2012;
+**      and Vulcan, Inc., 2012.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+:- compiler_options([xpp_on]).
+#include "flora_terms.flh"
+
+:- import
+	FL_TAG_DESCRIPTOR_META_PREDICATE/4,
+	FL_BOOL_DESCRIPTOR_META_PREDICATE/4,
+	FL_FORCED_DEFEASIBILITY_UNION/3,
+	FL_RULE_ENABLER_UNION/2
+   from usermod.
+
+:- import
+	flora_modularize_atom/3
+   from flrwrapper.
+:- import
+	flora_refresh_tables/1
+   from flrtables.
+:- import
+	convert_to_head_literal/2,
+        show_rule_signature/9
+   from flrcanon.
+	
+:- import
+	flora_adaptive_assert/1,
+	flora_adaptive_retract/1
+   from flrstoragebase.
+
+:- export
+	get_tag_descriptor_info/4,
+	get_bool_descriptor_info/4,
+
+	get_tag_descriptor_info_with_rulehead/5,
+	get_bool_descriptor_info_with_rulehead/5,
+
+	get_ruleid_by_tag_or_head/4,
+
+	synonymous_tag/3,
+	synonymous_tag_with_head/4,
+
+	is_defeasible_rule/2,
+	is_defeasible_tag/2,
+	is_strict_rule/2,
+	make_rule_defeasible/2,
+	make_rule_strict/2,
+
+	disable_rule_by_id/2,
+	enable_rule_by_id/2,
+	is_enabled_rule/2,
+	is_disabled_rule/2,
+
+	get_module_from_metafacts/2,
+
+	clear_bool_metafacts_by_ruleid/2,
+	clear_tag_metafacts_by_ruleid/2,
+	flora_reset_descriptor_meta_predicates/1.
+
+
+get_tag_descriptor_info(RuleId,Module,Tag,VarTerm) :-
+	FL_TAG_DESCRIPTOR_META_PREDICATE(RuleId,Module,Tag,VarTerm).
+get_bool_descriptor_info(RuleId,Module,BoolProp,VarTerm) :-
+	FL_BOOL_DESCRIPTOR_META_PREDICATE(RuleId,Module,BoolProp,VarTerm).
+
+%% tabling get_tag_descriptor_info_with_rulehead/5 helps about 10%
+%% but see if this works with incremental tabling
+:- table get_tag_descriptor_info_with_rulehead/5.
+get_tag_descriptor_info_with_rulehead(RuleId,Module,Tag,Head,VarTerm) :-
+	(nonvar(RuleId) ; nonvar(Tag)),
+	!,
+	FL_TAG_DESCRIPTOR_META_PREDICATE(RuleId,Module,Tag,VarTerm),
+	show_rule_signature(RuleId,VarTerm,_Prefix,Module,Head,_Body,
+			    _DefeatCond,_RuleList,_BridgeRule).
+%% if Tag and Id are vars, try to index on Head
+get_tag_descriptor_info_with_rulehead(RuleId,Module,Tag,Head,VarTerm) :-
+	show_rule_signature(RuleId,VarTerm,_Prefix,Module,Head,_Body,
+			    _DefeatCond,_RuleList,_BridgeRule),
+	FL_TAG_DESCRIPTOR_META_PREDICATE(RuleId,Module,Tag,VarTerm).
+
+get_ruleid_by_tag_or_head(Tag,Head,Module,RuleId) :-
+	nonvar(Tag),
+	!,
+	FL_TAG_DESCRIPTOR_META_PREDICATE(RuleId,Module,Tag,VarTerm),
+	show_rule_signature(RuleId,VarTerm,_Prefix,Module,Head,_Body,
+			    _DefeatCond,_RuleList,_BridgeRule).
+get_ruleid_by_tag_or_head(Tag,Head,Module,RuleId) :-
+	%% Tag is a var
+	show_rule_signature(RuleId,VarTerm,_Prefix,Module,Head,_Body,
+			    _DefeatCond,_RuleList,_BridgeRule),
+	FL_TAG_DESCRIPTOR_META_PREDICATE(RuleId,Module,Tag,VarTerm).
+
+get_bool_descriptor_info_with_rulehead(RuleId,Module,BoolProp,Head,VarTerm) :-
+	nonvar(RuleId),
+	!,
+	FL_BOOL_DESCRIPTOR_META_PREDICATE(RuleId,Module,BoolProp,VarTerm),
+	show_rule_signature(RuleId,VarTerm,_Prefix,Module,Head,_Body,
+			    _DefeatCond,_RuleList,_BridgeRule).
+%% if Id is a var, try to index on Head
+get_bool_descriptor_info_with_rulehead(RuleId,Module,BoolProp,Head,VarTerm) :-
+	show_rule_signature(RuleId,VarTerm,_Prefix,Module,Head,_Body,
+			    _DefeatCond,_RuleList,_BridgeRule),
+	FL_BOOL_DESCRIPTOR_META_PREDICATE(RuleId,Module,BoolProp,VarTerm).
+
+%% synonymous_tag/3 used only in genincludes/flrdefeasible.fli
+%% usually synonymous_tag_with_head/4 is used
+%% Tabling either of these does not help, even slows things down a tiny bit.
+synonymous_tag(Tag1,Mod,Tag2) :-
+	nonvar(Tag1),
+	!,
+	get_tag_descriptor_info(Id,Mod,Tag1,Vars),
+	get_tag_descriptor_info(Id,Mod,Tag2,Vars).
+synonymous_tag(Tag1,Mod,Tag2) :-
+	get_tag_descriptor_info(Id,Mod,Tag2,Vars),
+	get_tag_descriptor_info(Id,Mod,Tag1,Vars).
+
+synonymous_tag_with_head(Tag,_Mod,Tag,Head) :-
+	var(Tag),
+	var(Head),
+	!.
+synonymous_tag_with_head(Tag1,Mod,Tag2,Head) :-
+	get_tag_descriptor_info_with_rulehead(Id,Mod,Tag1,Head,Vars),
+	get_tag_descriptor_info_with_rulehead(Id,Mod,Tag2,Head,Vars).
+
+%% The predicate of forced defeasibility FL_FORCED_DEFEASIBILITY_UNION
+%% overrides whatever the descriptor says about defeasibility
+
+%% is_defeasible_rule(+Id,+Mod)
+is_defeasible_rule(Id,Mod) :-
+	FL_FORCED_DEFEASIBILITY_UNION(Id,Mod,FL_DEFEASIBLE),
+	!.
+is_defeasible_rule(Id,Mod) :-
+	\+ FL_FORCED_DEFEASIBILITY_UNION(Id,Mod,FL_STRICT),
+	get_bool_descriptor_info(Id,Mod,FL_DEFEASIBLE,_).
+%% is_strict_rule(+Id,+Mod)
+is_strict_rule(Id,Mod) :-
+	FL_FORCED_DEFEASIBILITY_UNION(Id,Mod,FL_STRICT),
+	!.
+is_strict_rule(Id,Mod) :-
+	\+ FL_FORCED_DEFEASIBILITY_UNION(Id,Mod,FL_DEFEASIBLE),
+	get_bool_descriptor_info(Id,Mod,FL_STRICT,_).
+
+is_defeasible_tag(Tag,Mod) :-
+	nonvar(Tag),
+	!,
+	get_tag_descriptor_info(Id,Mod,Tag,_VarTerm),
+	is_defeasible_rule(Id,Mod).
+is_defeasible_tag(Tag,Mod) :-
+	is_defeasible_rule(Id,Mod),
+	get_tag_descriptor_info(Id,Mod,Tag,_VarTerm).
+
+
+
+%% make_rule_defeasible(+Id,+Mod)
+make_rule_defeasible(Id,Mod) :-
+	flora_modularize_atom(FL_FORCED_DEFEASIBILITY,Mod,
+			      ModularDefeasibilityPredName),
+	DefeasibilityPred =.. [ModularDefeasibilityPredName,Id,_],
+	(flora_adaptive_retract(DefeasibilityPred), fail ; true),
+	!,
+	arg(2,DefeasibilityPred,FL_DEFEASIBLE),
+	flora_adaptive_assert(DefeasibilityPred).
+%% make_rule_strict(+Id,+Mod)
+make_rule_strict(Id,Mod) :-
+	flora_modularize_atom(FL_FORCED_DEFEASIBILITY,Mod,
+			      ModularDefeasibilityPredName),
+	DefeasibilityPred =.. [ModularDefeasibilityPredName,Id,_],
+	(flora_adaptive_retract(DefeasibilityPred), fail ; true),
+	!,
+	arg(2,DefeasibilityPred,FL_STRICT),
+	flora_adaptive_assert(DefeasibilityPred).
+
+/*************************************************************************
+       enable_rule_by_id(+Id,+Mod)
+       disable_rule_by_id(+Id,+Mod)
+
+   These assert/retract enabler metafacts for rules (static or dynamic)
+   and thus have the effect similar to assert/retract, but much cheaper
+
+   enable_rule_by_id/2 is idempotent
+   disable_rule_by_id/2 fails if the rule is already disabled
+*************************************************************************/
+enable_rule_by_id(Id,Mod) :-
+	flora_modularize_atom(FL_RULE_ENABLER,Mod,ModularEnabler),
+	EnablerPred =.. [ModularEnabler,Id],
+	show_rule_signature(Id,_DescrVarTerm,_Prefix,Mod,Head,_Body,
+			    _DefeatCond,_RuleList,_BridgeRule),
+	(EnablerPred -> true  % idempotent
+	; flora_adaptive_assert(EnablerPred),
+	    convert_to_head_literal(Head,HeadAsHead),
+	    flora_refresh_tables(HeadAsHead)
+	).
+
+disable_rule_by_id(Id,Mod) :-
+	flora_modularize_atom(FL_RULE_ENABLER,Mod,ModularEnabler),
+	EnablerPred =.. [ModularEnabler,Id],
+	show_rule_signature(Id,_DescrVarTerm,_Prefix,Mod,Head,_Body,
+			    _DefeatCond,_RuleList,_BridgeRule),
+	(\+EnablerPred -> true
+	; flora_adaptive_retract(EnablerPred),
+	    convert_to_head_literal(Head,HeadAsHead),
+	    flora_refresh_tables(HeadAsHead)
+	).
+
+is_enabled_rule(Id,Mod) :-
+	var(Mod),
+	!,
+	show_rule_signature(Id,_DescrVarTerm,_Prefix,Mod,_Head,_Body,
+			    _DefeatCond,_RuleList,_BridgeRule),
+	(FL_RULE_ENABLER_UNION(Id,Mod) -> true
+	; fail
+	).
+is_enabled_rule(Id,Mod) :-
+	flora_modularize_atom(FL_RULE_ENABLER,Mod,ModularEnabler),
+	EnablerPred =.. [ModularEnabler,Id],
+	show_rule_signature(Id,_DescrVarTerm,_Prefix,Mod,_Head,_Body,
+			    _DefeatCond,_RuleList,_BridgeRule),
+	(EnablerPred -> true
+	; fail
+	).
+
+is_disabled_rule(Id,Mod) :-
+	var(Mod),
+	!,
+	show_rule_signature(Id,_DescrVarTerm,_Prefix,Mod,_Head,_Body,
+			    _DefeatCond,_RuleList,_BridgeRule),
+	(FL_RULE_ENABLER_UNION(Id,Mod) -> fail
+	; true
+	).
+is_disabled_rule(Id,Mod) :-
+	flora_modularize_atom(FL_RULE_ENABLER,Mod,ModularEnabler),
+	EnablerPred =.. [ModularEnabler,Id],
+	show_rule_signature(Id,_DescrVarTerm,_Prefix,Mod,_Head,_Body,
+			    _DefeatCond,_RuleList,_BridgeRule),
+	(EnablerPred -> fail
+	; true
+	).
+
+/*************************************************************************
+   flora_reset_descriptor_meta_predicates(+ModuleName)
+
+   retracts all content from meta predicates for module
+*************************************************************************/
+flora_reset_descriptor_meta_predicates(Mod) :-
+	retractall(FL_TAG_DESCRIPTOR_META_PREDICATE(_,Mod,_,_)),
+	retractall(FL_BOOL_DESCRIPTOR_META_PREDICATE(_,Mod,_,_)),
+	flora_modularize_atom(FL_RULE_ENABLER,Mod,RuleEnablerPredName),
+	RuleEnabler =.. [RuleEnablerPredName,_],
+	retractall(RuleEnabler).
+
+/**************************************************************************
+	clear_bool_metafacts_by_ruleid(+RuleId,+Mod)
+	clear_tag_metafacts_by_ruleid(+RuleId,+Mod)
+
+  Clear all bool/tag metafacts for a given Id and module
+**************************************************************************/
+clear_bool_metafacts_by_ruleid(RuleId,Mod) :-
+	retractall(FL_BOOL_DESCRIPTOR_META_PREDICATE(RuleId,Mod,_,_)).
+
+clear_tag_metafacts_by_ruleid(RuleId,Mod) :-
+	retractall(FL_TAG_DESCRIPTOR_META_PREDICATE(RuleId,Mod,_,_)).
+
+/*****************************************************************************
+    Module out of metafact conjunction
+*****************************************************************************/
+%% case of conjunction of metafacts
+get_module_from_metafacts((Meta,_),Mod) :-
+	!,
+	arg(2,Meta,Mod).
+%% single metafact
+get_module_from_metafacts(Meta,Mod) :- arg(2,Meta,Mod).

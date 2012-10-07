@@ -122,18 +122,35 @@ is_flora_gpp_markup(QUOTED_ATOM(FLORA_GPP_MARKUP,_)).
 /**************************************************************************
   is_descriptor_function(+Object)
 **************************************************************************/
-is_descriptor_function(FUNCTION(OBJECT(SYMBOL_TOKEN(FL_DESCRIPTOROP),_),_Arg)).
-is_descriptor_op(OBJECT(SYMBOL_TOKEN(FL_DESCRIPTOROP),TokenN),TokenN).
+is_descriptor_function(Object) :-  is_tag_descriptor_function(Object).
+is_descriptor_function(Object) :-  is_ruleid_descriptor_function(Object).
+is_descriptor_function(Object) :-  is_bool_descriptor_function(Object).
+
+is_tag_descriptor_function(FUNCTION(OBJECT(SYMBOL_TOKEN(FL_TAG_DESCR_OP),_),_Arg)).
+is_ruleid_descriptor_function(FUNCTION(OBJECT(SYMBOL_TOKEN(FL_RULEID_OP),_),_Arg)).
+is_bool_descriptor_function(FUNCTION(OBJECT(SYMBOL_TOKEN(FL_BOOL_DESCR_OP),_),_Arg)).
+
 is_descriptor_token(SYMBOL_TOKEN(FL_DESCRIPTOROP,_)).
+
+is_descriptor_op(OBJECT(SYMBOL_TOKEN(FL_DESCRIPTOROP),TokenN),TokenN).
 descriptor_funct_struct(Arg,Struct) :-
-	argument_struct(FL_BRACE,Arg,0,0,ArgStruct),
-	is_descriptor_op(DescrToken,0),
+	get_rightmost_index(Arg,Idx),
+	argument_struct(FL_BRACE,Arg,0,Idx,ArgStruct),
+	is_descriptor_op(DescrToken,Idx),
 	function_struct(DescrToken,ArgStruct,Struct).
 
-is_ruleid_op(OBJECT(SYMBOL_TOKEN(FL_RULE_ID_OP),TokenN),TokenN).
+is_bool_descriptor_op(OBJECT(SYMBOL_TOKEN(FL_BOOL_DESCR_SYM),TokenN),TokenN).
+bool_descriptor_funct_struct(Arg,Struct) :-
+	get_rightmost_index(Arg,Idx),
+	argument_struct(FL_BRACE,Arg,0,Idx,ArgStruct),
+	is_bool_descriptor_op(DescrToken,Idx),
+	function_struct(DescrToken,ArgStruct,Struct).
+
+is_ruleid_op(OBJECT(SYMBOL_TOKEN(FL_RULEID_SYM),TokenN),TokenN).
 ruleid_funct_struct(Arg,Struct) :-
-	argument_struct(FL_BRACE,Arg,0,0,ArgStruct),
-	is_ruleid_op(RuleidToken,0),
+	get_rightmost_index(Arg,Idx),
+	argument_struct(FL_BRACE,Arg,0,Idx,ArgStruct),
+	is_ruleid_op(RuleidToken,Idx),
 	function_struct(RuleidToken,ArgStruct,Struct).
 
 /**************************************************************************
@@ -434,7 +451,7 @@ flora_compose(PrevToken,TmStack,OpStack,N,Term,Status) :-
 %% flora_compose/7
 
 /*
-%% Debigging
+%% Debugging
 flora_compose(PrevToken,TmStack,OpStack,N,CurToken,_Term,_Status) :-
 	writeln(11111111=PrevToken+CurToken+TmStack+OpStack+N),
 	fail.
@@ -459,6 +476,9 @@ flora_compose(OPRND(O),TmStack,OpStack,N,CurToken,Term,Status) :-
    the op-stack and some other clause checks for this marker.
    So, flora_compose returns instead of failing even though the above construct
    is not composed normally.
+
+   NEXT RULE is mostly BROKEN!!!!
+   Does not deal with @descr occurring inside clause{...} and insertrule{...}
 */
 flora_compose(NULL,[],[],N,CurToken,Term,Status) :-
 	is_descriptor_token(CurToken),
@@ -507,10 +527,13 @@ flora_compose(PrevToken,TmStack,OpStack,N,CurToken,Term,Status) :-
    Currently this can handle only the cases of descriptors of the form
    @term[...] rule
    which is all we need at this stage.
+
+   NEXT 3 RULES OF flora_compose ARE BROKEN!!!!
+   Deal with @descr, @!descr @@descr
 */
 flora_compose(OPRND(Obj),[],[marker(_N,N1)],N1,_CurTk,OPRND(Obj),[]) :-
 	\+is_ruleid_op(Obj,_),
-	\+is_descriptor_op(Obj,_),
+	\+is_bool_descriptor_op(Obj,_),
 	!.
 %% the case of @!foo
 flora_compose(OPRND(Obj),[],[marker(_N,NxtN)],_N3,_CurTk,OPRND(Term),Status) :-
@@ -525,13 +548,13 @@ flora_compose(OPRND(Obj),[],[marker(_N,NxtN)],_N3,_CurTk,OPRND(Term),Status) :-
 	!.
 %% the case of  @@strict/@@defeasible
 flora_compose(OPRND(Obj),[],[marker(_N,NxtN)],_N3,_CurTk,OPRND(Term),Status) :-
-	is_descriptor_op(Obj,N2),
+	is_bool_descriptor_op(Obj,N2),
 	M is N2+1,
 	flora_compose(marker(M,NxtN),[],[],M,Descr,Status),
 	(Status == []
 	->  Descr = OPRND(Descr0),
 	    %% change this to something else
-	    descriptor_funct_struct(Descr0,Term)
+	    bool_descriptor_funct_struct(Descr0,Term)
 	; true
 	),
 	!.

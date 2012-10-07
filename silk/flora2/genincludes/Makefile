@@ -26,6 +26,7 @@ ALLOBJS = flrpatch.flh flrpreddef.flh flrindex_P.flh \
 	  flrdefeasible.flh \
 	  flropposes.flh \
 	  flropposes_data.flh \
+	  flrdescriptor_metafacts.flh \
 	  flrrefreshtable.flh
 
 PROLOG = none

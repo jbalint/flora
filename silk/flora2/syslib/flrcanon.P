@@ -32,16 +32,18 @@
 :- dynamic 
         flora_rule_signature(_,_,_,_,_,_,_,_,_).
 
-%% indexing is arranged so that first indexing is done on rule id,
-%% then rule head, then body. Indexing on module does not seem to help much.
-:- index(flora_rule_signature/9,[1,4,5]).
+%% Indexing is arranged so that first indexing is done on rule id,
+%% then rule head. Indexing on module does not seem to help much.
+%% Indexing on Head (arg 5) helps ~20%, but star-indexing on Head
+%% slows things down.
+:- index(flora_rule_signature/9,[1,5]).
 
 :- dynamic
 	flora_body_to_head_conversion_cache(_,_),
 	flora_head_to_body_conversion_cache(_,_),
 	%% Used both for converting to signatures and back to value molecules
 	flora_to_signature_conversion_cache(_,_,_).
-:- index(flora_to_signature_conversion_cache/3,[1,3]).
+:- index(flora_to_signature_conversion_cache/3,[1]).
 
 :- import
 	flora_is_transactional_wrapper/1,
@@ -55,6 +57,8 @@
 	flora_canonic_wrapper_symbol/2,
 	negate_wrapper/2
    from flrwrapper.
+
+:- import get_tag_descriptor_info_with_rulehead/5 from flrdescriptor_support.
 
 :- import
 	memberchk/2,
@@ -74,7 +78,7 @@
 
 
 :- import
-	FLSYSRULEUPDATE/7,
+	FLSYSRULEUPDATE/10,
 	FLLIBMODOBJ/5,
 	FLLIBMODLIT/4,
 	FLLIBUNIVEQFORM/2
@@ -91,6 +95,8 @@
         flora_bind_libmodobj/2,
         flora_conjunct_libmodobj/2,
         matching_rule_signature/6,
+	show_rule_by_id/4,  % fast version of clause{...}
+	show_rule_by_tag/4, % same, but by tag
         show_rule_signature/9,
 	rule_signature_member/3,
 	get_canonical_form/2,
@@ -125,7 +131,7 @@
 /******************************************************************************
   get_canonical_form(+Term,-Canon)
   get the canonical form Canon of the given Term. Canon is in the form
-  of FLCANON(Wrap,Args,Module,Callable)
+  of FLCANON(Wrap,Args,Module,Callable,TablingStatus)
 ******************************************************************************/
 %% Case of Var
 get_canonical_form(Term,FLCANON(_,_,_,Term,_)) :-
@@ -514,8 +520,9 @@ flora_preprocess_headlist([H|L],[H|LList]) :-
         
 
 /***********************************************************************
- flora_record_rule_signature(+RuleId,+HeadPredPrefix,+Module,+Head,+Body,
-                             +Meta,?DefeatCond,+Rule,+BridgeRule)
+ flora_record_rule_signature(+RuleId,+DescriptorVarsTerm,
+                             +HeadPredPrefix,+Module,+Head,+Body,
+                             ?DefeatCond,+Rule,+BridgeRule)
  Assert a rule signature.
  The head is converted to the body format and stored.
  This is so that after we retrieve a head using clause{...} we could
@@ -523,40 +530,43 @@ flora_preprocess_headlist([H|L],[H|LList]) :-
  Downside: if we want to create a different rule with this head,
  we would need to convert the head into the FLORA-2 head format.
 ***********************************************************************/
-flora_record_rule_signature(RuleId,HPrefix,Module,Head,Body,Meta,DefeatCond,Rule,Bridge) :-
+flora_record_rule_signature(RuleId,DescriptorVarsTerm,HPrefix,Module,Head,Body,DefeatCond,Rule,Bridge) :-
 	%% Head is stored in the body form so that it could be queried
 	%% via reification
 	convert_to_body_literal(Head,BHead),
 	bind_head_in_defeat_condition_with_copy(BHead,DefeatCond),
         flora_decode_goal_as_atom(Head,HeadAtm),
-	catch(flora_assert(flora_rule_signature(RuleId,HPrefix,Module,BHead,Body,
-					  Meta,DefeatCond,Rule,Bridge),
+	catch(flora_assert(flora_rule_signature(RuleId,DescriptorVarsTerm,
+						HPrefix,Module,BHead,Body,
+						DefeatCond,Rule,Bridge),
 			   CONSERVE_REGISTERS,
 			   INDEXED_ARG),
 	      _,
-	      (nl,flora_warning_line('The body of the rule with the head ~w is too large. This rule be neither accessed with clause{...} nor used for defeasible reasoning. Try to split this rule into smaller pieces.',[HeadAtm]),nl)).
+	      (nl,flora_warning_line('The body of the rule with the head ~w is too large. This rule be neither accessed with clause{...} nor used for defeasible reasoning. Try to split this rule into smaller pieces.',[HeadAtm]),nl)
+	     ).
 
 
 /***********************************************************************
- flora_retract_signatures(+RuleId,+HeadPredPrefix,+Module,+Head,+Body,
-                          +Meta,+Rule,+BridgeRule)
+ flora_retract_signatures(+RuleId,+DescriptorVarsTerm,
+                          +HeadPredPrefix,+Module,+Head,+Body,
+                          +Rule,+BridgeRule)
  retract matching signatures
 ***********************************************************************/
-flora_retract_signatures(Id,HPrefix,Mod,(H1,H2),Body,Meta,(RL1,RL2),Bridge) :-
+flora_retract_signatures(Id,DescriptorVarsTerm,HPrefix,Mod,(H1,H2),Body,(RL1,RL2),Bridge) :-
 	!,
-        flora_retract_signatures(Id,HPrefix,Mod,H1,Body,Meta,RL1,Bridge),
-        flora_retract_signatures(Id,HPrefix,Mod,H2,Body,Meta,RL2,Bridge).
+        flora_retract_signatures(Id,DescriptorVarsTerm,HPrefix,Mod,H1,Body,RL1,Bridge),
+        flora_retract_signatures(Id,DescriptorVarsTerm,HPrefix,Mod,H2,Body,RL2,Bridge).
 
-flora_retract_signatures(Id,HPrefix,Mod,Hd,Body,Meta,RuleL,Bridge) :-
+flora_retract_signatures(Id,DescriptorVarsTerm,HPrefix,Mod,Hd,Body,RuleL,Bridge) :-
 	convert_to_body_literal(Hd,BHd),
-        retract(flora_rule_signature(Id,HPrefix,Mod,BHd,Body,Meta,_DefeatCond,RuleL,Bridge)).
+        retract(flora_rule_signature(Id,DescriptorVarsTerm,HPrefix,Mod,BHd,Body,_DefeatCond,RuleL,Bridge)).
 
 /***********************************************************************
  flora_reset_rule_signature(+Module)
  retract all rule signatures for the Module
 ***********************************************************************/
 flora_reset_rule_signature(Module) :-
-        retractall(flora_rule_signature(_Id,_WPrefix,Module,_Head,_Body,_Meta,_DefeatCond,_RuleList,_BridgeRule)).
+        retractall(flora_rule_signature(_Id,_VarsTerm,_WPrefix,Module,_Head,_Body,_DefeatCond,_RuleList,_BridgeRule)).
 
 /***********************************************************************
  flora_conjunct_libmodobj(+RuleHeadList,-NewRuleHeadList)
@@ -579,7 +589,7 @@ flora_conjunct_libmodobj([FLLIBMODOBJ(W,A,M,C,O)|Tail],[P|Rest]) :-
         ;
             P = First
         ).
-flora_conjunct_libmodobj([FLSYSRULEUPDATE(Id,HeadList,Body,HVars,BVars,Meta,DefeatCond)|L],[FLSYSRULEUPDATE(Id,NewHeadList,Body,HVars,BVars,Meta,DefeatCond)|NL]) :-
+flora_conjunct_libmodobj([FLSYSRULEUPDATE(Id,DescrVarTerm,DescrMetaFacts,HeadList,Body,HVars,BVars,PreBody,PostBody,DefeatCond)|L],[FLSYSRULEUPDATE(Id,DescrVarTerm,DescrMetaFacts,NewHeadList,Body,HVars,BVars,PreBody,PostBody,DefeatCond)|NL]) :-
         !,
         flora_conjunct_libmodobj(HeadList,NewHeadList),
         flora_conjunct_libmodobj(L,NL).
@@ -639,7 +649,7 @@ flora_bind_libmodobj([H|_Tail],_NewList) :-
         var(H),
         !,
         flora_abort('uninstantiated element in the rule list of insertrule{...}').
-flora_bind_libmodobj([FLSYSRULEUPDATE(Id,HeadList,Body,HVars,BVars,Meta,DefeatCond)|L],[FLSYSRULEUPDATE(Id,NewHeadList,Body,HVars,BVars,Meta,DefeatCond)|NL]) :-
+flora_bind_libmodobj([FLSYSRULEUPDATE(Id,DescrVarTerm,DescrMetaFacts,HeadList,Body,HVars,BVars,PreBody,PostBody,DefeatCond)|L],[FLSYSRULEUPDATE(Id,DescrVarTerm,DescrMetaFacts,NewHeadList,Body,HVars,BVars,PreBody,PostBody,DefeatCond)|NL]) :-
         !,
         flora_bind_libmodobj(HeadList,NewHeadList),
         flora_bind_libmodobj(L,NL).
@@ -672,19 +682,17 @@ flora_bind_libmodobj([H|L], [H|NL]) :- flora_bind_libmodobj(L,NL).
     The _with_copy form first creates a copy of Head.
 
     Note that DefeatCond has the form:
-    TABLED_HILOG_WRAPPER(FL_UNDEFEATED,(IdCode,HeadCode),ThisModule)
-    or
-    NULL
+    FL_UNDEFEATED(IdCode,VarsCode,HeadCode,ThisModule,Caller)
 ***********************************************************************/
 bind_head_in_defeat_condition(Head,DefeatCond) :-
-	(DefeatCond == NULL, !
+	(DefeatCond == true, !
 	;
 	    convert_to_body_literal(Head,BHead),
 	    extract_head_from_defeat_condition(DefeatCond,BHead)
 	).
 
 bind_head_in_defeat_condition_with_copy(Head,DefeatCond) :-
-	(DefeatCond == NULL, !
+	(DefeatCond == true, !
 	;
 	    %% We use copy-term so that the variables in Head and DefeatCond
 	    %% would be different. Otherwise, constant unifications with
@@ -698,10 +706,9 @@ bind_head_in_defeat_condition_with_copy(Head,DefeatCond) :-
 extract_head_from_defeat_condition(DefeatCond,Head) :-
 	DefeatCond = _:DelayLiteral,
 	arg(4,DelayLiteral,[DefeatCondSansDelay|_]),
-	%% OBSOLETE: the case when FL_UNDEFEATED is implemented as HiLog
-	%%      arg(3,DefeatCondSansDelay,Head).
-	%% The below is for the case when FL_UNDEFEATED is implemented as Prolog
-	arg(2,DefeatCondSansDelay,Head).
+	%% If FL_UNDEFEATED(IdCode,VarsCode,Head,Module,Caller) is changed,
+	%% change below the argument number
+	arg(3,DefeatCondSansDelay,Head).
 
 
 /***********************************************************************
@@ -714,33 +721,35 @@ conjunct_to_list(A, [A]).
 
 
 /******************************************************************************
-  show_rule_signature(?Id,?Prefix,?Module,-Head,-Body,?Meta,-DefeatCond,-RuleList,-BridgeRule)
+  show_rule_signature(?Id,?VarsTerm,?Prefix,?Module,-Head,-Body,-DefeatCond,-RuleList,-BridgeRule)
 
   show_rule_signature does not do head/body conversion,
-  so these can really be only output vars
+  so Head/Body can really be only output vars
 ******************************************************************************/
-show_rule_signature(Id,Prefix,Module,Head,Body,Meta,DefeatCond,RuleList,BridgeRule) :-
-	flora_rule_signature(Id,Prefix,Module,Head,Body,Meta,DefeatCond,RuleList,BridgeRule).
+show_rule_signature(Id,VarsTerm,Prefix,Module,Head,Body,DefeatCond,RuleList,BridgeRule) :-
+	flora_rule_signature(Id,VarsTerm,Prefix,Module,Head,Body,DefeatCond,RuleList,BridgeRule).
 
 
 /* Some operations on Rule signatures */
-rule_signature_member(tag,Sig,Lab) :-
-	Sig = (Lab,_,_Module,_Head,_Body,_Meta,_DefeatCond,_Rules,_BridgeRule).
+rule_signature_member(id,Sig,Id) :-
+	Sig = (Id,_,_,_Module,_Head,_Body,_DefeatCond,_Rules,_BridgeRule).
 rule_signature_member(module,Sig,Module) :-
-	Sig = (_Lab,_,Module,_Head,_Body,_Meta,_DefeatCond,_Rules,_BridgeRule).
+	Sig = (_Id,_,_,Module,_Head,_Body,_DefeatCond,_Rules,_BridgeRule).
 rule_signature_member(head,Sig,Head) :-
-	Sig = (_Lab,_,_Module,Head,_Body,_Meta,_DefeatCond,_Rules,_BridgeRule).
+	Sig = (_Id,_,_,_Module,Head,_Body,_DefeatCond,_Rules,_BridgeRule).
 rule_signature_member(body,Sig,Body) :-
-	Sig = (_Lab,_,_Module,_Head,Body,_Meta,_DefeatCond,_Rules,_BridgeRule).
+	Sig = (_Id,_,_,_Module,_Head,Body,_DefeatCond,_Rules,_BridgeRule).
 rule_signature_member(defeatcondition,Sig,DefeatCond) :-
-	Sig = (_Lab,_,_Module,_Head,_Body,_Meta,DefeatCond,_Rules,_BridgeRule).
+	Sig = (_Id,_,_,_Module,_Head,_Body,DefeatCond,_Rules,_BridgeRule).
 
 
 /***********************************************************************
-  matching_rule_signature(+Id,+Prefix,+Head,+Body,+Meta,-RuleSignature)
+  show_rule_by_id(+Id,+Mod,?Head,?Body)
+  show_rule_by_tag(+Tag,+Mod,?Head,?Body)
+  matching_rule_signature(?Id,?DescrVarsTerm,?Prefix,?Head,?Body,-RuleSignature)
 
   RuleSignature:
-     (Id,Prefix,Module,Head,Body,Meta,DefeatCondition,RuleList,BridgeRule)
+     (Id,Prefix,Prefix,Module,Head,Body,DefeatCondition,RuleList,BridgeRule)
 
   BridgeRules:
       A multiheaded rule like  p,q :- r is represented as
@@ -753,27 +762,34 @@ rule_signature_member(defeatcondition,Sig,DefeatCond) :-
       This contains the top part of the split multiheaded rule.
       In the above, it would be p :- newpredicateXYZ or q :- newpredicateXYZ.
 ************************************************************************/
-matching_rule_signature(Id,Prefix,Head,Body,Meta,(Id,Prefix,Mod,Head,NewBody,Meta,DefeatCond,RuleList,BridgeRule)) :-
+show_rule_by_id(Id,Mod,Head,Body) :-
+	matching_rule_signature(Id,_,_,Head,Body,Signature),
+	rule_signature_member(module,Signature,Mod).
+show_rule_by_tag(Tag,Mod,Head,Body) :-
+	get_tag_descriptor_info_with_rulehead(Id,Mod,Tag,Head,_),
+	show_rule_by_id(Id,Mod,Head,Body).
+
+matching_rule_signature(Id,VarsTerm,Prefix,Head,Body,(Id,VarsTerm,Prefix,Mod,Head,NewBody,DefeatCond,RuleList,BridgeRule)) :-
         var(Head),
         !,
-        flora_rule_signature(Id,Prefix,Mod,Head,NewBody,Meta,DefeatCond,RuleList,BridgeRule),
+        flora_rule_signature(Id,VarsTerm,Prefix,Mod,Head,NewBody,DefeatCond,RuleList,BridgeRule),
 	FLLIBUNIVEQFORM(NewBody,Body).
 
-matching_rule_signature(Id,Prefix,FLLIBMODLIT(A1,A2,A3,A4),Body,Meta,(Id,Prefix,Mod,NewHead,NewBody,Meta,DefeatCond,RuleList,BridgeRule)) :-
+matching_rule_signature(Id,VarsTerm,Prefix,FLLIBMODLIT(A1,A2,A3,A4),Body,(Id,VarsTerm,Prefix,Mod,NewHead,NewBody,DefeatCond,RuleList,BridgeRule)) :-
         !,
-        flora_rule_signature(Id,Prefix,Mod,NewHead,NewBody,Meta,DefeatCond,RuleList,BridgeRule),
+        flora_rule_signature(Id,VarsTerm,Prefix,Mod,NewHead,NewBody,DefeatCond,RuleList,BridgeRule),
         FLLIBUNIVEQFORM(NewHead,FLLIBMODLIT(A1,A2,A3,A4)),
 	FLLIBUNIVEQFORM(NewBody,Body).
 
-matching_rule_signature(Id,Prefix,(H1,H2),Body,Meta,(Id,Prefix,Mod,(NewH1,NewH2),NewBody,Meta,DefeatCond,(RL1,RL2),BridgeRule)) :-
+matching_rule_signature(Id,VarsTerm,Prefix,(H1,H2),Body,(Id,VarsTerm,Prefix,Mod,(NewH1,NewH2),NewBody,DefeatCond,(RL1,RL2),BridgeRule)) :-
         !,
-        matching_rule_signature(Id,Prefix,H1,Body,Meta,(Id,Prefix,Mod,NewH1,NewBody,Meta,DefeatCond,RL1,BridgeRule)),
-        matching_rule_signature(Id,Prefix,H2,Body,Meta,(Id,Prefix,Mod,NewH2,NewBody,Meta,RL2,BridgeRule)).
+        matching_rule_signature(Id,VarsTerm,Prefix,H1,Body,(Id,VarsTerm,Prefix,Mod,NewH1,NewBody,DefeatCond,RL1,BridgeRule)),
+        matching_rule_signature(Id,VarsTerm,Prefix,H2,Body,(Id,VarsTerm,Prefix,Mod,NewH2,NewBody,RL2,BridgeRule)).
 
-matching_rule_signature(Id,Prefix,Head,Body,Meta,(Id,Prefix,Mod,GH,NewBody,Meta,DefeatCond,RuleList,BridgeRule)) :-
+matching_rule_signature(Id,VarsTerm,Prefix,Head,Body,(Id,VarsTerm,Prefix,Mod,GH,NewBody,DefeatCond,RuleList,BridgeRule)) :-
         convert_to_body_literal(Head,HH),
         flora_generalize_last(HH,GH),
-        flora_rule_signature(Id,Prefix,Mod,GH,NewBody,Meta,DefeatCond,RuleList,BridgeRule),
+        flora_rule_signature(Id,VarsTerm,Prefix,Mod,GH,NewBody,DefeatCond,RuleList,BridgeRule),
 	FLLIBUNIVEQFORM(NewBody,Body).
 
 /***********************************************************************

@@ -1696,10 +1696,10 @@ expressions as follows.
 %%
 \begin{enumerate}
 \item If {\tt c::c1} and {\tt c::c2} then {\tt c::(c1,c2)}, i.e.,
-  {\tt (c1,c2)} is the least upper bound of {\tt c1} and {\tt c2} in the
+  {\tt (c1,c2)} is the greatest lower bound of {\tt c1} and {\tt c2} in the
   class hierarchy.
 \item If {\tt c1::c} and {\tt c2::c} then {\tt (c1;c2)::c}, i.e.,
-  {\tt (c1;c2)} is the greatest lower bound of {\tt c1} and {\tt c2} in the
+  {\tt (c1;c2)} is the lowest upper bound of {\tt c1} and {\tt c2} in the
   class hierarchy. 
 \item Any class, {\tt c}, is considered a superclass of {\tt (c,?\_)} and
   {\tt (?\_,c)}. In particular, {\tt (c,c)::c}. At present, \FLORA does not
@@ -7444,7 +7444,7 @@ intermediate predicates.
 
 The {\tt clause} statement can also be used to query the \emph{labels} and
 meta-data associated with \FLORA rules. This form of the clause statement
-is described in Section~\ref{sec-rule-label}.
+is described in Section~\ref{sec-rule-id}.
 
 \index{\_isbasefact predicate}
 Note that in \FLORA facts are different from rules. They cannot be queried
@@ -8458,128 +8458,151 @@ the occurrence of \texttt{!!} in \emph{that} rule will force the execution of
 \texttt{bar(?Z)}.   
 
 
-\section{Rule Labels and Meta-information.}
-\label{sec-rule-label}
+\section{Rule Ids and Meta-information}
+\label{sec-rule-id}
 
-\index{rule annotation}
-\index{annotation!see \emph{rule annotation}}
-\index{rule label}
+\index{rule descriptor}
+\index{descriptor!see \emph{rule descriptor}}
+\index{rule Id}
 \index{rule meta-data}
-\FLORA supports the use of the \emph{annotation} of the form
-@\{\emph{Label},\emph{Meta}\} in front of any term or formula (e.g., rule,
-query, rule body, a particular subgoal in the rule body, etc.). However,
-it is really used only when it appears in front of a rule or a fact.
-In all other cases the annotation is discarded.
+\FLORA supports the use of rule \emph{descriptors} of the form
+%% 
+\begin{itemize}
+\item  \emph{Rule Id descriptor}:   \texttt{@!\{id[frame]\}}  or just \texttt{@!{id}}, \\
+  where \texttt{id} is a term and the frame information is the same as what
+  is allowed in a simple (not nested) F-logic molecule. \\
+  Currently the frame part is ignored by the compiler.
+\item \texttt{Tag descriptor}:  \texttt{@\{tag1,tag2,...\}}, \\
+  where \texttt{tag1}, \texttt{tag2}, etc., are terms.\\
+  Rule tags are used for defeasible reasoning
+  (Section~\ref{sec-defeasible}).
+\item \emph{Defeasibility descriptor}:  \texttt{@@\{defeasible\}}  or
+  \texttt{@@\{strict\}}. Defeasibility descriptors are used for defeasible
+  reasoning, as described in Section~\ref{sec-defeasible}.
+\end{itemize}
+%% 
+This extends the rule syntax as follows:
+%% 
+\begin{alltt}
+   \emph{rule-descriptors} \emph{Head} :- \emph{Body}.
+   \emph{rule-descriptors} \emph{Fact}.
+\end{alltt}
+%% 
+Any number of tag descriptors is allowed but only one rule Id and one
+defeasibility descriptor.
+In other places, rule descriptors are either ignored or will cause syntax
+errors. 
 
-The \emph{Label} part of the annotation
-must be a constant, while \emph{Meta} is a comma-separated list of literals.
-Both \emph{Label} and \emph{Meta} are optional. If the first conjunct
-inside @\{...\} is a term other than a variable (but it can be a term that
-contains variables), it is treated as a tag given
-to the rule by the user. Therefore, a
-term should never be used as the first conjunct of the
-meta-information part unless a separate rule tag is also provided.
-If no rule tag is needed, then one can put a variable instead. This
-signals the compiler to skip the tag part. For instance,
-%% 
-\begin{verbatim}
- @{?, some[meta->info]} foo(?X) :- bar(?X).
-\end{verbatim}
-%% 
-As we have just mentioned, a rule tag can have variables. For instance,
+Rule tags and Ids are terms and so can have variables. For instance,
 %% 
 \begin{verbatim}
 @{allow(?Device,?Person)}  authorized(?Person,?Device) :- not abused(?Person,?Device).
 \end{verbatim}
 %% 
+If no Id is given, a system-generated rule Id is used. If no tag is given,
+the Id of the rule also serves as a tag.
 
+If no defeasibility descriptor is given then a rule is considered
+defeasible by default if an explicit tag is specified.
+Otherwise, the rule is considered strict.  However, for defeasibility to
+have any effect, the rule must be in a \index{defeasibility-capable
+  document} \emph{defeasibility-capable} document (local file or a
+remote document), i.e., the document
+must have the directive \texttt{:- use\_argumentation\_theory} at
+the top (see Section~\ref{sec-defeasible}).
+Also, rules whose heads are transactional predicates or methods are
+currently never
+defeasible---no matter what the defeasibility descriptor says.
 
-Instead of a ``normal'' term, a rule tag can be a Skolem
-constant, {\tt \_\#}.  This is useful when the user wants the compiler to
-generate a new unique rule tag automatically. For instance,
-%% 
-\begin{verbatim}
-   @{_#} foo(?X) :- bar(?X).
-\end{verbatim}
-%% 
-Numbered Skolem constants, e.g., {\tt \_\#1} or {\tt
-  \_\#2}, can also be used;
-they allow ``capturing'' the newly generated
-rule labels by the rules. For instance,
-%% 
-\begin{verbatim}
-   @{_#33} foo(this_ruleid_is(_#33),?X) :- bar(?X).
-\end{verbatim}
-%% 
+\paragraph{The \texttt{\_@!} token.} 
+\index{\_@! token}
+Rules can reference their Ids even if the Id is not given explicitly by the
+author and thus cannot be determined by just looking at the rule. This is
+accomplished with the help of the special token \texttt{\_@!}, which is
+substituted at run time by the Id of the rule where the token occurs.
 
+\paragraph{Enabling and disabling rules.}
+Rule Ids make it possible to \emph{enable} and \emph{disable} rules,
+producing the effect of deleting and re-inserting rules.
+The difference is, however, that enabling and disabling do not actually
+change the rules in the system (so they are very fast compared to
+\texttt{insert} and \texttt{delete}) and, most importantly, they apply to
+static rules, not just the dynamic rules.  To specify a rule, one needs to
+specify the Id of the rule in question and its module. The following
+primitives are provided:
+%% 
+\begin{itemize}
+\item enable\{Id,Module\}
+\item disable\{Id,Module\}
+\item isenabled\{Id,Module\}
+\item isdisabled\{Id,Module\}
+\end{itemize}
+%% 
+The last two primitives are queries that tell us whether a particular rule
+is enabled or disabled. To enable or disable a rule, the rule must already
+exist as a static or dynamic rule. Enabling  and disabling operations are
+idempotent: they always succeed and applying \texttt{enable} to an enabled
+rule or \texttt{disable} to a disabled rule has no effect.  
+If a rule with the specified Id and module does not exist in the system,
+both \texttt{enable} and disable fail and so do both of the above queries.
+
+\paragraph{Changing defeasibility.}
+The defeasibility status of a rule can be changed via the following
+statements:
+%% 
+\begin{itemize}
+\item  makedefeasible\{Id,Module\}
+\item  makestrict\{Id,Module\}
+\item  isdefeasible\{Id,Module\}
+\item  isstrict\{Id,Module\}
+\end{itemize}
+%% 
+The last two primitives are queries. The primitive \texttt{makedefeasible}
+and \texttt{makestrict} are idempotent and always succeed. The queries
+\texttt{isdefeasible} and \texttt{isstrict} tell us whether the rule in
+question is currently defeasible or strict.    
+If the rule with the given Id does not exist in the given module, both of
+these queries fail.
+
+\paragraph{Querying the rule base and rule descriptors.}
 \index{clause\{...\}}
-Rule labels and meta-data can be queried using the {\tt clause\{...\}}
+Rule Ids and other meta-data can be queried using the {\tt clause\{...\}}
 construct introduced in Section~\ref{sec:clause}. To this end, \FLORA
 provides two form of the clause statement that extend the statements
 defined in Section~Section~\ref{sec:clause}:
 %%
 {\tt
 \begin{quote}
-clause\{\it{@\{lab,meta\} head,body}\}\\
+clause\{\it{desbriptors head,body}\}\\
 \tt
-clause\{\it{@\{lab,meta\} type,head,body}\}
+clause\{\it{desbriptors type,head,body}\}
 \end{quote}
 }
 %%
-Here \emph{type}, \emph{head}, and \emph{body} are as in
-Section~\ref{sec:clause}. \emph{Lab} and \emph{meta} have the same form as
-above except that they can also be variables or, in case of \emph{meta},
-include variables. For instance,
-%% 
-\begin{verbatim}
-    ?- clause{@{?Lab,a[b->?Y],?Z} foo[bar->?Val],?Body}.
-\end{verbatim}
-%% 
-This query will retrieve all rules whose head matches {\tt foo[bar->?Val]}
-and whose meta-data matches the pattern {\tt [a[b->?Y] | ?Z]} (meta-data is
-a list of atomic formulas, and the last variable in the meta-data pattern
-represents the tail of that list; if the entire meta-data is represented by
-a variable then that variable is bound to the entire rule's meta-data).
-The variable {\tt ?Lab} will be bound to the rule labels, and {\tt ?Body}
-to the matching rule bodies.
-
-Note that even though the user may have given
-explicit labels only to some of the rules, \FLORA will automatically
-assign \emph{system} labels to the remainder of the rules (the anonymous
-tags such as {\tt \_\#} are considered \emph{user}, not system labels).
-Therefore, the above {\tt clause}-query might also retrieve  
-the rules that have no explicit user-assigned rule Ids provided that they
-match the other patterns specified in the query.
-
-Meta-data is a general purpose annotation mechanism that \FLORA provides to
-the user. One can use it to assign unique Ids to the rules and attach other
-information. For instance, a convention can be adopted that the a construct
-such as {\tt id=...} in the meta-part specifies a unique rule Id:
-%% 
-\begin{verbatim}
-    @{foo, id=abc123} a1 :- b1.
-    @{foo, id=abc124} a2 :- b2.
-\end{verbatim}
-%% 
-Note that rule labels are not unique here, but rule Ids could be required,
-by convention, to be unique.
-In contrast, rule labels are used mostly to support \emph{defeasible
-  reasoning}---see Section~\ref{sec-defeasible}.  As shown above, rule
-tags are \emph{not} required to be unique and in many cases they are
-not. 
-
-One other restriction is that
-rule labels \emph{cannot} be assigned to rules that have
-transactional literals (marked with the \%-sign) in the rule head:
-defeasible reasoning with side-effectful rules is not supported.
-However, other metadata is allowed in such rules.
+Here descriptors are rule descriptors as above and
+\emph{type}, \emph{head}, and \emph{body} are as in
+Section~\ref{sec:clause}. 
 For instance,
 %% 
 \begin{verbatim}
-@{lab,some[meta->data]} %action :- ... .    // illegal
-@{?,some[meta->data]}   %action :- ... .    // ok
+    ?- clause{@{?Tag} @@{defeasible} foo[bar->?Val],?Body}.
 \end{verbatim}
 %% 
+This query will retrieve all defeasible rules whose head matches {\tt
+  foo[bar->?Val]}. The variable \texttt{?Tag} will be bound to the tag of
+the rule. 
+
+\textbf{Note:} the \texttt{clause\{...\}} primitive queries the rules as
+they were created by the author. Disabling a rule or changing its
+defeasibility status won't affect \texttt{clause{...}}.
+For instance, if we had a
+rule @!{abc} \texttt{@{defeasible} p:- q}
+and then this rule was disabled and/or
+made strict, \texttt{clause{@@{defeasible} p,q}}
+will still be true and
+\texttt{clause{@@{strict} p,q}} 
+false. In this way, one can investigate the changes
+made to the statis of the various rules in the course of time.   
 
 
 \section{Defeasible Reasoning}
@@ -8604,7 +8627,7 @@ A rule instance, $\rho_1$ tagged $i_1$, \emph{opposes} another rule
 instance, $\rho_2$ tagged $i_2$, if and only if
 \texttt{\_opposes($i_1$,$head(\rho_1)$,$i_2$,$head(\rho_2)$)} is true,
 where $head(\rho_i)$ denotes the head-literal of the corresponding rule
-(which can be negated with {\tt neg}). A rule instance, $\rho_1$ labeled
+(which can be negated with {\tt neg}). A rule instance, $\rho_1$ tagged
 $i_1$, \emph{overrides} the rule instance $\rho_2$ tagged $i_2$ if and
 only if \texttt{\_overrides($i_1$,$head(\rho_1)$,$i_2$,$head(\rho_2)$)} is
 true. (For convenience, \FLORA also defines 2-argument versions of these
@@ -8634,7 +8657,7 @@ rule instance.
 Rule disqualification is not so commonly agreed upon a notion as the other
 two.  Some argumentation theories do not use it at all (i.e., nothing is
 disqualified).  The default argumentation theory in \FLORA postulates that a
-rule instance, $\rho_1$ tagged $i_1$, is disqualified in two cases:
+rule instance $\rho_1$, tagged $i_1$, is disqualified in two cases:
 %% 
 \begin{itemize}
 \item If it transitively defeats itself, i.e., there is a sequence of
@@ -8689,16 +8712,24 @@ the directive
 %% 
 at the top. Thus, different modules of the same \FLORA
 knowledge base can use different theories of defeasible reasoning.
+For instance, if some argumentation theory is implemented in file
+\texttt{myargth.flr}, then it can be declared in a \FLORA document
+using
+%% 
+\begin{verbatim}
+  :- use_argumentation_theory{foo}.
+  ?- [myargth>>foo].
+\end{verbatim}
+%% 
 
-The defeasible theory in module {\tt foo} must use certain API, which will
+Defeasible theories must use certain API, which will
 be described in a later version of this manual. Meanwhile, one can
 construct such theories by analogy with GCL---see {\tt lib/flrgcl.flr}.  
 
-Note that argumentation theories affect only those rules that have explicit
-user-specified labels---just metadata will not do (Skolem labels of the
-form {\tt \_\#} or {\tt \_\#1} \emph{are} considered user labels). Facts
-that have explicitly specified labels or meta-info are treated as rules
-that have {\tt true} as the only literal in their bodies.
+Note that argumentation theories affect only defeasible rules and the
+defeasibility status of a rule can be changed from \texttt{strict} to
+\texttt{defeasible} and vice versa---see
+Section~\ref{sec-rule-id}.
 
 \subsection{Rule Overriding and Conflicts}\label{sec-overriding-conflict}
 
@@ -8712,7 +8743,7 @@ Rule overriding can be specified via one of the following two forms:
 \end{alltt}
 %% 
 The first form of the {\tt \_overrides} statement says that the rule with
-tag \emph{RuleLab1} overrides the rule with the rule label
+tag \emph{RuleLab1} overrides the rule with the rule tag
 \emph{RuleLab2} regardless of what the heads of those rules are. The second
 form of {\tt \_overrides} says the following. Let $\rho_1$ he a program
 rule with the tag \emph{RuleLab1} and head \emph{H1}, and $\rho_2$ he a
@@ -8750,8 +8781,10 @@ with respect to the usual first-order logic. For instance, {\tt a :- b} and
 
 Both {\tt \_opposes} and {\tt \_overrides} can be defined via user rules
 as well as facts, and these rules and facts can even be added and deleted
-at run-time of the program using the statements {\tt insert\{...\}/delete\{...\}} and {\tt
-  insertrule\{...\}}/{\tt deleterule\{...\}}.
+or disabled/enabled
+at run-time using the statements {\tt insert\{...\}/delete\{...\}}, {\tt
+  insertrule\{...\}}/{\tt deleterule\{...\}}, {\tt
+  enable\{...\}}/{\tt disable\{...\}}.
 However, this is not recommended because the meaning of such a
 program might be hard to understand. This is especially true in the case of
 the {\tt \_opposes} predicate.  Although it is advised
@@ -8774,19 +8807,18 @@ is ignored.
 Sometimes it is useful to disable, or \emph{cancel} a rule instance, if
 certain conditions are satisfied. This can be specified using the special
 predicate {\tt \_cancel}. The default argumentation theory in \FLORA  
-understands two versions of that predicate: a 1-argument version and a
-2-argument version:
+understands two versions of that predicate:
 %% 
 \begin{alltt}
-    _cancel(\emph{label}).
-    _cancel(\emph{label},\emph{head}).
+    _cancel(\emph{tag}).
+    _cancel(\emph{tag},\emph{head}).
 \end{alltt}
 %% 
 The first rule cancels all rule instances whose tag unifies with
-\emph{label} and the second version cancels only those rules whose label
-unifies with \emph{label} and whose head unifies with \emph{head}.   
+\emph{tag} and the second version cancels only those rules whose tag
+unifies with \emph{tag} and whose head unifies with \emph{head}.   
 
-Cancellation rules can also be labeled, overridden,
+Cancellation rules can also be tagged, overridden,
 and canceled by other cancellation
 rules. To illustrate,  consider the following example:
 %% 
@@ -8814,7 +8846,7 @@ derivation of {\tt tt3(bb)}. However, rule {\tt c5} cancels rule {\tt c4},
 so {\tt tt3(bb)} stays put.
 
 Observe the use of 1-argument and 2-argument cancellation predicate.
-The first argument is always a term that matches rule labels for the rules
+The first argument is always a term that matches rule tags for the rules
 to be canceled. The second
 argument, if present, matches the heads of the rules to be canceled. For
 instance, {\tt \_cancel(L2)} cancels only the rule tagged {\tt L2}. If more
@@ -8823,13 +8855,13 @@ our example), then all such rules are canceled. Two-argument cancellation
 predicates cancel only the rules that match both arguments. In our case,
 however, the first argument is a variable, as in {\tt \_cancel(?,tt3(aa))},
 which means that all the rules matching the head are canceled, regardless
-of the label.\footnote{
+of the tag.\footnote{
   Again, in our case, only one rule head matches the literal {\tt tt3(a)},
   but in general there can be several.
 }
 %% 
 
-Here is a more sophisticated example:
+Here is a more complicated example:
 %% 
 \begin{verbatim}
 device(printer).          abused(Bob,printer).       pardoned(printer,Bob).
@@ -8921,21 +8953,19 @@ and {\tt L22}, but {\tt L11} has higher priority. As a result, {\tt L22}
 remains canceled and is false, but {\tt L11} is not canceled and remains
 true.
 
-\subsection{Defeasible vs. Strict Rules}
+\subsection{Changing  Default Defeasibility Status}
 
 \index{rule!defeasible}
 \index{rule!strict}
 \index{defeasible rule}
 \index{strict rule}
 %%
-\FLORA distinguishes between \emph{defeasible} and \emph{strict} rules.
-Only defeasible rules can be defeated by other rules according to an
-argumentation theory.
-The general rule is that an explicitly tagged rule is always defeasible
-unless the tag is a variable. Rules that are tagged with variables are
-always strict.
-For the unlabeled rules, the default is strict. However, \FLORA provides
-two compiler directives:
+In Section~\ref{sec-rule-id}, we discussed the default
+defeasibility policy and the fact that defeasibility can be changed using
+the \texttt{makestrict}/\texttt{makedefeasible} primitives.  
+This policy says that rules that have no explicit tags and no explicit
+defeasibility descriptor are considered strict. To change this default
+policy, \FLORA provides two compiler directives:
 %% 
 \begin{verbatim}
 :- default_is_defeasible_rules.
@@ -8945,10 +8975,10 @@ two compiler directives:
 \end{verbatim}
 %% 
 The \verb|default_is_defeasible_rules| directive changes the default so
-that unlabeled rules become defeasible. The directive
+that untagged rules become defeasible. The directive
 \verb|default_is_strict_rules| changes the default back to strict.
 These directives can appear any number of times in the program
-changing the treatment of the unlabeled rules to the desired default.
+changing the treatment of the untagged rules to the desired default.
 
 \index{tag\{...\} primitive}
 %%
@@ -8978,7 +9008,7 @@ then the query
 will return the following answers:
 %% 
 \begin{verbatim}
-    ?X = default_rule_label1
+    ?X = '_$$''''default_ruleid1'
     ?Y = ${abc2(?_h2400)}
 
     ?X = p
@@ -8987,7 +9017,7 @@ will return the following answers:
 %% 
 The rules headed by {\tt abc2} and {\tt foo2} are not listed, since they
 are strict.  
-The {\tt label} primitive also enables the user to query rules in a specific
+The {\tt tag} primitive also enables the user to query rules in a specific
 module. For instance,
 %% 
 \begin{verbatim}
@@ -8999,8 +9029,8 @@ module. For instance,
 
 \subsection{Supported Argumentation Theories}\label{sec-exclusion-constr}
 
-At present, \FLORA supports three different argumentation theories: the new
-and the original generalized courteous logics and general courteous
+At present, \FLORA supports four different argumentation theories: the new
+and the original generalized courteous logics and two general courteous
 logic with general exclusion constraints.
 
 \subsubsection{The New and the Original Courteous Argumentation Theories}
@@ -9070,6 +9100,10 @@ determines which of them are defeated.  Intuitively, the defeated opposers
 are those that do not ``beat'' (rebut) any other opposer in the same
 exclusion constraint.
 
+The other argumentation theory with general exclusions is called
+\texttt{ogclpe}. This theory differs slightly from \texttt{gclpe} in the
+way rules are defeated.  
+
 
 \subsection{Defeasible Rules Must Be Purely Logical}
 
@@ -9117,27 +9151,27 @@ To help the user debug defeasible knowledge base, the default argumentation
 theory, {\tt \_gcl}, provides a special API, which can be used to find out
 why certain inferences were or were not made.
 The API consists of several methods, which take status-objects of the form
-{\tt status(ruleId,ruleHead)} and returns information such as why a certain
+{\tt status(ruleTag,ruleHead)} and returns information such as why a certain
 rule was defeated, which rules are defeated by the given one, etc.
 The list of methods follows:
 %% 
 \begin{itemize}
-\item  {\tt status(?I,?H)[howDefeated -> ?Reason]}.\\
-  Here {\tt ?I} is a rule Id and {\tt ?H} is a rule head. The rule head
+\item  {\tt status(?T,?H)[howDefeated -> ?Reason]}.\\
+  Here {\tt ?T} is a rule Id and {\tt ?H} is a rule head. The rule head
   cannot be a variable. There is no need to reify the rule head: \FLORA
   understands that a rule-head literal is expected and will compile it
   appropriately.  
 
   If the corresponding rule is not defeated, the query fails.  Otherwise,
-  {\tt ?Reason} is the result of the query. It can tke three different forms:
+  {\tt ?Reason} is the result of the query. It can take three different forms:
   %% 
   \begin{itemize}
-  \item {\tt refutedBy(ruleId,ruleHead)}: In this case, all rule
-    id/head pairs that refute the rule(s) represented by the {\tt ?I/?H}
-    pair (i.e., whose tag unifies with {\tt ?I} and head with {\tt ?H})
+  \item {\tt refutedBy(ruleTag,ruleHead)}: In this case, all rule
+    tag/head pairs that refute the rule(s) represented by the {\tt ?T/?H}
+    pair (i.e., whose tag unifies with {\tt ?T} and head with {\tt ?H})
     will be returned.
-  \item {\tt rebuttedBy(ruleId,ruleHead)}: All the rule
-    id/head pairs that rebut the rule(s) represented by the {\tt ?I/?H} pair
+  \item {\tt rebuttedBy(ruleTag,ruleHead)}: All the rule
+    tag/head pairs that rebut the rule(s) represented by the {\tt ?T/?H} pair
     will be returned.
   \item {\tt disqualified}: This is returned if the rule is
     disqualified. (Recall that in the default {\tt \_gcl} theory a rule is
@@ -9147,46 +9181,49 @@ The list of methods follows:
     additional information, as described next. 
   \end{itemize}
   %% 
-\item  {\tt status(?I,?H)[howDisqualified->defeatCycle(?Defeater,?Defeated)]}.\\
-  If the rules represented by the {\tt ?I/?H} pair are disqualified, this
+\item  {\tt status(?T,?H)[howDisqualified->defeatCycle(?Defeater,?Defeated)]}.\\
+  If the rules represented by the {\tt ?T/?H} pair are disqualified, this
   method returns the set of terms of the form {\tt
     defeats(?Defeater,?Defeated)}. Here both {\tt ?Defeater} and {\tt
-    ?Defeated} are id/head pairs that are defeated by the {\tt ?I/?H} pair
+    ?Defeated} are tag/head pairs that are defeated by the {\tt ?T/?H} pair
   and, in addition, {\tt ?Defeater} defeats {\tt ?Defeated}. By following
   these pairs one should be able
   to discover a cycle of defeats starting and ending
-  with {\tt ?I/?H}, which constitutes a self-defeating cycle.
-\item  {\tt status(?I,?H)[howDisqualified->canceled]}.\\
+  with {\tt ?T/?H}, which constitutes a self-defeating cycle.
+\item  {\tt status(?T,?H)[howDisqualified->canceled]}.\\
   This literal is true if all the rules whose tag unifies with
-  {\tt ?I} and head with {\tt ?H} are
+  {\tt ?T} and head with {\tt ?H} are
   canceled.
-\item  {\tt status(?I,?H)[howDisqualified->beatenByStrictRule(?SRH)]}.\\
-  This literal is true if all the defeasible rules with tag \texttt{?I}
+\item  {\tt status(?T,?H)[howDisqualified->beatenByStrictRule(?SRH)]}.\\
+  This literal is true if all the defeasible rules with tag \texttt{?T}
   and head \texttt{?H} have an opposing strict rule. In that case,
   \texttt{?SRH} is bound to the head of that opposing rule. 
-\item  {\tt status(?I,?H)[info->?Info]}.\\
+\item  {\tt status(?T,?H)[info->?Info]}.\\
   This method provides all kinds of details about the behavior of the rule
-  head {\tt ?H} in rules tagged {\tt ?I}. The information returned
+  head {\tt ?H} in rules tagged {\tt ?T}. The information returned
   includes {\tt candidate} (if the corresponding rule is a candidate),
   {\tt conflictsWith(?LabeledHead)}, {\tt refutes(?LabeledHead)}, and
   {\tt rebuts(?LabeledHead)}.   
   %% 
 \end{itemize}
 %% 
-All these methods are provided by all three argumentation theories and are
-available in the modules {\tt \_gcl}, {\tt ogcl}, and {\tt gcle}. However,
+All these methods are provided by all argumentation theories and are
+available in the module {\tt \_gcl} for the default argumentation
+theory; for other argumentation theories, these methods are available in
+the modules in which these argumentation theories are loaded.
+However,
 the information returned by these methods differs from one argumentation theory
-to another. For instance, for {\tt \_gcl} and {\tt ogcl}, the method
+to another. For instance, for {\tt gclp} and {\tt ogclp}, the method
 {\tt howDefeated} may return {\tt refutedBy(...)} and {\tt
-  rebuttedBy(...)}, but in case of {\tt gcle} this method might return
+  rebuttedBy(...)}, but in case of {\tt gclpe} this method might return
 {\tt notBeaterFor(ExclusionConstraintId)} as well as \texttt{canceled} and
 \texttt{beatenByStrictRule(?SRH)}.    
-For instance,
+Here are some of the examples of these queries:
 %% 
 \begin{verbatim}
-    ?- status(?I,configuration(0,block4,square7))[info->conflictsWith(?X)]@_gcl.
-    ?- status(?I,configuration(nxt(nxt(0)),block4,square3))[howDefeated->?X]@_gcl.
-    ?- status(?I,configuration(0,block4,square7))[info->competes(?Exclusion,?O)]@gcle.
+    ?- status(?T,configuration(0,block4,square7))[info->conflictsWith(?X)]@_gcl.
+    ?- status(?T,configuration(nxt(nxt(0)),block4,square3))[howDefeated->?X]@_gcl.
+    ?- status(?T,configuration(0,block4,square7))[info->competes(?Exclusion,?O)]@gcle.
 \end{verbatim}
 %% 
 

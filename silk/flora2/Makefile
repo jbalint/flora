@@ -46,6 +46,7 @@ ALLOBJS = flrarguments${OBJEXT} \
 	  flrversion${OBJEXT} \
 	  flrwraparound${OBJEXT} \
 	  flrsynonym${OBJEXT} \
+	  flrsimpleprimitive${OBJEXT} \
 	  flrwrapper${OBJEXT}
 
 
