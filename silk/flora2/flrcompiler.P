@@ -724,8 +724,9 @@ head_neg_struct(Goal,Idx,Code,[]) :-
 	is_prvariable(Goal,_VarName,_Idx),
 	!,
 	%% When variable is neg-negated (inside an update op)
-	thismodule_struct(ThisModule),
-	callerargsterm_struct(ThisModule,CallerInfo),
+	%%thismodule_struct(ThisModule),
+	%%callerargsterm_struct(ThisModule,CallerInfo),
+	callermod_info_structure(CallerInfo),
 	atomobj_struct(FL_INVALIDMODULE,Mod),
 	florasyslib_struct(Idx,FLNEGLIBMODLIT,3,[Goal,Mod,CallerInfo],Code).
 
@@ -921,24 +922,6 @@ workspace_struct(P,WS,PRWORKSPACE(P,WS)).
 newpredicate_struct(Name,N,Args,PRNEWPRED(Name,N,Args)).
 thismodule_struct(PRTHISMODULE(PRTHISMODULE)).
 
-callerargsterm_struct(Caller,CallerInfo) :-
-	%% In the future we'll replace INFONULL with rule numbers or something
-	(has_context(literal_workspace(_WS)) -> 
-	    %%compile_workspace_term(_WS,ArgsCode)
-	    ArgsCode = INFONULL
-	; has_context(goal_reification) ->
-	    %%thismodule_struct(ArgsCode)
-	    ArgsCode = INFONULL
-	; has_context(rule_reification)
-	-> ArgsCode = PRDYNCALLERARGSVAR(PRDYNCALLERARGSVAR)
-	; %% non-workspace literal in the body
-	  %%thismodule_struct(ArgsCode)
-	    ArgsCode = INFONULL
-	),
-	!,
-	list_struct([Caller,PRCALLERARGSTERM(ArgsCode)],[],CallerInfo).
-
-
 workspaceterm_struct(WS,PRWORKSPACETERM(WSTerm)) :-
 	compile_workspace_term(WS,WSTerm).
 
@@ -960,11 +943,13 @@ compile_workspace_term(WS, CompiledWS) :-
 
 %% For dynamic rules - workspace of the rule: (rule)@WS
 %% Otherwise - current module.
-context_module_struct(CallerInfo) :-
+%% Used in rule BODIES
+%% Used only in determine_caller_info/2
+module_callerargsterm_struct(CallerInfo) :-
 	has_context(dynruleworkspace(WSTerm)),
 	!,
 	callerargsterm_struct(WSTerm,CallerInfo).
-context_module_struct(CallerInfo) :-
+module_callerargsterm_struct(CallerInfo) :-
 	has_context(goal_reification),
 	\+ has_context(rule_reification),
 	!,
@@ -972,21 +957,39 @@ context_module_struct(CallerInfo) :-
 	%% with this, reification in the head doesn't unify with the body
 	%%thismodule_struct(WSTerm), 
 	callerargsterm_struct(WSTerm,CallerInfo).
-context_module_struct(CallerInfo) :-
+module_callerargsterm_struct(CallerInfo) :-
 	thismodule_struct(WSTerm),
 	!,
 	callerargsterm_struct(WSTerm,CallerInfo).
 
-%% Represents the special variable, which appears in the rule head, that is
+callerargsterm_struct(Caller,CallerInfo) :-
+	%% In the future we'll replace INFONULL with rule numbers or something
+	(has_context(literal_workspace(_WS)) -> 
+	    %%compile_workspace_term(_WS,ArgsCode)
+	    ArgsCode = INFONULL
+	; has_context(goal_reification) ->
+	    %%thismodule_struct(ArgsCode)
+	    ArgsCode = INFONULL
+	; has_context(rule_reification)
+	-> ArgsCode = PRDYNCALLERARGSVAR(PRDYNCALLERARGSVAR)
+	; %% non-workspace literal in the body
+	  %%thismodule_struct(ArgsCode)
+	    ArgsCode = INFONULL
+	),
+	!,
+	list_struct([Caller,PRCALLERARGSTERM(ArgsCode)],[],CallerInfo).
+
+
+%% Represents the special variable, which appears in the rule HEAD, that is
 %% bound to the caller name 
 callermod_info_structure(Caller) :-
 	%% In the head of dynamic rules
-	has_context(compiling_dynrule),
+	has_context(compiling_dynrule(_)),
 	!,
 	list_struct([PRDYNCALLERVAR(PRDYNCALLERVAR),
 		     PRDYNCALLERARGSVAR(PRDYNCALLERARGSVAR)],
 		    [], Caller).
-%% In the head of static rules
+%% In the HEAD of static rules
 callermod_info_structure(Caller) :-
 	list_struct([PRCALLERVAR(PRCALLERVAR),
 		     PRCALLERARGSVAR(PRCALLERARGSVAR)],
@@ -994,16 +997,18 @@ callermod_info_structure(Caller) :-
 
 callermod_var_structure(PRDYNCALLERVAR(PRDYNCALLERVAR)) :-
 	%% In the head of dynamic rules
-	has_context(compiling_dynrule),
+	has_context(compiling_dynrule(_)),
 	!.
 %% In the head of static rules
 callermod_var_structure(PRCALLERVAR(PRCALLERVAR)).
 
+/*
 thisruleid_var_structure(Struct) :-
-	(has_context(compiling_dynrule) ->
+	(has_context(compiling_dynrule(_)) ->
 	    Struct = PRTHISDYNRULEIDVAR(PRTHISDYNRULEIDVAR)
 	; Struct = PRTHISRULEIDVAR(PRTHISRULEIDVAR)
 	).
+*/
 
 thisstorage_struct(fdb,PRTHISFDBSTORAGE(PRTHISFDBSTORAGE)).
 %% support for checking undefinedness
@@ -1013,7 +1018,7 @@ floralib_struct(WS,PRFLORALIB(WS)).
 storage_struct(WS,PRFDBSTORAGE(WS)).
 
 determine_caller_info(Context,Caller) :-
-	(Context==BODYLITERAL -> context_module_struct(Caller)
+	(Context==BODYLITERAL -> module_callerargsterm_struct(Caller)
 	; Context==HEADLITERAL -> callermod_info_structure(Caller)
 	%% debug
 	; flora_error_line('[Compiler] BUG: No caller type exists for this context, ~w', [Context]),
@@ -1099,10 +1104,12 @@ caller_binding_code(Binding,Code) :-
 	atomobj_struct(FL_SILENT_EQUAL,EqCode),
 	prologterm_struct(EqCode,2,[CallerVar,Binding],Code).
 
+/*
 thisruleid_binding_code(Binding,Code) :-
 	thisruleid_var_structure(RuleIdVar),
 	atomobj_struct(FL_SILENT_EQUAL,EqCode),
 	prologterm_struct(EqCode,2,[RuleIdVar,Binding],Code).
+*/
 
 /*
 is_prtermlit(PRTERMLIT(Obj,_,_),I) :- approx_prindex(Obj,I).
@@ -3823,7 +3830,7 @@ new_udf_predicate_funct(Name,Arity,NewPredicateFunct,NewName,NPArity):-
   FactDiffList = Facts-Facts: the empty diff list
 ****************************************************************************/
 compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,Facts-Facts,Status) :-
-	set_context(compiling_rule),
+	set_context(compiling_rule(DescriptorIdCode)),
 	compile_head_top(Head,HeadCode,H2BCodeHead,H2BCodeTail,HeadStatusPre),
 	compile_conjunct2list(HeadCode,HeadCodeList),
 	no_mixed_sensor_nonsensor_heads(HeadCodeList,Head,DelayStatus),
@@ -3843,8 +3850,9 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,Facts-Fa
 	    (has_context(compiling_udf) -> RuleEnablerTest = true
 	    ; construct_rule_enabling_test(DescriptorIdCode,RuleEnablerTest)
 	    ),
-	    thisruleid_binding_code(DescriptorIdCode,ThisRuleIdBindingCode),
-	    conjunct_struct(RuleEnablerTest,ThisRuleIdBindingCode,PreBody),
+	    %%thisruleid_binding_code(DescriptorIdCode,ThisRuleIdBindingCode),
+	    %%conjunct_struct(RuleEnablerTest,ThisRuleIdBindingCode,PreBody),
+	    PreBody = RuleEnablerTest,
 	    PostBody = DelayCode,
 	    conjunct_struct(PreBody,BodyCodeSansDelay,BodyCode_aux),
 	    (is_prvariable(PostBody) -> BodyCode = BodyCode_aux
@@ -3870,7 +3878,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,Facts-Fa
 	;
 	    Status=HeadStatus
         ),
-	clear_context(compiling_rule),
+	clear_context(compiling_rule(DescriptorIdCode)),
 	!.
 
 /****************************************************************************
@@ -4771,8 +4779,10 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	%% _@! - rule id token
 	; is_fltoken(ParserTerm,FL_RULEID_TOKEN_PREFIX,FL_RULEID_SYM,Index) ->
 	    BodyHeadList=[],
-	    ((has_context(compiling_dynrule) ; has_context(compiling_rule))
-	    -> thisruleid_var_structure(Object),
+	    ((has_context(compiling_dynrule(DescrIdCode)) ; has_context(compiling_rule(DescrIdCode)))
+	    ->
+		Object = DescrIdCode,
+		%%thisruleid_var_structure(Object),
 		Status = []
 	    ; compiling_error(Index,RULEID_TOKEN_NOT_IN_RULE,Err),
 		Status = [Err]
@@ -6656,8 +6666,10 @@ compile_head_fltoken(Token,Suffix,Index,Object,Status) :-
 	    new_oidobj(Rule_num,Suffix,Index,Object),
 	    Status = []
 	; Token == FL_RULEID_TOKEN_PREFIX, Suffix == FL_RULEID_SYM ->
-	    ((has_context(compiling_dynrule) ; has_context(compiling_rule))
-	    -> thisruleid_var_structure(Object),
+	    ((has_context(compiling_dynrule(DescrIdCode)) ; has_context(compiling_rule(DescrIdCode)))
+	    -> 
+		Object = DescrIdCode,
+		%%thisruleid_var_structure(Object),
 		Status = []
 	    ; compiling_error(Index,RULEID_TOKEN_NOT_IN_RULE,Err),
 		Status = [Err]
@@ -9268,8 +9280,14 @@ compile_flinsert_list([H|T],Code,Status) :-
 	    ;
 		%% Head literal contains a path expr, so it becomes a rule.
 		%% Treat it as a dynamically inserted rule.
+
+		%% Since this rule came from a dynamic fact that contains
+		%% a path expression, the annotation code is empty.
+		%% The last FL_TRUE is the defeasible condition to be
+		%% attached to rule bodies.
+		compile_descriptor_list([],dynrule,DescrIdCode,DescrVarsTerm,DefaultMetaFactDiffList,_),
 		set_context(compile_with_var_module),
-		set_context(compiling_dynrule),
+		set_context(compiling_dynrule(DescrIdCode)),
 		compile_head_literal(H,HeadCode,H2BCodeHead,H2BCodeTail,S),
 		compile_conjunct2list(HeadCode,HCode),
 		new_prvariable(NO_INDEX,HVL),
@@ -9278,11 +9296,6 @@ compile_flinsert_list([H|T],Code,Status) :-
 		conjunct_code([H2BCodeHead,H2BCodeTail],H2BCode),
 		%% only the vars in the fact-term are to be checked
 		delay_literals_checking_code([],H,DelayCode),
-		%% Since this rule came from a dynamic fact that contains
-		%% a path expression, the annotation code is empty.
-		%% The last FL_TRUE is the defeasible condition to be
-		%% attached to rule bodies.
-		compile_descriptor_list([],dynrule,DescrIdCode,DescrVarsTerm,DefaultMetaFactDiffList,_),
 		construct_rule_enabling_test(DescrIdCode,RuleEnablerTest),
 		PreBody = RuleEnablerTest,
 		PostBody = DelayCode,
@@ -9298,7 +9311,7 @@ compile_flinsert_list([H|T],Code,Status) :-
 		collect_name_var_pairs([],BodyVars),
 		list_struct(BodyVars,[],BVLValue),
 		report_dynrule_varlist(BVL,BVLValue),
-		clear_context(compiling_dynrule),
+		clear_context(compiling_dynrule(DescrIdCode)),
 		clear_context(compile_with_var_module),
 		compile_flinsert_list(T,TCode,S2),
 		( no_errors_found(S2) -> 
@@ -9525,7 +9538,7 @@ compile_fldynrule(Op,R,RCode,Status) :-
 %% compile_fldynrule_main(+Op,+Head,+Body,+DescrIdCode,+DescrVarsTerm,+MetaFactDiffList,-RuleCode,-Status) :-
 compile_fldynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,RuleCode,Status) :-
         set_context(compile_with_var_module),
-	set_context(compiling_dynrule),
+	set_context(compiling_dynrule(DescrIdCode)),
 	compile_head_top(Head,HeadCode1,H2BCodeHead,H2BCodeTail,HeadStatusPre),
         new_prvariable(NO_INDEX,HVL),
 	compile_conjunct2list(HeadCode1,HeadCode2),
@@ -9554,8 +9567,9 @@ compile_fldynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,R
 		; construct_rule_enabling_test(DescrIdCode,RuleEnablerTest)
 		),
 		delay_literals_checking_code(Head,Body,DelayCode),
-		thisruleid_binding_code(DescrIdCode,ThisRuleIdBindingCode),
-		conjunct_struct(RuleEnablerTest,ThisRuleIdBindingCode,PreBody),
+		%%thisruleid_binding_code(DescrIdCode,ThisRuleIdBindingCode),
+		%%conjunct_struct(RuleEnablerTest,ThisRuleIdBindingCode,PreBody),
+		PreBody = RuleEnablerTest,
 		PostBody = DelayCode,
 		dynrule_struct(HeadCodeList,BodyCodeSansDelay,HVL,BVL,
 			       PreBody,PostBody,
@@ -9578,7 +9592,7 @@ compile_fldynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,R
 	    Status=HeadStatus
 	),
 	!,
-	clear_context(compiling_dynrule),
+	clear_context(compiling_dynrule(DescrIdCode)),
         clear_context(compile_with_var_module).
 
 remove_empty_list([],[]) :- !.
