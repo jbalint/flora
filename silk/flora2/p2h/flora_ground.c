@@ -50,17 +50,20 @@
 #define FL_UNDEFEATED             "undefeated"
 
 
-inline static int is_flora_form(prolog_term term);
+inline static int is_flora_form(prolog_term term, int ignore_negative);
 inline static int is_flora_tnot_predicate(prolog_term pterm);
 inline static int local_ground(CPtr term);
 inline static int local_ground_cyc(CTXTc Cell term, int cycle_action);
 inline static prolog_term trim(CPtr pterm);
 inline static prolog_term trim_compound(prolog_term pterm, int arity);
 inline static prolog_term trim_list(prolog_term inList);
-inline static void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail);
+inline static void term_vars(CPtr pterm,
+			     CPtr* pvars, CPtr* pvarstail,
+			     Integer ignore_negative);
 inline static void term_vars_split(CPtr pterm,
 				   CPtr* pvars, CPtr* pvarstail,
-				   CPtr* pattrvars, CPtr* pattrvarstail);
+				   CPtr* pattrvars, CPtr* pattrvarstail,
+				   Integer ignore_negative);
 
 #ifdef FG_DEBUG
 static char *pterm2string(CTXTdeclc prolog_term term);
@@ -144,10 +147,14 @@ DllExport xsbBool call_conv flrnonground_cyc(CTXTdecl)
 
 
 
+/* If Arg 3 is != 0, ignore vars in negative subgoals and in
+   true{..}/false{..}, ...
+*/
 DllExport xsbBool call_conv flrterm_vars (CTXTdecl)
 {
   prolog_term pterm = extern_reg_term(1);
   prolog_term outvars = extern_reg_term(2);
+  Integer ignore_negative = extern_ptoc_int(3);
   prolog_term vars = extern_p2p_new();
   prolog_term tail = vars;
 
@@ -155,7 +162,7 @@ DllExport xsbBool call_conv flrterm_vars (CTXTdecl)
   fprintf(stderr,"term_vars: pterm=%s\n", pterm2string(CTXTc pterm));
 #endif
 
-  term_vars((CPtr) pterm, (CPtr *) &vars, (CPtr*) &tail);
+  term_vars((CPtr) pterm, (CPtr *) &vars, (CPtr*) &tail, ignore_negative);
   
 #ifdef FG_DEBUG
   fprintf(stderr,"term_vars2: vars=%s\n", pterm2string(CTXTc vars));
@@ -167,11 +174,15 @@ DllExport xsbBool call_conv flrterm_vars (CTXTdecl)
 }
 
 
+/* If Arg 4 is != 0, ignore vars in negative subgoals and in
+   true{..}/false{..}, ...
+*/
 DllExport xsbBool call_conv flrterm_vars_split (CTXTdecl)
 {
   prolog_term pterm = extern_reg_term(1);
   prolog_term outvars = extern_reg_term(2);
   prolog_term outattrvars = extern_reg_term(3);
+  Integer ignore_negative = extern_ptoc_int(4);
   prolog_term vars = extern_p2p_new();
   prolog_term tail = vars;
   prolog_term attrvars = extern_p2p_new();
@@ -183,7 +194,8 @@ DllExport xsbBool call_conv flrterm_vars_split (CTXTdecl)
 
   term_vars_split((CPtr)pterm,
 		  (CPtr *)&vars, (CPtr*)&tail,
-		  (CPtr *)&attrvars, (CPtr*)&attrtail);
+		  (CPtr *)&attrvars, (CPtr*)&attrtail,
+		  ignore_negative);
   
 #ifdef FG_DEBUG
   fprintf(stderr,"term_vars_split2: vars=%s\n", pterm2string(CTXTc vars));
@@ -225,7 +237,7 @@ int local_ground(CPtr pterm)
     for (j=1; j < arity ; j++)
       if (!local_ground(clref_val(pterm)+j))
 	return FALSE;
-    if (is_flora_form((prolog_term)pterm))
+    if (is_flora_form((prolog_term)pterm,1)) // ignore negative
       return TRUE;
 
     pterm = clref_val(pterm)+arity;
@@ -270,14 +282,14 @@ prolog_term trim(CPtr pterm)
     return trim_compound((prolog_term)pterm,arity);
 
   default:
-    xsb_abort("[FLORA]: Internal bug (flrtrim_last/2): term with unknown tag (%d)",
+    xsb_abort("[FLORA]: internal bug (flrtrim_last/2): term with unknown tag (%d)",
 	      (int)cell_tag(pterm));
     return FALSE;
   }
 }
 
 
-void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail)
+void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail, Integer ignore_negative)
 {
   int j, arity;
 
@@ -311,15 +323,24 @@ void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail)
     return;
 
   case XSB_LIST:
-    term_vars(clref_val(pterm),pvars,pvarstail);
+    term_vars(clref_val(pterm),pvars,pvarstail,ignore_negative);
     pterm = clref_val(pterm)+1;
     goto groundBegin;
 
   case XSB_STRUCT:
+#ifdef FG_DEBUG
+      fprintf(stderr,"pterm: %s\n",pterm2string(CTXTc (prolog_term)pterm));
+#endif
     arity = (int) get_arity(get_str_psc(pterm));
     // if it is FLORA_TNOT_PREDICATE(Call,File,Line), get vars from Call only
     if (is_flora_tnot_predicate((prolog_term) pterm) && arity == 3) {
-      term_vars(clref_val(pterm)+1,pvars,pvarstail);
+      term_vars(clref_val(pterm)+1,pvars,pvarstail,ignore_negative);
+#ifdef FG_DEBUG
+      fprintf(stderr,"pvars: %s\n",
+              pterm2string(CTXTc (prolog_term) *pvars));
+      fprintf(stderr,"pvarstail: %s\n",
+              pterm2string(CTXTc (prolog_term) *pvarstail));
+#endif
       return;
     }
     if (arity == 0)
@@ -334,7 +355,7 @@ void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail)
               pterm2string(CTXTc (prolog_term) *pvarstail));
 #endif
 
-      term_vars(clref_val(pterm)+j,pvars,pvarstail);
+      term_vars(clref_val(pterm)+j,pvars,pvarstail,ignore_negative);
 
 #ifdef FG_DEBUG
       fprintf(stderr,"strct2: Arg1=%s\n",
@@ -346,14 +367,14 @@ void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail)
 #endif
     }
     // if this is a flora formula, no need to check the last argument
-    if (is_flora_form((prolog_term)pterm))
+    if (is_flora_form((prolog_term)pterm,ignore_negative))
       return;
 
     pterm = clref_val(pterm)+arity;
     goto groundBegin;
 
   default:
-    xsb_abort("[FLORA]: BUG in flrterm_vars/1: term with unknown tag (%d)",
+    xsb_abort("[FLORA]: BUG in flrterm_vars/2: term with unknown tag (%d)",
 	      (int)cell_tag(pterm));
     return;
   }
@@ -364,7 +385,8 @@ void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail)
 // this one splits attributed from regular vars
 void term_vars_split(CPtr pterm,
 		     CPtr* pvars, CPtr* pvarstail,
-		     CPtr* pattrvars, CPtr* pattrvarstail)
+		     CPtr* pattrvars, CPtr* pattrvarstail,
+		     Integer ignore_negative)
 {
   int j, arity;
 
@@ -394,7 +416,7 @@ void term_vars_split(CPtr pterm,
     return;
 
   case XSB_LIST:
-    term_vars_split(clref_val(pterm),pvars,pvarstail,pattrvars,pattrvarstail);
+    term_vars_split(clref_val(pterm),pvars,pvarstail,pattrvars,pattrvarstail,ignore_negative);
     pterm = clref_val(pterm)+1;
     goto groundBegin;
 
@@ -402,23 +424,23 @@ void term_vars_split(CPtr pterm,
     arity = (int) get_arity(get_str_psc(pterm));
     // if it is FLORA_TNOT_PREDICATE(Call,File,Line), get vars from Call only
     if (is_flora_tnot_predicate((prolog_term) pterm) && arity == 3) {
-      term_vars_split(clref_val(pterm)+1,pvars,pvarstail,pattrvars,pattrvarstail);
+      term_vars_split(clref_val(pterm)+1,pvars,pvarstail,pattrvars,pattrvarstail,ignore_negative);
       return;
     }
     if (arity == 0)
       return;
     for (j=1; j < arity; j++) {
-      term_vars_split(clref_val(pterm)+j,pvars,pvarstail,pattrvars,pattrvarstail);
+      term_vars_split(clref_val(pterm)+j,pvars,pvarstail,pattrvars,pattrvarstail,ignore_negative);
     }
     // if this is a flora formula, no need to check the last argument
-    if (is_flora_form((prolog_term)pterm))
+    if (is_flora_form((prolog_term)pterm,ignore_negative))
       return;
 
     pterm = clref_val(pterm)+arity;
     goto groundBegin;
 
   default:
-    xsb_abort("[FLORA]: BUG in flrterm_vars_split/1: term with unknown tag (%d)",
+    xsb_abort("[FLORA]: BUG in flrterm_vars_split/3: term with unknown tag (%d)",
 	      (int)cell_tag(pterm));
     return;
   }
@@ -437,7 +459,9 @@ static inline xsbBool is_scalar(prolog_term pterm)
 
 
 /* Check if pterm represents a formula rather than a term */
-static inline int is_flora_form(prolog_term pterm)
+/* If ignore_negative=1, FL_TRUTHVALUE_TABLED_CALL and FL_TABLED_UNNUMBER_CALL
+   are considered flora formulas. */
+static inline int is_flora_form(prolog_term pterm, int ignore_negative)
 {
   char *functor;
   int has_flora_prefix;
@@ -448,16 +472,13 @@ static inline int is_flora_form(prolog_term pterm)
   has_flora_prefix =
     (strncmp(functor,FLORA_META_PREFIX,FLORA_META_PREFIX_LEN)==0);
 
-  /*
-  if (has_flora_prefix &&
-      (strstr(functor,FL_TRUTHVALUE_TABLED_CALL)
-       || strstr(functor,FL_TABLED_UNNUMBER_CALL)
-       || strstr(functor,FL_UNDEFEATED)
-       ))
-    return FALSE;
-  */
   if (has_flora_prefix && strstr(functor,FL_UNDEFEATED))
     return FALSE;
+  if (!ignore_negative && has_flora_prefix &&
+      (strstr(functor,FL_TRUTHVALUE_TABLED_CALL)
+       || strstr(functor,FL_TABLED_UNNUMBER_CALL)
+       ))
+      return FALSE;
 
   return (has_flora_prefix);
 }

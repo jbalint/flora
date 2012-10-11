@@ -6,4 +6,4 @@
 	flratom_char_code/3,
 	flratom_begins_with/2,
 	flratom_ends_with/2,
-	flrterm_vars/2, flrterm_vars_split/3.
+	flrterm_vars/3, flrterm_vars_split/4.
