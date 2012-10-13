@@ -678,7 +678,7 @@ neg_struct(Goal,_Idx,Code,[]) :-
 	    has_context(goal_reification)
 	-> % When variable is negated under ~, as in ?X ~ neg ?Y.
 	    thismodule_struct(ThisModule),
-	    callerargsterm_struct(ThisModule,CallerInfo),
+	    body_caller_info_structure(ThisModule,CallerInfo),
 	    atomobj_struct(FL_INVALIDMODULE,Mod),
 	    florasyslib_struct(Idx,FLNEGLIBMODLIT,3,[Goal,Mod,CallerInfo],Code)
 	;   Code = PRNEG(Goal)
@@ -724,9 +724,7 @@ head_neg_struct(Goal,Idx,Code,[]) :-
 	is_prvariable(Goal,_VarName,_Idx),
 	!,
 	%% When variable is neg-negated (inside an update op)
-	%%thismodule_struct(ThisModule),
-	%%callerargsterm_struct(ThisModule,CallerInfo),
-	callermod_info_structure(CallerInfo),
+	head_caller_info_structure(CallerInfo),
 	atomobj_struct(FL_INVALIDMODULE,Mod),
 	florasyslib_struct(Idx,FLNEGLIBMODLIT,3,[Goal,Mod,CallerInfo],Code).
 
@@ -945,24 +943,24 @@ compile_workspace_term(WS, CompiledWS) :-
 %% Otherwise - current module.
 %% Used in rule BODIES
 %% Used only in determine_caller_info/2
-module_callerargsterm_struct(CallerInfo) :-
+body_caller_info_structure(CallerInfo) :-
 	has_context(dynruleworkspace(WSTerm)),
 	!,
-	callerargsterm_struct(WSTerm,CallerInfo).
-module_callerargsterm_struct(CallerInfo) :-
+	body_caller_info_structure(WSTerm,CallerInfo).
+body_caller_info_structure(CallerInfo) :-
 	has_context(goal_reification),
 	\+ has_context(rule_reification),
 	!,
 	new_caller_prvariable(NO_INDEX,WSTerm),
 	%% with this, reification in the head doesn't unify with the body
 	%%thismodule_struct(WSTerm), 
-	callerargsterm_struct(WSTerm,CallerInfo).
-module_callerargsterm_struct(CallerInfo) :-
+	body_caller_info_structure(WSTerm,CallerInfo).
+body_caller_info_structure(CallerInfo) :-
 	thismodule_struct(WSTerm),
 	!,
-	callerargsterm_struct(WSTerm,CallerInfo).
+	body_caller_info_structure(WSTerm,CallerInfo).
 
-callerargsterm_struct(Caller,CallerInfo) :-
+body_caller_info_structure(CalleModule,CallerInfo) :-
 	%% In the future we'll replace INFONULL with rule numbers or something
 	(has_context(literal_workspace(_WS)) -> 
 	    %%compile_workspace_term(_WS,ArgsCode)
@@ -971,36 +969,45 @@ callerargsterm_struct(Caller,CallerInfo) :-
 	    %%thismodule_struct(ArgsCode)
 	    ArgsCode = INFONULL
 	; has_context(rule_reification)
-	-> ArgsCode = PRDYNCALLERARGSVAR(PRDYNCALLERARGSVAR)
+	->
+	    %%dyn_caller_argsvar_struct(ArgsCode)
+	    ArgsCode = INFONULL
 	; %% non-workspace literal in the body
 	  %%thismodule_struct(ArgsCode)
 	    ArgsCode = INFONULL
 	),
 	!,
-	list_struct([Caller,PRCALLERARGSTERM(ArgsCode)],[],CallerInfo).
+	list_struct([CalleModule,PRCALLERARGSTERM(ArgsCode)],[],CallerInfo).
 
 
 %% Represents the special variable, which appears in the rule HEAD, that is
 %% bound to the caller name 
-callermod_info_structure(Caller) :-
+head_caller_info_structure(Caller) :-
 	%% In the head of dynamic rules
 	has_context(compiling_dynrule(_)),
 	!,
-	list_struct([PRDYNCALLERVAR(PRDYNCALLERVAR),
-		     PRDYNCALLERARGSVAR(PRDYNCALLERARGSVAR)],
-		    [], Caller).
+	dyn_caller_var_struct(CallerStruct),
+	dyn_caller_argsvar_struct(CallerArgsStruct),
+	list_struct([CallerStruct,CallerArgsStruct], [], Caller).
 %% In the HEAD of static rules
-callermod_info_structure(Caller) :-
-	list_struct([PRCALLERVAR(PRCALLERVAR),
-		     PRCALLERARGSVAR(PRCALLERARGSVAR)],
-		    [], Caller).
+head_caller_info_structure(Caller) :-
+	callermod_var_structure(CallerStruct),
+	caller_argsvar_struct(CallerArgsStruct),
+	list_struct([CallerStruct,CallerArgsStruct], [], Caller).
 
-callermod_var_structure(PRDYNCALLERVAR(PRDYNCALLERVAR)) :-
+callermod_var_structure(Struct) :-
 	%% In the head of dynamic rules
 	has_context(compiling_dynrule(_)),
-	!.
+	!,
+	dyn_caller_var_struct(Struct).
 %% In the head of static rules
-callermod_var_structure(PRCALLERVAR(PRCALLERVAR)).
+callermod_var_structure(Struct) :- caller_var_struct(Struct).
+
+caller_var_struct(PRCALLERVAR(PRCALLERVAR)).
+dyn_caller_var_struct(PRDYNCALLERVAR(PRDYNCALLERVAR)).
+
+caller_argsvar_struct(PRCALLERARGSVAR(PRCALLERARGSVAR)).
+dyn_caller_argsvar_struct(PRDYNCALLERARGSVAR(PRDYNCALLERARGSVAR)).
 
 /*
 thisruleid_var_structure(Struct) :-
@@ -1017,9 +1024,15 @@ thisstorage_struct(fld,PRTHISFLDSTORAGE(PRTHISFLDSTORAGE)).
 floralib_struct(WS,PRFLORALIB(WS)).
 storage_struct(WS,PRFDBSTORAGE(WS)).
 
+%% Construct caller info for a literal.
+%% Different caler info is created for body and head.
+%% This form is used for cases when a literal can be both in the head and
+%% in the body. In that case, Context is passed to tell which form to use.
+%% When we know if we are in the head or in the body, we use
+%% body_caller_info_structure/1 or head_caller_info_structure/1 directly.
 determine_caller_info(Context,Caller) :-
-	(Context==BODYLITERAL -> module_callerargsterm_struct(Caller)
-	; Context==HEADLITERAL -> callermod_info_structure(Caller)
+	(Context==BODYLITERAL -> body_caller_info_structure(Caller)
+	; Context==HEADLITERAL -> head_caller_info_structure(Caller)
 	%% debug
 	; flora_error_line('[Compiler] BUG: No caller type exists for this context, ~w', [Context]),
 	    throw(FLORA_TOP_LEVEL)
@@ -1173,7 +1186,7 @@ workspacelit_struct(P,WS,Code) :-
 	(is_flvariable(WS,WSVarName,Index)
 	->
 	    varobj_struct(WSVarName,Index,WSVarCode),
-	    callerargsterm_struct(ThisModuleName,CallerInfo),
+	    body_caller_info_structure(ThisModuleName,CallerInfo),
 	    %% a call to a Flora user module
 	    florasyslib_struct(Index,FLLIBMODLIT,3,[P,WSVarCode,CallerInfo],Code)
 
@@ -1183,7 +1196,7 @@ workspacelit_struct(P,WS,Code) :-
 	->
 	    compile_workspace_term(WS,WSCode),
 	    set_context(literal_workspace(WS)),
-	    callerargsterm_struct(ThisModuleName,CallerInfo),
+	    body_caller_info_structure(ThisModuleName,CallerInfo),
 	    clear_context(literal_workspace(WS)),
 	    %% a call to a module
 	    florasyslib_struct(Index,FLLIBMODLIT,3,[P,WSCode,CallerInfo],Code)
@@ -1210,7 +1223,7 @@ workspaceobj_struct(P,WS,Object,Code) :-
 	(is_flvariable(WS,WSVarName,Index) ->
 	    varobj_struct(WSVarName,Index,WSVarCode),
 	    new_prvariable(Index,Object),
-	    callerargsterm_struct(ThisModuleName,CallerInfo),
+	    body_caller_info_structure(ThisModuleName,CallerInfo),
 	    %% code to construct the object for foo@X in arg position,
 	    %% i.e., p(foo@X)
 	    florasyslib_struct(Index,FLLIBMODOBJ,4,[P,WSVarCode,CallerInfo,Object],Code)
@@ -1219,7 +1232,7 @@ workspaceobj_struct(P,WS,Object,Code) :-
 	->
 	    compile_workspace_term(WS,WSCode),
 	    new_prvariable(Index,Object),
-	    callerargsterm_struct(ThisModuleName,CallerInfo),
+	    body_caller_info_structure(ThisModuleName,CallerInfo),
 	    %% code to construct the object for X@... in arg position,
 	    %% i.e., p(X@...)
 	    florasyslib_struct(Index,FLLIBMODOBJ,4,[P,WSCode,CallerInfo,Object],Code)
@@ -1624,12 +1637,12 @@ incattspec_struct(Object,AttObj,RefType,ValObj,Code) :-
 %% appears only in the rule body
 mvdincspec_struct(Object,AttObj,ValObj,PRMVDINC(Object,AttObj,ValObj,CallerInfo)) :-
 	thismodule_struct(ThisModule),
-	callerargsterm_struct(ThisModule,CallerInfo).
+	body_caller_info_structure(ThisModule,CallerInfo).
 %% *+>>
 %% appears only in the rule body
 imvdincspec_struct(Object,AttObj,ValObj,PRIMVDINC(Object,AttObj,ValObj,CallerInfo)) :-
 	thismodule_struct(ThisModule),
-	callerargsterm_struct(ThisModule,CallerInfo).
+	body_caller_info_structure(ThisModule,CallerInfo).
 
 %% ->->, *->->
 %% appears only in the rule body
@@ -1644,10 +1657,10 @@ tolistattspec_struct(Object,AttObj,RefType,ValObj,Code) :-
 
 mvdtolistspec_struct(Object,AttObj,ValObj,PRMVDTOLIST(Object,AttObj,ValObj,CallerInfo)) :-
 	thismodule_struct(ThisModule),
-	callerargsterm_struct(ThisModule,CallerInfo).
+	body_caller_info_structure(ThisModule,CallerInfo).
 imvdtolistspec_struct(Object,AttObj,ValObj,PRIMVDTOLIST(Object,AttObj,ValObj,CallerInfo)) :-
 	thismodule_struct(ThisModule),
-	callerargsterm_struct(ThisModule,CallerInfo).
+	body_caller_info_structure(ThisModule,CallerInfo).
 
 %% This is called when someting like a.b[] is compiled.
 body_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
@@ -3910,7 +3923,7 @@ split_ruleheads_add_rulesig(HeadList,Body,BodySansDelay,DescriptorIdCode,DescrVa
 	length(HeadVars,N),
 	new_predicate(Name),
 	!,
-	callermod_info_structure(CallerVarObj),
+	head_caller_info_structure(CallerVarObj),
 	append(HeadVars,[CallerVarObj],HeadVarsAndCaller),
 	N1 is N+1,
 	newpredicate_struct(Name,N1,HeadVarsAndCaller,Newpredicate),
@@ -3961,7 +3974,7 @@ construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVa
 	    %% this code makes FL_UNDEFEATED into Prolog predicate
 	    %% It is faster, saves table space
 	    modularized_atom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
-	    callerargsterm_struct(ThisModule,CallerInfo),
+	    body_caller_info_structure(ThisModule,CallerInfo),
 	    prologterm_struct(UnDefeatFunCode,5,
 			      [DescrIdCode,DescrVarsTerm,DummyVarObj4Head,ThisModule,CallerInfo],
 			      DefeatCondCode),
@@ -3991,7 +4004,7 @@ construct_static_defeasible_condition(HeadCode,DescrIdCode,DescrVarsTerm,Delayed
 	    %% this code makes FL_UNDEFEATED into modularized Prolog predicate
 	    %% It is faster, saves table space
 	    modularized_atom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
-	    callerargsterm_struct(ThisModule,CallerInfo),
+	    body_caller_info_structure(ThisModule,CallerInfo),
 	    prologterm_struct(UnDefeatFunCode,5,
 			      [DescrIdCode,DescrVarsTerm,HeadCode,ThisModule,CallerInfo],
 			      DefeatCondCode),
@@ -4301,7 +4314,7 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
                 %% Needed only for calls when a variable occurs by itself in
 		%% the rule body:  ... :- ..., X, ,,,
                 thismodule_struct(ThisModule),
-                callerargsterm_struct(ThisModule,CallerInfo),  %% doesn't matter
+                body_caller_info_structure(ThisModule,CallerInfo),  %% doesn't matter
                 atomobj_struct(FL_INVALIDMODULE,Module),
                 florasyslib_struct(VIndex,FLLIBMODLIT,3,[V,Module,CallerInfo],SpecCode)
             ),
