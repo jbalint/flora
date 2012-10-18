@@ -35,6 +35,9 @@
 	flora_abort/1,
 	flora_abort/2
    from flrporting.
+
+:- import is_strict_rule/2 from flrdescriptor_support.
+
 %%:- import member/2 from basics.
 :- import flora_decode_goal_as_atom_substitute_vars/2 from flrdecode.
 :- import flora_error_line/2 from flrprint.
@@ -94,7 +97,7 @@
 
 
 
-%% MK: Support for testing. Need to replace with something more general like
+%% MK: test_mode/1: support for testing. Need something more general, like
 %% catch. But catch does not work in  a usual way, as delayed literals
 %% are slipped from under catch/3, so catch/3 applies vacuously to when/2.
 :- dynamic test_mode/1.
@@ -109,7 +112,7 @@ clear_test_mode :- retract(test_mode(debug)).
 FLLIBDELAYEDLITERAL(Builtin,FileN,Line,Args) :-
 	delay_spec_to_predicate(Builtin,FileN,Line,Args,Call,Condition_pre),
 	%% sometimes statically created delay conditions need postprocessing
-	make_delay_condition(Builtin,Condition_pre,Condition),
+	make_delay_condition(Builtin,Args,Condition_pre,Condition),
 	!,
 	%% If Condition is ground, no point in using when/2.
 	%% This speeds up cases where args are mostly ground.
@@ -164,6 +167,12 @@ flora_defeat_condition_wrapper(File,Line,DefeatCond,VarList,VarnameList,DynHead)
 	%% Note: for safety should be DefeatCond->true,
 	%% but this cuts over tables. Somehow it works without the ->true.
 	(is_cyclic(DynHead) -> fail
+	%% If this delay condition is for a currently strict rule,
+	%% do not execute the condition - just assume it is true.
+	; arg(1,DefeatCond,RuleId),
+	    arg(4,DefeatCond,Module),
+	    is_strict_rule(RuleId,Module)
+	-> true
 	; DefeatCond
 	; check_dynamic_rule_head_for_groundedness(File,Line,DynHead),
 	    (ground(VarList) -> true
@@ -498,7 +507,7 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
 						       VarList,
 						       VarnameList,
 						       DynHead),
-			%% this will be postprocessed by make_delay_condition/3
+			%% this will be postprocessed by make_delay_condition/4
 			%% It takes the terms below and makes
 			%% (ground(VarList),ground(DynHead))),
 			(VarList,DynHead)),
@@ -600,23 +609,30 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
    true.
 
 
-make_delay_condition(FL_UNDEFEATED,CondIn,CondOut) :-
+make_delay_condition(FL_UNDEFEATED,Args,CondIn,CondOut) :-
 	!,
-	CondIn = (CompiletimeCond,RuntimeCond),
-	%% using flora_term_variables/2 or flrterm_vars/2
-	%% instead of term_variables/2 is
-	%% important here. Otherwise FL_UNDEFEATED in dynamically inserted
-	%% rules will be delayed incorrectly due to caller variables.
-	%%flora_term_variables(RuntimeCond,RuntimeCondVars),
-	flrterm_vars(RuntimeCond,RuntimeCondVars,1),  %% 1: ignore vars in negation
-	CondOut = ground((CompiletimeCond,RuntimeCondVars)).
-make_delay_condition(FL_DEFLTNEG,Goal,CondOut) :-
+	Args = [UndefeatedLit|_],
+	arg(1,UndefeatedLit,RuleId),
+	arg(4,UndefeatedLit,Module),
+	(is_strict_rule(RuleId,Module)
+	-> CondOut = true
+	; CondIn = (CompiletimeCond,RuntimeCond),
+	    %% using flora_term_variables/2 or flrterm_vars/2
+	    %% instead of term_variables/2 is
+	    %% important here. Otherwise FL_UNDEFEATED in dynamically inserted
+	    %% rules will be delayed incorrectly due to caller variables.
+	    %%flora_term_variables(RuntimeCond,RuntimeCondVars),
+	    %% 1 below means: ignore vars in negative literals
+	    flrterm_vars(RuntimeCond,RuntimeCondVars,1),
+	    CondOut = ground((CompiletimeCond,RuntimeCondVars))
+	).
+make_delay_condition(FL_DEFLTNEG,_Args,Goal,CondOut) :-
 	!,
 	%%flora_term_variables(Goal,Vars),
 	flrterm_vars(Goal,Vars,1),  %% 1: ignore vars in negation
 	CondOut = ground(Vars).
 %% catchall
-make_delay_condition(_,Cond,Cond).
+make_delay_condition(_,_,Cond,Cond).
 
 
 
