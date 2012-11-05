@@ -237,7 +237,7 @@ public class FloraSession extends FloraConstants
     /* Utility to double each quote */
     private String doubleEachQuote(String str)
     {
-	String outstr = new String("");
+	String outstr = "";
 
 	for (int i=0; i<str.length(); i++) {
 	    char ch = str.charAt(i);
