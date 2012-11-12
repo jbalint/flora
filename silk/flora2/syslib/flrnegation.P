@@ -70,8 +70,11 @@
 	flora_storage_fast_insert_fact/3
    from flrstoragebase.
 
+/* update_counter is a pair (HiNum,LowNum). We use a pair so we could
+   use large numbers even on a 32 bit machine */
 :- dynamic update_counter/2.
 :- local update_counter/2.
+:- index(update_counter/2,0).
 
 :- dynamic convert_to_table_cache/2, convert_to_table_cache_failed/1.
 :- local convert_to_table_cache/2, convert_to_table_cache_failed/1.
@@ -261,6 +264,7 @@ make_negated_goal(_UnwrappedGoal,OrigGoal,tnot(TempGoal)) :-
 %% update_counter business
 #define NEG_MGT_TRIE  FLORA_SYMBOL('neg_mgt_trie')
 ?- assert(update_counter(0,0)).
+%% tells when not to clean up tables for TABLED_UNNUMBER_CALL
 donot_cleanup_negation(Call) :-
 	update_counter(CurrL,CurrR),
 	(storage_find_fact(NEG_MGT_TRIE,negated_calls_cache(Call,CallFlag))
@@ -276,13 +280,15 @@ incr_flora_update_counter :-
 	),
 	assert(update_counter(H1,L1)).
 
+%% saves Call in a trie-cache
 register_negated_call(Call) :-
 	%% get current flag
 	update_counter(L,R),
 	CurrFlag = (L,R),
 	(storage_find_fact(NEG_MGT_TRIE,negated_calls_cache(Call,CurrFlag))
 	-> true
-	; storage_delete_fact(NEG_MGT_TRIE,negated_calls_cache(Call,_),_),
+	;
+	    storage_delete_fact(NEG_MGT_TRIE,negated_calls_cache(Call,_),_),
 	    %%!,   %% cut here has no effect
 	    flora_storage_fast_insert_fact(NEG_MGT_TRIE,
 					   NON_INCREMENTAL_TRIE,

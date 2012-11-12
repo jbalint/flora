@@ -45,9 +45,9 @@
 :- dynamic flora_encoded_call_cache(_,_,_,_).
 :- dynamic flora_decoded_predicate_cache(_,_,_,_,_,_,_).
 :- dynamic functor_arity_cache(_,_).
+:- index(functor_arity_cache/2,[1,2]).
 
-%% These indices do not seem to make a difference or even turt
-%%:- index(functor_arity_cache/2,[1,2]).
+%% These indices do not seem to make a difference and can even hurt
 %%:- index(flora_encoded_call_cache/4,[1,3,2]).
 %%:- index(flora_decoded_predicate_cache/8,[1]).
 

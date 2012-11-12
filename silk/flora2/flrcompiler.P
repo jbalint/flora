@@ -961,23 +961,8 @@ body_caller_info_structure(CallerInfo) :-
 	body_caller_info_structure(WSTerm,CallerInfo).
 
 body_caller_info_structure(CalleModule,CallerInfo) :-
-	%% In the future we'll replace INFONULL with rule numbers or something
-	(has_context(literal_workspace(_WS)) -> 
-	    %%compile_workspace_term(_WS,ArgsCode)
-	    ArgsCode = INFONULL
-	; has_context(goal_reification) ->
-	    %%thismodule_struct(ArgsCode)
-	    ArgsCode = INFONULL
-	; has_context(rule_reification)
-	->
-	    %%dyn_caller_argsvar_struct(ArgsCode)
-	    ArgsCode = INFONULL
-	; %% non-workspace literal in the body
-	  %%thismodule_struct(ArgsCode)
-	    ArgsCode = INFONULL
-	),
-	!,
-	list_struct([CalleModule,PRCALLERARGSTERM(ArgsCode)],[],CallerInfo).
+	caller_tracing_code(body,TracingCode),
+	list_struct([CalleModule,TracingCode],[],CallerInfo).
 
 
 %% Represents the special variable, which appears in the rule HEAD, that is
@@ -987,13 +972,18 @@ head_caller_info_structure(Caller) :-
 	has_context(compiling_dynrule(_)),
 	!,
 	dyn_caller_var_struct(CallerStruct),
-	dyn_caller_argsvar_struct(CallerArgsStruct),
-	list_struct([CallerStruct,CallerArgsStruct], [], Caller).
+	caller_tracing_code(head,TracingCode),
+	list_struct([CallerStruct,TracingCode], [], Caller).
 %% In the HEAD of static rules
 head_caller_info_structure(Caller) :-
 	callermod_var_structure(CallerStruct),
-	caller_argsvar_struct(CallerArgsStruct),
-	list_struct([CallerStruct,CallerArgsStruct], [], Caller).
+	caller_tracing_code(head,TracingCode),
+	list_struct([CallerStruct,TracingCode], [], Caller).
+
+%% This is used when we want variables in the tracing part of the caller info
+var_caller_info_structure(CalleModule,CallerInfo) :-
+	caller_tracing_code(vars,TracingCode),
+	list_struct([CalleModule,TracingCode],[],CallerInfo).
 
 callermod_var_structure(Struct) :-
 	%% In the head of dynamic rules
@@ -1006,8 +996,40 @@ callermod_var_structure(Struct) :- caller_var_struct(Struct).
 caller_var_struct(PRCALLERVAR(PRCALLERVAR)).
 dyn_caller_var_struct(PRDYNCALLERVAR(PRDYNCALLERVAR)).
 
-caller_argsvar_struct(PRCALLERARGSVAR(PRCALLERARGSVAR)).
-dyn_caller_argsvar_struct(PRDYNCALLERARGSVAR(PRDYNCALLERARGSVAR)).
+%% NO_TRACING_FAST is not really faster than NO_TRACING
+%%#define NO_TRACING_FAST
+%%#define NO_TRACING
+%% Context =  head/body/vars
+caller_tracing_code(Context,TracingCode) :-
+#ifdef NO_TRACING_FAST
+        Context = Context, %% to suppress the single var warning
+	new_caller_prvariable(NO_INDEX,TracingCode).
+#else
+#ifdef NO_TRACING
+        %% If NO_TRACING, the tracing info will always be tracing(var,var)
+	%% Making this, say, tracing(1,1) makes it a tiny bit slower.
+	new_caller_prvariable(NO_INDEX,DescrIdCode),
+#else
+	( has_context(compiling_dynrule(DescrIdCode)), Context\==vars,
+	    \+ has_context(goal_reification),
+	    \+ has_context(compiling_update_literals)
+	; has_context(compiling_rule(DescrIdCode)), Context\==vars,
+	    \+ has_context(goal_reification),
+	    \+ has_context(compiling_update_literals)
+	; %% Context = vars or is not a (rule, reification, or update)
+	    new_caller_prvariable(NO_INDEX,DescrIdCode)
+	),
+#endif
+	!,
+	atomobj_struct(FL_TRACING,TraceFunCode),
+	new_caller_prvariable(NO_INDEX,CalledRuleVar),
+	(Context == body ->
+	    prologterm_struct(TraceFunCode,2,[CalledRuleVar,DescrIdCode],TracingCode)
+	;
+	    prologterm_struct(TraceFunCode,2,[DescrIdCode,CalledRuleVar],TracingCode)
+	).
+#endif
+
 
 /*
 thisruleid_var_structure(Struct) :-
@@ -1158,7 +1180,6 @@ has_prologlit([H|Rest],Idx) :-
    WSCode is where the final code is produced.
 */
 attach_workspace(WS,Generator,GeneratorCode,WSCode,Status) :- 
-	set_context(literal_workspace(WS)),
 	call(Generator),
 	(is_modularizedprologterm(GeneratorCode) ->
 	    (is_flvariable(WS,_,Idx)
@@ -1166,7 +1187,6 @@ attach_workspace(WS,Generator,GeneratorCode,WSCode,Status) :-
 		Status = [Err]
 	    ;
 		workspacelit_struct(GeneratorCode,WS,WSCode),
-		clear_context(literal_workspace(WS)),
 		Status = []
 	    )
 	;   is_prologterm(GeneratorCode) ->
@@ -1176,7 +1196,6 @@ attach_workspace(WS,Generator,GeneratorCode,WSCode,Status) :-
 	    Status = []
 	;
 	    workspacelit_struct(GeneratorCode,WS,WSCode),
-	    clear_context(literal_workspace(WS)),
 	    Status = []
 	),
 	!.
@@ -1195,9 +1214,7 @@ workspacelit_struct(P,WS,Code) :-
 	; (is_prvariable(P,_,Index); is_prtransactionalvariable(P,_,Index))
 	->
 	    compile_workspace_term(WS,WSCode),
-	    set_context(literal_workspace(WS)),
 	    body_caller_info_structure(ThisModuleName,CallerInfo),
-	    clear_context(literal_workspace(WS)),
 	    %% a call to a module
 	    florasyslib_struct(Index,FLLIBMODLIT,3,[P,WSCode,CallerInfo],Code)
 
@@ -2517,10 +2534,10 @@ compile_add_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,Fact
 	    compile_annotated_construct_add(Descriptor,MainPartOfRule,RuleDiffList,FactDiffList,Status)
 
 	; is_fludfunction(ParserTerm,Function,Body,ReturnValue) ->
-	    compile_user_defined_function(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status)
+	    compile_user_defined_function_definition(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status)
 
 	; is_fludfunctionfact(ParserTerm,Function,Value) ->
-	    compile_user_defined_function(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status)
+	    compile_user_defined_function_definition(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status)
         ),
 	!,
 	clear_context(compiling_for_addition),
@@ -2692,11 +2709,11 @@ compile_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiff
 	    compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,FactDiffList,MetaFactDiffList,Status)
 
 	; is_fludfunction(ParserTerm,Function,Body,ReturnValue) ->
-	    compile_user_defined_function(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
+	    compile_user_defined_function_definition(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
 	    MetaFactDiffList = _M-_M
 
 	; is_fludfunctionfact(ParserTerm,Function,Value) ->
-	    compile_user_defined_function(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
+	    compile_user_defined_function_definition(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
 	    MetaFactDiffList = _M-_M
         ),
 	!,
@@ -3153,7 +3170,7 @@ compile_flfact(Head,RuleDiffList,FactDiffList,MetaFactDiffList,Status) :-
 					    DescrIdCode,DescrVarsTerm,
 					    RuleDiffList,[]),
 		FactDiffList = _F-_F, %% empty fact diff list
-		(has_context(compiling_udf) -> S2 = []
+		(has_context(compiling_udf_definition) -> S2 = []
 		%% for UDFs, variables are checked separately
 		; check_head_vars_for_safety(Head,[],S2)
 		)
@@ -3204,7 +3221,7 @@ compile_flfact_add(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList
 compile_factlist(FactList,FactListCode,RuleDifferenceList,FactDifferenceList,Status) :-
 	compile_factlist1(FactListCode,RuleDifferenceList,FactDifferenceList),
 	( %% UDF vars are checked elsewhere
-	    has_context(compiling_udf) -> Status = []
+	    has_context(compiling_udf_definition) -> Status = []
 	; %% check fact vars for safety
 	    collect_flvars(FactList,HeadVars), HeadVars \== []
 	-> %% for facts we can do a fast check for var safety
@@ -3705,7 +3722,7 @@ construct_export_struct(TermCode,WSCode,IsUpdatableCode,ModuleListCode,Code) :-
 
 
 /****************************************************************************
-  compile_user_defined_function(+Function,+Body,+ReturnValue,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-Status)
+  compile_user_defined_function_definition(+Function,+Body,+ReturnValue,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-Status)
 
   Compile a UDF definition. Create a predicate representing the UDF, its rule.
 
@@ -3724,7 +3741,7 @@ construct_export_struct(TermCode,WSCode,IsUpdatableCode,ModuleListCode,Code) :-
 %% retractall flora_defined_udf_registry/4.
 %% If overriding module FLORA_DEFAULT_WORKSPACE, we also
 %% retractall flora_used_udf_registry/5.
-compile_user_defined_function(Function,_Body,_ReturnValue,CodeList-CodeList,Facts-Facts,U-U,[Err]) :-
+compile_user_defined_function_definition(Function,_Body,_ReturnValue,CodeList-CodeList,Facts-Facts,U-U,[Err]) :-
 	is_flterm_or_flatom(Function,Funct,N,_),
 	flora_get_flatomvar_name(Funct,Name),
 	has_symbol(Name,N,_,_,_,FUNCTION_SYMBOL,_),
@@ -3733,8 +3750,8 @@ compile_user_defined_function(Function,_Body,_ReturnValue,CodeList-CodeList,Fact
 	approx_flindex(Function,Index),
 	compiling_error(Index,ERROR_UDF_SYMBOL,Err).
 
-compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactDiffList,UDFPreds-UDFPredsTail,Status) :-
-	set_context(compiling_udf),
+compile_user_defined_function_definition(Function,Body,ReturnValue,CodeList-ListTail,FactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	set_context(compiling_udf_definition),
 	( is_flterm_or_flatom(Function,Funct,N,Args),
 	    flora_get_flatomvar_name(Funct,Name) ->
 	    new_udf_predicate(Name,N,Args,NewArgs,NewPredicate,NewPredicateOrigArgs,NewPredName,NewPredArity,NewReturnValue),
@@ -3790,7 +3807,7 @@ compile_user_defined_function(Function,Body,ReturnValue,CodeList-ListTail,FactDi
 	    Status = [Err]
 	),
 	!,
-	clear_context(compiling_udf).
+	clear_context(compiling_udf_definition).
 
 /*
 new_udf_args([],[]):-!.
@@ -3860,7 +3877,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,Facts-Fa
 	    (all_defined_as_sensors(HeadCodeList) -> DelayCode = NULL
 	    ; delay_literals_checking_code(Head,Body,DelayCode)
 	    ),
-	    (has_context(compiling_udf) -> RuleEnablerTest = true
+	    (has_context(compiling_udf_definition) -> RuleEnablerTest = true
 	    ; construct_rule_enabling_test(DescriptorIdCode,RuleEnablerTest)
 	    ),
 	    %%thisruleid_binding_code(DescriptorIdCode,ThisRuleIdBindingCode),
@@ -3878,7 +3895,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,Facts-Fa
 					    BodyCode,BodyCodeSansDelay,
 					    DescriptorIdCode,DescrVarsTerm,
 					    RuleList-RuleTail, Status1),
-		( no_errors_found(Status1), \+ has_context(compiling_udf)
+		( no_errors_found(Status1), \+ has_context(compiling_udf_definition)
 		%% for UDFS checking of variables is done separately
 		->
 		    check_head_vars_for_safety(Head,Body,VarStatus),
@@ -3961,7 +3978,7 @@ add_defeasible_condition_to_body(DefeatCondCode,BodyCode,NewBodyCode) :-
 %% NewVar is used because this type of defeasible condition is used in rule
 %% signatures and dynamic rules; NewVar is bound to the head at run time.
 construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVarsTerm,DelayedDefeatCondCode) :-
-	(has_permaoption(FLDEFEASIBLE(LibModule))
+	(has_permaoption(FLDEFEASIBLE(LibModule)), \+ has_context(compiling_udf_definition)
 	->
 	    %% DummyVarObj4Head is unified with Head in
 	    %% flora_record_rule_signature in flrcanon.P and flrdynrule.P
@@ -3974,7 +3991,7 @@ construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVa
 	    %% this code makes FL_UNDEFEATED into Prolog predicate
 	    %% It is faster, saves table space
 	    modularized_atom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
-	    body_caller_info_structure(ThisModule,CallerInfo),
+	    var_caller_info_structure(ThisModule,CallerInfo),
 	    prologterm_struct(UnDefeatFunCode,5,
 			      [DescrIdCode,DescrVarsTerm,DummyVarObj4Head,ThisModule,CallerInfo],
 			      DefeatCondCode),
@@ -3992,11 +4009,11 @@ construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVa
 	!.
 
 %% DefeatCondCode = FL_UNDEFEATED(DescrIdCode,DescrVarsTerm,HeadCode,ThisModule)
-%%                  or NULL.
+%%                  or true.
 %% FL_UNDEFEATED is a modularized Prolog predicate
 %% The difference is that instead of NewVar we insert head code at compile time.
 construct_static_defeasible_condition(HeadCode,DescrIdCode,DescrVarsTerm,DelayedDefeatCondCode) :-
-	(has_permaoption(FLDEFEASIBLE(LibModule))
+	(has_permaoption(FLDEFEASIBLE(LibModule)), \+ has_context(compiling_udf_definition)
 	->
 	    %% create FL_UNDEFEATED(DescrIdCode,NewVar,ThisModule)
 	    thismodule_struct(ThisModule),
@@ -4004,7 +4021,7 @@ construct_static_defeasible_condition(HeadCode,DescrIdCode,DescrVarsTerm,Delayed
 	    %% this code makes FL_UNDEFEATED into modularized Prolog predicate
 	    %% It is faster, saves table space
 	    modularized_atom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
-	    body_caller_info_structure(ThisModule,CallerInfo),
+	    var_caller_info_structure(ThisModule,CallerInfo),
 	    prologterm_struct(UnDefeatFunCode,5,
 			      [DescrIdCode,DescrVarsTerm,HeadCode,ThisModule,CallerInfo],
 			      DefeatCondCode),
@@ -5556,11 +5573,17 @@ compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,Nesting,Object,P
 ****************************************************************************/
 has_user_defined_function(Funct,N,_Args,FArgs,Predicate,ReturnValue) :-
 	flora_get_flatomvar_name(Funct,Name),
-	has_permaoption(user_defined_function(Name,N,FArgs,Predicate,ReturnValue)),
+	(flrsynonym:flora_op_synonym(Name,BaseName)
+	; BaseName = Name
+	),
+	has_permaoption(user_defined_function(BaseName,N,FArgs,Predicate,ReturnValue)),
 	!.
 has_user_defined_function(Funct,N,_Args,FArgs,Predicate,ReturnValue) :-
 	flora_get_flatomvar_name(Funct,Name),
-	flora_used_udf_registry(Name,N,FArgs,Predicate,ReturnValue),
+	(flrsynonym:flora_op_synonym(Name,BaseName)
+	; BaseName = Name
+	),
+	flora_used_udf_registry(BaseName,N,FArgs,Predicate,ReturnValue),
 	!.
 
 has_user_defined_function(Funct,N,Args,Args,Predicate,ReturnValue) :-
@@ -9576,7 +9599,7 @@ compile_fldynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,R
 		construct_defeasible_condition_for_signature_or_dynrule(HeadCode,DescrIdCode,DescrVarsTerm,DefeatCondCode),
 		%% Note: Head cannot contain sensors, so no need to check
 		%% multi-headed rules if sensors mix with non-sensors
-		(has_context(compiling_udf) -> RuleEnablerTest = true
+		(has_context(compiling_udf_definition) -> RuleEnablerTest = true
 		; construct_rule_enabling_test(DescrIdCode,RuleEnablerTest)
 		),
 		delay_literals_checking_code(Head,Body,DelayCode),

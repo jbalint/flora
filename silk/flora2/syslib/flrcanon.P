@@ -141,24 +141,20 @@ get_canonical_form(Term,FLCANON(_,_,_,Term,_)) :-
        var(Term),
        !.
 
-%% Case of Var@...
-get_canonical_form(FLLIBMODLIT(FL_LIBMOD,Term,Mod,_Caller),Canon) :-
+get_canonical_form(FLLIBMODLIT(Wrap,Term,Mod,_Caller),Canon) :-
 	var(Term),
 	!,
-        Canon = FLCANON(_,_,Mod,Term,FL_TABLED).
-
-%% Case of neg Var@...
-get_canonical_form(FLLIBMODLIT(FL_NEGLIBMOD,Term,Mod,_Caller),Canon) :-
-	var(Term),
-	!,
-        Canon = FLCANON(_,_,Mod,Callable,FL_TABLED_NEG),
-	Term = FLLIBMODLIT(FL_NEGLIBMOD,Callable,Mod,_Caller).
-
-%% Case of %?Var@... 
-get_canonical_form(FLLIBMODLIT(FL_TRANSLIBMOD,Term,Mod,_Caller),Canon) :-
-	var(Term),
-	!,
-        Canon = FLCANON(_,_,Mod,Term,FL_NOTTABLED).
+	%% Case of Var@...
+	(Wrap == FL_LIBMOD ->
+	    Canon = FLCANON(_,_,Mod,Term,FL_TABLED)
+	%% Case of neg Var@...
+	; Wrap == FL_NEGLIBMOD ->
+	    Canon = FLCANON(_,_,Mod,Callable,FL_TABLED_NEG),
+	    Term = FLLIBMODLIT(FL_NEGLIBMOD,Callable,Mod,_Caller)
+	%% Case of %?Var@... 
+	; Wrap == FL_TRANSLIBMOD ->
+	    Canon = FLCANON(_,_,Mod,Term,FL_NOTTABLED)
+	).
 
 
 %% Case of ?Var@... where ?Var is bound
@@ -294,11 +290,9 @@ get_canonical_form(Term, Canon) :-
 ** Caches its result for faster processing
 ****************************************************************************/
 convert_to_head_literal(Body,Head) :-
-	var(Body),
-	!,
-	Head = Body.
-convert_to_head_literal(Body,Head) :-
-	flora_body_to_head_conversion_cache(Body,Head),
+	(var(Body) -> Head = Body
+	; flora_body_to_head_conversion_cache(Body,Head)
+	),
 	!.
 convert_to_head_literal(Body,Head) :-
 	flora_decode_predicate(Body,Type,ModuleName,_Wrap,_Prefix,WrapOrPred,ArgL),
@@ -328,7 +322,7 @@ convert_to_body_literal(Head,Body) :-
 	var(Head),
 	!,
 	Body = Head.
-convert_to_body_literal(FLLIBMODLIT(Wrap,Args,Mod,_Caller),FLLIBMODLIT(Wrap,Args,Mod,INFONULL)) :-
+convert_to_body_literal(FLLIBMODLIT(Wrap,Args,Mod,_Caller),FLLIBMODLIT(Wrap,Args,Mod,_NewCaller)) :-
 	!.
 
 convert_to_body_literal(Head,Body) :-
@@ -431,11 +425,7 @@ convert_to_value_atom(Signature,InheritanceMode,Molecule) :-
  translate into fllibmodlit canonical form
 ************************************************************************/ 
 flora_build_pred_signature(B,B) :-
-        atomic(B),
-        !.
-
-flora_build_pred_signature(B,B) :-
-        var(B),
+        (atomic(B) ; var(B)),
         !.
 
 flora_build_pred_signature((B1,B2),(NB1,NB2)) :-
@@ -538,9 +528,10 @@ flora_record_rule_signature(RuleId,DescriptorVarsTerm,HPrefix,Module,Head,Body,D
 	%% via reification
 	convert_to_body_literal(Head,BHead),
 	bind_head_in_defeat_condition_with_copy(BHead,DefeatCond),
+        flora_generalize_last(BHead,GenBHead),
         flora_decode_goal_as_atom(Head,HeadAtm),
 	catch(flora_assert(flora_rule_signature(RuleId,DescriptorVarsTerm,
-						HPrefix,Module,BHead,Body,
+						HPrefix,Module,GenBHead,Body,
 						DefeatCond,Rule,Bridge),
 			   CONSERVE_REGISTERS,
 			   INDEXED_ARG),
@@ -706,12 +697,20 @@ bind_head_in_defeat_condition_with_copy(Head,DefeatCond) :-
 	).
 
 
-extract_head_from_defeat_condition(DefeatCond,Head) :-
-	DefeatCond = _:DelayLiteral,
+%% This case is used if we wrap DefeatCond in the delay wrapper
+extract_head_from_defeat_condition(_:DelayLiteral,Head) :-
+	!,
 	arg(4,DelayLiteral,[DefeatCondSansDelay|_]),
 	%% If FL_UNDEFEATED(IdCode,VarsCode,Head,Module,Caller) is changed,
 	%% change below the argument number
 	arg(3,DefeatCondSansDelay,Head).
+/*
+%% This case for testing: when we don't wrap DefeatCond with the delay wrapper
+extract_head_from_defeat_condition(DefeatCond,Head) :-
+	%% If FL_UNDEFEATED(IdCode,VarsCode,Head,Module,Caller) is changed,
+	%% change below the argument number
+	arg(3,DefeatCond,Head).
+*/
 
 
 /***********************************************************************
@@ -766,12 +765,15 @@ rule_signature_member(defeatcondition,Sig,DefeatCond) :-
       In the above, it would be p :- newpredicateXYZ or q :- newpredicateXYZ.
 ************************************************************************/
 show_rule_by_id(Id,Mod,Head,Body) :-
-	matching_rule_signature(Id,_,_,Head,Body,Signature),
+        flora_generalize_last(Head,GHead),
+	matching_rule_signature(Id,_,_,GHead,Body,Signature),
 	rule_signature_member(module,Signature,Mod).
 show_rule_by_tag(Tag,Mod,Head,Body) :-
 	get_tag_descriptor_info_with_rulehead(Id,Mod,Tag,Head,_),
 	show_rule_by_id(Id,Mod,Head,Body).
 
+%% tabling this does not help much: < 10%
+%%:- table matching_rule_signature/6 as AUXILIARY_TABLING_TYPE.
 matching_rule_signature(Id,VarsTerm,Prefix,Head,Body,(Id,VarsTerm,Prefix,Mod,Head,NewBody,DefeatCond,RuleList,BridgeRule)) :-
         var(Head),
         !,
@@ -789,10 +791,10 @@ matching_rule_signature(Id,VarsTerm,Prefix,(H1,H2),Body,(Id,VarsTerm,Prefix,Mod,
         matching_rule_signature(Id,VarsTerm,Prefix,H1,Body,(Id,VarsTerm,Prefix,Mod,NewH1,NewBody,DefeatCond,RL1,BridgeRule)),
         matching_rule_signature(Id,VarsTerm,Prefix,H2,Body,(Id,VarsTerm,Prefix,Mod,NewH2,NewBody,RL2,BridgeRule)).
 
-matching_rule_signature(Id,VarsTerm,Prefix,Head,Body,(Id,VarsTerm,Prefix,Mod,GH,NewBody,DefeatCond,RuleList,BridgeRule)) :-
-        convert_to_body_literal(Head,HH),
-        flora_generalize_last(HH,GH),
-        flora_rule_signature(Id,VarsTerm,Prefix,Mod,GH,NewBody,DefeatCond,RuleList,BridgeRule),
+matching_rule_signature(Id,VarsTerm,Prefix,Head,Body,(Id,VarsTerm,Prefix,Mod,GHead,NewBody,DefeatCond,RuleList,BridgeRule)) :-
+        convert_to_body_literal(Head,BHead),
+        flora_rule_signature(Id,VarsTerm,Prefix,Mod,BHead,NewBody,DefeatCond,RuleList,BridgeRule),
+        flora_generalize_last(BHead,GHead),
 	FLLIBUNIVEQFORM(NewBody,Body).
 
 /***********************************************************************
@@ -836,12 +838,6 @@ all_fllibmodobj((FLLIBMODOBJ(_,_,_,_,_),Rest)) :-
   check whether ?X@M is bound to non-transactional predicate
   and %?X@M to transactional predicate
 ************************************************************************/
-flora_check_dynmod_type_consistency(Arg) :-
-	Arg \= FLLIBMODLIT(FL_LIBMOD,_,_,_),
-	Arg \= FLLIBMODLIT(FL_NEGLIBMOD,_,_,_),
-	Arg \= FLLIBMODLIT(FL_TRANSLIBMOD,_,_,_),
-	!.
-
 %% Wrap is FL_LIBMOD, FL_NEGLIBMOD, FL_TRANSLIBMOD
 flora_check_dynmod_type_consistency(FLLIBMODLIT(_Wrap,Term,_Mod,_Caller)) :-
         var(Term),
@@ -907,6 +903,9 @@ flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_NEGLIBMOD,_Term,_M,_C)) :-
 flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_TRANSLIBMOD,_Term,_M,_C)) :-
         !,
         flora_abort('the idiom %?Variable@module requires that the variable is bound to a HiLog term or a transactional formula').
+
+%% catchall case
+flora_check_dynmod_type_consistency(_Arg).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

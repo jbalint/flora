@@ -84,10 +84,6 @@ is_prdyncallervar(PRDYNCALLERVAR(PRDYNCALLERVAR)).
 %%is_prthisruleid(PRTHISRULEIDVAR(PRTHISRULEIDVAR)).
 %%is_prthisdynruleid(PRTHISDYNRULEIDVAR(PRTHISDYNRULEIDVAR)).
 
-is_prcallerargsterm(PRCALLERARGSTERM(ArgsTerm),ArgsTerm).
-is_prcallerargsvar(PRCALLERARGSVAR(PRCALLERARGSVAR)).
-is_prdyncallerargsvar(PRDYNCALLERARGSVAR(PRDYNCALLERARGSVAR)).
-
 is_prworkspaceterm(PRWORKSPACETERM(WSTerm),WSTerm).
 
 %% with textual information
@@ -527,25 +523,26 @@ coder_write_code(Term,Status) :-
 
 
 /****************************************************************************
-  coder_write_udf_definition(+Term,-Status)
+  coder_write_udf_definition(+PredNameSansModule,+Arity,+PredName,-Status=[])
 ****************************************************************************/
-coder_write_udf_definition(Name,N,PredName,[]) :-
+coder_write_udf_definition(PredNameSansModule,N,PredName,[]) :-
 	flora_write_atom('?- assert(flrregistry:flora_defined_udf_registry(FLORA_THIS_MODULE_NAME,'),
-	flora_write_atom(Name),
+	flora_write_quoted_atom(PredNameSansModule),
 	flora_write_atom(','),
 	write_canonical(N),
 	flora_write_atom(',FLORA_THIS_WORKSPACE('),
-	flora_write_atom(PredName),
+	flora_double_quotes(PredName,PredName2),
+	flora_write_atom(PredName2),
 	flora_write_atom('))).'),
 	nl.
 
 
 /****************************************************************************
-  coder_write_udf_used(+Term,-Status)
+  coder_write_udf_used(+PredNameSansModule,+Arity,+Args,+Pred,+RetValue,-Status=[])
 ****************************************************************************/
 coder_write_udf_used(Name,N,Args,Pred,ReturnValue,[]) :-
 	flora_write_atom('?- assert(flrregistry:flora_used_udf_registry('),
-	flora_write_atom(Name),
+	flora_write_quoted_atom(Name),
 	flora_write_atom(','),
 	write_canonical(N),
 	flora_write_atom(','),
@@ -827,21 +824,6 @@ flora_write_struct(Term,_Context,[]) :-
 	is_prdyncallervar(Term),
 	!,
 	flora_write_atom(FLORA_DYNRULE_HEADLIT_CALLER_VAR_NAME).
-
-flora_write_struct(Term,Context,Status) :-
-	is_prcallerargsterm(Term,CallerVars),
-	!,
-	flora_write_struct(CallerVars,Context,Status).
-
-flora_write_struct(Term,_Context,[]) :-
-	is_prcallerargsvar(Term),
-	!,
-	flora_write_atom(FLORA_HEADLIT_CALLER_ARGS_VAR_NAME).
-
-flora_write_struct(Term,_Context,[]) :-
-	is_prdyncallerargsvar(Term),
-	!,
-	flora_write_atom(FLORA_DYNRULE_HEADLIT_CALLER_INFOVAR_NAME).
 
 flora_write_struct(Term,_Context,[]) :-
 	is_prspecialvar(Term,Type),
@@ -1176,8 +1158,9 @@ coder_write_wsliteral(WS,Funct,Args,Context,Status) :-
 coder_write_workspace(THISMODULE,Funct) :-
 	!,
 	flora_write_atom('FLORA_THIS_WORKSPACE('),
-	%% Atom is not quoted when written.
-	flora_write_atom(Funct),
+	%% Atom is not quoted but if there are quotes inside they are doubled
+	flora_double_quotes(Funct,Funct2),
+	flora_write_atom(Funct2),
 	put(CH_RPAREN).
 
 coder_write_workspace(WS,Funct) :-
@@ -1582,9 +1565,10 @@ coder_write_dynrulelist([H|L],Status) :-
 ****************************************************************************/
 flora_coder_write_prolog_bridge_rule(PredName,Arity,Type) :-
 	length(ArgLst,Arity),
-	flora_concat_atoms(['FLORA_THIS_WORKSPACE(',PredName,')'],HeadPred),
-	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNAPREFIX_UNQ(', PredName, '))'], BodyPredA),
-	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNZPREFIX_UNQ(', PredName, '))'], BodyPredZ),
+	flora_double_quotes(PredName,PredName2),
+	flora_concat_atoms(['FLORA_THIS_WORKSPACE(',PredName2,')'],HeadPred),
+	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNAPREFIX_UNQ(', PredName2, '))'], BodyPredA),
+	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNZPREFIX_UNQ(', PredName2, '))'], BodyPredZ),
 	(Type == end -> BodyPred = BodyPredZ
 	; BodyPred = BodyPredA
 	),
@@ -1633,9 +1617,10 @@ util_write_arglist([A|Rest]) :-
 ****************************************************************************/
 flora_coder_write_conditional_prolog_bridge_rule(PredName,Arity) :-
 	length(ArgLst,Arity),
-	flora_concat_atoms(['FLORA_THIS_WORKSPACE(',PredName,')'],HeadPred),
-	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNAPREFIX_UNQ(',PredName,'))'], BodyPredA),
-	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNZPREFIX_UNQ(',PredName,'))'], BodyPredZ),
+	flora_double_quotes(PredName,PredName2),
+	flora_concat_atoms(['FLORA_THIS_WORKSPACE(',PredName2,')'],HeadPred),
+	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNAPREFIX_UNQ(',PredName2,'))'], BodyPredA),
+	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNZPREFIX_UNQ(',PredName2,'))'], BodyPredZ),
 	TrueArity is Arity+1,
 	write('?- (current_predicate('),
 	flora_write_atom(HeadPred),put(CH_SLASH),write(TrueArity),
@@ -1882,21 +1867,6 @@ flora_build_struct(Term,_DWS,_Context,VarList,Code,(_V,NO_INDEX),[]) :-
 %% Instead, we bind all occurrences of this variable in a rule to the same var
 flora_build_struct(Term,_DWS,_Context,VarList,Code,(_V,NO_INDEX),[]) :-
 	is_prdyncallervar(Term),
-	!,
-	coder_build_variable(Term,VarList,Code).
-
-flora_build_struct(Term,_DWS,Context,VarList,Code,_Index,Status) :-
-	is_prcallerargsterm(Term,CallerVars),
-	!,
-	flora_build_struct(CallerVars,_DWS,Context,VarList,Code,_Index,Status).
-
-flora_build_struct(Term,_DWS,_Context,VarList,Code,(_V,NO_INDEX),[]) :-
-	is_prcallerargsvar(Term),
-	!,
-	coder_build_variable(Term,VarList,Code).
-
-flora_build_struct(Term,_DWS,_Context,VarList,Code,(_V,NO_INDEX),[]) :-
-	is_prdyncallerargsvar(Term),
 	!,
 	coder_build_variable(Term,VarList,Code).
 

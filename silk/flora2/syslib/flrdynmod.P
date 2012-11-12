@@ -188,12 +188,15 @@ FLLIBMODOBJ(F,Arg,ModuleName,CallerInfo,Pout) :-
   The input can also be already callable. In this case just return in.
 *********************************************************************/
 get_libmod_callable(FL_LIBMOD,(FL_NEG_Atm(Arg)),ModuleName,CallerInfo,P) :-
-	get_libmod_callable(FL_NEGLIBMOD,Arg,ModuleName,CallerInfo,P),
+	adjust_caller_info(CallerInfo,RealCallerInfo),
+	get_libmod_callable(FL_NEGLIBMOD,Arg,ModuleName,RealCallerInfo,P),
 	!.
 get_libmod_callable(FL_NEGLIBMOD,(FL_NEG_Atm(Arg)),ModuleName,CallerInfo,P) :-
-	get_libmod_callable(FL_LIBMOD,Arg,ModuleName,CallerInfo,P),
+	adjust_caller_info(CallerInfo,RealCallerInfo),
+	get_libmod_callable(FL_LIBMOD,Arg,ModuleName,RealCallerInfo,P),
 	!.
-get_libmod_callable(F,Arg,ModuleName,CallerInfo,P) :-
+get_libmod_callable(F,Arg,ModuleName,CallerInfoIn,P) :-
+	adjust_caller_info(CallerInfoIn,CallerInfo),
         (
 	  is_list(Arg),
 	  F == FL_LIBMOD,
@@ -206,11 +209,9 @@ get_libmod_callable(F,Arg,ModuleName,CallerInfo,P) :-
 	  %% so the caller is already accounted for.
 	  %% P is now made into a Flora wrapper
 	  flora_module_predicate(F,Arg,ModuleName,P),
-	  make_caller_info(CallerInfo,ModuleName,RealCallerInfo),
-	  flora_bind_last(P, RealCallerInfo)
-	; is_libmodlit_control(Arg, [_Wrap,_A,PredModule,_C]), !,
-	  make_caller_info(CallerInfo,PredModule,RealCallerInfo),
-	  flora_bind_last(Arg, RealCallerInfo),
+	  flora_bind_last(P, CallerInfo)
+	; is_libmodlit_control(Arg, [_Wrap,_A,_PredModule,_C]), !,
+	  flora_bind_last(Arg, CallerInfo),
 	  P = Arg
 	%% is_caller_distributive/3
         ; is_caller_distributive(Arg, _, _), !,
@@ -228,15 +229,9 @@ get_libmod_callable(F,Arg,ModuleName,CallerInfo,P) :-
 	  ( %% if already a hilog or flogic predicate -- use it
 	      nonvar(PredModName),
 	      !,
-	      %% Arg is already a FLORA callable predicate,
-	      %% so use *its* module name, NOT the one from CallerInfo
-	      make_caller_info(CallerInfo,PredModName,RealCallerInfo),
-	      %% Always replace the caller and replace whatever there is
-	      %% with RealCallerInfo. Otherwise, general_tests/callReified.flr
-	      %% won't work. The current caller info of X, where X is bound
-	      %% to a reified formula may have been bound by a call from
-	      %% another module and thus may be incorrect.
-	      flora_replace_last(Arg,RealCallerInfo,P1),
+	      %% Always replace the caller info so as to unbind the
+	      %% tracing part of CallerInfo properly.
+	      flora_replace_last(Arg,CallerInfo,P1),
 	      (F == FL_NEGLIBMOD -> flrwrapper:negate_predicate(P1,P)
 	      ; P = P1
 	      )
@@ -283,7 +278,8 @@ distribute_workspace(F,[H|L],Mod,CallerInfo,[FLLIBMODLIT(F,H,Mod,CallerInfo)|NL]
 
 distribute_caller_info([],_CallerInfo,[]) :- !.
 distribute_caller_info([H|OpArgList],CallerInfo,[Hout|OpArgListOut]) :-
-	apply_caller_info(H,CallerInfo,Hout),
+	adjust_caller_info(CallerInfo,RealCallerInfo),
+	apply_caller_info(H,RealCallerInfo,Hout),
 	distribute_caller_info(OpArgList,CallerInfo,OpArgListOut).
 
 apply_caller_info(Goal,CallerInfo,GoalOut) :-
@@ -304,13 +300,35 @@ apply_caller_info(Goal,CallerInfo,GoalOut) :-
 apply_caller_info(Goal,CallerInfo,GoalOut) :-
 	(flora_decode_predicate(Goal,_,Module,_,_,_,_), nonvar(Module)
 	->
-	    make_caller_info(CallerInfo,Module,RealCallerInfo),
-	    flora_bind_last(Goal,RealCallerInfo),
+	    flora_bind_last(Goal,CallerInfo),
 	    GoalOut = Goal
 	; GoalOut = Goal
 	).
 
-%% make_caller_info(+DefaultCallerInfo,+RealModule,-RealCallerInfo)
-%%make_caller_info([Caller,_| Rest],RealModule,[Caller,RealModule | Rest]).
-make_caller_info([Caller,_],_RealModule,[Caller,INFONULL]).
+%%% adjust_caller_info(+DefaultCallerInfo,-RealCallerInfo)
+%%   In the tracing info, tracing(CalledRuleId,ThisRuleId), unbind CalledRuleId
+:- import tracing/2 from usermod.
+adjust_caller_info(CallerInfo,RealCallerInfo) :-
+	CallerInfo = [Module,TracingInfo|Rest],
+	RealCallerInfo = [Module,RealTracingInfo|Rest],
+	(var(TracingInfo) -> RealTracingInfo = TracingInfo
+	; TracingInfo = tracing(_,CallingRuleId)
+	%% replace the Id of the rule being called,
+	%% as they would be different for different literals
+	%% The lack of this replacement was the source of a very subtle,
+	%% hard-to-find bug
+	-> RealTracingInfo = tracing(_,CallingRuleId)
+	;  RealTracingInfo = TracingInfo
+	).
+/*
+*/
 
+%% replace the Id of the rule being called,
+%% as they would be different for different literals
+%% The lack of this replacement was the source of a very subtle,
+%% hard-to-find bug
+/*
+:- import tracing/2 from usermod.
+adjust_caller_info([Module,tracing(_,CallingRuleId)|Rest],
+		   [Module,tracing(_,CallingRuleId)|Rest]).
+*/
