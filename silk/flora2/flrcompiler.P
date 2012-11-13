@@ -996,39 +996,29 @@ callermod_var_structure(Struct) :- caller_var_struct(Struct).
 caller_var_struct(PRCALLERVAR(PRCALLERVAR)).
 dyn_caller_var_struct(PRDYNCALLERVAR(PRDYNCALLERVAR)).
 
-%% NO_TRACING_FAST is not really faster than NO_TRACING
-%%#define NO_TRACING_FAST
-%%#define NO_TRACING
 %% Context =  head/body/vars
 caller_tracing_code(Context,TracingCode) :-
-#ifdef NO_TRACING_FAST
-        Context = Context, %% to suppress the single var warning
-	new_caller_prvariable(NO_INDEX,TracingCode).
-#else
-#ifdef NO_TRACING
-        %% If NO_TRACING, the tracing info will always be tracing(var,var)
-	%% Making this, say, tracing(1,1) makes it a tiny bit slower.
-	new_caller_prvariable(NO_INDEX,DescrIdCode),
-#else
-	( has_context(compiling_dynrule(DescrIdCode)), Context\==vars,
-	    \+ has_context(goal_reification),
-	    \+ has_context(compiling_update_literals)
-	; has_context(compiling_rule(DescrIdCode)), Context\==vars,
-	    \+ has_context(goal_reification),
-	    \+ has_context(compiling_update_literals)
-	; %% Context = vars or is not a (rule, reification, or update)
-	    new_caller_prvariable(NO_INDEX,DescrIdCode)
-	),
-#endif
-	!,
-	atomobj_struct(FL_TRACING,TraceFunCode),
-	new_caller_prvariable(NO_INDEX,CalledRuleVar),
-	(Context == body ->
-	    prologterm_struct(TraceFunCode,2,[CalledRuleVar,DescrIdCode],TracingCode)
+	(has_permaoption(no_trace_info) ->
+	    new_caller_prvariable(NO_INDEX,TracingCode)
 	;
-	    prologterm_struct(TraceFunCode,2,[DescrIdCode,CalledRuleVar],TracingCode)
+	    ( has_context(compiling_dynrule(DescrIdCode)), Context\==vars,
+		\+ has_context(goal_reification),
+		\+ has_context(compiling_update_literals)
+	    ; has_context(compiling_rule(DescrIdCode)), Context\==vars,
+		\+ has_context(goal_reification),
+		\+ has_context(compiling_update_literals)
+	    ; %% Context = vars or is not a (rule, reification, or update)
+		new_caller_prvariable(NO_INDEX,DescrIdCode)
+	    ),
+	    !,
+	    atomobj_struct(FL_TRACING,TraceFunCode),
+	    new_caller_prvariable(NO_INDEX,CalledRuleVar),
+	    (Context == body ->
+		prologterm_struct(TraceFunCode,2,[CalledRuleVar,DescrIdCode],TracingCode)
+	    ;
+		prologterm_struct(TraceFunCode,2,[DescrIdCode,CalledRuleVar],TracingCode)
+	    )
 	).
-#endif
 
 
 /*
@@ -2438,7 +2428,8 @@ report_semantic_options([H|T]) :-
 
 
 /****************************************************************************
-  initialize_work
+  initialize_work/0
+  Called each time we start parsing a new sentence
 ****************************************************************************/
 initialize_work :-
 	flora_reset_newvar,
@@ -2446,7 +2437,7 @@ initialize_work :-
 	%%clear_compilation_liboptions,
 	flora_retractall_substitute(BODYVARS_PREDICATE(_)),
 	flora_retractall_substitute(HEADVARS_PREDICATE(_)),
-	clear_contextall(_),
+	clear_contextall(_),  %% maybe delete?
         clear_dynrule_varlist.
 
 /****************************************************************************
@@ -2953,14 +2944,9 @@ compile_direct(DirectTerm,_Idx,[Code],[]) :-
 	query_struct(Code1,Code).
 
 %% :- compiler_options
-compile_direct(DirectTerm,Idx,[Code],[]) :-
+compile_direct(DirectTerm,_Idx,Code,Status) :-
 	is_flcmpopt(DirectTerm,OptList),
-	( memberchk(XSB_SPECREPR,OptList) -> report_option(XSB_SPECREPR,Idx)
-	;
-	    true
-	),
-	cmpopt_struct(OptList,OCode),
-	directive_struct(OCode,Code),	
+	compile_compiler_options(OptList,Code,Status),
 	!.
 	
 %% :- ignore_depchk
@@ -3006,6 +2992,44 @@ compile_ignoredep_list([H|L],[HCode|LCode],Status) :-
             Status = S
         ),
 	!.
+
+/****************************************************************************
+  Compile :- flora_compiler_options(OptList)
+****************************************************************************/
+compile_compiler_options([],[],[]) :- !.
+compile_compiler_options([Opt|Rest],Code,Status) :-
+	compile_compiler_option(Opt,OptCode,S1),
+	(S1 == [] ->
+	    compile_compiler_options(Rest,RestCode,Status),
+	    (OptCode == [] -> Code = RestCode
+	    ; Code = [OptCode|RestCode]
+	    )
+	; Status = S1
+	).
+
+compile_compiler_option(Opt,OptCode,Status) :-
+	( %% suppress trace info due to performance reasons
+	    is_flatom(Opt,FL_PRODUCTION) -> set_production_mode(on),
+	    OptCode = [],
+	    Status = []
+	;  %% Prolog compiler options of the form prolog(opt,opt,...)
+	    is_flplib(Opt,FltermOpt),
+	    is_flterm(FltermOpt,Funct,_N,PrologOptList),
+	    is_flatom(Funct,prolog)
+	->
+	    compile_pathexplist(PrologOptList,OptListCode,_,_,Status),
+	    cmpopt_struct(OptListCode,PrCode),
+	    directive_struct(PrCode,OptCode)
+	;
+	    approx_flindex(Opt,Index),
+	    compiling_error(Index,ERROR_CMPOPT,Err),
+	    Status = [Err]
+	).
+
+set_production_mode(on) :-
+	set_permaoption(no_trace_info).
+set_production_mode(off) :-
+	clear_one_permaoption(no_trace_info).
 
 /****************************************************************************
   compile_symbol_context_list(+SymbolsList,-Status)

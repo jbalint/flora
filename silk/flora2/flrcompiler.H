@@ -164,5 +164,6 @@
 	make_symbol_context_status/10,
 	compiling_warning/3,
 	compiling_error/3,
+	set_production_mode/1,
 	is_fltoken/3,
 	is_flvariable/3.
