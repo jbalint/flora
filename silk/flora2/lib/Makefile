@@ -22,11 +22,11 @@ PROLOGEXT=.P
 FLORADIR=..
 
 ALL = 	flrio${PROLOGEXT} \
-	flrstorage${PROLOGEXT} flrsystem${PROLOGEXT} \
+	flrstorage${PROLOGEXT} \
+	flrsystem${PROLOGEXT} \
 	flrbasetype${PROLOGEXT} \
 	flrparse${PROLOGEXT} \
-	flrtypeconstraint${PROLOGEXT} \
-	flrgclp${PROLOGEXT}
+	flrtypeconstraint${PROLOGEXT}
 
 Option = [optimize]
 
@@ -82,4 +82,4 @@ finish:
 	echo Done
 
 clean:
-	/bin/rm -f *${PROLOGEXT} *$(OBJEXT) *.O *.fdb *~ .*~ *.fld *.flt *.fls *.con *.bak .#* cmd*
+	/bin/rm -f *${PROLOGEXT} *$(OBJEXT) *.O *.fdb *~ .*~ *.fld *.flt *.flm *.fls *.fls2 *.con *.bak .#* cmd*

@@ -22,8 +22,7 @@ ALLOBJS = flrio$(PROLOGEXT) \
 	  flrstorage$(PROLOGEXT) flrsystem$(PROLOGEXT) \
 	  flrbasetype$(PROLOGEXT) \
 	  flrparse$(PROLOGEXT) \
-	  flrtypeconstraint$(PROLOGEXT) \
-	  flrgclp$(PROLOGEXT)
+	  flrtypeconstraint$(PROLOGEXT)
 
 !IF EXISTS (..\.prolog_path_wind) 
 !INCLUDE ..\.prolog_path_wind
@@ -47,6 +46,8 @@ CLEAN:
 	-@if exist *.fld erase *.fld
 	-@if exist *.flt erase *.flt
 	-@if exist *.fls erase *.fls
+	-@if exist *.fls2 erase *.fls2
+	-@if exist *.flm erase *.flm
 	-@if exist *~ erase *~
 	-@if exist *.bak erase *.bak
 	-@if exist .#* erase .#*

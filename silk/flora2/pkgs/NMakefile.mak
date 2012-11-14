@@ -23,15 +23,10 @@
 OBJEXT = .xwam
 PROLOGEXT = .P
 
-ALLOBJS = flrxml_aux$(PROLOGEXT) javaAPI$(PROLOGEXT) \
-	  gclpe$(PROLOGEXT) \
-	  ogclp$(PROLOGEXT) \
-	  sgclp$(PROLOGEXT) \
-	  ogclpe$(PROLOGEXT) \
-	  atck2$(PROLOGEXT) \
-	  atck3$(PROLOGEXT) \
-	  atck1alt$(PROLOGEXT) \
-	  persistentmodules$(PROLOGEXT) prettyprint$(PROLOGEXT)
+ALLOBJS = flrxml_aux$(PROLOGEXT) \
+	  javaAPI$(PROLOGEXT) \
+	  persistentmodules$(PROLOGEXT) \
+	  prettyprint$(PROLOGEXT)
 
 OPTIONS=[optimize]
 
@@ -54,6 +49,8 @@ CLEAN:
 	-@if exist *.fld erase *.fld
 	-@if exist *.flt erase *.flt
 	-@if exist *.fls erase *.fls
+	-@if exist *.fls2 erase *.fls2
+	-@if exist *.flm erase *.flm
 	-@if exist *~ erase *~
 	-@if exist *.bak erase *.bak
 	-@if exist .#* erase .#*

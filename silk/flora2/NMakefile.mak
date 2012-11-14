@@ -61,6 +61,8 @@ ALL:: CLEANTEMP $(ALLOBJS)
 	nmake /nologo /f NMakefile.mak
 	cd ..\lib
 	nmake /nologo /f NMakefile.mak
+	cd ..\AT
+	nmake /nologo /f NMakefile.mak
 	cd ..\debugger
 	nmake /nologo /f NMakefile.mak
 	cd ..\pkgs
@@ -88,6 +90,8 @@ CLEAN : CLEANTEMP
 	cd ..\debugger
 	nmake /nologo /f NMakefile.mak clean
 	cd ..\lib
+	nmake /nologo /f NMakefile.mak clean
+	cd ..\AT
 	nmake /nologo /f NMakefile.mak clean
 	cd ..\pkgs
 	nmake /nologo /f NMakefile.mak clean

@@ -1,4 +1,4 @@
-## File:      flora2/lib/Makefile
+## File:      flora2/AT/Makefile
 ## Author(s): kifer
 ## Contact:   flora-users@lists.sourceforge.net
 ## 
@@ -43,10 +43,10 @@ PROLOG_COMMAND = $(PROLOG) -i -s -m 80000 -c 10000 -e 'segfault_handler(warn).'
 #-----------------------------------------------------------------------#
 
 # Make sure warnings are saved in a file.
-SVFILE = '$(FLORADIR)/.flora_lib_warn.tmp'
+SVFILE = '$(FLORADIR)/.flora_AT_warn.tmp'
 STDWARN = 3
 STDERR = 2
-HDRMSG = "While compiling .../flora2/lib:"
+HDRMSG = "While compiling .../flora2/AT:"
 
 
 # suffix rules
@@ -60,8 +60,13 @@ recompile: $(ALL) finish
 	@rm cmd...
 	@cat $(SVFILE)
 
-.flr${PROLOGEXT}:
+# System ATs, like flrgclp, should be treated here
+flrgclp${PROLOGEXT}:
 	echo 'flora_compile_system_module($*).' >> cmd...
+
+# the default case
+.flr${PROLOGEXT}:
+	echo "import ('_compile')/1 from flora2. '_compile'($*)." >> cmd...
 
 init:
 	rm -f $(SVFILE)

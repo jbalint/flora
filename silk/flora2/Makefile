@@ -110,6 +110,7 @@ core: top
 
 libs:
 	cd lib && $(MAKE) PROLOG=$(PROLOG)
+	cd AT && $(MAKE) PROLOG=$(PROLOG)
 
 misc:
 	cd pkgs && $(MAKE) PROLOG=$(PROLOG)
@@ -184,6 +185,7 @@ clean: cleantemp
 	cd genincludes && $(MAKE) clean
 	cd syslib && $(MAKE) clean
 	cd lib && $(MAKE) clean
+	cd AT && $(MAKE) clean
 	cd debugger && $(MAKE) clean
 	cd p2h && $(MAKE) clean
 	cd pkgs && $(MAKE) clean

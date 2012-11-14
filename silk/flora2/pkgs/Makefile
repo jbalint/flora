@@ -20,14 +20,8 @@ PROLOGEXT=.P
 
 FLORADIR=..
 
-ALL = 	flrxml_aux${PROLOGEXT} javaAPI${PROLOGEXT} \
-	gclpe${PROLOGEXT} \
-	ogclp${PROLOGEXT} \
-	sgclp${PROLOGEXT} \
-	ogclpe${PROLOGEXT} \
-	atck2${PROLOGEXT} \
-	atck3${PROLOGEXT} \
-	atck1alt${PROLOGEXT} \
+ALL = 	flrxml_aux${PROLOGEXT} \
+	javaAPI${PROLOGEXT} \
 	persistentmodules${PROLOGEXT} \
 	prettyprint${PROLOGEXT}
 
@@ -87,4 +81,4 @@ finish:
 	echo Done
 
 clean:
-	/bin/rm -f core *$(PROLOGEXT) *${OBJEXT} *.O *.fdb *.fld *.flt *.fls *.bak *~ .*~ .#*
+	/bin/rm -f core *$(PROLOGEXT) *${OBJEXT} *.O *.fdb *.fld *.flt *.fls *.fls2 *.flm *.bak *~ .*~ .#*
