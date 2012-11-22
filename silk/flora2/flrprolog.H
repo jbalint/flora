@@ -22,6 +22,7 @@
 :- dynamic flora_dynprlg(_,_).
 :- dynamic flora_dynprlg(_,_,_).
 :- dynamic modular_dynprlg(_,_).
+:- dynamic flora_permanent_dynprlg(_,_).
 
 
 /*
@@ -56,6 +57,7 @@
 	flora_define_modular_prolog/1,
 	flora_define_modular_prolog/2,
 	flora_define_modular_prolog/3,
+	flora_define_permanent_prolog/2,
 	flora_prlgdef/3,
 	flora_prlgdef/2.
 

@@ -48,9 +48,7 @@
 :- prolog FL_COMPETES/4, FL_COMPETES/3.
 //:- table FL_UNDEFEATED/4.  // DO NOT TABLE - useless
 :- prolog FL_UNDEFEATED/4.
-:- prolog beaten_by_strict_rule/3, beaten_by_strict_rule/5,
-	  change_module/4, change_module_nocheck/4,
-	  check_module_to_AT_association/1.
+:- prolog beaten_by_strict_rule/3, beaten_by_strict_rule/5.
 :- prolog existsOpposerWithNoCandidates/2, existsOpposerWithNoCandidates/3.
 :- prolog tightExclusion/3, tightBinaryExclusion/3.
 
@@ -106,6 +104,9 @@ strict_candidate(?T,?H) :-
 	caller{?Mod},
 	FL_STRICT_CANDIDATE(?T,?H,?Mod).
 
+#include "change_module.flh"
+
+
 // These are mostly for debugging
 // Note: when ?H,?H1,?H2 are bound by the user, they should be reified
 // For instance: defeated(?T,${neg a})@_gcl.
@@ -131,16 +132,6 @@ overrides(?T1,?H1,?T2,?H2) :-
 	synonymous_tag_with_head(?T1,?RealMod,?T11,?H1)@_plg(flrdescriptor_support),
 	synonymous_tag_with_head(?T2,?RealMod,?T22,?H2)@_plg(flrdescriptor_support),
 	FL_OVERRIDES_AUX(?RealMod,?T11,?MH1,?T22,?MH2).
-
-check_module_to_AT_association(?Mod) :-
-	\+flora_defeasible_module_registry(?Mod,_@)@_prolog(flrregistry),
-	?Mod \== _@,
-	!,
-	%abort(['User module ', ?Mod,
-	        ' is not associated with the argumentation theory residing in module ',
-		 _@])@_system.
-check_module_to_AT_association(?) :- true.
-
 
 // Axioms for Courteous LP with general exclusions
 
@@ -421,24 +412,6 @@ FL_STATUS(?T,?H)[info->candidate] :-
 	FL_CANDIDATE(?T,?HM,?RealMod).
 
 
-// if ?InA has module _@, change it to ?Mod
-// ?RealNewMod is the module of the final OutA
-// (the module is not changed if it is not _@).
-change_module(?InA,?Mod,?RealNewMod,?OutA) :-
-	flora_change_module(?InA,?OutA,(_@,?Mod),?RealNewMod,['In ',FL_STATUS,'(Tag,Head)[...]@',_@,': Head must be bound'])@_prolog(flrwrapper),
-	check_module_to_AT_association(?RealNewMod).
-
-
-change_module_nocheck(?InA,?,?,?OutA) :-
-	_isvar(?InA),
-	!,
-	?OutA = ?InA.
-// if ?InA has module _@, change it to ?Mod
-change_module_nocheck(?InA,?Mod,?RealNewMod,?OutA) :-
-	flora_change_module(?InA,?OutA,(_@,?Mod),?RealNewMod,'In defeated/overrides/opposes: something wrong')@_prolog(flrwrapper),
-	check_module_to_AT_association(?RealNewMod).
-
-
 /***************************** Auxiliary Predicates ***********************/
 // Given a rule Tag and possibly Head, find body and test if it is satisfied.
 // This predicate's tables are abolished after each query by an
@@ -446,7 +419,7 @@ change_module_nocheck(?InA,?Mod,?RealNewMod,?OutA) :-
 // It may succeed for one query and will be tabled.
 // If it is, then when called for another query, wrong result may be returned.
 FL_CANDIDATE(?T,?Head,?Mod) :-
-	/* Must reset term-depth limit, since show_rule_by_id/4 can
+	/* Must reset term-depth limit, since get_ruleid_by_tag_or_head/4 can
 	   retrieve rules with very large bodies. As terms they will be very
 	   deep (>100). */
 	current_prolog_flag(max_table_subgoal_depth,?TermDepth)@_prolog,
