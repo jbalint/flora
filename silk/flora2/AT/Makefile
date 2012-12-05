@@ -21,14 +21,15 @@ PROLOGEXT=.P
 
 FLORADIR=..
 
-ALL = flrgclp${PROLOGEXT} \
-	gclpe${PROLOGEXT} \
-	ogclp${PROLOGEXT} \
-	sgclp${PROLOGEXT} \
-	ogclpe${PROLOGEXT} \
-	atck2${PROLOGEXT} \
-	atck3${PROLOGEXT} \
-	atck1alt${PROLOGEXT}
+ALL = flrgclp$(PROLOGEXT) \
+	gclpe$(PROLOGEXT) \
+	ogclp$(PROLOGEXT) \
+	sgclp$(PROLOGEXT) \
+	ogclpe$(PROLOGEXT) \
+	atck2$(PROLOGEXT) \
+	atck3$(PROLOGEXT) \
+	atco$(PROLOGEXT) \
+	atck1alt$(PROLOGEXT)
 
 Option = [optimize]
 
