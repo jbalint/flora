@@ -1233,7 +1233,7 @@ workspaceobj_struct(P,WS,Object,Code) :-
 	    body_caller_info_structure(ThisModuleName,CallerInfo),
 	    %% code to construct the object for foo@X in arg position,
 	    %% i.e., p(foo@X)
-	    florasyslib_struct(Index,FLLIBMODOBJ,4,[P,WSVarCode,CallerInfo,Object],Code)
+	    florasyslib_struct(Index,FLLIBMODOBJ,5,[FL_BODY,P,WSVarCode,CallerInfo,Object],Code)
 
 	; is_prvariable(P,_,Index)
 	->
@@ -1242,7 +1242,7 @@ workspaceobj_struct(P,WS,Object,Code) :-
 	    body_caller_info_structure(ThisModuleName,CallerInfo),
 	    %% code to construct the object for X@... in arg position,
 	    %% i.e., p(X@...)
-	    florasyslib_struct(Index,FLLIBMODOBJ,4,[P,WSCode,CallerInfo,Object],Code)
+	    florasyslib_struct(Index,FLLIBMODOBJ,5,[FL_BODY,P,WSCode,CallerInfo,Object],Code)
 
 	; is_flatom(WS,WSAtom,Index) ->
 	    atomobj_struct(WSAtom,Index,WSCode),
@@ -2472,9 +2472,9 @@ flora_compile_add(NULL,R-R,F-F,U-U,[]) :- !.
 	
 flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,Status) :-
 /*
-	writeln(2,'------------result of parsing-----------------'),
-	writeln(2,ParserTerm),
-	writeln(2,'----------------------------------------------'),
+	DBGOUT('------------result of parsing-----------------'),
+	DBGOUT(ParserTerm),
+	DBGOUT('----------------------------------------------'),
 */
 	prepare_to_compile_rule,
 	flora_increment_counter(RULE_NUM,1,_,_),
@@ -2485,13 +2485,13 @@ flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,Status) 
 			     UDFPredsDiffList,
 			     Status),
 /*
-	writeln(2,'------------result of add_compilation-------------'),
-	writeln(2,rules=RuleDiffList),
-	writeln(2,facts=FactDiffList),
-	writeln(2,metafacts=MetaFactDiffList),
-	%%writeln(2,udfs =UDFPredsDiffList),
-	writeln(2,status=Status),
-	writeln(2,'--------------------------------------------------'),
+	DBGOUT('------------result of add_compilation-------------'),
+	DBGOUT(rules=RuleDiffList),
+	DBGOUT(facts=FactDiffList),
+	DBGOUT(metafacts=MetaFactDiffList),
+	%%DBGOUT(udfs =UDFPredsDiffList),
+	DBGOUT(status=Status),
+	DBGOUT('--------------------------------------------------'),
 */
 	!.
 	
@@ -2625,9 +2625,9 @@ flora_compile(NULL,R-R,F-F,M-M,U-U,[]) :- !.
 
 flora_compile(ParserTerm,RuleDiffList,FactDiffList,MetaFactDiffList,UDFPredsDiffList,Status) :-
 /*
-	writeln(2,'------------result of parsing-----------------'),
-	writeln(2,ParserTerm),
-	writeln(2,'----------------------------------------------'),
+	DBGOUT('------------result of parsing-----------------'),
+	DBGOUT(ParserTerm),
+	DBGOUT('----------------------------------------------'),
 */
 	prepare_to_compile_rule,
 	flora_increment_counter(RULE_NUM,1,_,_),
@@ -2637,13 +2637,13 @@ flora_compile(ParserTerm,RuleDiffList,FactDiffList,MetaFactDiffList,UDFPredsDiff
 			 UDFPredsDiffList,
 			 Status),
 /*
-	writeln(2,'------------result of compilation-----------------'),
-	writeln(2,rules=RuleDiffList),
-	writeln(2,facts=FactDiffList),
-	writeln(2,metafacts=MetaFactDiffList),
-	%%writeln(2,udfs =UDFPredsDiffList),
-	writeln(2,status=Status),
-	writeln(2,'--------------------------------------------------'),
+	DBGOUT('------------result of compilation-----------------'),
+	DBGOUT(rules=RuleDiffList),
+	DBGOUT(facts=FactDiffList),
+	DBGOUT(metafacts=MetaFactDiffList),
+	%%DBGOUT(udfs =UDFPredsDiffList),
+	DBGOUT(status=Status),
+	DBGOUT('--------------------------------------------------'),
 */
 	!.
 	
@@ -6675,18 +6675,19 @@ compile_head_pathexp(ParserTerm,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
 
 	; is_reifyop(ParserTerm,Formula) ->
 	    %% Code: code to get Object
-	    /* We could push fllibmodobj that creates reified statement
-	       to the body. This would allow us to have reified statements with
-	       var module in the head. However, this is hard to do: requires
-	       changes to fllibmodobj. Test case:
+	    /* We push fllibmodobj creating reified statement
+	       to the body. This allows us to have reified statements with
+	       var module in the head. For instance,
 	        p(${a(?X)@?M}) :- a(?X,?M).
 		a(1,mmm).
 		?- p(${a(?X)@mmm}).
-	    %%compile_reifyop(Formula,Object,H2BCodeHead,Status),
-	    %%Code = NULL,
 	    */
-	    compile_reifyop(Formula,Object,Code,Status),
-	    H2BCodeHead = NULL,
+	    %% If H2BCodeHead != NULL, it means that head-reification could
+	    %% not be fully computed due to a var in the module or literal
+	    %% position. In that case, fllibmodobj/5 is pushed to the body;
+	    %% it will then compute the reification or will unify with it.
+	    compile_reifyop(Formula,Object,H2BCodeHead,Status),
+	    Code = NULL,
 	    H2BCodeTail = NULL
 
         ; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
@@ -7502,12 +7503,14 @@ compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,[],Transactional
 		  empty ([]) ignores user defined functions
   +Nesting - needed for nested user defined functions
 ****************************************************************************/
+/*
 compile_wstermlit(_Funct,_N,_Args,WS,_Nesting,_OidCode,_Code,_BHList,Status) :-
 	is_flvariable(WS,_Name,VarIndex),
 	has_context(compiling_headliteral),
 	!,
 	compiling_error(VarIndex,VARWSINHEAD,Err),
 	Status = [Err].
+*/
 
 compile_wstermlit(Funct,N,Args,WS,Nesting,OidCode,Code,BodyHeadList,CompileStatus) :-
 	(is_fltransactionalatom(Funct,_)
@@ -8211,10 +8214,14 @@ compute_reification_expr(Formula,Object,OidCode,Status) :-
 	%% If it is compiled into a LIBMODLIT/3, replace with LIBMODOBJ
 	->
             new_prvariable(Index,Object),
-	    append(Args,[Object],NewArgs),
 	    %% LIBMODLIT/3 already has the caller argument -- no
 	    %% need to add it here
-	    florasyslib_struct(Index,FLLIBMODOBJ,4,NewArgs,OidCode)
+	    Args = [Pred,WS,Caller],
+	    (has_context(compiling_headliteral)
+	    -> NewArgs = [FL_HEAD,Pred,WS,Caller,Object]
+	    ;  NewArgs = [FL_BODY,Pred,WS,Caller,Object]
+	    ),
+	    florasyslib_struct(Index,FLLIBMODOBJ,5,NewArgs,OidCode)
 	;
 	    reify_struct(Object1,Object),
 	    OidCode = NULL
@@ -8694,6 +8701,7 @@ compile_head_wsflpathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Statu
 /****************************************************************************
   compile_head_wstermobj(+FunctorTerm,+Arity,+ArgList,+WS,-Object,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
 ****************************************************************************/
+/*
 compile_head_wstermobj(_Funct,_N,_Args,WS,_Object,_Code,_H2BCodeHead,_H2BCodeTail,Status) :-
 	is_flvariable(WS,_Name,VarIndex),
 	!,
@@ -8703,6 +8711,7 @@ compile_head_wstermobj(_Funct,_N,_Args,WS,_Object,_Code,_H2BCodeHead,_H2BCodeTai
 	%% of the rule.
 	compiling_error(VarIndex,VARWSINHEAD,Err),
 	Status = [Err].
+*/
 
 compile_head_wstermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
 	(is_fltransactionalatom(Funct,_)
