@@ -40,12 +40,8 @@
     	beats_lit_rule/4,
 	beats_lit_lit/3.
 :- prolog
-	exists_refutable_bodylit_non_dominating/4,
-	exists_false_irrefutable_bodylit/3,
 	exists_cand_not_overridden/4,
-	exists_refutable_supported_strongly_defeated_bodylit/3,
 	no_refutable_bodylits/3,
-	not_guarantees_rule/4,
 	not_beats_supported_argument/3.
 
 
@@ -176,7 +172,9 @@ beats_lit_rule(?q,?rh,?h,?mod) :-
 	dominates_lit_rule(?q,?rh,?h,?mod),
 	!.
 
+
 beats_lit_rule(?q,?rh,?h,?mod) :-   
+	// Format:  SILK_REFUTABLEBODYLIT(-ruleid,-head,_@,-bodylit)
 	SILK_REFUTABLEBODYLIT(?rh,?h,?mod,?bi),
 	beats_lit_lit(?q,?bi,?mod).
 
@@ -185,29 +183,24 @@ beats_lit_lit(?q,?bi,?mod) :-
 	!,
 	// forall ?rbi (supportedargument(?rbi,?bi)~~>beats(lit)(rule)(?q,?rbi))
 	naf not_beats_supported_argument(?q,?bi,?mod).
-beats_lit_lit(?q, ?opposer_bodylit,?mod) :-  
+// remove '...' arounf naf ?var once this is supported
+beats_lit_lit(?q,'${naf ?bodylit}',?mod) :-  
 	/*
 	  beats_lit_lit(?q, naf ?bi,?mod) :-  
 	      exist ?rbi ( headlit(?rbi,?bi),
 			  forall ?bbi (refutablebodylit(?rbi, naf ?bbi) ~~> 
 			       beats(lit)(lit)(?q,?bbi) ) ) ; 
 	*/
-        // opposer_bodylit is a generalization of naf bodylit
-	FL_OPPOSES_AUX(?mod,?,?opposer_bodylit,?,?bodylit),
 	headlit(?rb,?bodylit,?mod),
-        naf not_guarantees_rule(?q,?rb,?bodylit,?mod).
+	SILK_BODYINFO(?rb,${naf ?bodylit},?mod,
+	              ?q,ATCO_BEATS_LIT_LIT,
+	              ?_wholebody,?refutable_part),
+	?refutable_bodypart.
 
 // ?lit1 naf beats ?lit2 by not beating some rule ?r2 that supports ?lit2
 not_beats_supported_argument(?lit1,?lit2,?mod) :-
 	supportedargument(?r2,?lit2,?mod),
 	naf beats_lit_rule(?lit1,?r2,?lit2,?mod).
-
-// ?lit does not ensure ?rule because ?lit is not beating an opposer
-// of some refutable ?bodylit of ?rule
-not_guarantees_rule(?lit,?rule,?headlit,?mod) :-
-	SILK_REFUTABLEBODYLIT(?rule,?headlit,?mod,?bodylit),
-	FL_OPPOSES_AUX(?mod,?,?bodylit,?,?opposer_bodylit),
-	naf beats_lit_lit(?lit,?opposer_bodylit,?mod).
 
 supportedargument(?r,?h,?mod) :- 
 	attemptedsupportedargument(?r,?h,?mod)
@@ -221,7 +214,7 @@ supportedargument(?r,?h,?mod) :-
 /*
       attemptedsupportedargument/3
 
-  The first case is when there are no refutable body literals for the rule.
+  The first case is when there are no refutable body literals in the rule body.
   This is both optimization and also allows us to write FLORA-2 tests
   without explicitly specifying irrefutable literals when it is known
   that all bodylits are irrefutable.
@@ -232,22 +225,20 @@ attemptedsupportedargument(?r,?h,?mod) :-
 	FL_CANDIDATE(?r,?h,?mod).
 attemptedsupportedargument(?r,?h,?mod) :- 
 	headlit(?r,?h,?mod),
-	// forall ?bi ( irrefutablebodylit(?rh,?bi) ~~> ?bi )
-	naf exists_false_irrefutable_bodylit(?r,?h,?mod),
-	// forall ?bi ( refutablebodylit(?rh,?bi) ~~> 
-	//         hassupportedargument(?bi) and naf stronglydefeated(?bi) ) 
-	naf exists_refutable_supported_strongly_defeated_bodylit(?r,?h,?mod).
+	SILK_BODYINFO(?r,?h,?mod,
+	              ?,ATCO_ATTEMPTEDSUPPORTED_ARG,
+	              ?bodyspec,?_refutable_part),
+	?bodyspec.
 
 hassupportedargument(?bodylit,?mod) :- 
 	stronglit(?bodylit),
 	!,
 	supportedargument(?_r,?bodylit,?mod).
 
-hassupportedargument(?opposer_lit,?mod) :-  
-	FL_OPPOSES_AUX(?mod,?,?opposer_lit,?,?lit),
+// remove '...' arounf naf ?var once this is supported
+hassupportedargument('${naf ?lit}',?mod) :-  
 	headlit(?r,?lit,?mod),
-	SILK_REFUTABLEBODYLIT(?r,?lit,?mod,?opposer_bodylit),
-	FL_OPPOSES_AUX(?mod,?,?opposer_bodylit,?,?bodylit),
+	SILK_REFUTABLEBODYLIT(?r,?lit,?mod,'${naf ?bodylit}'),
 	hassupportedargument(?bodylit,?mod),
 	naf stronglydefeated_lit(?bodylit,?mod).
 /*
@@ -282,16 +273,10 @@ stronglydefeated_lit(?q,?mod) :-
         // forall ?rcq ( cand(?rcq,?q) ~~> overrid(?r_op_q,?rcq) )
         // i.e., dominates(rule)(lit)(?rnq,?q)
         dominates_rule_lit(?r_op_q,?opposer_q,?q,?mod),
-        // forall ?bi ( irrefutablebodylit(?r_op_q,?bi) ~~> ?bi )
-        naf exists_false_irrefutable_bodylit(?r_op_q,?opposer_q,?mod),
-	// Each refutablebodylit lit dominates:
-        // forall ?bi (refutablebodylit(?rnq,?bi)~~>dominates(lit)(lit)(?bi,?q)
-	naf exists_refutable_bodylit_non_dominating(?r_op_q,?opposer_q,?q,?mod).
-
-exists_refutable_bodylit_non_dominating(?r_op_q,?opposer_q,?q,?mod) :-
-	SILK_REFUTABLEBODYLIT(?r_op_q,?opposer_q,?mod,?bodylit),
-	naf dominates_lit_lit(?bodylit,?q,?mod).
-
+	SILK_BODYINFO(?r_op_q,?opposer_q,?mod,
+	              ?q,ATCO_STRONGLYDEFEATED,
+	              ?bodyspec,?_refutable_part),
+	?bodyspec.
 
 
 /***************************** Utilities *************************************/
@@ -321,28 +306,19 @@ naf_literal(?NegWrapped,?Positive) :-
 stronglit(?lit) :- \+ naf_literal(?lit,?).
 
 
-// Format:
-// SILK_REFUTABLEBODYLIT(123,Hd,_@,${aaa(pp)}).
-// SILK_IRREFUTABLEBODYLIT(123,Hd,_@,${aaa(pp)}).
-
-
 headlit(?r,?h,?mod) :- get_tag_descriptor_info_with_rulehead(?r,?mod,?,?h,?)@_prolog(flrdescriptor_support).
 
-// exists ?bi ( irrefutablebodylit(?rh,?bi) ~~> ?bi ) 
-exists_false_irrefutable_bodylit(?r,?h,?mod) :-
-	SILK_IRREFUTABLEBODYLIT(?r,?h,?mod,?bodylit),
-	naf ?bodylit.
-
-
-// exists ?bi ( refutablebodylit(?rh,?bi)
-//                 ~~> hassupportedargument(?bi), naf stronglydefeated(?bi) ) 
-exists_refutable_supported_strongly_defeated_bodylit(?r,?h,?mod) :-
-	SILK_REFUTABLEBODYLIT(?r,?h,?mod,?bodylit),
-	(naf hassupportedargument(?bodylit,?mod)
-	    or
-	 stronglydefeated_lit(?bodylit,?mod)
-	).
 
 no_refutable_bodylits(?r,?h,?mod) :-
 	headlit(?r,?h,?mod),
-	naf exist(?bodylit)^SILK_REFUTABLEBODYLIT(?r,?h,?mod,?bodylit).
+	naf SILK_REFUTABLEBODYLIT(?r,?h,?mod,?).
+
+
+SILK_ATCO_REFUTABLE_WRAP(ATCO_ATTEMPTEDSUPPORTED_ARG,?_extern,?mod,?bodylit) :-
+	hassupportedargument(?bodylit,?mod),
+	naf stronglydefeated(?bodylit,?mod).
+SILK_ATCO_REFUTABLE_WRAP(ATCO_STRONGLYDEFEATED,?extern_lit,?mod,?bodylit) :-
+	dominates_lit_lit(?bodylit,?extern_lit,?mod).
+SILK_ATCO_REFUTABLE_WRAP(ATCO_BEATS_LIT_LIT,?extern_lit,?mod,?bodylit) :-
+	// remove '...' arounf naf ?var once this is supported
+	beats_lit_lit(?extern_lit,'${naf ?bodylit}',?mod).
