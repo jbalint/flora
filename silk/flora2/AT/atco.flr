@@ -1,7 +1,10 @@
 
+#define EXPERIMENTAL
+
 #include "flora_terms.flh"
 #include "flora_porting.flh"
 #include "atco.flh"
+
 
 ?- Method[%mustDefine(on)]@_system.
 
@@ -175,7 +178,7 @@ beats_lit_rule(?q,?rh,?h,?mod) :-
 
 beats_lit_rule(?q,?rh,?h,?mod) :-   
 	// Format:  SILK_REFUTABLEBODYLIT(-ruleid,-head,_@,-bodylit)
-	SILK_REFUTABLEBODYLIT(?rh,?h,?mod,?bi),
+	SILK_REFUTABLEBODYLIT(?rh,?h,?mod,?bi)@_prolog,
 	beats_lit_lit(?q,?bi,?mod).
 
 beats_lit_lit(?q,?bi,?mod) :- 
@@ -183,6 +186,14 @@ beats_lit_lit(?q,?bi,?mod) :-
 	!,
 	// forall ?rbi (supportedargument(?rbi,?bi)~~>beats(lit)(rule)(?q,?rbi))
 	naf not_beats_supported_argument(?q,?bi,?mod).
+// this case allows to drop SILK_BODYINFO for rules with no refutable bodylits
+// MK: I think this case never arrises
+beats_lit_lit(?_q,?nafbodylit,?mod) :- 
+	naf_literal(?nafbodylit,?bodylit),
+	headlit(?r,?bodylit,?mod),
+	no_refutable_bodylits(?r,?bodylit,?mod),
+	!,
+	FL_CANDIDATE(?r,?bodylit,?mod).
 beats_lit_lit(?q,?nafbodylit,?mod) :-  
 	naf_literal(?nafbodylit,?bodylit),
 	/*
@@ -192,9 +203,9 @@ beats_lit_lit(?q,?nafbodylit,?mod) :-
 			       beats(lit)(lit)(?q,?bbi) ) ) ; 
 	*/
 	//headlit(?rb,?bodylit,?mod),
-	SILK_BODYINFO(?rb,?nafbodylit,?mod,
+	SILK_BODYINFO(?_rb,?bodylit,?mod,
 	              ?q,ATCO_BEATS_LIT_LIT,
-	              ?modified_body),
+	              ?modified_body)@_prolog,
 	?modified_body.
 
 // ?lit1 naf beats ?lit2 by not beating some rule ?r2 that supports ?lit2
@@ -213,12 +224,8 @@ supportedargument(?r,?h,?mod) :-
 
 /*
       attemptedsupportedargument/3
-
-  The first case is when there are no refutable body literals in the rule body.
-  This is both optimization and also allows us to write FLORA-2 tests
-  without explicitly specifying irrefutable literals when it is known
-  that all bodylits are irrefutable.
 */
+// this case allows to drop SILK_BODYINFO for rules with no refutable bodylits
 attemptedsupportedargument(?r,?h,?mod) :- 
 	no_refutable_bodylits(?r,?h,?mod),
 	!,
@@ -227,7 +234,7 @@ attemptedsupportedargument(?r,?h,?mod) :-
 	//headlit(?r,?h,?mod),
 	SILK_BODYINFO(?r,?h,?mod,
 	              ?,ATCO_ATTEMPTEDSUPPORTED_ARG,
-	              ?modified_body),
+	              ?modified_body)@_prolog,
 	?modified_body.
 
 hassupportedargument(?bodylit,?mod) :- 
@@ -238,7 +245,7 @@ hassupportedargument(?bodylit,?mod) :-
 hassupportedargument(?naflit,?mod) :-  
 	naf_literal(?naflit,?lit),
 	//headlit(?r,?lit,?mod),
-	SILK_REFUTABLEBODYLIT(?r,?lit,?mod,?nafbodylit),
+	SILK_REFUTABLEBODYLIT(?_r,?lit,?mod,?nafbodylit)@_prolog,
 	naf_literal(?nafbodylit,?bodylit),
 	hassupportedargument(?bodylit,?mod),
 	naf stronglydefeated_lit(?bodylit,?mod).
@@ -257,12 +264,8 @@ hassupportedargument(?naflit,?mod) :-
 
 /*
       stronglydefeated_lit/2
-
-  The first case is when there are no refutable body literals for the rule.
-  This is both optimization and also allows us to write FLORA-2 tests
-  without explicitly specifying irrefutable literals when it is known
-  that all bodylits are irrefutable.
 */
+// this case allows to drop SILK_BODYINFO for rules with no refutable bodylits
 stronglydefeated_lit(?q,?mod) :-
 	FL_OPPOSES_AUX(?mod,?,?q,?,?opposer_q),
 	no_refutable_bodylits(?r_op_q,?opposer_q,?mod),
@@ -276,7 +279,7 @@ stronglydefeated_lit(?q,?mod) :-
         dominates_rule_lit(?r_op_q,?opposer_q,?q,?mod),
 	SILK_BODYINFO(?r_op_q,?opposer_q,?mod,
 	              ?q,ATCO_STRONGLYDEFEATED,
-	              ?modified_body),
+	              ?modified_body)@_prolog,
 	?modified_body.
 
 
@@ -285,7 +288,7 @@ atco_overrides(?r1,?h1,?r2,?h2,?mod) :-
 	// need to intro user-level primitives to get the tags once
 	// these APIs settle down
 	get_tag_descriptor_info_with_rulehead(?r1,?mod,?t1,?h1,?_vars1)@_prolog(flrdescriptor_support),
-	get_tag_descriptor_info(?r2,?mod,?t2,?h2,?_vars2)@_prolog(flrdescriptor_support),
+	get_tag_descriptor_info_with_rulehead(?r2,?mod,?t2,?h2,?_vars2)@_prolog(flrdescriptor_support),
 	FL_OVERRIDES_AUX(?mod,?t1,?h1,?t2,?h2).
 
 
@@ -310,11 +313,13 @@ stronglit(?lit) :- \+ naf_literal(?lit,?).
 headlit(?r,?h,?mod) :- get_tag_descriptor_info_with_rulehead(?r,?mod,?,?h,?)@_prolog(flrdescriptor_support).
 
 
+// we use this for rules that have no refutable bodylits
 no_refutable_bodylits(?r,?h,?mod) :-
 	headlit(?r,?h,?mod),
-	naf SILK_REFUTABLEBODYLIT(?r,?h,?mod,?).
+	\+ SILK_REFUTABLEBODYLIT(?r,?h,?mod,?)@_prolog.
 
 
+// this wrapper is declared as modular prolog
 SILK_ATCO_REFUTABLE_WRAP(ATCO_ATTEMPTEDSUPPORTED_ARG,?_extern,?mod,?bodylit) :-
 	!,
 	hassupportedargument(?bodylit,?mod),

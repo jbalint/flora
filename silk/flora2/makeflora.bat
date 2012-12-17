@@ -25,7 +25,7 @@ if "%1" == "-I" shift
 if "%1" == "-S" echo #define FLORA_SUBSUMPTIVE_TABLING > %default_tabling%
 if "%1" == "-S" shift
 
-if "%1" == "" echo Usage:  makeflora [-c|-c64] full-path-to-prolog
+if "%1" == "" echo Usage:  makeflora [-c or -c64] full-path-to-prolog
 if "%1" == "" goto end
 
 if        "%1" == "-c"    (set PROLOG=%2 -s -m 40000 -c 4000
@@ -33,7 +33,7 @@ if        "%1" == "-c"    (set PROLOG=%2 -s -m 40000 -c 4000
 ) else                    set PROLOG=%1 -s -m 40000 -c 4000
 
 @echo.
-if "%PROLOG%" == "" echo Usage:  makeflora [-c|-c64] full-path-to-prolog
+if "%PROLOG%" == "" echo Usage:  makeflora [-c or -c64] full-path-to-prolog
 if "%PROLOG%" == "" goto end
 
 if "%1" == "clean" if not exist binary-distribution.txt nmake /nologo /f NMakefile.mak clean
