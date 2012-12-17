@@ -40,6 +40,7 @@ exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
               encap_mod1.flr encap_mod2.flr encap_syntax_check.flr \
               error_invalidsym.flr error_dynmod.flr \
               error_nonvar.flr error_nonvar2.flr error_nonvar3.flr \
+              atco_specific_aux.flr \
 	      test_func_modulebar.flr test_func_facts_aux.flr \
 	      test_builtin_err.flr \
     	      test_delays_errors1.flr test_delays_errors2.flr \
