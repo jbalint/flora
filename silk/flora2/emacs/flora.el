@@ -123,7 +123,7 @@
     ;; for objects
     '("\\([A-Za-z0-9_][A-Za-z0-9_!.]*\\) *\\["
       1 'font-lock-variable-name-face)
-    '("\\b\\(\\\+\\|not\\|avg\\|max\\|min\\|sum\\|count\\|collectset\\|collectbag\\|insert\\|delete\\|b?t_?insert\\|b?t_?delete\\|insertall\\|b?t_?insertall\\|deleteall\\|b?t_?deleteall\\|erase\\|eraseall\\|b?t_?erase\\|b?t_?eraseall\\|insertrule_?[az]?\\|if\\|then\\|else\\|while\\|do\\|until\\|unless\\|p2h\\|semantics\||setsemantics\\|caller\\|newoid\\|fl[A-Z][a-zA-Z]*\\)\\b"
+    '("\\b\\(\\\+\\|naf\\|avg\\|max\\|min\\|sum\\|count\\|setof\\|bagof\\|insert\\|delete\\|b?t_?insert\\|b?t_?delete\\|insertall\\|b?t_?insertall\\|deleteall\\|b?t_?deleteall\\|erase\\|eraseall\\|b?t_?erase\\|b?t_?eraseall\\|insertrule_?[az]?\\|if\\|then\\|else\\|while\\|do\\|until\\|unless\\|p2h\\|semantics\||setsemantics\\|caller\\|newoid\\|fl[A-Z][a-zA-Z]*\\)\\b"
       1 'font-lock-keyword-face)
     '("\\(:\\||\\)" 
       1 'font-lock-type-face)
