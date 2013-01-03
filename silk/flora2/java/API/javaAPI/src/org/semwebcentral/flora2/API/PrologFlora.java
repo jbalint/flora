@@ -183,6 +183,10 @@ public class PrologFlora extends FloraConstants
 		}
 	}
 	
+	public Object[] FloraCommand(String cmd,Vector<String> vars){
+		return FloraCommand(cmd, vars,null);
+	}
+    
     /* Call the flora_query/5 predicate of FLORA-2
     ** Binds FLORA-2 variables to the returned values
     ** and returns an array of answers. Each answer is an Interprolog
@@ -191,8 +195,9 @@ public class PrologFlora extends FloraConstants
     **
     ** cmd : Flora query to be executed 
     ** vars : Variables in the Flora query that need to be bound
+    ** forestLog: if not null, causes this command to be wrapped in a log_forest call, cf. XSB Manual 10.3
     */
-    public Object[] FloraCommand(String cmd,Vector<String> vars)
+    public Object[] FloraCommand(String cmd,Vector<String> vars,File forestLog)
     {
     	StringBuffer sb = new StringBuffer();
     	String varsString = "";
@@ -225,7 +230,9 @@ public class PrologFlora extends FloraConstants
     	String queryString = "S_rnd='" + cmd + "',";
     	String floraQueryString =
     		//"findall(TM_rnd,(flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex),buildTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
-    		"findall(TM_rnd,(flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex),buildInitiallyFlatTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
+    		"findall(TM_rnd,("+
+    			(forestLog==null?"flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex)":"tables:log_forest(flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex),[file('"+ forestLog +"')])")+
+    			",buildInitiallyFlatTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
     		
     	sb.append(queryString);
     	sb.append(listString);
