@@ -17,9 +17,9 @@ ARCHOBJDIR = $(ARCHDIR)\saved.o
 ALL : "$(OUTDIR)\prolog2hilog.dll"  "$(OUTDIR)\flora_ground.dll"
 
 CLEAN :
-	-@if exist *.obj" erase *.obj"
-	-@if exist *.dll" erase *.dll"
-	-@if exist *.exp" erase *.exp"
+	-@if exist *.obj erase *.obj
+	-@if exist *.dll erase *.dll
+	-@if exist *.exp erase *.exp
 	-@if exist *~ erase *~
 	-@if exist .#* erase .#*
 	-@if exist *.bak erase *.bak

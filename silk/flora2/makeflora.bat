@@ -28,9 +28,9 @@ if "%1" == "-S" shift
 if "%1" == "" echo Usage:  makeflora [-c or -c64] full-path-to-prolog
 if "%1" == "" goto end
 
-if        "%1" == "-c"    (set PROLOG=%2 -s -m 40000 -c 4000
-) else if "%1" == "-c64"  (set PROLOG=%2 -s -m 40000 -c 4000
-) else                    set PROLOG=%1 -s -m 40000 -c 4000
+if        "%1" == "-c"    (set PROLOG=%2 -m 40000 -c 4000
+) else if "%1" == "-c64"  (set PROLOG=%2 -m 40000 -c 4000
+) else                    set PROLOG=%1 -m 40000 -c 4000
 
 @echo.
 if "%PROLOG%" == "" echo Usage:  makeflora [-c or -c64] full-path-to-prolog

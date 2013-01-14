@@ -42,8 +42,8 @@
 #define FLORA_META_PREFIX         "_$_$_flora'mod"
 #define FLORA_META_PREFIX_LEN     14
 
-#define FLORA_TNOT_PREDICATE      "flora_tnot"
-#define FLORA_TNOT_LEN            10
+#define FLORA_NAF_PREDICATE       "flora_naf"
+#define FLORA_NAF_LEN             9
 
 #define FL_TRUTHVALUE_TABLED_CALL "truthvalue_tabled_call"
 #define FL_TABLED_UNNUMBER_CALL   "tabled_unnumber_call"
@@ -332,7 +332,7 @@ void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail, Integer ignore_negative
       fprintf(stderr,"pterm: %s\n",pterm2string(CTXTc (prolog_term)pterm));
 #endif
     arity = (int) get_arity(get_str_psc(pterm));
-    // if it is FLORA_TNOT_PREDICATE(Call,File,Line), get vars from Call only
+    // if it is FLORA_NAF_PREDICATE(Call,File,Line), get vars from Call only
     if (is_flora_tnot_predicate((prolog_term) pterm) && arity == 3) {
       term_vars(clref_val(pterm)+1,pvars,pvarstail,ignore_negative);
 #ifdef FG_DEBUG
@@ -422,7 +422,7 @@ void term_vars_split(CPtr pterm,
 
   case XSB_STRUCT:
     arity = (int) get_arity(get_str_psc(pterm));
-    // if it is FLORA_TNOT_PREDICATE(Call,File,Line), get vars from Call only
+    // if it is FLORA_NAF_PREDICATE(Call,File,Line), get vars from Call only
     if (is_flora_tnot_predicate((prolog_term) pterm) && arity == 3) {
       term_vars_split(clref_val(pterm)+1,pvars,pvarstail,pattrvars,pattrvarstail,ignore_negative);
       return;
@@ -489,7 +489,7 @@ static inline int is_flora_tnot_predicate(prolog_term pterm)
 {
   char *functor;
   functor = extern_p2c_functor(pterm);
-  return (strncmp(functor, FLORA_TNOT_PREDICATE, FLORA_TNOT_LEN)==0);
+  return (strncmp(functor, FLORA_NAF_PREDICATE, FLORA_NAF_LEN)==0);
 }
 
 
