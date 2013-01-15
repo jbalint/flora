@@ -74,10 +74,6 @@ public class FloraSession extends FloraConstants
 	}
 	return result;
     }
-
-	public Iterator<HashMap<String, FloraObject>> FindAllMatches(String query,Vector<String> vars){
-		return FindAllMatches( query, vars, null);
-	}
 	
     /* Execute a command at the FLORA-2 session 
     ** The answer is a resultset that can be queried
@@ -85,7 +81,7 @@ public class FloraSession extends FloraConstants
     ** query : Flora query to be executed 
     ** vars : Vector of variables to be bound
     */
-    public Iterator<HashMap<String, FloraObject>> FindAllMatches(String query,Vector<String> vars, File forestLog)
+    public Iterator<HashMap<String, FloraObject>> FindAllMatches(String query,Vector<String> vars)
     {
 	Vector<HashMap<String,FloraObject>> retBindings = new Vector<HashMap<String,FloraObject>>();
 	Object[] bindings = null;
@@ -95,7 +91,7 @@ public class FloraSession extends FloraConstants
 		System.out.println("FindAllMatches, before FloraCommand. Query = " + query);
 		System.out.println("FindAllMatches, before FloraCommand. Vars = " + vars);
 	    }
-	    bindings = flora.FloraCommand(doubleEachQuote(query),vars,forestLog);
+	    bindings = flora.FloraCommand(doubleEachQuote(query),vars);
 	    if (debug) {
 		System.out.println("FindAllMatches, after FloraCommand: " + bindings);
 	    }
@@ -182,18 +178,20 @@ public class FloraSession extends FloraConstants
     	flora.setLoadProgressHandler(handler);
     }
     
-    public Iterator<HashMap<String, FloraObject>> ExecuteQuery(String query,Vector<String> vars){
-    	return  ExecuteQuery( query, vars, null);
+    /** Delegates to same method in PrologFlora. 
+    @see org.semwebcentral.flora2.API.PrologFlora#setLoadProgressHandler(String,double) */
+    public void setLoadProgressHandler(String handler,double period){
+    	flora.setLoadProgressHandler(handler,period);
     }
-    
+        
     /* Execute a query with variables
     **
     ** query : query to be executed
     ** vars : variables in the query
     */
-    public Iterator<HashMap<String, FloraObject>> ExecuteQuery(String query,Vector<String> vars, File forestLog)
+    public Iterator<HashMap<String, FloraObject>> ExecuteQuery(String query,Vector<String> vars)
     {
-	return FindAllMatches(query,vars, forestLog);
+	return FindAllMatches(query,vars);
     }
 
     

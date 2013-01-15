@@ -61,6 +61,7 @@ public class PrologFlora extends FloraConstants
     int numExceptions = 0;
     
     private String loadProgressHandlerPredicate = null;
+    private long loadProgressPeriod = 0; // mS
     
     /* Function for setting Initialization commands */
     void initCommandStrings(String FloraRootDir)
@@ -169,24 +170,25 @@ public class PrologFlora extends FloraConstants
         return cmdsuccess;
     }
     
-    /** Causes Prolog goal handler(_G) to be called periodically during file compilation and loading command goals.
+    /** Causes Prolog goal handler(_G) to be called periodically every period seconds during file compilation and loading command goals.
      _G will be bound to the current command. If handler is null, progress will not be reported */
-    public void setLoadProgressHandler(String handler){
+    public void setLoadProgressHandler(String handler,double period){
     	loadProgressHandlerPredicate = handler;
+    	loadProgressPeriod = Math.round(period*1000);
+    }
+        
+    public void setLoadProgressHandler(String handler){
+    	setLoadProgressHandler(handler,1.0);
     }
         
 	private String wrapAsTimedCall(String G) {
 		if (loadProgressHandlerPredicate==null) return G;
 		else {
 			logger.info("preparing timed_call to "+G);
-			return "timed_call( ("+G+ "), repeating(1000), "+loadProgressHandlerPredicate+"(("+G+")), nesting)";
+			return "timed_call( ("+G+ "), repeating("+loadProgressPeriod+"), "+loadProgressHandlerPredicate+"(("+G+")), nesting)";
 		}
 	}
 	
-	public Object[] FloraCommand(String cmd,Vector<String> vars){
-		return FloraCommand(cmd, vars,null);
-	}
-    
     /* Call the flora_query/5 predicate of FLORA-2
     ** Binds FLORA-2 variables to the returned values
     ** and returns an array of answers. Each answer is an Interprolog
@@ -195,9 +197,8 @@ public class PrologFlora extends FloraConstants
     **
     ** cmd : Flora query to be executed 
     ** vars : Variables in the Flora query that need to be bound
-    ** forestLog: if not null, causes this command to be wrapped in a log_forest call, cf. XSB Manual 10.3
     */
-    public Object[] FloraCommand(String cmd,Vector<String> vars,File forestLog)
+    public Object[] FloraCommand(String cmd,Vector<String> vars)
     {
     	StringBuffer sb = new StringBuffer();
     	String varsString = "";
@@ -230,9 +231,11 @@ public class PrologFlora extends FloraConstants
     	String queryString = "S_rnd='" + cmd + "',";
     	String floraQueryString =
     		//"findall(TM_rnd,(flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex),buildTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
+    		(loadProgressHandlerPredicate==null?"":"ipIamAlive('"+cmd+"'), ") + // send a first message, so we get some feedback even for fast queries
     		"findall(TM_rnd,("+
-    			(forestLog==null?"flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex)":"tables:log_forest(flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex),[file('"+ forestLog +"')])")+
-    			",buildInitiallyFlatTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
+    			"flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex)"+
+    			",buildInitiallyFlatTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)" +
+    		(loadProgressHandlerPredicate==null?"":", ipIamAlive('"+cmd+"')"); // send last message, so we get some final feedback even for fast queries
     		
     	sb.append(queryString);
     	sb.append(listString);
