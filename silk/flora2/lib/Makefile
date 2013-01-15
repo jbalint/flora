@@ -36,7 +36,7 @@ Option = [optimize]
 # Self-make: Version 1.4.1
 #
 PROLOG = none
-PROLOG_COMMAND = $(PROLOG) -i -s -m 80000 -c 10000 -e 'segfault_handler(warn).'
+PROLOG_COMMAND = $(PROLOG) -i -m 80000 -c 10000 -e 'segfault_handler(warn).'
 #
 #-----------------------------------------------------------------------#
 

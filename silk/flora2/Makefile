@@ -67,7 +67,7 @@ OPTION = [optimize,ti_all,spec_repr]
 
 # PROLOG is passed as an argument to make. Default is none, to trigger an error
 PROLOG=none
-PROLOG_COMMAND = $(PROLOG) -s -m 60000 -c 10000 -e 'segfault_handler(warn).'
+PROLOG_COMMAND = $(PROLOG) -m 60000 -c 10000 -e 'segfault_handler(warn).'
 
 # Make sure warnings are saved in a file.
 SVFILE = '$(FLORADIR)/.flora_top_warn.tmp'
