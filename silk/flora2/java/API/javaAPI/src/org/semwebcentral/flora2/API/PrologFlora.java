@@ -185,7 +185,9 @@ public class PrologFlora extends FloraConstants
 		if (loadProgressHandlerPredicate==null) return G;
 		else {
 			logger.info("preparing timed_call to "+G);
-			return "timed_call( ("+G+ "), repeating("+loadProgressPeriod+"), "+loadProgressHandlerPredicate+"(("+G+")), nesting)";
+			return "timed_call(( "+
+				loadProgressHandlerPredicate+"(("+G+"),"+HEARTBEAT_STAGE_BEGIN+"),("+G+ ")), repeating("+loadProgressPeriod+"), "+
+				loadProgressHandlerPredicate+"(("+G+"),"+HEARTBEAT_STAGE_RUN+"), nesting)";
 		}
 	}
 	
@@ -231,11 +233,11 @@ public class PrologFlora extends FloraConstants
     	String queryString = "S_rnd='" + cmd + "',";
     	String floraQueryString =
     		//"findall(TM_rnd,(flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex),buildTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
-    		(loadProgressHandlerPredicate==null?"":"ipIamAlive('"+cmd+"'), ") + // send a first message, so we get some feedback even for fast queries
+    		(loadProgressHandlerPredicate==null?"":loadProgressHandlerPredicate+"('"+cmd+"',"+HEARTBEAT_STAGE_BEGIN+"), ") + // send a first message, so we get some feedback even for fast queries
     		"findall(TM_rnd,("+
     			"flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex)"+
     			",buildInitiallyFlatTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)" +
-    		(loadProgressHandlerPredicate==null?"":", ipIamAlive('"+cmd+"')"); // send last message, so we get some final feedback even for fast queries
+    		(loadProgressHandlerPredicate==null?"":", "+loadProgressHandlerPredicate+"('"+cmd+"',"+HEARTBEAT_STAGE_END+")"); // send last message, so we get some final feedback even for fast queries
     		
     	sb.append(queryString);
     	sb.append(listString);
@@ -255,8 +257,6 @@ public class PrologFlora extends FloraConstants
 	    //return null;
 	}
     }
-
-
     /* A simpler way to call FLORA commands that are not queries
     **
     ** cmd : Command to be executed

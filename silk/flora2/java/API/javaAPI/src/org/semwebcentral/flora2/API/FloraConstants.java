@@ -63,6 +63,10 @@ public class FloraConstants
 
     public final static String WRAP_HILOG = "flapply";
 
+	public static final String HEARTBEAT_STAGE_INIT = "init";
+	public static final String HEARTBEAT_STAGE_BEGIN = "begin";
+	public static final String HEARTBEAT_STAGE_RUN = "run";
+	public static final String HEARTBEAT_STAGE_END = "end";
 
     public static String printableMethodType(int type) {
 	if (type == VALUE) return "value";
