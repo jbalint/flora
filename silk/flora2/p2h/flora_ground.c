@@ -43,6 +43,7 @@
 #define FLORA_META_PREFIX_LEN     14
 
 #define FLORA_NAF_PREDICATE       "flora_naf"
+#define FLORA_NAF_ARITY           4
 #define FLORA_NAF_LEN             9
 
 #define FL_TRUTHVALUE_TABLED_CALL "truthvalue_tabled_call"
@@ -332,8 +333,8 @@ void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail, Integer ignore_negative
       fprintf(stderr,"pterm: %s\n",pterm2string(CTXTc (prolog_term)pterm));
 #endif
     arity = (int) get_arity(get_str_psc(pterm));
-    // if it is FLORA_NAF_PREDICATE(Call,File,Line), get vars from Call only
-    if (is_flora_tnot_predicate((prolog_term) pterm) && arity == 3) {
+    // if it is FLORA_NAF_PREDICATE(Call,FreeVars,File,Line), get vars from Call only
+    if (is_flora_tnot_predicate((prolog_term) pterm) && arity == FLORA_NAF_ARITY) {
       term_vars(clref_val(pterm)+1,pvars,pvarstail,ignore_negative);
 #ifdef FG_DEBUG
       fprintf(stderr,"pvars: %s\n",
@@ -422,8 +423,8 @@ void term_vars_split(CPtr pterm,
 
   case XSB_STRUCT:
     arity = (int) get_arity(get_str_psc(pterm));
-    // if it is FLORA_NAF_PREDICATE(Call,File,Line), get vars from Call only
-    if (is_flora_tnot_predicate((prolog_term) pterm) && arity == 3) {
+    // if it is FLORA_NAF_PREDICATE(Call,FreeVars,File,Line), get vars from Call only
+    if (is_flora_tnot_predicate((prolog_term) pterm) && arity == FLORA_NAF_ARITY) {
       term_vars_split(clref_val(pterm)+1,pvars,pvarstail,pattrvars,pattrvarstail,ignore_negative);
       return;
     }

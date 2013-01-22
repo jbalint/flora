@@ -38,6 +38,7 @@
 :- import
 	u_not/1
    from tables.
+:- import variant/2 from subsumes.
 :- import
 	incr_invalidate_call/1
    from increval.
@@ -65,6 +66,9 @@
 	storage_delete_fact/3,
 	storage_find_fact/2
    from storage.
+:- import
+	flrterm_vars/3
+   from flora_ground.
 
 :- import
 	flora_storage_fast_insert_fact/3
@@ -83,7 +87,7 @@
 	flora_unwrap_negation/2,
 	flora_apply_negation_wrapper/3,
 	incr_flora_update_counter/0,
-	FLORA_NAF_PREDICATE/3,
+	FLORA_NAF_PREDICATE/4,
 	FLORA_NAF_PREDICATE/1.
 
 
@@ -100,34 +104,52 @@
 %%	pp :- p(X).
 %% where pp is a new proposition.
 
-FLORA_NAF_PREDICATE(Goal) :- FLORA_NAF_PREDICATE(Goal,NULL,NULL).
+FLORA_NAF_PREDICATE(Goal) :-
+	flrterm_vars(Goal,FreeVarList,0),  %% 0: include vars in negation
+	FLORA_NAF_PREDICATE(Goal,FreeVarList,NULL,NULL).
 
-FLORA_NAF_PREDICATE(Goal,_Line,_File) :-
+FLORA_NAF_PREDICATE(Goal,_FreeVars,_Line,_File) :-
 	is_cyclic(Goal),
 	!,
 	fail.
-FLORA_NAF_PREDICATE(Goal,_Line,_File) :-
-#ifdef NEGATION_DEBUG_STATS
-	flrporting:flora_increment_counter(negtotal,1,_,_),
-#endif
-	flora_unwrap_negation_nocheck(Goal,UnwrappedGoal),
-	%% only tabled predicates can pass the next test
-	convert_flora_call_to_tabled(UnwrappedGoal,NewCall),
-	ground(NewCall),
-	!,
-	%% this will call body-predicates in flrpreddef_NAF.inc, which
-	%% will then call FLORA_NAF_PREDICATE_GROUND/1 below.
-	%% Note: flrpreddef_NAF.inc can be called only by subgoals obtained through
-	%% the transform performed by convert_flora_call_to_tabled/2.
-	call0(NewCall).
-FLORA_NAF_PREDICATE(Goal,Line,File) :-
-	flora_unwrap_negation_nocheck(Goal,UnwrappedGoal),
-	%% acyclicity of the goal is checked upfront
-	make_negated_goal(UnwrappedGoal,Goal,NewGoal),
-	%%call0(NewGoal).
-	catch(call0(NewGoal),error(typed_table_error(incremental_tabling),_,_),
-	      incr_tabling_error_handler(Line,File,UnwrappedGoal)).
+%% First trying naf_exists
+FLORA_NAF_PREDICATE(Goal,_FreeVars,Line,File) :-
+	naf_exists(Goal,Line,File).
 
+/*
+%% trying neg Goal. 
+%% Maybe add a catch(call0) here later once we understand
+%% what kind of errors might arise
+
+exists_not(_Vars,Goal):- neg(Goal).
+*/
+FLORA_NAF_PREDICATE(Goal,_FreeVars,_Line,_File) :-
+	flora_unwrap_negation_nocheck(Goal,UnwrappedGoal),
+	%% neg Goal
+	flrwrapper:negate_predicate(UnwrappedGoal,NegUnwrappedGoal),
+	call0(NegUnwrappedGoal).
+
+/*
+%% finally trying naf exists forall Vars Goal
+exists_not(Vars,Goal):- 
+	Vars \= [],
+	not_exists(myforall(Vars,Goal)),
+	u_not(Goal).
+*/
+FLORA_NAF_PREDICATE(Goal,FreeVarsTerm,Line,File) :-
+	flora_unwrap_negation_nocheck(Goal,UnwrappedGoal),
+	functor(Goal,FL_Tabled_Unnumber_Call_PredName,_),
+	flrwrapper:flora_get_symbol_module(FL_Tabled_Unnumber_Call_PredName,Module),
+	%% FreeVarsTerm was originally a varlist, but may have been instantiated
+	flrterm_vars(FreeVarsTerm,FreeVarList,0), %% 0: include vars under naf
+	%%DBGOUTLN(freevars_=FreeVarList),
+	%%DBGOUTLN(goal_____=Goal),
+	FreeVarList \= [],
+	flora_apply_negation_wrapper(quazi_forall(FreeVarList,UnwrappedGoal),Module,QuaziForallGoal),
+	naf_exists(QuaziForallGoal,Line,File),
+	%%DBGOUTLN(quazigoal=QuaziForallGoal),
+	%%DBGOUTLN(unwrapped=UnwrappedGoal),
+	u_not(UnwrappedGoal).
 
 :- export FLORA_NAF_PREDICATE_GROUND/1.
 %% optimization for ground tabled negated subgoals
@@ -142,6 +164,29 @@ FLORA_NAF_PREDICATE_GROUND(Goal) :-
 #endif
 	tnot(Goal).
 
+
+naf_exists(Goal,_Line,_File) :-
+#ifdef NEGATION_DEBUG_STATS
+	flrporting:flora_increment_counter(negtotal,1,_,_),
+#endif
+	flora_unwrap_negation_nocheck(Goal,UnwrappedGoal),
+	%% only tabled predicates can pass the next test
+	convert_flora_call_to_tabled(UnwrappedGoal,NewCall),
+	ground(NewCall),
+	!,
+	%% this will call body-predicates in flrpreddef_NAF.inc, which
+	%% will then call FLORA_NAF_PREDICATE_GROUND/1 below.
+	%% Note: flrpreddef_NAF.inc can be called only by subgoals obtained
+	%%  through the transform performed by convert_flora_call_to_tabled/2.
+	call0(NewCall).
+
+naf_exists(Goal,Line,File) :-
+	flora_unwrap_negation_nocheck(Goal,UnwrappedGoal),
+	%% acyclicity of the goal is checked upfront
+	make_negated_goal(UnwrappedGoal,Goal,NewGoal),
+	%%call0(NewGoal).
+	catch(call0(NewGoal),error(typed_table_error(incremental_tabling),_,_),
+	      incr_tabling_error_handler(Line,File,UnwrappedGoal)).
 
 	
 %% Delete tables for FLORA_THIS_WORKSPACE(TABLED_UNNUMBER_CALL)/1, which
@@ -354,6 +399,11 @@ save_in_convert_to_table_cache_failed(Call) :-
 	functor(CallTempl,Fun,N),
 	assert(convert_to_table_cache_failed(CallTempl)).
 
+quazi_forall(Vars,Goal):- 
+	copy_term(Vars,Vars1),
+	call(Goal),
+	variant(Vars,Vars1).
+
 
 #ifdef NEGATION_DEBUG_STATS
 :- export get_negation_stats/0.
@@ -365,12 +415,12 @@ get_negation_stats :-
 	gensym:conget(neghypo,Hypo),
 	gensym:conget(neggenerl,Gen),
 	Builtins is Total-Tabled-Ground-Trans-Hypo-Gen,
-	writeln(2,'Statistics for negation use:'),
-	writeln(2,'total '=Total),
-	writeln(2,tabled=Tabled),
-	writeln(2,ground=Ground),
-	writeln(2,transl=Trans),
-	writeln(2,'hypo  '=Trans),
-	writeln(2,bltins=Builtins),
-	writeln(2,generl=Gen).
+	DBGOUTLN('Statistics for negation use:'),
+	DBGOUTLN('total '=Total),
+	DBGOUTLN(tabled=Tabled),
+	DBGOUTLN(ground=Ground),
+	DBGOUTLN(transl=Trans),
+	DBGOUTLN('hypo  '=Trans),
+	DBGOUTLN(bltins=Builtins),
+	DBGOUTLN(generl=Gen).
 #endif

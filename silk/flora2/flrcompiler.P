@@ -27,6 +27,7 @@
 
 #define NEWVAR	        	 newvar
 #define NEWDONTCAREVAR	       	 newdontcarevar
+#define NEWEXISTENTIALVAR      	 newexistentialvar
 #define NEWCALLERVAR	       	 newcallervar
 #define NEWPREDICATE_COUNTER   	 '_$$''''global_newpredicate_counter'
 #define NEWPREDICATE_SYM       	 '_$$''''newpredicate'
@@ -585,17 +586,17 @@ is_prquantifier(PRQUANTIFIER(QuantifierType,FormCode,FreVarObjs),
 
 %% \+
 naf_struct_prolog(Goal,PRPLGNAF(Goal)).
-%% not,naf
-pure_naf_struct_flora(Goal,PRSILKNAF(WrappedGoal,Line,CurrFileName)) :-
+%% naf
+pure_naf_struct_flora(Goal,FreeVars,PRSILKNAF(WrappedGoal,FreeVars,Line,CurrFileName)) :-
 	code_line_and_file_by_prterm(Goal,Line,CurrFileName),
 	modularized_atom_struct(FL_TABLED_UNNUMBER_CALL,NO_INDEX,FunCode),
 	prologterm_struct(FunCode,1,[Goal],WrappedGoal).
 %% We can optimize this by passing free variables list. If the list is empty,
 %% we won't delay
-naf_struct_flora(Goal,Code) :-
-	pure_naf_struct_flora(Goal,PureNotCode),
+naf_struct_flora(Goal,FreeVars,Code) :-
+	pure_naf_struct_flora(Goal,FreeVars,PureSilkNAFcode),
 	%% delay default negation
-	delay_struct(NO_INDEX,FL_DEFLTNEG,[PureNotCode],Code).
+	delay_struct(NO_INDEX,FL_DEFLTNEG,[PureSilkNAFcode],Code).
 
 %% delay struct
 delay_struct(Index,DelayOp,Args,Code) :-
@@ -612,7 +613,7 @@ neg_struct(PRAND(Goal1,Goal2),Idx,PRAND(Goal1,Struct2),Status) :-
 	!,
 	neg_struct(Goal2,Idx,Struct2,Status).
 
-%% unlike not/naf, neg can appear in the head
+%% unlike naf, neg can appear in the head
 neg_struct(PRAND(Goal1,Goal2),Idx,PROR(Struct1,Struct2),Status) :-
 	neg_struct(Goal1,Idx,Struct1,S),
 	( no_errors_found(S) -> 
@@ -807,7 +808,7 @@ transactionalatomobj_struct(FLTRANSACTIONALATOM(Atom,I),PRATOM(Atom,I)) :- !.
 atomlit_struct(_Context,FLATOM(Atom,I),Code) :-
 	flora_prlgdef(Atom,0),
 	!,
-	atomobj_struct(FLATOM(Atom,I),AtomCode),
+	atomobj_struct(Atom,I,AtomCode),
 	prologterm_struct(AtomCode,0,[],Code).
 atomlit_struct(Context,FLATOM(Atom,I),Code) :-
 	flora_modular_prlgdef(Atom,0),
@@ -818,12 +819,12 @@ atomlit_struct(Context,FLATOM(Atom,I),Code) :-
 atomlit_struct(_Context,FLATOM(Atom,I),Code) :-
 	flora_prlgdef(Atom,0,Mod),
 	!,
-	atomobj_struct(FLATOM(Atom,I),AtomCode),
+	atomobj_struct(Atom,I,AtomCode),
 	prologterm_struct(AtomCode,0,[],Mod,Code).
 atomlit_struct(_Context,FLATOM(Atom,I),Code) :-
 	flora_prlgdef_repl(Atom,0,ReplacementAtm,Mod),
 	!,
-	atomobj_struct(FLATOM(ReplacementAtm,I),AtomCode),
+	atomobj_struct(ReplacementAtm,I,AtomCode),
 	prologterm_struct(AtomCode,0,[],Mod,Code).
 atomlit_struct(_Context,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
 	flora_prlgdef(Atom,0),
@@ -1673,7 +1674,11 @@ imvdtolistspec_struct(Object,AttObj,ValObj,PRIMVDTOLIST(Object,AttObj,ValObj,Cal
 body_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
 	%% Index is the approximate textual information
 	%% for the new variable that represents an oid.
-	new_prvariable(Index,Val),
+	%% Here we use existential variables so that if we get something like
+	%% naf bill.has(moo)[type->bar] then the var corresponding to
+	%% bill.has(moo) will be treated as existential and so there will not be
+	%% a delay because of its unboundedness.
+	new_existential_prvariable(Index,Val),
 	( is_mvdrefop(RefType) ->
 	    mvdspec_struct(BODYLITERAL,Obj,Att,Val,Code)
 	;
@@ -1786,6 +1791,8 @@ new_dontcare_prvariable(Index,VarObj) :-
 	flora_new_varobj(NEWDONTCAREVAR,Index,VarObj).
 new_caller_prvariable(Index,VarObj) :-
 	flora_new_varobj(NEWCALLERVAR,Index,VarObj).
+new_existential_prvariable(Index,VarObj) :-
+	flora_new_varobj(NEWEXISTENTIALVAR,Index,VarObj).
 
 %% creates new transactional variable
 new_dontcare_prtransactionalvar(Index,VarObj) :-
@@ -2094,7 +2101,6 @@ vars_contains([H1|T1],[H2|T2]) :-
 
 
 /*****************************************************************************
-             remove_prdontcare_vars(+InList,-OutList)
              remove_caller_vars(+InList,-OutList)
              remove_prvars(+InList,-OutList)
       Removes all the do not care variables from InList.
@@ -2125,10 +2131,19 @@ remove_prvars(Prefix,[H|T1],T2) :-
 remove_prvars(Prefix,[H|T1],[H|T2]) :-
 	remove_prvars(Prefix,T1,T2).
 
+/*
 remove_prdontcare_vars(InVars,OutVars) :-
 	remove_prvars(NEWDONTCAREVAR,InVars,OutVars).
+*/
 remove_caller_vars(InVars,OutVars) :-
 	remove_prvars(NEWCALLERVAR,InVars,OutVars).
+
+remove_existential_vars(InVars,OutVars) :-
+	remove_prvars(NEWEXISTENTIALVAR,InVars,OutVars).
+
+remove_prdontcare_and_caller_vars(In,Out) :-
+	remove_prvars(NEWDONTCAREVAR,In,Intermed),
+	remove_prvars(NEWCALLERVAR,Intermed,Out).
 
 
 /****************************************************************************
@@ -3222,7 +3237,7 @@ compile_flfact_add(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList
 	        %% if compiling for addition, just insert the rule: no need
 		%% to add signature, as signatures are added when such rules
 		%% are inserted at compile time
-		H2BflCode = FLATOM(FL_TRUE,NO_INDEX),
+		flatom_struct(FL_TRUE,NO_INDEX,H2BflCode),
 		%% no explicit id given: just generate new rule id
 		compile_rule_add(Head,H2BflCode,
 				 DescriptorIdCode,DescrVarsTerm,
@@ -3794,7 +3809,7 @@ compile_user_defined_function_definition(Function,Body,ReturnValue,CodeList-List
 	    compile_descriptor_list([],udfrule,DescrIdCode,DescrVarsTerm,_,_),
 	    ( Body=NULL ->
 		%% UDFs are always compiled as rules: add a dummy body
-		RealBody = FLATOM(FL_TRUE,NO_INDEX),
+		flatom_struct(FL_TRUE,NO_INDEX,RealBody),
 		new_udfrule_body(RealBody,FunctIndex,
 				 ReturnValue,NewReturnValue,NewBody),
 		%% empty descr list - just generate new rule id
@@ -4024,7 +4039,7 @@ construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVa
 			      [DescrIdCode,DescrVarsTerm,DummyVarObj4Head,ThisModule,CallerInfo],
 			      DefeatCondCode),
 	    %% wrap up for delaying the defeasible condition
-	    list_struct([],[],EmptyListObj),
+	    list_struct([],[],EmptyListObj), %% empty list
 	    ( approx_prindex(Head,HeadIdx) -> true
 	    ; HeadIdx=NO_INDEX
 	    ),
@@ -4269,11 +4284,18 @@ compile_body(ParserTerm,Code,Status) :-
 	set_context(compiling_default_negation),
 	compile_body(G,GCode,Status),
 	( no_errors_found(Status) ->
-	    (is_prquantifier(GCode,_Quant,FormCode,_FreeVarObjs)
-	    -> true
-	    ;  FormCode = GCode
+	    (is_prquantifier(GCode,_Quant,FormCode,FreeVarObjList)
+	    -> list_struct(FreeVarObjList,[],FreeVarObjs)
+	    ;  FormCode = GCode,
+		%% if no quantifier, use all vars minus dontcare/callervars
+		collect_prvars(GCode,AllVars),
+		remove_prdontcare_and_caller_vars(AllVars,FreeVarObjList1),
+		%% this is used if naf-exists is nested deep inside the code
+		remove_existential_vars(FreeVarObjList1,FreeVarObjList),
+		list_struct(FreeVarObjList,[],FreeVarObjs)
 	    ),
-	    (NAFType == FL_SILKNAF -> naf_struct_flora(FormCode,Code)
+	    (NAFType == FL_SILKNAF
+	    -> naf_struct_flora(FormCode,FreeVarObjs,Code)
 	    ; naf_struct_prolog(FormCode,Code)
 	    )
 	; true
@@ -4301,15 +4323,16 @@ compile_body(ParserTerm,Code,Status) :-
 	    S3 = [Err3]
 	),
 	subtract_varnames_from_vars(FormVarList,QuantVarNames,FreeVarObjs_aux),
-	remove_prdontcare_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
-	remove_caller_vars(FreeVarObjs_aux2,FreeVarObjs),
+	remove_prdontcare_and_caller_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
+	%% this is used if naf-exists is nested deep inside the code
+	remove_existential_vars(FreeVarObjs_aux2,FreeVarObjs),
 
-	rename_prvariables(QuantVarNames,FormCode,
+	rename_prvariables(QuantVarNames,NEWEXISTENTIALVAR,FormCode,
 			   RenamedFormCode,_RenamedQuantVars),
 	flatten([S1,S2,S3],Status),
 	!,
 	( no_errors_found(Status) ->
-	    %% Create the code for compiled quantification.
+	    %% Create code for compiled quantification.
 	    quantifier_struct(FL_EXISTS,RenamedFormCode,FreeVarObjs,Code)
 	;
 	    true
@@ -5955,12 +5978,19 @@ compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
 	set_context(compiling_default_negation),
 	compile_flspecbody(Object,G,OidCode,GCode,BodyHeadList,Status),
 	( no_errors_found(Status) -> 
-	    (is_prquantifier(GCode,_Quant,FormCode,_FreeVarObjs)
-	    -> true
-	    ;  FormCode = GCode
+	    (is_prquantifier(GCode,_Quant,FormCode,FreeVarObjList)
+	    -> list_struct(FreeVarObjList,[],FreeVarObjs)
+	    ;  FormCode = GCode,
+		%% if no quantifier, use all vars minus dontcare/callervars
+		collect_prvars(GCode,AllVars),
+		remove_prdontcare_and_caller_vars(AllVars,FreeVarObjList1),
+		%% this is used if naf-exists is nested deep inside the code
+		remove_existential_vars(FreeVarObjList1,FreeVarObjList),
+		list_struct(FreeVarObjList,[],FreeVarObjs)
 	    ),
 	    conjunct_code([OidCode,FormCode],CombinedCode),
-	    (NAFType == FL_SILKNAF -> naf_struct_flora(CombinedCode,Code)
+	    (NAFType == FL_SILKNAF
+	    -> naf_struct_flora(CombinedCode,FreeVarObjs,Code)
 	    ; naf_struct_prolog(CombinedCode,Code)
 	    )
 	; true
@@ -6001,10 +6031,11 @@ compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
 
 	subtract_varnames_from_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
 	%% remove don't care vars, since no need to delay because of them
-	remove_prdontcare_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
-	remove_caller_vars(FreeVarObjs_aux2,FreeVarObjs),
+	remove_prdontcare_and_caller_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
+	%% this is used if naf-exists is nested deep inside the code
+	remove_existential_vars(FreeVarObjs_aux2,FreeVarObjs),
 
-	rename_prvariables(QuantVarNames,FormCode,
+	rename_prvariables(QuantVarNames,NEWEXISTENTIALVAR,FormCode,
 			   RenamedFormCode,_RenamedQuantVars),
 
 	flatten([S1,S2,S3],Status),
@@ -7766,7 +7797,13 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	compile_wsflspecbody(Object,G,WS,OidCode,GCode,BodyHeadList,Status),
 	( no_errors_found(Status) -> 
 	    conjunct_code([OidCode,GCode],CombinedGCode),
-	    naf_struct_flora(CombinedGCode,Code)
+	    %% if no quantifier, use all vars minus dontcare/callervars
+	    collect_prvars(GCode,AllVars),
+	    remove_prdontcare_and_caller_vars(AllVars,FreeVarObjList1),
+	    %% this is used if naf-exists is nested deep inside the code
+	    remove_existential_vars(FreeVarObjList1,FreeVarObjList),
+	    list_struct(FreeVarObjList,[],FreeVarObjs),
+	    naf_struct_flora(CombinedGCode,FreeVarObjs,Code)
 	; true
 	),
 	!,
@@ -7796,10 +7833,11 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 
 	subtract_varnames_from_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
 	%% remove don't care vars, since no need to delay because of them
-	remove_prdontcare_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
-	remove_caller_vars(FreeVarObjs_aux2,FreeVarObjs),
+	remove_prdontcare_and_caller_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
+	%% this is used if naf-exists is nested deep inside the code
+	remove_existential_vars(FreeVarObjs_aux2,FreeVarObjs),
 	
-	rename_prvariables(QuantVarNames,FormCode,
+	rename_prvariables(QuantVarNames,NEWEXISTENTIALVAR,FormCode,
 			   RenamedFormCode,_RenamedQuantVars),
 
 	!,
@@ -9696,7 +9734,7 @@ compile_stop_delay(VarList,_Idx,Code,Status) :-
 	),
 	compile_pathexplist(VarList,VarListCode,_,_,Status),
 	list_struct(VarListCode,[],ArgsCode),
-	list_struct([],[],EmptyListCode),
+	list_struct([],[],EmptyListCode), %% empty list
 	prologterm_struct(FLORA_DELAY_CHECKER,2,[ArgsCode,EmptyListCode],
 			  FLDELAYSUPPORTMOD,Code).
 
@@ -10171,20 +10209,21 @@ merge_status([S|Rest],T) :-
 
 
 /***************************************************************************
-    rename_prvariables(+VarNameList,+OldFormula,-NewFormula,-NewVarList)
+    rename_prvariables(+VarNameList,+VarType,+OldFormula,-NewFormula,-NewVarList)
        Replaces each occurrence of each variable in VarNameList with
        a newly created variable (the same for different occurrences of the
        same var name. Returns a new formula and the variable objects used
        in the substitutions.
+       VarType: NEWVAR, NEWDONTCAREVAR, NEWCALLERVAR, NEWEXISTENTIALVAR
     rename_one_prvariable(+VarName,+NewVarObj,+Body,-NewBody),
        Replaces each occurrence of a a var object having VarName
        as the variable name with NewVarObj. Returns the newly created formula.
 ***************************************************************************/
-rename_prvariables([],Body,Body,[]) :- !.
-rename_prvariables([VarName|VarNameList],Body,NewBody,[NewVarObj|NewVarList]) :-
-	new_prvariable(NO_INDEX,NewVarObj),
+rename_prvariables([],_VarType,Body,Body,[]) :- !.
+rename_prvariables([VarName|VarNameList],VarType,Body,NewBody,[NewVarObj|NewVarList]) :-
+	flora_new_varobj(VarType,NO_INDEX,NewVarObj),
 	rename_one_prvariable(VarName,NewVarObj,Body,NewBody1),
-	rename_prvariables(VarNameList,NewBody1,NewBody,NewVarList).
+	rename_prvariables(VarNameList,VarType,NewBody1,NewBody,NewVarList).
 
 rename_one_prvariable(VarName,NewVarObj,Body,NewBody) :-
 	(

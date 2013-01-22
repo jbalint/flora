@@ -61,6 +61,8 @@
 :- dynamic delayed_sensor/3.
 :- index(delayed_sensor/3,trie).
 
+:- dynamic experimental/1.
+
 :- export
 	FLORA_DELAY_CHECKER/2,
 	FLLIBDELAYEDLITERAL/4,
@@ -70,6 +72,10 @@
 	flora_delayed_literal/3,
 	flora_delayed_builtin_literal/2,
 	flora_delayed_sensor_literal/3.
+
+:- export
+	enable_experiment/1,
+	disable_experiment/1.
 
 /*
 :- export
@@ -349,7 +355,7 @@ FLORA_DELAY_CHECKER(InstantiatedBodyVars,HeadVars) :-
 %% scan all vars repeatedly, eliminating attributed vars,
 %% until no more attributed vars left. Execute attached triggers on the way.
 extract_triggers_and_execute_all(AllVars,HeadVars) :-
-	flrterm_vars_split(AllVars, RegVars, AttrVars,1), %% 1: ignore vars in negation
+	flrterm_vars_split(AllVars, RegVars, AttrVars,0), %% 1: ignore vars in negation
 	(AttrVars == [] -> true
 	; extract_triggers_and_execute(AttrVars,HeadVars),
 	    extract_triggers_and_execute_all(RegVars,HeadVars)
@@ -628,8 +634,15 @@ make_delay_condition(FL_UNDEFEATED,Args,CondIn,CondOut) :-
 	).
 make_delay_condition(FL_DEFLTNEG,_Args,Goal,CondOut) :-
 	!,
-	%%flora_term_variables(Goal,Vars),
-	flrterm_vars(Goal,Vars,1),  %% 1: ignore vars in negation
+	(experimental(delay_naf) ->
+	%%(true ->
+	    %% delaying NAF
+	    %% Arg 2 is a list of the originally free vars in Goal
+	    arg(2,Goal,Vars)
+	;
+	    %% not delaying NAF
+	    Vars = []
+	),
 	CondOut = ground(Vars).
 %% catchall
 make_delay_condition(_,_,Cond,Cond).
@@ -716,7 +729,7 @@ flora_term_variables(Term, Vars) :-
 get_significant_vars(Term, Vh, Vt) :-
 	(var(Term)
 	 ->	Vh = [Term | Vt]
-	; Term = FLORA_NAF_PREDICATE(Call,_Line,_File)
+	; Term = FLORA_NAF_PREDICATE(Call,_FreeVars,_Line,_File)
 	-> get_significant_vars(Call,Vh,Vt)
 	; flora_decode_predicate(Term,CallType,_,_,_,Args),
 	    (CallType == prolog ->
@@ -731,3 +744,9 @@ get_significant_vars_aux([T|Ts], Vh, Vt) :-
 	get_significant_vars(T, Vh, Vm),
 	get_significant_vars_aux(Ts, Vm, Vt).
 */
+
+enable_experiment(X) :- assert(experimental(X)).
+disable_experiment(X) :-
+	(ground(X) -> retract(experimental(X))
+	; retractall(experimental(X))
+	).
