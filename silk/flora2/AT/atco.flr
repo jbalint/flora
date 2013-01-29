@@ -9,11 +9,13 @@
 ?- Method[%mustDefine(on)]@_system.
 
 :- symbol_context
+        prlg FL_REFUTED(?,?,?,?),
         prlg beaten_by_strict_rule(?,?,?,?,?).
 
-:- table FL_CANDIDATE/3, FL_STRICT_CANDIDATE/3.
+:- table FL_STRICT_CANDIDATE/3.
+:- table FL_CANDIDATE/3.
 :- prolog FL_UNDEFEATED/4.
-:- prolog FL_REFUTED/3.
+:- prolog FL_REFUTED/3, FL_REFUTED/4.
 :- prolog strongcandicate/3.
 
 :- prolog
@@ -32,6 +34,9 @@
 	not_disqualified_rule/3,
 	opposing_rules/5.
 :- prolog
+        dispatch_refutable_bodylits/1,
+        dispatch_one_refutable_bodylit/4.
+:- prolog
         supportedargument/3,
 	hassupportedargument/2,
 	attemptedsupportedargument/3.
@@ -46,7 +51,10 @@
 	exists_cand_not_overridden/4,
 	no_refutable_bodylits/3,
 	not_beats_supported_argument/3.
+/*
+*/
 
+:- ignore_depchk %abort(?)@_system.
 
 FL_UNDEFEATED(?r,?_vars,?_h,?mod) :-
 	is_strict_rule(?r,?mod)@_prolog(flrdescriptor_support),
@@ -73,9 +81,16 @@ FL_REFUTED(?r,?h,?mod) :-
 	supportedargument(?r2,?h2,?mod),
 	naf beats_lit_rule(?h,?r2,?h2,?mod).
 
+// used only for status reporting
+FL_REFUTED(?r,?h,?refuter,?mod) :-
+	FL_CANDIDATE(?r,?h,?mod),
+	opposing_rules(?r,?h,?refuter,?h2,?mod),
+	supportedargument(?refuter,?h2,?mod),
+	naf beats_lit_rule(?h,?refuter,?h2,?mod).
+
 disqualified_rule(?r,?h,?mod) :- beaten_by_strict_rule(?r,?h,?mod).
 disqualified_rule(?r,?h,?mod) :-
-	get_tag_descriptor_info(?r,?mod,?t,?)@_prolog(flrdescriptor_support),
+	get_tag_descriptor_info_with_rulehead(?r,?mod,?t,?h,?)@_prolog(flrdescriptor_support),
 	FL_CANCEL_AUX(?mod,?t,?h).
 // FL_OVERRIDEN_CANCELLATION expresses interaction  of defeat and cancellation:
 // Cancellation rule is disqualified if the rule being canceled has higher
@@ -86,7 +101,7 @@ disqualified_rule(?r,?h,?mod) :-
 
 // This differs from FL_OVERRIDEN_CANCELLATION/3: it uses rule id instead of tag
 overriden_cancellation_rule(?r,?h,?mod) :-
-	get_tag_descriptor_info(?r,?mod,?t,?)@_prolog(flrdescriptor_support),
+	get_tag_descriptor_info_with_rulehead(?r,?mod,?t,?h,?)@_prolog(flrdescriptor_support),
 	FL_OVERRIDEN_CANCELLATION(?t,?h,?mod).
 
 disqualified_lit(?h,?mod) :-
@@ -96,11 +111,10 @@ not_disqualified_rule(?r,?h,?mod) :-
 	naf disqualified_rule(?r,?h,?mod).
 
 
-
 opposing_rules(?r1,?h1,?r2,?h2,?mod) :-
-	get_tag_descriptor_info(?r1,?mod,?t1,?vars)@_prolog(flrdescriptor_support),
-	get_tag_descriptor_info(?r2,?mod,?t2,?vars)@_prolog(flrdescriptor_support),
-	FL_OPPOSES_AUX(?mod,?t1,?h1,?t2,?h2).
+	get_tag_descriptor_info_with_rulehead(?r1,?mod,?t1,?h1,?vars)@_prolog(flrdescriptor_support),
+	FL_OPPOSES_AUX(?mod,?t1,?h1,?t2,?h2),
+	get_tag_descriptor_info_with_rulehead(?r2,?mod,?t2,?h2,?vars)@_prolog(flrdescriptor_support).
 
 /*
     forall ?rq (cand(?rq,?q) ~~> exist ?rbi (cand(?rbi,?bi), overrid(?rbi,?rq)))
@@ -111,10 +125,15 @@ opposing_rules(?r1,?h1,?r2,?h2,?mod) :-
     naf exists ?rq (cand(?rq,?q), naf dominates(lit)(rule)(bi,rq)
 */
 dominates_lit_lit(?lit1,?lit2,?mod) :-
+	/*
 	naf ((
 	      FL_CANDIDATE(?r2,?lit2,?mod),
 	      naf dominates_lit_rule(?lit1,?r2,?lit2,?mod)
 	)).
+	*/
+        naf exists(?r2)^FL_CANDIDATE(?r2,?lit2,?mod)
+        or
+        dominates_lit_rule(?lit1,?_r2,?lit2,?mod).
 
 // Note: in overriding we take into accounts heads also because tags can
 // have variables and head-instantiations may also instantiate tags
@@ -140,14 +159,25 @@ exists_cand_not_overridden(?r,?h,?lit,?mod) :-
 */
 FL_CANDIDATE(?r,?h,?mod) :-
 	?modH = ?h@?mod,
-	is_defeasible_rule(?r,?mod)@_prolog(flrdescriptor_support),
 	show_rule_by_id(?r, ?mod, ?modH, ?body)@_plg(flrcanon),
+	is_defeasible_rule(?r,?mod)@_prolog(flrdescriptor_support),
 	?body.
+
+/*
+// this does not make a diff, it seems. also, if uncommenting this,
+// comment out this line at the top:     :- table FL_CANDIDATE/3.
+neg FL_CANDIDATE(?r,?h,?mod) :-
+	?modH = ?h@?mod,
+	show_rule_by_id(?r, ?mod, ?modH, ?body)@_plg(flrcanon),
+	is_defeasible_rule(?r,?mod)@_prolog(flrdescriptor_support),
+	negate_predicate(?body,?negbody)@_plg(flrwrapper),
+	?negbody.
+*/
 
 FL_STRICT_CANDIDATE(?r,?h,?mod) :-
 	?modH = ?h@?mod,
-	is_strict_rule(?r,?mod)@_prolog(flrdescriptor_support),
 	show_rule_by_id(?r, ?mod, ?modH, ?body)@_plg(flrcanon),
+	is_strict_rule(?r,?mod)@_prolog(flrdescriptor_support),
 	?body.
 
 // not in Benjamin's
@@ -172,8 +202,9 @@ strongcandicate(?r,?h,?mod) :-
 
 
 beats_lit_rule(?q,?rh,?h,?mod) :-
-	dominates_lit_rule(?q,?rh,?h,?mod),
-	!.
+	dominates_lit_rule(?q,?rh,?h,?mod).
+	// cannot have a cut here. otherwise we get a cut over FL_CANDIDATE
+	//!.
 
 
 beats_lit_rule(?q,?rh,?h,?mod) :-   
@@ -208,7 +239,7 @@ beats_lit_lit(?q,?nafbodylit,?mod) :-
 	SILK_BODYINFO(?_rb,?bodylit,?mod,
 	              ?q,ATCO_BEATS_LIT_LIT,
 	              ?modified_body)@_prolog,
-	?modified_body.
+		      dispatch_refutable_bodylits(?modified_body).
 
 // ?lit1 naf beats ?lit2 by not beating some rule ?r2 that supports ?lit2
 not_beats_supported_argument(?lit1,?lit2,?mod) :-
@@ -237,7 +268,7 @@ attemptedsupportedargument(?r,?h,?mod) :-
 	SILK_BODYINFO(?r,?h,?mod,
 	              ?,ATCO_ATTEMPTEDSUPPORTED_ARG,
 	              ?modified_body)@_prolog,
-	?modified_body.
+		      dispatch_refutable_bodylits(?modified_body).
 
 hassupportedargument(?bodylit,?mod) :- 
 	stronglit(?bodylit),
@@ -282,7 +313,7 @@ stronglydefeated_lit(?q,?mod) :-
 	SILK_BODYINFO(?r_op_q,?opposer_q,?mod,
 	              ?q,ATCO_STRONGLYDEFEATED,
 	              ?modified_body)@_prolog,
-	?modified_body.
+		      dispatch_refutable_bodylits(?modified_body).
 
 
 /***************************** Utilities *************************************/
@@ -302,12 +333,16 @@ atco_overrides(?r1,?h1,?r2,?h2,?mod) :-
 
     Or it can be just THIS_WORKSPACE(tabled_unnumber_call)(?Positive)
 */
-naf_literal(FLDELAYSUPPORTMOD:FLLIBDELAYEDLITERAL(FL_DEFLTNEG,?,?,[?Negated,?,?]),?Positive) :-
+naf_literal(?NegArg,?Positive) :-
+	?NegArg = ':'(FLDELAYSUPPORTMOD,FLLIBDELAYEDLITERAL(FL_DEFLTNEG,?,?,[?Negated,?,?])@_plg)@_plg,
 	arg(1,?Negated,?NegWrapped),
 	!,
-	flrnegation:flora_unwrap_negation(?NegWrapped,?Positive).
+	flora_unwrap_negation(?NegWrapped,?Positive)@_plg(flrnegation).
 naf_literal(?NegWrapped,?Positive) :-
-	flrnegation:flora_unwrap_negation(?NegWrapped,?Positive).
+	flora_unwrap_negation(?NegWrapped,?Positive)@_plg(flrnegation),
+	// flora_unwrap_negation catch case is ?NegWrapped=?Positive,
+	// so we need to prevent this here
+	?NegWrapped \= ?Positive.
 
 stronglit(?lit) :- \+ naf_literal(?lit,?).
 
@@ -320,16 +355,47 @@ no_refutable_bodylits(?r,?h,?mod) :-
 	headlit(?r,?h,?mod),
 	\+ SILK_REFUTABLEBODYLIT(?r,?h,?mod,?)@_prolog.
 
+dispatch_refutable_bodylits(ATCO_BODYLIT_WRAPPER(?CtlVar,?ExtLit,?mod,?bodylit)) :-
+	!,
+	dispatch_one_refutable_bodylit(?CtlVar,?ExtLit,?mod,?bodylit).
+dispatch_refutable_bodylits((ATCO_BODYLIT_WRAPPER(?CtlVar,?ExtLit,?mod,?bodylit),?rest)) :-
+	dispatch_one_refutable_bodylit(?CtlVar,?ExtLit,?mod,?bodylit),
+	dispatch_refutable_bodylits(?rest).
 
 // this wrapper is declared as modular prolog
-SILK_ATCO_REFUTABLE_WRAP(ATCO_ATTEMPTEDSUPPORTED_ARG,?_extern,?mod,?bodylit) :-
+dispatch_one_refutable_bodylit(ATCO_ATTEMPTEDSUPPORTED_ARG,?_extern,?mod,?bodylit) :-
 	!,
 	hassupportedargument(?bodylit,?mod),
-	naf stronglydefeated(?bodylit,?mod).
-SILK_ATCO_REFUTABLE_WRAP(ATCO_STRONGLYDEFEATED,?extern_lit,?mod,?bodylit) :-
+	naf stronglydefeated_lit(?bodylit,?mod).
+dispatch_one_refutable_bodylit(ATCO_STRONGLYDEFEATED,?extern_lit,?mod,?bodylit) :-
 	!,
 	dominates_lit_lit(?bodylit,?extern_lit,?mod).
-SILK_ATCO_REFUTABLE_WRAP(ATCO_BEATS_LIT_LIT,?extern_lit,?mod,?bodylit) :-
+dispatch_one_refutable_bodylit(ATCO_BEATS_LIT_LIT,?extern_lit,?mod,?bodylit) :-
 	!,
 	naf_literal(?nafbodylit,?bodylit),
 	beats_lit_lit(?extern_lit,?nafbodylit,?mod).
+
+/***** Debugging interface ********/
+#include "change_module.flh"
+
+// FL_STATUS depends on rule Ids, NOT on tags
+FL_STATUS(?r,?h)[howDefeated -> refutedBy(?refuter)] :-
+	caller{?mod},
+	change_module(?h,?mod,?_realMod,?hm),
+	FL_REFUTED(?r,?hm,?refuter,?mod).
+
+FL_STATUS(?r,?h)[howDefeated -> beatenByStrictRule(?strictR)] :-
+	caller{?mod},
+	change_module(?h,?mod,?_realMod,?hm),
+	beaten_by_strict_rule(?r,?hm,?strictR,?_strictH,?mod).
+
+FL_STATUS(?r,?h)[howDefeated -> canceled] :-
+	caller{?mod},
+	change_module(?h,?mod,?_realMod,?hm),
+	disqualified_rule(?r,?hm,?mod),
+	naf beaten_by_strict_rule(?r,?hm,?mod).
+	
+FL_STATUS(?_r,?h)[howDefeated -> disqualifiedLiteral] :-
+	caller{?mod},
+	change_module(?h,?mod,?_realMod,?hm),
+	disqualified_lit(?hm,?mod).
