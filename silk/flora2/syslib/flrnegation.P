@@ -112,16 +112,22 @@ FLORA_NAF_PREDICATE(Goal,_FreeVars,_Line,_File) :-
 	is_cyclic(Goal),
 	!,
 	fail.
-%% First trying naf_exists
-FLORA_NAF_PREDICATE(Goal,_FreeVars,Line,File) :-
-	%%DBGOUTLN(initial_goal=Goal),
-	naf_exists(Goal,Line,File),
-	machine:xwam_state(2,_XX),
-	%%DBGOUTLN(state=_XX),
-	true.
 
 /*
-%% trying neg Goal. 
+   exists_not implementation:
+      neg Goal
+      naf_exists Goal
+      u_not Goal
+
+   We need to do neg Goal because if it comes after naf_exists Goal
+   then the following can happen:
+
+      naf_exists Goal may be undefined. Then an undefined answer will
+      be returned even though neg Goal might be true.
+*/
+
+/*
+%% Trying neg Goal. 
 %% Maybe add a catch(call0) here later once we understand
 %% what kind of errors might arise
 
@@ -134,7 +140,18 @@ FLORA_NAF_PREDICATE(Goal,_FreeVars,_Line,_File) :-
 	%%DBGOUTLN(non_negated_goal=UnwrappedGoal),
 	flrwrapper:negate_predicate(UnwrappedGoal,NegUnwrappedGoal),
 	%%DBGOUTLN(negated_goal=NegUnwrappedGoal),
-	call0(NegUnwrappedGoal).
+	call0(NegUnwrappedGoal),
+	%%machine:xwam_state(2,_XX), DBGOUTLN(neg_succeeded_goal=_XX+Goal),
+	true.
+
+%% Trying naf_exists
+FLORA_NAF_PREDICATE(Goal,_FreeVars,Line,File) :-
+	%%DBGOUTLN(initial_goal=Goal),
+	naf_exists(Goal,Line,File),
+	%%machine:xwam_state(2,_XX), DBGOUTLN(naf_succeeded=_XX+Goal),
+	%%machine:xwam_state(2,_XX), _XX=0, %% NOT sound
+	true.
+
 
 /*
 %% finally trying naf exists forall Vars Goal
@@ -156,7 +173,10 @@ FLORA_NAF_PREDICATE(Goal,FreeVarsTerm,Line,File) :-
 	naf_exists(QuaziForallGoal,Line,File),
 	%%DBGOUTLN(quazigoal=QuaziForallGoal),
 	%%DBGOUTLN(unwrapped=UnwrappedGoal),
-	u_not(UnwrappedGoal).
+	u_not(UnwrappedGoal),
+	machine:xwam_state(2,_XX),
+	%%DBGOUTLN(unot_succeeded=_XX+Goal),
+	true.
 
 :- export FLORA_NAF_PREDICATE_GROUND/1.
 %% optimization for ground tabled negated subgoals

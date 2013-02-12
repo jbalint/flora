@@ -111,6 +111,9 @@ FLLIBEXPORT_INTERNAL(_WS,_UpdateTag,_ExportingModule,[],_Term).
 /****************************************************************************
   flora_assert_into_export_registry/5
   flora_assert_into_export_registry(+DynamicModulename,+ExportingModule,+ModuleExportedTo,+UpdateTag,+Term)
+  DynamicModulename: used only in executable instructions like this:
+     ?- (export aaa(?)>>foo)@bar.
+     Here DynamicModulename = bar.
   The predicate that asserts the exported term, along with the module name(s) 
   it is exported too, to the registry.
 ****************************************************************************/
@@ -118,21 +121,24 @@ flora_assert_into_export_registry(DynamicModulename,ExportingModule,ModuleExport
 	!,
 	( var(DynamicModulename) ->	
 	    ( is_fllibmodlit(Term) ->
-	      %% need to check whether it is FLLIBMODLIT
-	      %% error!! Since it should have been initialized before.
-	      flora_error_invalid_export(Term)
+		%% need to check whether it is FLLIBMODLIT
+		%% error!! Since it should have been initialized before.
+		flora_error_invalid_export(Term)
 	    ;
-	      ( flora_export_registry(ExportingModule, ModuleExportedTo, UpdateTag, Term),
-		!
-	      ;
-		asserta(flora_export_registry(ExportingModule, ModuleExportedTo, UpdateTag, Term)),
-		convert_to_signature(Term,inheritable,SigTerm),
-		asserta(flora_export_registry(ExportingModule, ModuleExportedTo, UpdateTag, SigTerm)),
-		convert_to_signature(Term,noninheritable,SigTerm2),
-		asserta(flora_export_registry(ExportingModule, ModuleExportedTo, UpdateTag, SigTerm2)),
-		convert_to_value_atom(Term,inheritable,SigTerm3),
-		asserta(flora_export_registry(ExportingModule, ModuleExportedTo, UpdateTag, SigTerm3))
-	      )
+		( flora_export_registry(ExportingModule, ModuleExportedTo, UpdateTag, Term),
+		    !
+		;
+		    asserta(flora_export_registry(ExportingModule, ModuleExportedTo, UpdateTag, Term)),
+		    flrwrapper:negate_predicate(Term,NegTerm),
+		    asserta(flora_export_registry(ExportingModule, ModuleExportedTo, UpdateTag, NegTerm)),
+		    
+		    convert_to_signature(Term,inheritable,SigTerm),
+		    asserta(flora_export_registry(ExportingModule, ModuleExportedTo, UpdateTag, SigTerm)),
+		    convert_to_signature(Term,noninheritable,SigTerm2),
+		    asserta(flora_export_registry(ExportingModule, ModuleExportedTo, UpdateTag, SigTerm2)),
+		    convert_to_value_atom(Term,inheritable,SigTerm3),
+		    asserta(flora_export_registry(ExportingModule, ModuleExportedTo, UpdateTag, SigTerm3))
+		)
 	    )
 	;
 	    ( is_fllibmodlit(Term) ->

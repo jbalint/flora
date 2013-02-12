@@ -94,7 +94,7 @@ FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
    WRAP_DIFFOBJEQL_AUX/3 rule must be loaded exactly once. This is why we
    are checking clause(WRAP_DIFFOBJEQL_AUX(_,_,_),_). Reloading this rule
    is not possible when equality is on, since WRAP_DIFFOBJEQL_AUX/3 is
-   essentially in the body of every rule (it unfolded).
+   essentially in the body of every rule (if unfolded).
 */
 :- import FLLIBDELAYEDLITERAL/4 from flrdelaysupport.
 ?-  (

@@ -29,6 +29,7 @@ ALL = flrgclp$(PROLOGEXT) \
 	atck2$(PROLOGEXT) \
 	atck3$(PROLOGEXT) \
 	atco$(PROLOGEXT) \
+	atco2$(PROLOGEXT) \
 	atck1alt$(PROLOGEXT)
 
 Option = [optimize]
