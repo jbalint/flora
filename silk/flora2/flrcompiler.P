@@ -4316,7 +4316,7 @@ compile_body(ParserTerm,Code,Status) :-
 	is_fllogicquantifier(ParserTerm,FL_EXISTS,QuantVarNames,Formula,Idx),
 	has_context(compiling_default_negation),
 	!,
-	%% no quantified don't care vars (?,?_) 
+	%% no quantified don't care vars (?,?_) allowed
 	(memberchk(FL_UNDERSCORE,QuantVarNames) ->
 	    compiling_error(Idx,NO_QUANTIFIED_ANONVARS,Err1),
 	    S1 = [Err1]
@@ -4327,18 +4327,23 @@ compile_body(ParserTerm,Code,Status) :-
 	%% We use prvars so that newly introduced vars will be accounted for
 	collect_prvars(FormCode,FormVarList),
 	vars_to_var_names(FormVarList,FormVarNames),
+	(QuantVarNames == FL_STAR -> S3 = [] %% all vars are existential
 	%% quantified vars must occur in Formula
-	(subset(QuantVarNames,FormVarNames) -> S3 = []
+	; subset(QuantVarNames,FormVarNames) -> S3 = []
 	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
 	    S3 = [Err3]
 	),
-	subtract_varnames_from_vars(FormVarList,QuantVarNames,FreeVarObjs_aux),
+	(QuantVarNames == FL_STAR -> FreeVarObjs_aux = []
+	; subtract_varnames_from_vars(FormVarList,QuantVarNames,FreeVarObjs_aux)
+	),
 	remove_prdontcare_and_caller_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
 	%% this is used if naf-exists is nested deep inside the code
 	remove_existential_vars(FreeVarObjs_aux2,FreeVarObjs),
 
-	rename_prvariables(QuantVarNames,NEWEXISTENTIALVAR,FormCode,
-			   RenamedFormCode,_RenamedQuantVars),
+	(QuantVarNames == FL_STAR -> RenamedFormCode = FormCode
+	; rename_prvariables(QuantVarNames,NEWEXISTENTIALVAR,FormCode,
+			     RenamedFormCode,_RenamedQuantVars)
+	),
 	flatten([S1,S2,S3],Status),
 	!,
 	( no_errors_found(Status) ->
@@ -6033,21 +6038,25 @@ compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
 	%% We use prvars so that newly introduced vars will be accounted for
 	collect_prvars([Object,OidCode,FormCode],AllVarList),
 	vars_to_var_names(AllVarList,AllVarList_names),
+	(QuantVarNames == FL_STAR -> S3 = [] %% all vars are existential
 	%% quantified vars must occur in Formula
-	(subset(QuantVarNames,AllVarList_names) -> S3 = []
+	; subset(QuantVarNames,AllVarList_names) -> S3 = []
 	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
 	    S3 = [Err3]
 	),
 
-	subtract_varnames_from_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
+	(QuantVarNames == FL_STAR -> FreeVarObjs_aux = []
+	; subtract_varnames_from_vars(AllVarList,QuantVarNames,FreeVarObjs_aux)
+	),
 	%% remove don't care vars, since no need to delay because of them
 	remove_prdontcare_and_caller_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
 	%% this is used if naf-exists is nested deep inside the code
 	remove_existential_vars(FreeVarObjs_aux2,FreeVarObjs),
 
-	rename_prvariables(QuantVarNames,NEWEXISTENTIALVAR,FormCode,
-			   RenamedFormCode,_RenamedQuantVars),
-
+	(QuantVarNames == FL_STAR -> RenamedFormCode = FormCode
+	; rename_prvariables(QuantVarNames,NEWEXISTENTIALVAR,FormCode,
+			     RenamedFormCode,_RenamedQuantVars)
+	),
 	flatten([S1,S2,S3],Status),
 	!,
 	( no_errors_found(Status) -> 
