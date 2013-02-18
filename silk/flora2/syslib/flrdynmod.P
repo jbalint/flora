@@ -30,7 +30,8 @@
 	flora_check_module_name/1,
 	flora_module_predicate/4,
 	flora_decode_predicate/7,
-	is_flora_callable_literal/1
+	is_flora_callable_literal/1,
+	negate_predicate/2
    from flrwrapper.
 
 :- import
@@ -246,7 +247,10 @@ get_libmod_callable(F,Arg,ModuleName,CallerInfoIn,P) :-
 	%% is_ws_distributive/3
         ; is_ws_distributive(Arg,Op,ArgList), !,
 	  distribute_workspace(F,ArgList,ModuleName,CallerInfo,ArgListOut),
-	  is_ws_distributive(P,Op,ArgListOut)
+	  (F == FL_NEGLIBMOD -> dual_connective(Op,Op1)
+	  ; Op1 = Op
+	  ),
+	  is_ws_distributive(P,Op1,ArgListOut)
 	; %% ?Var, ?Var@?M, or %?Var@..., Var bound to compound
 	  %% F is FL_LIBMOD, FL_NEGLIBMOD, or FL_TRANSLIBMOD
 	  flora_decode_predicate(Arg,_,PredModName,Wrapper,_,_,Args), !,
@@ -256,12 +260,12 @@ get_libmod_callable(F,Arg,ModuleName,CallerInfoIn,P) :-
 	      %% Always replace the caller info so as to unbind the
 	      %% tracing part of CallerInfo properly.
 	      flora_replace_last(Arg,CallerInfo,P1),
-	      (F == FL_NEGLIBMOD -> flrwrapper:negate_predicate(P1,P)
+	      (F == FL_NEGLIBMOD -> negate_predicate(P1,P)
 	      ; P = P1
 	      )
 	  ; ModuleName==FL_INVALIDMODULE,
 	      !,
-	      (F == FL_NEGLIBMOD -> flrwrapper:negate_predicate(Arg,P)
+	      (F == FL_NEGLIBMOD -> negate_predicate(Arg,P)
 	      ; P = Arg
 	      )
 	  ; %% else, HiLog - construct it
@@ -356,3 +360,6 @@ adjust_caller_info(CallerInfo,RealCallerInfo) :-
 adjust_caller_info([Module,tracing(_,CallingRuleId)|Rest],
 		   [Module,tracing(_,CallingRuleId)|Rest]).
 */
+
+dual_connective(',',';').
+dual_connective(';',',').
