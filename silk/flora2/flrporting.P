@@ -33,33 +33,35 @@
 :- import conget/2, conset/2 from gensym.
 :- import eval/2 from eval.
 :- import
-	%%term_type/2,
-	term_psc/2,
-	psc_type/2,
-	slash/1,
-	str_len/2,
-	file_writequoted/2,
-	file_puttoken/3
+        %%term_type/2,
+        term_psc/2,
+        psc_type/2,
+        slash/1,
+        str_len/2,
+        file_writequoted/2,
+        file_puttoken/3
    from machine.
 :- import
-	substring/4,
-	term_to_atom/3
+        substring/4,
+	term_to_codes/3,
+        term_to_atom/3
    from string.
 :- import library_directory/1 from usermod.
 :- import xsb_configuration/2 from xsb_configuration.
 :- import
-	path_sysop/2, path_sysop/3, copyIOport/2,
-	file_read_line_atom/1, file_read_line_list/1
-	from file_io.
+        path_sysop/2, path_sysop/3, copyIOport/2,
+        file_read_line_atom/1, file_read_line_list/1
+        from file_io.
 
 :- import
-	%%close_open_tables/1,
-	xsb_backtrace/1
+        %%close_open_tables/1,
+        xsb_backtrace/1
    from machine.
 
 :- import
-	select/3,
-	reverse/2
+        select/3,
+	append/3,
+        reverse/2
    from basics.
 
 :- import banner_control/1 from banner.
@@ -67,128 +69,148 @@
 :- import flora_configuration/2 from flrregistry.
 
 :- export
-	flora_write_quoted_atom/1,
-	flora_write_atom_quoted_as_needed/1,
-	flora_write_atom/1,
-	flora_file_op/2,
-	flora_file_op/3,
-	flora_read_line_as_atom/1,
-	flora_read_line_as_list/1,
-	flora_copy_input/0,
-	flora_copy_input/2,
+        flora_write_quoted_atom/1,
+        flora_write_atom_quoted_as_needed/1,
+        flora_write_atom/1,
+        flora_file_op/2,
+        flora_file_op/3,
+        flora_read_line_as_atom/1,
+        flora_read_line_as_list/1,
+        flora_copy_input/0,
+        flora_copy_input/2,
 
-	flora_slash/1,
-	flora_running_under/1,
-	flora_user_home/1,
-	flora_install_dir/1,
-	flora_user_floradir/1,
-	flora_build_id/1,
-	flora_build_date/1,
-	flora_abort/0,
-	flora_abort/1,
-	flora_abort/2,
+        flora_slash/1,
+        flora_running_under/1,
+        flora_user_home/1,
+        flora_install_dir/1,
+        flora_user_floradir/1,
+        flora_build_id/1,
+        flora_build_date/1,
+        flora_abort/0,
+        flora_abort/1,
+        flora_abort/2,
 
-	flora_predicate_is_defined_lowlevel/1,
+        flora_predicate_is_defined_lowlevel/1,
 
-	flora_atom_length/2,
-	flora_match_substring/3,
-	flora_match_substring/5,
-	flora_get_substring/4,
-	flora_term_to_atom/2,
-	flora_term_to_atom_quote/2,
-	flora_concat_items/2,
-	flora_concat_atoms/2,
-	flora_concat_strings/2,
-	flora_set_counter/2,
-	flora_get_counter/2,
-	flora_increment_counter/4,
-	flora_cputime/1,
-	flora_module_path_get/1,
-	flora_module_path_add/1,
-	flora_module_path_remove/1,
-	flora_banner_control/1,
-	flora_delete_from_list/3,
-	flora_double_backslash/2,
-	flora_double_quotes/2,
-	flora_double_backslash_and_quotes/2,
-	flora_convert_backslash_to_forward/2,
-	flora_convert_win_path_to_cygwin/2.
+        flora_atom_length/2,
+        flora_match_substring/3,
+        flora_match_substring/5,
+        flora_get_substring/4,
+        flora_term_to_atom/2,
+        flora_term_to_atom_quote/2,
+        flora_concat_items/2,
+        flora_concat_atoms/2,
+        flora_concat_strings/2,
+        flora_set_counter/2,
+        flora_get_counter/2,
+        flora_increment_counter/4,
+        flora_cputime/1,
+        flora_module_path_get/1,
+        flora_module_path_add/1,
+        flora_module_path_remove/1,
+        flora_banner_control/1,
+        flora_delete_from_list/3,
+        flora_double_backslash/2,
+        flora_double_quotes/2,
+        flora_double_backslash_and_quotes/2,
+        flora_convert_backslash_to_forward/2,
+        flora_convert_win_path_to_cygwin/2.
 
 
 flora_term_to_atom(Term,Atom) :-
-	term_to_atom(Term,Atom,[ignore_ops(canonical),quoted(false)]).
-	%%fmt_write_string(AtomN,'%S',arg(Term)),
-	%%Atom = AtomN.
+        term_to_atom(Term,Atom,[ignore_ops(canonical),quoted(false)]).
+        %%fmt_write_string(AtomN,'%S',arg(Term)),
+        %%Atom = AtomN.
 
 flora_term_to_atom_quote(Term,Atom) :-
-	term_to_atom(Term,Atom,[ignore_ops(canonical),quoted(true)]).
-	%%fmt_write_string(Atom,'%S',arg(Term)).
+        term_to_atom(Term,Atom,[ignore_ops(canonical),quoted(true)]).
+        %%fmt_write_string(Atom,'%S',arg(Term)).
 
 %% This concats items or any type - atoms, numbers, etc.
 flora_concat_items(List,Atom) :-
-	copy_term(List,List1),
-	%% this is done because otherwise term_to_atom will convert
-	%% every variable to _h0. With numbervars, each variable is
-	%% encoded as $VAR(XYZ), with different variables getting
-	%% different names, and then term_to_atom decodes them to XYZ.
-	%%num_vars:numbervars(List1,0,_,[attvar(bind)]),
-	flora_concat_items_aux(List1,Atom).
+        copy_term(List,List1),
+	my_concat_atom(List1,Atom,_).
+/*
+flora_concat_items(List,Atom) :-
+        copy_term(List,List1),
+        %% this is done because otherwise term_to_atom will convert
+        %% every variable to _h0. With numbervars, each variable is
+        %% encoded as $VAR(XYZ), with different variables getting
+        %% different names, and then term_to_atom decodes them to XYZ.
+        %%num_vars:numbervars(List1,0,_,[attvar(bind)]),
+        flora_concat_items_aux(List1,Atom).
 
 %% Make the most common case fast!
 flora_concat_items_aux([Item1,Item2],Atom) :-
-	!,
-	%%term_to_atom(Item1,Item1atm,[ignore_ops(canonical),quoted(false),numbervars(true)]),
-	%%term_to_atom(Item2,Item2atm,[ignore_ops(canonical),quoted(false),numbervars(true)]),
-	%%atom_concat(Item1atm,Item2atm,Atom).
-	fmt_write_string(AtomN, '%S%S', arg(Item1,Item2)),
-	Atom = AtomN.
+        !,
+        %%term_to_atom(Item1,Item1atm,[ignore_ops(canonical),quoted(false),numbervars(true)]),
+        %%term_to_atom(Item2,Item2atm,[ignore_ops(canonical),quoted(false),numbervars(true)]),
+        %%atom_concat(Item1atm,Item2atm,Atom).
+        fmt_write_string(AtomN, '%S%S', arg(Item1,Item2)),
+        Atom = AtomN.
 flora_concat_items_aux([Item|ItemList],Atom) :-
-	%%term_to_atom(Item,Atom1,[ignore_ops(canonical),quoted(false),numbervars(true)]),
-	fmt_write_string(Atom1, '%S', arg(Item)),
-	flora_concat_items_aux(ItemList,Atom2),
-	%%atom_concat(Atom1,Atom2,Atom).
-	fmt_write_string(AtomN, '%S%S', arg(Atom1,Atom2)),
-	Atom = AtomN.
+        %%term_to_atom(Item,Atom1,[ignore_ops(canonical),quoted(false),numbervars(true)]),
+        fmt_write_string(Atom1, '%S', arg(Item)),
+        flora_concat_items_aux(ItemList,Atom2),
+        %%atom_concat(Atom1,Atom2,Atom).
+        fmt_write_string(AtomN, '%S%S', arg(Atom1,Atom2)),
+        Atom = AtomN.
 flora_concat_items_aux([],'').
+*/
+
+/*
+%% this was an experiment
+:- export flora_concat_items_aux3/3, flora_concat_items_aux/2.
+flora_concat_items_aux3([],Atom,Atom) :- !.
+flora_concat_items_aux3([Item|ItemList],Head,Atom) :-
+        fmt_write_string(Head1,'%S%s', arg(Head,Item)),
+        flora_concat_items_aux3(ItemList,Head1,Atom).
+*/
 
 %% If all members are atoms, this is more efficient
 %% Make the most common case fast!
+flora_concat_atoms(AtomList,Atom) :- my_concat_atom(AtomList,Atom,_).
+/*
 flora_concat_atoms([Atom1,Atom2],Atom) :-
-	!,
-	%%atom_concat(Atom1,Atom2,Atom).
-	fmt_write_string(AtomN, '%S%S', arg(Atom1,Atom2)),
-	Atom = AtomN.
+        !,
+        %%atom_concat(Atom1,Atom2,Atom).
+        fmt_write_string(AtomN, '%S%S', arg(Atom1,Atom2)),
+        Atom = AtomN.
 flora_concat_atoms([Atom1|AtomList],Atom) :-
-	flora_concat_atoms(AtomList,Atom2),
-	%%atom_concat(Atom1,Atom2,Atom).
-	fmt_write_string(AtomN, '%S%S', arg(Atom1,Atom2)),
-	Atom = AtomN.
+        flora_concat_atoms(AtomList,Atom2),
+        %%atom_concat(Atom1,Atom2,Atom).
+        fmt_write_string(AtomN, '%S%S', arg(Atom1,Atom2)),
+        Atom = AtomN.
 flora_concat_atoms([],'').
+*/
 
 %% This concats atoms or charlists
+flora_concat_strings(L,Atom) :- my_concat_atom(L,Atom,strings).
+/*
 flora_concat_strings([S1,S2],Atom) :-
-	!,
-	string_to_atom(S1,A1),
-	string_to_atom(S2,A2),
-	%%atom_concat(A1,A2,Atom).
-	fmt_write_string(AtomN, '%S%S', arg(A1,A2)),
-	Atom = AtomN.
+        !,
+        string_to_atom(S1,A1),
+        string_to_atom(S2,A2),
+        %%atom_concat(A1,A2,Atom).
+        fmt_write_string(AtomN, '%S%S', arg(A1,A2)),
+        Atom = AtomN.
 flora_concat_strings([S1|SList],Atom) :-
-	flora_concat_strings(SList,A2),
-	string_to_atom(S1,A1),
-	%%atom_concat(A1,A2,Atom).
-	fmt_write_string(AtomN, '%S%S', arg(A1,A2)),
-	Atom = AtomN.
+        flora_concat_strings(SList,A2),
+        string_to_atom(S1,A1),
+        %%atom_concat(A1,A2,Atom).
+        fmt_write_string(AtomN, '%S%S', arg(A1,A2)),
+        Atom = AtomN.
 flora_concat_strings([],'').
 
 string_to_atom(S,A) :-
-	(S == "" -> A = ''
-	; atom(S) -> S=A
-	; atom_codes(A,S)
-	-> true
-	; flora_abort(['Non-string in flora_concat_strings/2: ', S])
-	).
-	
+        (S == "" -> A = ''
+        ; atom(S) -> S=A
+        ; atom_codes(A,S)
+        -> true
+        ; flora_abort(['Non-string in flora_concat_strings/2: ', S])
+        ).
+*/
+        
 
 
 flora_atom_length(Atom,Length) :- str_len(Atom, Length).
@@ -197,17 +219,17 @@ flora_atom_length(Atom,Length) :- str_len(Atom, Length).
 flora_get_counter(Counter,Value) :- conget(Counter,Value).
 flora_set_counter(Counter,Value) :- conset(Counter,Value).
 flora_increment_counter(Counter,Increment,OldValue,NewValue) :-
-	eval(Increment,I),
-	conget(Counter,OldValue),
-	NewValue is OldValue + I,
-	conset(Counter,NewValue).
+        eval(Increment,I),
+        conget(Counter,OldValue),
+        NewValue is OldValue + I,
+        conset(Counter,NewValue).
 
 %% Flora wrappers for str_match in XSB's syslib/string.P
 %% Checks if Substr matches Str in a given direction and at the right position
 flora_match_substring(Substr,Str,Pos) :-
-	str_match(Substr,Str,forward,Pos,_).
+        str_match(Substr,Str,forward,Pos,_).
 flora_match_substring(Sub,Str,Direction,Beg,End) :-
-	str_match(Sub,Str,Direction,Beg,End).
+        str_match(Sub,Str,Direction,Beg,End).
 
 %% extract substring Subst from String at positions From - To
 flora_get_substring(String,From,To,Subst) :- substring(String,From,To,Subst).
@@ -225,11 +247,11 @@ flora_module_path_remove(Path) :- retractall(library_directory(Path)).
 flora_module_path_get('.').
 flora_module_path_get(Path) :- library_directory(Path).
 flora_module_path_get(Path) :-
-	xsb_configuration(libdir,LibPath), LibPath = Path.
+        xsb_configuration(libdir,LibPath), LibPath = Path.
 flora_module_path_get(Path) :-
-	xsb_configuration(syslibdir,SyslibPath), SyslibPath=Path.
+        xsb_configuration(syslibdir,SyslibPath), SyslibPath=Path.
 flora_module_path_get(Path) :-
-	xsb_configuration(cmplibdir,CmplibPath), CmplibPath = Path.
+        xsb_configuration(cmplibdir,CmplibPath), CmplibPath = Path.
 
 
 %% User Home
@@ -528,3 +550,52 @@ flora_predicate_is_defined_lowlevel(Term) :-
 	term_psc(Term, PSC),
 	psc_type(PSC, NType),
 	(   NType =:= T_PRED; NType =:= T_FORN; NType =:= T_DYNA ).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+/* 
+TLS 7/99 This version is linear rather than quadratic and seems
+much faster than the old one (which I must confess to writing).  Also,
+this is well-behaved for memory management since it no longer uses
+str_cat or str_len.
+
+TLS: 12/03 I thought this might be more useful if I added a flatten,
+	so that substrings could be passed in as lists. 
+DSW: 3/04 rewritten to single pass for efficiency
+*/
+ 
+%% If Switch=strings then character strings are converted to
+my_concat_atom(L,A,Switch) :-
+        c_atom(L,[],AC,Switch),
+        atom_codes(A,AC).
+
+c_atom(A,L0,L,Switch) :-
+        (A == []
+        ->   L = L0
+        ; A @= [_|_],
+	    (Switch == strings -> \+is_charlist(A)
+	    ; true
+	    )
+        ->   A = [A1|R],
+            (R == []
+	    ->  c_atom(A1,L0,L,Switch)
+	    ;   c_atom(R,L0,L1,Switch),
+		c_atom(A1,L1,L,Switch)
+	    )
+        ; A @= (_,_)
+        ->  A = (A1,R),
+            c_atom(R,L0,L1,Switch),
+            c_atom(A1,L1,L,Switch)
+        ; (atom(A)
+	  ->  atom_codes(A,AC)
+	  ;   number(A)
+	  ->  number_codes(A,AC)
+	  ; Switch == strings, is_charlist(A)
+	  -> AC = A
+	  ;   term_to_codes(A,[ignore_ops(canonical),quoted(false)],AC)
+	  ),
+            (L0 == []
+            ->   L = AC
+            ;    append(AC,L0,L)
+            )
+        ).
