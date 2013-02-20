@@ -24,7 +24,7 @@
 #include "atco.flh"
 
 
-?- Method[%mustDefine(on)]@_system.
+?- Method[%mustDefine(on(_@))]@_system.
 
 :- symbol_context
         prlg FL_REFUTED(?,?,?,?),
@@ -56,9 +56,9 @@
         dispatch_refutable_bodylits/1,
         dispatch_one_refutable_bodylit/4.
 :- prolog
-        supportedargument/3,
-	hassupportedargument/2,
-	attemptedsupportedargument/3.
+        supportedattackingargument/3,
+	hassupportedattackingargument/2,
+	attemptedsupportedattackingargument/3.
 :- prolog
         dominates_lit_lit/3,
         dominates_lit_rule/4,
@@ -102,7 +102,7 @@ defeated_lit(?h,?mod) :-
 FL_REFUTED(?r,?h,?mod) :-
 	FL_CANDIDATE(?r,?h,?mod),
 	opposing_rules(?r,?h,?r2,?h2,?mod),
-	supportedargument(?r2,?h2,?mod),
+	supportedattackingargument(?r2,?h2,?mod),
 	naf beats_lit_rule(?h,?r2,?h2,?mod).
 
 // used only for status reporting
@@ -110,7 +110,7 @@ FL_REFUTED(?r,?h,?mod) :-
 FL_REFUTED(?r,?h,?refuter,?mod) :-
 	FL_CANDIDATE(?r,?h,?mod),
 	opposing_rules(?r,?h,?refuter,?h2,?mod),
-	supportedargument(?refuter,?h2,?mod),
+	supportedattackingargument(?refuter,?h2,?mod),
 	naf beats_lit_rule(?h,?refuter,?h2,?mod).
 
 @!{disq1}
@@ -259,7 +259,7 @@ beats_lit_rule(?q,?rh,?h,?mod) :-
 beats_lit_lit(?q,?bi,?mod) :- 
 	stronglit(?bi),
 	!,
-	// forall ?rbi (supportedargument(?rbi,?bi)~~>beats(lit)(rule)(?q,?rbi))
+	// forall ?rbi (supportedattackingargument(?rbi,?bi)~~>beats(lit)(rule)(?q,?rbi))
 	naf not_beats_supported_argument(?q,?bi,?mod).
 // this case allows to drop SILK_BODYINFO for rules with no refutable bodylits
 // MK: I think this case never arrises
@@ -291,12 +291,12 @@ beats_lit_lit(?q,?nafbodylit,?mod) :-
 // ?lit1 naf beats ?lit2 by not beating some rule ?r2 that supports ?lit2
 @!{notbeats1}
 not_beats_supported_argument(?lit1,?lit2,?mod) :-
-	supportedargument(?r2,?lit2,?mod),
+	supportedattackingargument(?r2,?lit2,?mod),
 	naf beats_lit_rule(?lit1,?r2,?lit2,?mod).
 
 @!{sarg1}
-supportedargument(?r,?h,?mod) :- 
-	attemptedsupportedargument(?r,?h,?mod)
+supportedattackingargument(?r,?h,?mod) :- 
+	attemptedsupportedattackingargument(?r,?h,?mod)
 #ifndef EXPERIMENTAL
         and
 	// forall ?rp (cand(?rp,cancel(?rh)) ~~> overrid(?rh,?rp)) 
@@ -305,26 +305,26 @@ supportedargument(?r,?h,?mod) :-
         .
 
 /*
-      attemptedsupportedargument/3
+      attemptedsupportedattackingargument/3
 
-  attemptedsupportedargument(?rh,?h) :- 
+  attemptedsupportedattackingargument(?rh,?h) :- 
     headlit(?rh,?h) and 
     // Each irrefutablebodylit lit is true.
     forall ?bi ( irrefutablebodylit(?rh,?bi) ~~> ?bi )
     and   
     // Each refutablebodylit lit is supported and not strongly defeated
     forall ?bi ( refutablebodylit(?rh,?bi) ~~> 
-                 hassupportedargument(?bi) and 
+                 hassupportedattackingargument(?bi) and 
                  naf stronglydefeated(?bi) ) ;  
 */
 // this case allows to drop SILK_BODYINFO for rules with no refutable bodylits
 @!{attempt1}
-attemptedsupportedargument(?r,?h,?mod) :- 
+attemptedsupportedattackingargument(?r,?h,?mod) :- 
 	no_refutable_bodylits(?r,?h,?mod),
 	!,
 	FL_CANDIDATE(?r,?h,?mod).
 @!{attempt2}
-attemptedsupportedargument(?r,?h,?mod) :- 
+attemptedsupportedattackingargument(?r,?h,?mod) :- 
 	//headlit(?r,?h,?mod),
 	SILK_BODYINFO(?r,?h,?mod,
 	              ?,ATCO_ATTEMPTEDSUPPORTED_ARG,
@@ -334,28 +334,28 @@ attemptedsupportedargument(?r,?h,?mod) :-
         dispatch_refutable_bodylits(?modified_body).
 
 @!{hassup1}
-hassupportedargument(?bodylit,?mod) :- 
+hassupportedattackingargument(?bodylit,?mod) :- 
 	stronglit(?bodylit),
 	!,
-	supportedargument(?_r,?bodylit,?mod).
+	supportedattackingargument(?_r,?bodylit,?mod).
 
 @!{hassup2}
-hassupportedargument(?naflit,?mod) :-  
+hassupportedattackingargument(?naflit,?mod) :-  
 	naf_literal(?naflit,?lit),
 	//headlit(?r,?lit,?mod),
 	SILK_REFUTABLEBODYLIT(?_r,?lit,?mod,?nafbodylit)@_prolog,
 	naf_literal(?nafbodylit,?bodylit),
-	hassupportedargument(?bodylit,?mod),
+	hassupportedattackingargument(?bodylit,?mod),
 	naf stronglydefeated_lit(?bodylit,?mod).
 /*
 	naf hassupportthrurefutablenaflits_aux(?r,?bodylit).
 
   hassupportthrurefutablenaflits_aux(?rbi) :-  
 	forall ?bbi (refutablebodylit(?rbi, naf ?bbi) ~~>
-		     naf( hassupportedargument(?bbi) and 
+		     naf( hassupportedattackingargument(?bbi) and 
 			  naf stronglydefeated_lit(?bbi) ) ) 
   ie, naf exists ?bbi (refutablebodylit(?rbi, naf ?bbi),
-                       hassupportedargument(?bbi),
+                       hassupportedattackingargument(?bbi),
                        naf stronglydefeated(?bbi))
 */
 
@@ -447,7 +447,7 @@ dispatch_refutable_bodylits((ATCO_BODYLIT_WRAPPER(?CtlVar,?ExtLit,?mod,?bodylit)
 @!{dispatch2}
 dispatch_one_refutable_bodylit(ATCO_ATTEMPTEDSUPPORTED_ARG,?_extern,?mod,?bodylit) :-
 	!,
-	hassupportedargument(?bodylit,?mod),
+	hassupportedattackingargument(?bodylit,?mod),
 	naf stronglydefeated_lit(?bodylit,?mod),
 	true.
 @!{dispatchone1}
