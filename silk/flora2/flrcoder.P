@@ -526,14 +526,14 @@ coder_write_code(Term,Status) :-
   coder_write_udf_definition(+PredNameSansModule,+Arity,+PredName,-Status=[])
 ****************************************************************************/
 coder_write_udf_definition(PredNameSansModule,N,PredName,[]) :-
-	flora_write_atom('?- assert(flrregistry:flora_defined_udf_registry(FLORA_THIS_MODULE_NAME,'),
+	flora_write_atom('?-(assert(:(flrregistry,flora_defined_udf_registry(FLORA_THIS_MODULE_NAME,'),
 	flora_write_quoted_atom(PredNameSansModule),
 	flora_write_atom(','),
 	write_canonical(N),
 	flora_write_atom(',FLORA_THIS_WORKSPACE('),
 	flora_double_quotes(PredName,PredName2),
 	flora_write_atom(PredName2),
-	flora_write_atom('))).'),
+	flora_write_atom('))))).'),
 	nl.
 
 
@@ -541,7 +541,7 @@ coder_write_udf_definition(PredNameSansModule,N,PredName,[]) :-
   coder_write_udf_used(+PredNameSansModule,+Arity,+Args,+Pred,+RetValue,-Status=[])
 ****************************************************************************/
 coder_write_udf_used(Name,N,Args,Pred,ReturnValue,[]) :-
-	flora_write_atom('?- assert(flrregistry:flora_used_udf_registry('),
+	flora_write_atom('?-(assert(:(flrregistry,flora_used_udf_registry('),
 	flora_write_quoted_atom(Name),
 	flora_write_atom(','),
 	write_canonical(N),
@@ -551,7 +551,7 @@ coder_write_udf_used(Name,N,Args,Pred,ReturnValue,[]) :-
 	write_canonical(Pred),
 	flora_write_atom(','),
 	write_canonical(ReturnValue),
-	flora_write_atom(')).'),
+	flora_write_atom(')))).'),
 	nl.
 
 /****************************************************************************
@@ -579,9 +579,9 @@ coder_write_direct(Term,Status) :-
 	    %% flora_defeasible_module_registry is needed for rules
 	    %% added through flora_compile_add: we need to know
 	    %% whether to compile with defeasible theory or not.
-	    flora_write_atom('?- assert(flrregistry:flora_defeasible_module_registry(FLORA_THIS_MODULE_NAME,'),
+	    flora_write_atom('?-(assert(:(flrregistry,flora_defeasible_module_registry(FLORA_THIS_MODULE_NAME,'),
 	    write_canonical(TheoryModule),
-	    flora_write_atom(')).'), nl,
+	    flora_write_atom(')))).'), nl,
 	    flora_write_atom('#define FLORA_DEFEASIBLE_THEORY '), nl,
 	    flora_write_atom('#include flrdefeasible.flh '), nl,
 	    Status = []
@@ -1020,9 +1020,11 @@ flora_write_struct(Term,_Context,Status) :-
 flora_write_struct(Term,Context,Status) :-
 	is_prconstraint(Term,ConstrBody),
 	!,
-	write(FL_CONSTRAINT_START),
+	%% {}(constraint body). writing in canonical form
+	write_canonical('{}'),
+	put(CH_LPAREN),
 	flora_write_struct(ConstrBody,Context,Status),
-	write(FL_CONSTRAINT_END).
+	put(CH_RPAREN).
 
 %% This is used to pass prolog terms unchanged
 flora_write_struct(Term,_Context,[]) :-
@@ -1575,22 +1577,23 @@ flora_coder_write_prolog_bridge_rule(PredName,Arity,Type) :-
 	(Type \== end ->
 	    TrueArity is Arity+1,
 	    %% write :- dynamic Pred^dyna/z/TrueArity as FLORA_DYNAMICS_TYPE.
-	    write(':- dynamic '),
-	    flora_write_atom(BodyPredA), put(CH_SLASH), write(TrueArity),
-	    write(', '),
-	    flora_write_atom(BodyPredZ), put(CH_SLASH), write(TrueArity),
-	    write(' as FLORA_DYNAMICS_TYPE.\n')
+	    write(':-(dynamic(as('',''(/('),
+	    flora_write_atom(BodyPredA), put(CH_COMMA), write(TrueArity),
+	    write('),/('),
+	    flora_write_atom(BodyPredZ), put(CH_COMMA), write(TrueArity),
+	    write(')),FLORA_DYNAMICS_TYPE))).\n')
 	; true
 	),
 	%% write rule:  Pred(Args,Caller) :- Pred^dynz(Args,Caller)
+	write(':-('),
 	flora_write_atom(HeadPred),
 	put(CH_LPAREN),
 	util_write_arglist(ArgLst),
-	write('Caller) :- '),
+	write('Caller),'),
 	flora_write_atom(BodyPred),
 	put(CH_LPAREN),
 	util_write_arglist(ArgLst),
-	write('Caller).\n').
+	write('Caller)).\n').
 
 %% this adds a comma at the end, which we need for the Caller argument
 util_write_arglist([]) :- !.
@@ -1605,15 +1608,16 @@ util_write_arglist([A|Rest]) :-
 
   Writes a conditional bridge rule for added files of the form
 
-  ?- (current_predicate(FLORA_THIS_WORKSPACE(PredName)(Args,Caller)) ->
+  ?- (current_predicate(FLORA_THIS_WORKSPACE(PredName)/Arity+1) -> true
+     ;
         (dynamic FLORA_THIS_WORKSPACE(FLDYNAPREFIX(PredName))/Arity+1 as FLORA_DYNAMICS_TYPE),
         (dynamic FLORA_THIS_WORKSPACE(FLDYNZPREFIX(PredName))/Arity+1 as FLORA_DYNAMICS_TYPE),
 	assert((FLORA_THIS_WORKSPACE(PredName)(Args,Caller) :-
 		    FLORA_THIS_WORKSPACE(FLDYNAPREFIX(PredName))(Args,Caller))),
 	assert((FLORA_THIS_WORKSPACE(PredName)(Args,Caller) :-
 		    FLORA_THIS_WORKSPACE(FLDYNZPREFIX(PredName))(Args,Caller)))
-     ; true
      ).
+  We are writing all that in Prolog canonical form.
 ****************************************************************************/
 flora_coder_write_conditional_prolog_bridge_rule(PredName,Arity) :-
 	length(ArgLst,Arity),
@@ -1622,27 +1626,27 @@ flora_coder_write_conditional_prolog_bridge_rule(PredName,Arity) :-
 	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNAPREFIX_UNQ(',PredName2,'))'], BodyPredA),
 	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNZPREFIX_UNQ(',PredName2,'))'], BodyPredZ),
 	TrueArity is Arity+1,
-	write('?- (current_predicate('),
-	flora_write_atom(HeadPred),put(CH_SLASH),write(TrueArity),
-	flora_write_atom(') -> true ; '),
+	write('?-( '';''( ->(current_predicate(/('),
+	flora_write_atom(HeadPred),put(CH_COMMA),write(TrueArity),
+	flora_write_atom(')),true), '),
 	%% declaration :- dynamic Pred^dyna/z/TrueArity as FLORA_DYNAMICS_TYPE.
-	write('(dynamic '),
-	flora_write_atom(BodyPredA), put(CH_SLASH), write(TrueArity),
-	write(', '),
-	flora_write_atom(BodyPredZ), put(CH_SLASH), write(TrueArity),
-	write(' as FLORA_DYNAMICS_TYPE), '),
+	write('(dynamic(as('',''(/('),
+	flora_write_atom(BodyPredA), put(CH_COMMA), write(TrueArity),
+	write('),/('),
+	flora_write_atom(BodyPredZ), put(CH_COMMA), write(TrueArity),
+	write(')),FLORA_DYNAMICS_TYPE)), '),
 	%% write rule:  Pred(Args,Caller) :- Pred^dyna(Args,Caller)
-	write('assert(('),
+	write('assert(:-('),
 	flora_write_atom(HeadPred),
-	put(CH_LPAREN), util_write_arglist(ArgLst), write('Caller) :- '),
+	put(CH_LPAREN), util_write_arglist(ArgLst), write('Caller),'),
 	flora_write_atom(BodyPredA),
-	put(CH_LPAREN),util_write_arglist(ArgLst),write('Caller))), '),
+	put(CH_LPAREN), util_write_arglist(ArgLst), write('Caller))), '),
 	%% write rule:  Pred(Args,Caller) :- Pred^dynz(Args,Caller)
-	write('assert(('),
+	write('assert(:-('),
 	flora_write_atom(HeadPred),
-	put(CH_LPAREN), util_write_arglist(ArgLst), write('Caller) :- '),
+	put(CH_LPAREN), util_write_arglist(ArgLst), write('Caller),'),
 	flora_write_atom(BodyPredZ),
-	put(CH_LPAREN),util_write_arglist(ArgLst),write('Caller))) ).\n').
+	put(CH_LPAREN), util_write_arglist(ArgLst), write('Caller)))) ) ).\n').
 
 /****************************************************************************
   coder_write_newoid(+Oid)

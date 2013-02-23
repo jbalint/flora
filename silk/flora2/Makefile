@@ -6,7 +6,7 @@
 ## Contact:   kifer@cs.stonybrook.edu
 ##
 ## Copyright (C) by
-##      The Research Foundation of the State University of New York, 1999-2008.
+##      The Research Foundation of the State University of New York, 1999-2013.
 ##
 ## All rights reserved.
 ##
@@ -96,12 +96,14 @@ top: cleantemp init $(ALLOBJS) finish
 
 core_internal: top
 	cd closure && $(MAKE) PROLOG=$(PROLOG)
+	cd includes && $(MAKE) PROLOG=$(PROLOG)
 	cd genincludes && $(MAKE) PROLOG=$(PROLOG)
 	cd syslib && $(MAKE) PROLOG=$(PROLOG)
 	cd debugger && $(MAKE) PROLOG=$(PROLOG)
 
 core: top
 	cd closure && $(MAKE) PROLOG=$(PROLOG)
+	cd includes && $(MAKE) PROLOG=$(PROLOG)
 	cd genincludes && $(MAKE) PROLOG=$(PROLOG)
 	cd syslib && $(MAKE) PROLOG=$(PROLOG)
 	cd debugger && $(MAKE) PROLOG=$(PROLOG)
@@ -183,6 +185,7 @@ clean: cleantemp
 	cd datatypes && $(MAKE) clean
 	cd docs && $(MAKE) clean
 	cd genincludes && $(MAKE) clean
+	cd includes && $(MAKE) clean
 	cd syslib && $(MAKE) clean
 	cd lib && $(MAKE) clean
 	cd AT && $(MAKE) clean

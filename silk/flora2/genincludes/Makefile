@@ -1,4 +1,4 @@
-## File:      flora2/closure/Makefile
+## File:      flora2/genincludes/Makefile
 ##
 ## Author(s): Michael Kifer
 ##            Guizhen Yang
@@ -6,7 +6,7 @@
 ## Contact:   kifer@cs.stonybrook.edu
 ##
 ## Copyright (C) by
-##      The Research Foundation of the State University of New York, 1999-2008.
+##      The Research Foundation of the State University of New York, 1999-2013.
 ##
 ## All rights reserved.
 ##

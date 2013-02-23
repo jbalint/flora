@@ -1182,17 +1182,17 @@ insert_code_for_loaddyn_data(FileName) :-
 	flora_current_out_line('#define FLORA_LOADDYN_DATA'),
 	flora_current_out_line('#endif'),
 	flora_current_out_line('#define FLORA_~w_FILENAME  ''~w.~w''', [FileCat,Base,Ext]),
-	flora_current_out_line('?- flrutils:flora_loaddyn_data(FLORA_~w_FILENAME,FLORA_THIS_MODULE_NAME,''~w'').',[FileCat,Ext]),
+	flora_current_out_line('?-(:(flrutils,flora_loaddyn_data(FLORA_~w_FILENAME,FLORA_THIS_MODULE_NAME,''~w''))).',[FileCat,Ext]),
 	flora_current_out_line('#else'),
 	flora_current_out_line('#if !defined(FLORA_READ_CANONICAL_AND_INSERT)'),
 	flora_current_out_line('#define FLORA_READ_CANONICAL_AND_INSERT'),
 	flora_current_out_line('#endif'),
 	( (Ext == FLORA_FLS_EXT ; Ext == FLORA_FLS2_EXT) ->
-	    flora_current_out_line('?- flrutils:flora_read_symbols_canonical_and_insert(FLORA_~w_FILENAME,FLORA_THIS_~w_STORAGE,_SymbolErrNum).',[FileCat,StorCat])
+	    flora_current_out_line('?-(:(flrutils,flora_read_symbols_canonical_and_insert(FLORA_~w_FILENAME,FLORA_THIS_~w_STORAGE,_SymbolErrNum))).',[FileCat,StorCat])
 	; Ext == FLORA_FLM_EXT ->
-	    flora_current_out_line('?- flrutils:flora_read_descriptor_metafacts_canonical_and_insert(~w,_ErrNum).',[Base])
+	    flora_current_out_line('?-(:(flrutils,flora_read_descriptor_metafacts_canonical_and_insert(~w,_ErrNum))).',[Base])
 	;
-	    flora_current_out_line('?- flrutils:flora_read_canonical_and_insert(FLORA_~w_FILENAME,FLORA_THIS_~w_STORAGE).',[FileCat,StorCat])
+	    flora_current_out_line('?-(:(flrutils,flora_read_canonical_and_insert(FLORA_~w_FILENAME,FLORA_THIS_~w_STORAGE))).',[FileCat,StorCat])
 	),
 	flora_current_out_line('#endif'),
 	flora_current_out_nl.
@@ -1444,7 +1444,7 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBF
 	findall(LibOption,member(FLSYSLIB(LibOption),FileOptionList),SysLibOptionList),
 	findall(ModOption,member(FLSYSMOD(ModOption),FileOptionList),SysModOptionList),
 	append(SysLibOptionList,SysModOptionList,OptList),
-	flora_current_out_line(':- compiler_options([spec_off]).'),
+	flora_current_out_line(':-(compiler_options([spec_off])).'),
 	util_include_file([FLHEADER],FLHeaderStatus),
 	(FLTFile == NULL -> true
 	; flora_print_define_filename_statement(FLTFile,'FLORA_FLT_FILENAME')
@@ -1452,9 +1452,9 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,DBF
 	%%util_include_file([FLHEADER2],FLHeaderStatus2),
 	%% we must abolish tables when adding rules, since old tables
 	%% may no longer be valid
-	flora_concat_atoms(['?- catch(abolish_all_tables,_,flora_warning_line(''',
+	flora_concat_atoms(['?-(catch(abolish_all_tables,_,flora_warning_line(''',
 			    WARN_TABLED_FLLOAD,
-			    ''',[''_add''])).'],
+			    ''',[''_add'']))).'],
 			   AbolishCommand),
 	flora_current_out_line(AbolishCommand),
 	%%
@@ -1678,7 +1678,6 @@ generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,MetaFac
 	findall(LibOption,member(FLSYSLIB(LibOption),FileOptionList),SysLibOptionList),
 	findall(ModOption,member(FLSYSMOD(ModOption),FileOptionList),SysModOptionList),
 	append(SysLibOptionList,SysModOptionList,OptList),
-	flora_current_out_line(':- compiler_options([spec_off]).'),
 	/*
 	  include_xpp_control_variables/1 should be before FLHEADER2
 	  so that the definitions of
@@ -1686,6 +1685,7 @@ generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,MetaFac
 	  will affect the tabling definitions included from FLHEADER2
 	*/
 	include_xpp_control_variables(TrailerOptions),
+	flora_current_out_line(':-(compiler_options([spec_off])).'),
 	util_include_file([FLHEADER], FLHeaderStatus),
 	(FLTFile == NULL -> true
 	; flora_print_define_filename_statement(FLTFile,'FLORA_FLT_FILENAME')
@@ -1767,19 +1767,19 @@ write_index_directives([(A,P)|L]) :-
             Type=tabled
         ),
 	P1 is P+1,
-	flora_write_atom(':- index FLORA_THIS_WORKSPACE('),
+	flora_write_atom(':-(index(''/''(FLORA_THIS_WORKSPACE('),
         ( Type==nontabled ->
 	    flora_write_atom(WRAP_NONTABLED_HILOG)
         ;
 	    flora_write_atom(WRAP_TABLED_HILOG)
         ),
-        flora_write_atom(')/'),
+        flora_write_atom('),'),
 	flora_current_out_string('~w',A1),
 	flora_current_out_string('-'),
 	flora_current_out_string('~w',P1),
-	flora_current_out_string('.'),
+	flora_current_out_string('))).'),
 	flora_current_out_nl,
-	flora_write_atom('?- index(FLORA_THIS_WORKSPACE('),
+	flora_write_atom('?-(index(FLORA_THIS_WORKSPACE('),
         ( Type==nontabled ->
 	    flora_write_atom(FLDYNAPREFIX(WRAP_NONTABLED_HILOG))
         ;
@@ -1787,9 +1787,9 @@ write_index_directives([(A,P)|L]) :-
         ),
         flora_write_atom(')/'),
 	flora_current_out_string('~w',A1), flora_current_out_string(','),
-	flora_current_out_string('~w',P1), flora_current_out_string(')'),
+	flora_current_out_string('~w',P1), flora_current_out_string('))'),
 	flora_current_out_string('.'), flora_current_out_nl,
-	flora_write_atom('?- index(FLORA_THIS_WORKSPACE('),
+	flora_write_atom('?-(index(FLORA_THIS_WORKSPACE('),
         ( Type==nontabled ->
 	    flora_write_atom(FLDYNZPREFIX(WRAP_NONTABLED_HILOG))
         ;
@@ -1797,7 +1797,7 @@ write_index_directives([(A,P)|L]) :-
         ),
         flora_write_atom(')/'),
 	flora_current_out_string('~w',A1), flora_current_out_string(','),
-	flora_current_out_string('~w',P1), flora_current_out_string(')'),
+	flora_current_out_string('~w',P1), flora_current_out_string('))'),
 	flora_current_out_string('.'), flora_current_out_nl,
 	write_index_directives(L).
 
@@ -2226,9 +2226,10 @@ get_then_write_rules(ModuleName) :-
 	    %% contain head in the body form
 	    write_rule_id(Id),
 	    %% TODO: Need to dump other descriptor information!
+	    flora_current_out_string(':-('),
 	    flora_write_rule_head(Head),
-	    flora_current_out_line(' :- '), flora_current_out_string('        '),
-	    flora_write_rule_body(Body), flora_current_out_line('.'),
+	    flora_current_out_string(','),
+	    flora_write_rule_body(Body), flora_current_out_line(').'),
 	    flora_current_out_nl	
 	),
 
@@ -3701,7 +3702,7 @@ encode_pathList_as_filenameList([Char|Rest],[Char|Rest1]) :-
 %% Include #define statements according to TrailerOptions
 include_xpp_control_variables(TrailerOptions) :-
 	flora_current_out_nl,
-	flora_current_out_line(':- compiler_options([xpp_on]).~n'),
+	flora_current_out_line(':-(compiler_options([xpp_on,canonical])).~n'),
 	flora_current_out_line('/********** Tabling and Trailer Control Variables ************/'),
 	flora_current_out_nl,
 	(memberchk('LOADABLETRAILER',TrailerOptions)
@@ -4271,21 +4272,21 @@ write_tabled_udf_predicates([(PredName,PredArity),UDFPreds]):-
 	nl,
 	%% in case PredName has single quotes in it
 	flrporting:flora_double_quotes(PredName,PredName2),
-	flora_write_atom(':- dynamic FLORA_THIS_WORKSPACE('),
+	flora_write_atom(':-(dynamic(as(''/''(FLORA_THIS_WORKSPACE('),
 	write(PredName2),
 	flora_write_atom(')'),
-	flora_write_atom('/'),
+	flora_write_atom(','),
 	write(PredArity),
-	flora_write_atom(' as FLORA_DYNAMICS_TYPE.'),
+	flora_write_atom('),FLORA_DYNAMICS_TYPE))).'),
 	nl,
 	flora_write_atom('#endif'),
 	nl,
-	flora_write_atom('TABLING_CONNECTIVE table FLORA_THIS_WORKSPACE('),
+	flora_write_atom('TABLING_CONNECTIVE(table(as(''/''(FLORA_THIS_WORKSPACE('),
 	write(PredName2),
 	flora_write_atom(')'),
-	flora_write_atom('/'),
+	flora_write_atom(','),
 	write(PredArity),
-	flora_write_atom(' as AUXILIARY_TABLING_TYPE.'),
+	flora_write_atom('),AUXILIARY_TABLING_TYPE))).'),
 	nl,
 	write_tabled_udf_predicates(UDFPreds),
 	!.

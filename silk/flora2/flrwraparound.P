@@ -220,31 +220,39 @@ intern_predicate_spec(P,EncodingType) :-
 	assert(flora_wraparound_info(P,EncodingType)),
 	assert(flora_wraparound_info(Name/Arity,EncodingType)).
 intern_predicate_spec(P,EncodingType) :-
-	flora_error_line('[flWrapAround] Invalid predicate specification in a ~w directive: ~w', [EncodingType,P]).
+	flora_error_line('<flWrapAround> Invalid predicate specification in a ~w directive: ~w', [EncodingType,P]).
 
 intern_copy_spec(String) :-
 	assert(flora_wraparound_copy_spec(String)).
 
 
 dump_other_directive(Directive, PredSpecs) :-
-	write(':- '), writeln(Directive),
-	dump_rule_body(PredSpecs,1),
-	writeln('.').
+	write(':-('), write(Directive),
+	write('('),
+	dump_rule_body(PredSpecs,0),
+	writeln(')).').
 
 dump_indices_directive(IndexSpecList) :-
-	writeln(':- index'),
-	dump_index_specs(IndexSpecList).
+	write(':-(index('),
+	dump_index_specs(IndexSpecList),
+	writeln(')).').
 dump_index_specs(','(Spec,IndexSpecList)) :-
 	!,
+	write(''',''('),
 	dump_index_spec(Spec),
-	writeln(','),
-	dump_index_specs(IndexSpecList).
-dump_index_specs(Spec) :- dump_index_spec(Spec), writeln('.').
+	write(','),
+	dump_index_specs(IndexSpecList),
+	write(')').
+dump_index_specs(Spec) :- dump_index_spec(Spec).
 dump_index_spec(Spec) :-
 	(Spec = Pred/Arity-ArgNo, !
-	; abort(('Invalid index specification: ', Spec))),
-	dump_literal(Pred/Arity,1),
-	write('-'), write(ArgNo).
+	; abort(('Invalid index specification: ', Spec))
+	),
+	write('''-''('),
+	dump_literal(Pred/Arity,0),
+	write(','),
+	write(ArgNo),
+	write(')').
 
 
 dump_storage_rules(','(Rule,Rest)) :- !,
@@ -258,7 +266,9 @@ dump_storage_rule(rule(HeadSpec,TailPred)) :-
 
 dump_storage_rule(rule(HeadSpec,TailPred,Storage)) :-
 	spec2skeleton(HeadSpec,HeadSkeleton),
-	dump_simple_goal(HeadSkeleton,0), writeln(' :-'),
+	write(':-( '),
+	dump_simple_goal(HeadSkeleton,0),
+	writeln(','),
 	indent(1),
 	write('flora_db_find_base('),
 	( Storage=fld ->
@@ -272,71 +282,69 @@ dump_storage_rule(rule(HeadSpec,TailPred,Storage)) :-
 	write(','),
 	HeadSkeleton =.. [_|HeadVars],
 	BodySkeleton =.. [TailPred|HeadVars],
-	dump_simple_goal(BodySkeleton,0), writeln(').').
+	dump_simple_goal(BodySkeleton,0), writeln(') ).').
 	
 dump_rule((Head :- Body)) :- !,
+	write(':-( '),
 	dump_simple_goal(Head,0),
-	writeln(' :-'),
-	dump_rule_body(Body,1),
-	writeln('.').
+	writeln(','),
+	indent(1),
+	dump_rule_body(Body,0),
+	writeln(').').
 %% Headless rule
 dump_rule((:- Body)) :- !,
-    	writeln(':- '), dump_rule_body(Body,1), writeln('.').
+    	write(':-('), dump_rule_body(Body,0), writeln(').').
 
 %% Facts
 dump_rule(Head) :-
 	dump_literal(Head,0),
 	writeln('.').
 
-dump_rule_body(Var,Indent) :-
+dump_rule_body(Var,_Indent) :-
 	var(Var),
 	!,
-	indent(Indent),
 	write(Var).
-dump_rule_body(','(L,Rest),Indent) :-  !,
-	dump_literal(L,Indent), writeln(','),
-	dump_rule_body(Rest,Indent).
-dump_rule_body(';'(Front,Back),Indent) :-  !,
-	indent(Indent), writeln('('),
-	Indent1 is Indent + 1,
-	dump_rule_body(Front,Indent1),
-	nl, indent(Indent), writeln(';'),
-	dump_rule_body(Back,Indent1),
-	nl, indent(Indent), write(')').
-dump_rule_body('->'(Front,Back),Indent) :-  !,
-	indent(Indent), writeln('('),
-	Indent1 is Indent + 1,
-	dump_rule_body(Front,Indent1),
-	nl, indent(Indent), writeln('->'),
-	dump_rule_body(Back,Indent1),
-	nl, indent(Indent), write(')').
-dump_rule_body('\+'(Body),Indent) :-  !,
-	indent(Indent), writeln('\+('),
-	Indent1 is Indent+1,
-	dump_rule_body(Body,Indent1),
-	nl, indent(Indent), write(')').
-dump_rule_body(not(Body), Indent) :-  !,
-	indent(Indent), writeln('not('),
-	Indent1 is Indent+1,
-	dump_rule_body(Body,Indent1),
-	nl, indent(Indent), write(')').
-dump_rule_body(tnot(Body), Indent) :-  !,
-	indent(Indent), writeln('tnot('),
-	Indent1 is Indent+1,
-	dump_rule_body(Body,Indent1),
-	nl, indent(Indent), write(')').
-dump_rule_body(call(Body), Indent) :-  !,
-	indent(Indent), writeln('call('),
-	Indent1 is Indent+1,
-	dump_rule_body(Body,Indent1),
-	nl, indent(Indent), write(')').
+dump_rule_body(','(L,Rest),_Indent) :-  !,
+	write(''',''('),
+	dump_literal(L,0),
+	write(','),
+	dump_rule_body(Rest,0),
+	write(')').
+dump_rule_body(';'(Front,Back),_Indent) :-  !,
+	write(''';''('),
+	dump_rule_body(Front,0),
+	write(','),
+	dump_rule_body(Back,0),
+	write(')').
+dump_rule_body('->'(Front,Back),_Indent) :-  !,
+	write('''->''('),
+	dump_rule_body(Front,0),
+	write(','),
+	dump_rule_body(Back,0),
+	write(')').
+dump_rule_body('\+'(Body),_Indent) :-  !,
+	write('\+('),
+	dump_rule_body(Body,0),
+	write(')').
+dump_rule_body(not(Body), _Indent) :-  !,
+	write('not('),
+	dump_rule_body(Body,0),
+	write(')').
+dump_rule_body(tnot(Body), _Indent) :-  !,
+	write('tnot('),
+	dump_rule_body(Body,0),
+	write(')').
+dump_rule_body(call(Body), _Indent) :-  !,
+	write('call('),
+	dump_rule_body(Body,0),
+	write(')').
 dump_rule_body(L,Indent) :- dump_literal(L,Indent).
 
 
 dump_literal(Spec,Indent) :-
 	( Spec = ','(F,B) -> dump_rule_body(Spec,Indent)
 	; Spec = ';'(F,B) -> dump_rule_body(Spec,Indent)
-	; Spec = '\+'(F) -> dump_rule_body(Spec,Indent)
+	; Spec = '\+'(F)  -> dump_rule_body(Spec,Indent)
 	; Spec = 'not'(F) -> dump_rule_body(Spec,Indent)
 	; Spec = 'tnot'(F) -> dump_rule_body(Spec,Indent)
 	; Spec = 'call'(F) -> dump_rule_body(Spec,Indent)
@@ -352,7 +360,9 @@ dump_simple_goal(Spec, Indent) :-
 	flrwrapper(Spec,WSpec,Changed),
 	indent(Indent),
 	(Changed=notwrapped
-	->  (WSpec = '/'(P,A) -> write_canonical(P), write('/'), write(A)
+	->  (WSpec = '/'(P,A)
+	    -> write('/('), write_canonical(P), write(','), write(A), write(')')
+	    ; is_list(WSpec) -> write_canonical(WSpec)
 	    ; WSpec =.. [P|Args], Args \== [] ->
 		write_canonical(P), write('('),
 		write_args(Args),
@@ -360,7 +370,11 @@ dump_simple_goal(Spec, Indent) :-
 	    ; write_canonical(WSpec)
 	    )
 	; %% Wrapped
-	    (WSpec = '/'(P,A) -> write(P), write('/'), write(A)
+	    (WSpec = '/'(P,A)
+	    %% do not use write_canonical(P) here! We do not want
+	    %% FLORA_THIS_WORKSPACE(foo) to be quoted as an atom.
+	    -> write('/('), write(P), write(','), write(A), write(')')
+	    ; is_list(WSpec) -> write_canonical(WSpec)
 	    ; WSpec =.. [P|Args], Args \== [] ->
 		write(P), write('('),
 		write_args(Args),
@@ -387,7 +401,7 @@ write_args(Args) :-
 
 
 indent(0) :- !.
-indent(1) :- !, write('        ').
+indent(1) :- !, write('    ').
 indent(N) :- N>1, write('  '), N1 is N-1, indent(N1).
 
 flora_out_filename(File,OutFile) :-
@@ -398,4 +412,4 @@ flora_out_filename(File,OutFile) :-
 in2out_extension(INFILE_EXT,DATFILE_EXT) :- !.
 in2out_extension(FLIFILE_EXT,FLHFILE_EXT) :- !.
 in2out_extension(Ext,_) :-
-	flora_error_line('[flWrapAround] Unknown extension, ~w', [Ext]).
+	flora_error_line('<flWrapAround> Unknown extension, ~w', [Ext]).

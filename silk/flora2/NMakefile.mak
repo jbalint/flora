@@ -5,7 +5,7 @@
 ## Contact:   kifer@cs.stonybrook.edu
 ##
 ## Copyright (C) by
-##      The Research Foundation of the State University of New York, 1999-2008.
+##      The Research Foundation of the State University of New York, 1999-2013.
 ##
 ## All rights reserved.
 ##
@@ -55,6 +55,8 @@ OPTIONS = [optimize,ti_all]
 ALL:: CLEANTEMP $(ALLOBJS)
 	cd closure
 	nmake /nologo /f NMakefile.mak
+	cd ..\includes
+	nmake /nologo /f NMakefile.mak
 	cd ..\genincludes
 	nmake /nologo /f NMakefile.mak
 	cd ..\syslib
@@ -82,6 +84,8 @@ CLEAN : CLEANTEMP
 	cd ..\closure
 	nmake /nologo /f NMakefile.mak clean
 	cd ..\genincludes
+	nmake /nologo /f NMakefile.mak clean
+	cd ..\includes
 	nmake /nologo /f NMakefile.mak clean
 	cd ..\datatypes
 	nmake /nologo /f NMakefile.mak clean
