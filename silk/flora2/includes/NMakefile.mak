@@ -29,7 +29,7 @@ ALL: $(ALLOBJS)
 
 CLEAN :
 	-@if exist *~ erase *~
-	-@if exist *.flh erase *.flh
+	-@if exist flrdefinition.flh erase flrdefinition.flh
 	-@if exist *.bak erase *.bak
 	-@if exist .#* erase .#*
 
