@@ -54,6 +54,7 @@
 	opposing_rules/5.
 :- prolog
         dispatch_refutable_bodylits/1,
+        dispatch_irrefutable_bodylits/1,
         dispatch_one_refutable_bodylit/4.
 :- prolog
         supportedattackingargument/3,
@@ -284,8 +285,6 @@ beats_lit_lit(?q,?nafbodylit,?mod) :-
 	SILK_BODYINFO(?_rb,?bodylit,?mod,
 	              ?q,ATCO_BEATS_LIT_LIT,
 	              ?modified_body)@_prolog,
-        // remember: dispatching takes care of both refutable & irrefutable
-        // lits in the ATCO spec
         dispatch_refutable_bodylits(?modified_body).
 
 // ?lit1 naf beats ?lit2 by not beating some rule ?r2 that supports ?lit2
@@ -327,10 +326,9 @@ attemptedsupportedattackingargument(?r,?h,?mod) :-
 attemptedsupportedattackingargument(?r,?h,?mod) :- 
 	//headlit(?r,?h,?mod),
 	SILK_BODYINFO(?r,?h,?mod,
-	              ?,ATCO_ATTEMPTEDSUPPORTED_ARG,
+	              ?,ATCO_ATTEMPTEDSUPPORTED_ATTACKING_ARG,
 	              ?modified_body)@_prolog,
-        // remember: dispatching takes care of both refutable & irrefutable
-        // lits in the ATCO spec
+        dispatch_irrefutable_bodylits(?modified_body),
         dispatch_refutable_bodylits(?modified_body).
 
 @!{hassup1}
@@ -381,12 +379,10 @@ stronglydefeated_lit(?q,?mod) :-
 	              ?q,ATCO_STRONGLYDEFEATED,
 	              ?modified_body)@_prolog,
         /*
-	  This takes care of both
 	  forall ?bi (irrefutablebodylit(?rnq,?bi) ~~> ?bi)
-	  and    
 	  forall ?bi (refutablebodylit(?rnq,?bi)~~>dominates(lit)(lit)(?bi,?q)))
-	  in the definition of ATCO
 	*/
+        dispatch_irrefutable_bodylits(?modified_body),
         dispatch_refutable_bodylits(?modified_body).
 
 
@@ -436,29 +432,43 @@ no_refutable_bodylits(?r,?h,?mod) :-
 	\+ SILK_REFUTABLEBODYLIT(?r,?h,?mod,?)@_prolog.
 
 @!{dispatch1}
-dispatch_refutable_bodylits(ATCO_BODYLIT_WRAPPER(?CtlVar,?ExtLit,?mod,?bodylit)) :-
+dispatch_refutable_bodylits(?lit) :-
 	!,
-	dispatch_one_refutable_bodylit(?CtlVar,?ExtLit,?mod,?bodylit).
-dispatch_refutable_bodylits((ATCO_BODYLIT_WRAPPER(?CtlVar,?ExtLit,?mod,?bodylit),?rest)) :-
-	dispatch_one_refutable_bodylit(?CtlVar,?ExtLit,?mod,?bodylit),
+        // if refutable then execute; else
+	if ?lit = ATCO_BODYLIT_WRAPPER(?CtlVar,?ExtLit,?mod,?bodylit)
+	then dispatch_one_refutable_bodylit(?CtlVar,?ExtLit,?mod,?bodylit).
+@!{dispatch2}
+dispatch_refutable_bodylits((?lit,?rest)) :-
+        // if refutable then execute; else
+	if ?lit = ATCO_BODYLIT_WRAPPER(?CtlVar,?ExtLit,?mod,?bodylit)
+	then dispatch_one_refutable_bodylit(?CtlVar,?ExtLit,?mod,?bodylit),
 	dispatch_refutable_bodylits(?rest).
+@!{dispatch_irrefut1}
+dispatch_irrefutable_bodylits((?lit,?rest)) :-
+	!,
+        // if irrefutable then execute; else
+	if ?lit != ATCO_BODYLIT_WRAPPER(?,?,?,?) then ?lit,
+	dispatch_irrefutable_bodylits(?rest).
+@!{dispatch_irrefut2}
+dispatch_irrefutable_bodylits(?lit) :-
+        // if irrefutable -> execute; else skip
+	if ?lit != ATCO_BODYLIT_WRAPPER(?,?,?,?) then ?lit.
 
 // this wrapper is declared as modular prolog
-@!{dispatch2}
-dispatch_one_refutable_bodylit(ATCO_ATTEMPTEDSUPPORTED_ARG,?_extern,?mod,?bodylit) :-
+@!{dispatchone1}
+dispatch_one_refutable_bodylit(ATCO_ATTEMPTEDSUPPORTED_ATTACKING_ARG,?_extern,?mod,?bodylit) :-
 	!,
 	hassupportedattackingargument(?bodylit,?mod),
-	naf stronglydefeated_lit(?bodylit,?mod),
-	true.
-@!{dispatchone1}
+	naf stronglydefeated_lit(?bodylit,?mod).
+@!{dispatchone2}
 dispatch_one_refutable_bodylit(ATCO_STRONGLYDEFEATED,?extern_lit,?mod,?bodylit) :-
 	!,
 	dominates_lit_lit(?bodylit,?extern_lit,?mod).
-@!{dispatchone2}
+@!{dispatchone3}
 dispatch_one_refutable_bodylit(ATCO_BEATS_LIT_LIT,?extern_lit,?mod,?bodylit) :-
 	!,
-	naf_literal(?nafbodylit,?bodylit),
-	beats_lit_lit(?extern_lit,?nafbodylit,?mod).
+	naf_literal(?bodylit,?posbodylit),
+	beats_lit_lit(?extern_lit,?posbodylit,?mod).
 
 /***** Debugging interface ********/
 #include "change_module.flh"

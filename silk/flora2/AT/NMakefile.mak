@@ -27,6 +27,7 @@ ALLOBJS = flrgclp$(PROLOGEXT) \
 	  atck3$(PROLOGEXT) \
 	  atco$(PROLOGEXT) \
 	  atco2$(PROLOGEXT) \
+	  atco3$(PROLOGEXT) \
 	  atck1alt$(PROLOGEXT)
 
 !IF EXISTS (..\.prolog_path_wind) 
