@@ -146,6 +146,12 @@ get_canonical_form(FLLIBMODLIT(Wrap,Term,Mod,_Caller),Canon) :-
 	!,
 	%% Case of Var@...
 	(Wrap == FL_LIBMOD ->
+	    %% this is not entirely true, since Term can later be bound to
+	    %% transactional or modular prolog.
+	    %% we should monitor this one
+	    %% We might have to split the cases where we know that
+	    %% an FLLIBMODLIT is tabled and when we do not.
+	    %% Right now FL_LIBMOD denotes both, but this is not entirely true.
 	    Canon = FLCANON(_,_,Mod,Term,FL_TABLED)
 	%% Case of neg Var@...
 	; Wrap == FL_NEGLIBMOD ->
@@ -265,7 +271,8 @@ get_canonical_form(FLLIBMODLIT(Wrap,Args,Mod,_Caller), Canon) :-
 get_canonical_form(Term, Canon) :-
 	flora_decode_predicate(Term,Type,ModName,FullWrap,_WPref,PureWrap,ArgL),
         ( (Type == (hilog) ; Type == flogic
-	  ; Type == neg_flogic ; Type == neg_hilog) ->
+	  ; Type == neg_flogic ; Type == neg_hilog)
+	->
 	    flora_generalize_last(ArgL,ArgLout),
 	    flora_generalize_last(Term,CallableOut)
         ;
@@ -275,6 +282,8 @@ get_canonical_form(Term, Canon) :-
 	flora_canonic_wrapper_symbol(FullWrap,CanonWrap),
 	( Type == (prolog) ->
 	    Canon = FLCANON(CanonWrap,ArgLout,ModName,CallableOut,FL_TERM)
+	; Type == (flora) ->
+	    Canon = FLCANON(CanonWrap,ArgLout,ModName,CallableOut,FL_MODULAR)
 	; ( (flora_is_transactional_wrapper(PureWrap) ; flora_is_transactional_wrapper(FullWrap))
 	  -> TableFlag = FL_NOTTABLED
 	  
@@ -528,6 +537,11 @@ flora_preprocess_headlist([H|L],[H|LList]) :-
  Downside: if we want to create a different rule with this head,
  we would need to convert the head into the FLORA-2 head format.
 ***********************************************************************/
+%% prolog rules' signatures are not recorded
+flora_record_rule_signature(_,_,_,_,Head,_,_,_,_) :-
+	flora_decode_predicate(Head,Type,_,_,_,_,_),
+	Type == (prolog),
+	!.
 flora_record_rule_signature(RuleId,DescriptorVarsTerm,HPrefix,Module,Head,Body,DefeatCond,Rule,Bridge) :-
 	%% Head is stored in the body form so that it could be queried
 	%% via reification
@@ -813,6 +827,16 @@ flora_is_nontabled_predicate(Pred) :-
         get_canonical_form(Pred,FLCANON(_,_,_,_,FL_NOTTABLED)).
 
 /***********************************************************************
+  flora_is_modular_prolog_predicate(+Predicate)
+************************************************************************/
+flora_is_modular_prolog_predicate((First,Rest)) :-
+        !,
+        all_fllibmodobj(First),
+        get_canonical_form(Rest,FLCANON(_,_,_,_,FL_MODULAR)).
+flora_is_modular_prolog_predicate(Pred) :-
+        get_canonical_form(Pred,FLCANON(_,_,_,_,FL_MODULAR)).
+
+/***********************************************************************
   flora_is_tabled_predicate(+Predicate)
   flora_is_tabled_neg_predicate(+Predicate)
 ************************************************************************/
@@ -882,6 +906,11 @@ flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_LIBMOD,Term,_M,_C)) :-
 	; Term =.. [FL_NEG,HTerm], (atom(HTerm) ; HTerm =.. [WRAP_HILOG|_])
 	; flora_is_tabled_predicate(Term)
 	; flora_is_tabled_neg_predicate(Term)
+	%% FL_LIBMOD corresponds to ?X, which can be bound both
+	%% to tabled and transactional preds
+	; flora_is_nontabled_predicate(Term)
+	%% and to modular prolog
+	; flora_is_modular_prolog_predicate(Term)
 	),
         !.
 flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_NEGLIBMOD,Term,_M,_C)) :-
@@ -899,15 +928,15 @@ flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_TRANSLIBMOD,Term,_M,_C)) :-
 	),
         !.
 
-flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_LIBMOD,_Term,_M,_C)) :-
+flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_LIBMOD,Term,M,_C)) :-
         !,
-        flora_abort('the idiom ?Variable@module requires that the variable is bound to a HiLog term or a non-transactional formula').
-flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_NEGLIBMOD,_Term,_M,_C)) :-
+        flora_abort([Term,'@',M, ': the idiom ?Variable@module requires that the variable is bound to a HiLog term or a non-transactional formula']).
+flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_NEGLIBMOD,Term,M,_C)) :-
         !,
-        flora_abort('the idiom neg ?Variable@module requires that the variable is bound to a HiLog term or a non-transactional formula').
-flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_TRANSLIBMOD,_Term,_M,_C)) :-
+        flora_abort([Term,'@',M, ': the idiom neg ?Variable@module requires that the variable is bound to a HiLog term or a non-transactional formula']).
+flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_TRANSLIBMOD,Term,M,_C)) :-
         !,
-        flora_abort('the idiom %?Variable@module requires that the variable is bound to a HiLog term or a transactional formula').
+        flora_abort([Term,'@',M, ': the idiom %?Variable@module requires that the variable is bound to a HiLog term or a transactional formula']).
 
 %% catchall case
 flora_check_dynmod_type_consistency(_Arg).
