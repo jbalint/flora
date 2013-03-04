@@ -31,9 +31,10 @@
         beaten_by_strict_rule(?,?,?,?,?)@?, // this one for debugging
         prlg beaten_by_strict_rule(?,?,?,?,?).
 
+:- prolog FL_UNDEFEATED/4.
+
 :- table FL_STRICT_CANDIDATE/3.
 :- table FL_CANDIDATE/3.
-:- prolog FL_UNDEFEATED/4.
 :- prolog FL_REFUTED/3, FL_REFUTED/4.
 :- prolog strongcandicate/3.
 
@@ -75,13 +76,15 @@
 :- ignore_depchk %abort(?)@_system.
 
 @!{undef1}
-FL_UNDEFEATED(?r,?_vars,?_h,?mod) :-
+FL_UNDEFEATED(?r,?_vars,?h,?mod) :-
+	headlit(?r,?h,?mod),
 	is_strict_rule(?r,?mod)@_prolog(flrdescriptor_support),
 	!.
 // we may have to pass variables ?vars down: heads might not be enough
 // since ?vars may include body vars
 @!{undef2}
 FL_UNDEFEATED(?r,?_vars,?h,?mod) :-
+	headlit(?r,?h,?mod),
 	naf defeated_rule(?r,?h,?mod),
 	naf defeated_lit(?h,?mod).
 
@@ -282,9 +285,7 @@ beats_lit_lit(?q,?nafbodylit,?mod) :-
 			       beats(lit)(lit)(?q,?bbi) ) ) ; 
 	*/
 	//headlit(?rb,?bodylit,?mod),
-	SILK_BODYINFO(?_rb,?bodylit,
-	              ?mod,?q,ATCO_BEATS_LIT_LIT,
-	              ?modified_body)@_prolog,
+	SILK_BODYINFO(?_rb,?bodylit,?mod,?modified_body)@_prolog,
         dispatch_refutable_bodylits(?modified_body,?mod,?q,ATCO_BEATS_LIT_LIT).
 
 // ?lit1 naf beats ?lit2 by not beating some rule ?r2 that supports ?lit2
@@ -321,17 +322,16 @@ supportedattackingargument(?r,?h,?mod) :-
 attemptedsupportedattackingargument(?r,?h,?mod) :- 
 	no_refutable_bodylits(?r,?h,?mod),
 	!,
-	FL_CANDIDATE(?r,?h,?mod).
+	(FL_CANDIDATE(?r,?h,?mod)
+        ; FL_STRICT_CANDIDATE(?r,?h,?mod)
+        ; _isbasefact(?h)
+        ).
 @!{attempt2}
 attemptedsupportedattackingargument(?r,?h,?mod) :- 
 	//headlit(?r,?h,?mod),
-	SILK_BODYINFO(?r,?h,
-	              ?mod,?ext_lit,ATCO_ATTEMPTEDSUPPORTED_ATTACKING_ARG,
-	              ?modified_body)@_prolog,
+	SILK_BODYINFO(?r,?h,?mod,?modified_body)@_prolog,
         dispatch_irrefutable_bodylits(?modified_body),
-        dispatch_refutable_bodylits(?modified_body,
-	                            // ?ext_lit is not used in this case
-	                            ?mod,?ext_lit,
+        dispatch_refutable_bodylits(?modified_body,?mod,?_ext_lit,
 				    ATCO_ATTEMPTEDSUPPORTED_ATTACKING_ARG).
 
 @!{hassup1}
@@ -370,7 +370,10 @@ stronglydefeated_lit(?q,?mod) :-
 	FL_OPPOSES_AUX(?mod,?,?q,?,?opposer_q),
 	no_refutable_bodylits(?r_op_q,?opposer_q,?mod),
 	!,
-	FL_CANDIDATE(?r_op_q,?opposer_q,?mod).
+	(FL_CANDIDATE(?r_op_q,?opposer_q,?mod)
+        ; FL_STRICT_CANDIDATE(?r_op_q,?opposer_q,?mod)
+        ; _isbasefact(?opposer_q)
+        ).
 @!{strongdef2}
 stronglydefeated_lit(?q,?mod) :-   
 	FL_OPPOSES_AUX(?mod,?,?q,?,?opposer_q),
@@ -378,9 +381,7 @@ stronglydefeated_lit(?q,?mod) :-
         // forall ?rcq ( cand(?rcq,?q) ~~> overrid(?r_op_q,?rcq) )
         // i.e., dominates(rule)(lit)(?rnq,?q)
         dominates_rule_lit(?r_op_q,?opposer_q,?q,?mod),
-	SILK_BODYINFO(?r_op_q,?opposer_q,
-	              ?mod,?q,ATCO_STRONGLYDEFEATED,
-	              ?modified_body)@_prolog,
+	SILK_BODYINFO(?r_op_q,?opposer_q,?mod,?modified_body)@_prolog,
         /*
 	  forall ?bi (irrefutablebodylit(?rnq,?bi) ~~> ?bi)
 	  forall ?bi (refutablebodylit(?rnq,?bi)~~>dominates(lit)(lit)(?bi,?q)))
@@ -432,7 +433,8 @@ headlit(?r,?h,?mod) :- get_tag_descriptor_info_with_rulehead(?r,?mod,?,?h,?)@_pr
 // we use this for rules that have no refutable bodylits
 @!{norefutbody1}
 no_refutable_bodylits(?r,?h,?mod) :-
-	headlit(?r,?h,?mod),
+	// do not test for headlits here: may be a fact
+	//headlit(?r,?h,?mod),
 	\+ SILK_REFUTABLEBODYLIT(?r,?h,?mod,?)@_prolog.
 
 @!{dispatch1}
@@ -479,10 +481,16 @@ dispatch_one_refutable_bodylit(ATCO_BEATS_LIT_LIT,?extern_lit,?mod,?bodylit) :-
 #include "change_module.flh"
 
 // FL_STATUS depends on rule Ids, NOT on tags
-FL_STATUS(?r,?h)[howDefeated -> refutedBy(?refuter)] :-
+FL_STATUS(?r,?h)[howDefeated -> ruleRefutedBy(?refuter)] :-
 	caller{?mod},
 	change_module(?h,?mod,?_realMod,?hm),
 	FL_REFUTED(?r,?hm,?refuter,?mod).
+
+FL_STATUS(?r,?h)[howDefeated -> literalRefutedBy(?refuter)] :-
+	caller{?mod},
+	change_module(?h,?mod,?_realMod,?hm),
+	FL_REFUTED(?r2,?hm,?refuter,?mod),
+	?r2 \= ?r.
 
 FL_STATUS(?r,?h)[howDefeated -> beatenByStrictRule(?strictR)] :-
 	caller{?mod},
