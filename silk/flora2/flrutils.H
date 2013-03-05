@@ -37,6 +37,7 @@
 	flora_module_path_get/1,
 	flora_slash/1,
 	flora_cputime/1,
+	flora_walltime/1,
 	flora_set_counter/2,
 	flora_get_counter/2,
 	flora_increment_counter/4,

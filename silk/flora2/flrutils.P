@@ -658,12 +658,10 @@ flora_fladd(FlrFile,Workspace) :-
 	  ),
 	  util_rename_file(AddXWAMFile,WSXWAMFile)
         ),
-	flora_cputime(T0),
-        consult(WSXWAMFile),
-	flora_cputime(T1),
-	T is T1-T0,
-	flora_loader_message('Done adding ~w. CPU time used: ~w seconds',
-			     [FlrFile,T]),
+	flora_measure_time(
+			   consult(WSXWAMFile),
+			   ['Done adding ', FlrFile, '. CPU time used:']
+			  ),
 	flora_clear_xpp_options,
 	!.
 
@@ -695,13 +693,13 @@ flora_flload(FlrFile,Workspace) :-
 	;
 	    flora_set_xpp_options_for_compile(Workspace),
 	    util_compile_file(FlrFile,MPFile,FDBFile,FLDFile,FLMFile,FLSFile,FLS2File,FLTFile,Status),
-	  ( Status == FLORA_FAILURE ->
-	      flora_clear_xpp_options,
-	      !,
-	      fail
-	  ;
-	    true
-	  )
+	    ( Status == FLORA_FAILURE ->
+		flora_clear_xpp_options,
+		!,
+		fail
+	    ;
+		true
+	    )
 	),
 	!,
 	flora_loader_message('Loading ~w into module ~w',[FlrFile,Workspace]),
@@ -730,7 +728,6 @@ flora_flload(FlrFile,Workspace) :-
 	  util_rename_file(MainXWAMFile,WSXWAMFile)
         ),
 	flora_call_hooks(Workspace,LOADTOMODULE,FlrFile,before,AroundHookLink),
-	flora_cputime(T0),
 	%% We clean out UDF predicates before loading (NOT adding!) a module.
 	%% See comment about this where flora_cleanup_udf/1 is defined.
 	%% Note: cleaning up UDFs *cannot* be done from within
@@ -741,11 +738,10 @@ flora_flload(FlrFile,Workspace) :-
 	%% Ditto with modular prolog: must abolish them
 	%% before loading but not adding
 	abolish_modular_prolog_predicates(Workspace),
-	consult(WSXWAMFile),
-	flora_cputime(T1),
-	T is T1-T0,
-	flora_loader_message('Done loading ~w. CPU time used: ~w seconds',
-			     [FlrFile,T]),
+	flora_measure_time(
+			   consult(WSXWAMFile),
+			   ['Done loading ', FlrFile, '. CPU time used:']
+			  ),
 	flora_call_hooks(Workspace,LOADTOMODULE,FlrFile,after,AroundHookLink),
 	flora_clear_xpp_options,
 	!.
@@ -1282,6 +1278,7 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLTFile,Fi
 	flora_maxerr(MaxErrNum),
 	flora_loader_msg_nl,
 	flora_loader_message('Compiling ~w for addition to modules',[InputFile]),
+	flora_walltime(WT0),
 	flora_cputime(T0),
 	seeing(PreInFile),
 	%% Disable the compilation for FLORA template include file.
@@ -1341,6 +1338,7 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLTFile,Fi
         ),
 	!,
 	flora_cputime(T1),
+	flora_walltime(WT1),
 	( FileStatus == FLORA_FAILURE ->
 	    util_remove_file_carefully(PFile),
 	    util_remove_file_carefully(DBFile),
@@ -1362,7 +1360,8 @@ util_compile_file_add(InputFile,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLTFile,Fi
 	    util_remove_file_carefully(Main_FLS2file)
 	;
 	    T is T1-T0,
-	    flora_loader_message('Done compilation & code generation for ~w. CPU time used: ~w seconds',[InputFile,T])
+	    WT is WT1-WT0,
+	    flora_loader_message('Done compilation & code generation for ~w. CPU time used: ~w seconds (elapsed time: ~w seconds)',[InputFile,T,WT])
 	),
 	print_warnings([depend(DepErrList)|RuleStatus]),
 	print_errors([depend(DepErrList)|RuleStatus]),
@@ -1520,6 +1519,7 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FLMFile,FLSFile,FLS2File,FLTFil
 	flora_maxerr(MaxErrNum),
 	flora_loader_msg_nl,
 	flora_loader_message('Compiling ~w',[InputFile]),
+	flora_walltime(WT0),
 	flora_cputime(T0),
 	seeing(PreInFile),
 	%% Disable the compilation for FLORA template include file.
@@ -1576,6 +1576,7 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FLMFile,FLSFile,FLS2File,FLTFil
         ),
 	!,
 	flora_cputime(T1),
+	flora_walltime(WT1),
 	( FileStatus == FLORA_FAILURE ->
 	    util_remove_file_carefully(PFile),
 	    util_remove_file_carefully(DBFile),
@@ -1597,7 +1598,8 @@ util_compile_file(InputFile,PFile,DBFile,FLDFile,FLMFile,FLSFile,FLS2File,FLTFil
 	    util_remove_file_carefully(Main_FLS2file)
 	;
 	    T is T1-T0,
-	    flora_loader_message('Done compilation & code generation for ~w. CPU time used: ~w seconds',[InputFile,T])
+	    WT is WT1-WT0,
+	    flora_loader_message('Done compilation & code generation for ~w. CPU time used: ~w seconds (elapsed time: ~w seconds)',[InputFile,T,WT])
 	),
 	print_warnings([depend(DepErrList)|RuleStatus]),
 	print_errors([depend(DepErrList)|RuleStatus]),
@@ -1856,6 +1858,7 @@ flora_loaddyn_data(OrigInFile,ModuleName,Ext) :-
 		flora_fls_storage_name(ModuleName,StorageName)
 	    ; true
 	    ),
+	    flora_walltime(WT0),
 	    flora_cputime(T0),
 	    seeing(PreInFile),
 	    (util_file_newerthan(PostGppFile,File) ->
@@ -1885,9 +1888,11 @@ flora_loaddyn_data(OrigInFile,ModuleName,Ext) :-
 	    ),
 	    see(PreInFile),
 	    flora_cputime(T1),
+	    flora_walltime(WT1),
 	    T is T1-T0,
+	    WT is WT1-WT0,
 	    ((var(SymbolErrNum) ; SymbolErrNum == 0) ->
-		flora_loader_message('Done loading ~w. CPU time used: ~w seconds',[File,T])
+		flora_loader_message('Done loading ~w. CPU time used: ~w seconds (elapsed time: ~w seconds)',[File,T,WT])
 	    ;  %% abort loading
 		flora_abort('Errors in the use of predicate symbols found', FLORA_ABORT_NOTRACE)
 	    ),
@@ -2169,24 +2174,26 @@ flora_save_module_util(File) :-
 save_module_internal(ModuleName,FlrFile) :-
 	flora_loader_message('Saving module ~w in file ~w',
 			     [ModuleName, FlrFile]),
-	(   flora_cputime(T0),
-	    telling(PreInFile),
-	    tell(FlrFile),
-	    flora_current_out_line('/* Saved contents of module ~w */', [ModuleName]),
-            flora_fdb_storage_name(ModuleName,StorageName),
-	    flora_current_out_nl,
-	    flora_current_out_line('/* Facts of module ~w */',[ModuleName]),
-	    flora_current_out_nl,
-	    get_then_write_facts(StorageName), flora_current_out_nl,
-            flora_current_out_line('/* Rules of module ~w */',[ModuleName]),
-	    flora_current_out_nl,
-	    get_then_write_rules(ModuleName),		     
-            told,
-	    tell(PreInFile),
-            flora_cputime(T1),
-	    T is T1-T0,
-	    flora_loader_message('Done saving module ~w. CPU time used: ~w seconds',[ModuleName,T])
-	),
+	flora_walltime(WT0),
+	flora_cputime(T0),
+	telling(PreInFile),
+	tell(FlrFile),
+	flora_current_out_line('/* Saved contents of module ~w */', [ModuleName]),
+	flora_fdb_storage_name(ModuleName,StorageName),
+	flora_current_out_nl,
+	flora_current_out_line('/* Facts of module ~w */',[ModuleName]),
+	flora_current_out_nl,
+	get_then_write_facts(StorageName), flora_current_out_nl,
+	flora_current_out_line('/* Rules of module ~w */',[ModuleName]),
+	flora_current_out_nl,
+	get_then_write_rules(ModuleName),		     
+	told,
+	tell(PreInFile),
+	flora_cputime(T1),
+	flora_walltime(WT1),
+	T is T1-T0,
+	WT is WT1-WT0,
+	flora_loader_message('Done saving module ~w. CPU time used: ~w seconds (elapsed time: ~w seconds)',[ModuleName,T,WT]),
 	!.
 
 	
@@ -3627,14 +3634,18 @@ flora_copy_and_preprocess(Input,Output,GPP_OptionsList) :-
    Message is printed to identify the call.
 *****************************************************************************/
 flora_measure_time(Call,Message) :-
+	flora_walltime(WT1),
 	flora_cputime(T1),
 	call(Call),
 	flora_cputime(T2),
+	flora_walltime(WT2),
 	Delta is T2 - T1,
+	WDelta is WT2 - WT1,
 	(is_list(Message) -> flora_concat_atoms(Message,RealMsg)
 	; RealMsg = Message
 	),
-	flora_loader_message('~w ~w seconds',[RealMsg,Delta]).
+	flora_loader_message('~w ~w seconds (elapsed time: ~w seconds)',
+			     [RealMsg,Delta,WDelta]).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -35,8 +35,7 @@
 
 
 :- import
-	timed_call/4,
-	cputime/1
+	timed_call/4
    from standard.
 
 :- import windows_os/0 from xsb_configuration.
@@ -48,6 +47,11 @@
 	is_acyclic/1,
 	xwam_state/2
    from machine.
+
+:- import
+	flora_cputime/1,
+	flora_walltime/1
+   from flrporting.
 
 :- import
 	storage_insert_fact/3,
@@ -115,7 +119,8 @@ fllibprogramans(Gs,NVs) :-
 flora_print_all(Gs,NVs) :-
 	NVs == [],
 	!,
-	cputime(T0),
+	flora_cputime(T0),
+	flora_walltime(WT0),
 	flora_call_hooks(_Mod,QUERYHOOK,Gs,before,AroundHookLink),
 	(catch(flora_call(Gs,NVs,XWamState),
 	       Exception,
@@ -124,20 +129,26 @@ flora_print_all(Gs,NVs) :-
 	    close_open_tables(cleanup)
 	->
 	    (
-	      cputime(T1),
+	      flora_cputime(T1),
+	      flora_walltime(WT1),
 	      T is T1-T0,
+	      WT is WT1-WT0,
 	      ( flora_switch(chatter) ->
-		  flora_stdfdbk_string('~nElapsed time ~w seconds~n', [T])
+		  flora_stdfdbk_string('~nElapsed (CPU) time ~w (~w) seconds~n',
+				       [WT,T])
 	      ; true
 	      ),
 	      flora_write_Yes_or_Unknown(XWamState)
 	    ),
 	    fail
 	;
-	    cputime(T1),
+	    flora_cputime(T1),
+	    flora_walltime(WT1),
 	    T is T1-T0,
+	    WT is WT1-WT0,
 	    ( flora_switch(chatter) ->
-		flora_stdfdbk_string('~nElapsed time ~w seconds~n', [T])
+		flora_stdfdbk_string('~nElapsed (CPU) time ~w (~w) seconds~n',
+				     [WT,T])
 	    ; true
 	    ),
 	    flora_write_No,
@@ -145,7 +156,8 @@ flora_print_all(Gs,NVs) :-
 	).
 
 flora_print_all(Gs,NVs) :-
-	cputime(T0),
+	flora_cputime(T0),
+	flora_walltime(WT0),
 	%% Construct a temporary trie-indexed predicate, FL_QUERY_PREDICATE
 	%% All answers are asserted into that predicate.
 	%% Since it is trie-indexed, duplicates are deleted.
@@ -180,15 +192,18 @@ flora_print_all(Gs,NVs) :-
 	      Exception,
 	      flranswer_all_answers_query_handler(Exception,QueryTemplate,AroundHookLink)
 	     ),
-	cputime(T1),
+	flora_cputime(T1),
+	flora_walltime(WT1),
 	T is T1-T0,
+	WT is WT1-WT0,
 	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
 	flora_reclaim_storage_space,
 	abolish(FL_QUERY_PREDICATE/QueryArity),
 	sort(TempL,L),
 	( L = [] ->
 	    ( flora_switch(chatter) ->
-		flora_stdfdbk_string('~nElapsed time ~w seconds~n', [T])
+		flora_stdfdbk_string('~nElapsed (CPU) time ~w (~w) seconds~n',
+				     [WT,T])
 	    ;
 		true
 	    ),
