@@ -868,6 +868,10 @@ fltransactionalnumber_struct(OBJECT(TRANSACTIONAL_NUMBER(Num),I),FLTRANSACTIONAL
 
 fltransactionalatom_struct(Atom,Index,FLTRANSACTIONALATOM(Atom,Index)).
 
+%% Will see is we change it later
+fltermdescriptor_struct(TermName,TermArity,FLTERMDESCRIPTOR(TermName,TermArity))   :- !.
+fltransactionaltermdescriptor_struct(TermName,TermArity,FLTRANSACTIONALTERMDESCRIPTOR(TermName,TermArity))   :- !.
+
 is_fltransactionalatom_struct(FLTRANSACTIONALATOM(_Atom,_I)) :- !.
 is_fltransactionalobject_struct(FLTRANSACTIONALATOM(_Atom,_I)) :- !.
 is_fltransactionalobject_struct(FLTRANSACTIONALVAR(_Name,_I)) :- !.
@@ -2548,7 +2552,7 @@ parse_body_symbol(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Code,Status) :-
 	!,
         workspace_template(R,RCode,S),
         ( S == [] ->
-            parse_body_symbol_literal(L,RCode,LCode,Status),
+            parse_body_symbol_literal(L,RCode,DISALLOW_TERM_DESCRIPTOR,LCode,Status),
 	    (Status == [] -> 
                 flora_get_module_from_spec(RCode,ModuleType,Module),
                 flmodule_struct(LCode,Module,ModuleType,Code)
@@ -2564,7 +2568,7 @@ parse_body_symbol(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),Code,Status) :
 	!,
 	check_context_spec(Term,S1),
 	(S1 == [] ->
-	    parse_body_symbol_literal(Term,NULL,TermCode,Status),
+	    parse_body_symbol_literal(Term,NULL,DISALLOW_TERM_DESCRIPTOR,TermCode,Status),
 	    fludfsymbol_struct(TermCode,Code)
 	; Status = S1
 	).
@@ -2574,7 +2578,7 @@ parse_body_symbol(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),Code,Status) :
 	!,
 	check_context_spec(Term,S1),
 	(S1 == [] ->
-	    parse_body_symbol_literal(Term,NULL,TermCode,Status),
+	    parse_body_symbol_literal(Term,NULL,DISALLOW_TERM_DESCRIPTOR,TermCode,Status),
 	    flsensorsymbol_struct(TermCode,Code)
 	; Status = S1
 	).
@@ -2584,13 +2588,13 @@ parse_body_symbol(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),Code,Status) :
 	!,
 	check_context_spec(Term,S1),
 	(S1 == [] ->
-	    parse_body_symbol_literal(Term,NULL,TermCode,Status),
+	    parse_body_symbol_literal(Term,NULL,DISALLOW_TERM_DESCRIPTOR,TermCode,Status),
 	    flprlgsymbol_struct(TermCode,Code)
 	; Status = S1
 	).
 
 parse_body_symbol(CanoniTerm,Code,Status) :-
-        parse_body_symbol_literal(CanoniTerm,Code,Status).
+        parse_body_symbol_literal(CanoniTerm,ALLOW_TERM_DESCRIPTOR,Code,Status).
 
 check_context_spec(CANOTERM(Funct,2,FL_PARENTHESIS,[_L,_R],If,_Ip),Status) :-
 	get_atom(Funct,FL_AT),
@@ -2600,10 +2604,11 @@ check_context_spec(_,[]).
 
 
 /****************************************************************************
-  parse_body_symbol_literal(+CanoniTerm,-Code,-Status)
+  parse_body_symbol_literal(+CanoniTerm,+WS,+AllowTermDescr,-Code,-Status)
 ****************************************************************************/
+
 %% transactional vars as literals can appear only with module specifications
-parse_body_symbol_literal(CanoniTerm,_WS,Code,Status) :-
+parse_body_symbol_literal(CanoniTerm,_AllowTermDescr,_WS,Code,Status) :-
 	fltransactionalobject_struct(CanoniTerm,Code),
 	!,
 	(is_fltransactionalvar_struct(Code),
@@ -2614,25 +2619,62 @@ parse_body_symbol_literal(CanoniTerm,_WS,Code,Status) :-
 	    Status = []
 	).
 
-parse_body_symbol_literal(CanoniTerm,_WS,Code,Status) :-
-        parse_body_symbol_literal(CanoniTerm,Code,Status).
+parse_body_symbol_literal(CanoniTerm,_WS,_AllowTermDescr,Code,Status) :-
+        parse_body_symbol_literal(CanoniTerm,_AllowTermDescr,Code,Status).
         
 /*%% standalone %_ is not allowed
-parse_body_symbol_literal(CanoniTerm,_Code,Status) :-
+parse_body_symbol_literal(CanoniTerm,_AllowTermDescr,_Code,Status) :-
 	fltransactionalobject_struct(CanoniTerm,_C),
 	is_fltransactionalvar_struct(_C),
         !,
 	parsing_error(CanoniTerm,ERROR_TRANSACTIONALVARLIT,Status).
 */
-        
-%% term
-parse_body_symbol_literal(CanoniTerm,Code,Status) :-
-        term_template(CanoniTerm,ALLOW_TRANS,Code,Status),
+
+%% term descriptor: TermName/ArgsNum
+parse_body_symbol_literal(CanoniTerm,ALLOW_TERM_DESCRIPTOR,Code,Status) :-
+        term_descriptor(CanoniTerm,Code,Status),
 	!.
 
-parse_body_symbol_literal(CanoniTerm,_Code,Status) :-
+        
+%% term
+parse_body_symbol_literal(CanoniTerm,_AllowTermDescr,Code,Status) :-
+        term_template(CanoniTerm,ALLOW_TRANS,ALLOW_TERM_VARARGS,Code,Status),
+	!.
+
+parse_body_symbol_literal(CanoniTerm,_AllowTermDescr,_Code,Status) :-
 	parsing_error(CanoniTerm,ERROR_SYMBOL,Status).
 
+/****************************************************************************
+  term_descriptor(+CanoniTerm,-Code,-Status)
+  term descriptor: checks whether CanoniTerm has the form TermName/TermArity
+****************************************************************************/
+term_descriptor(CANOTERM(Funct,2,_F,[TermName,TermArity],_If,_Ip),Code,[]) :-
+	get_name(Funct,FL_SLASH),
+	flobject_struct(TermArity,TermArityCode),
+	term_descriptor_arity(TermArityCode),
+	flobject_struct(TermName,TermNameCode),
+	fltermdescriptor_struct(TermNameCode,TermArityCode,Code),
+	!.
+
+term_descriptor(CANOTERM(Funct,2,_F,[TermName,TermArity],_If,_Ip),Code,[]) :-
+	get_name(Funct,FL_SLASH),
+	flobject_struct(TermArity,TermArityCode),
+	term_descriptor_arity(TermArityCode),
+	fltransactionalobject_struct(TermName,TermNameCode),
+	fltransactionaltermdescriptor_struct(TermNameCode,TermArityCode,Code),
+	!.
+
+term_descriptor(CANOTERM(Funct,_Arity,_F,_Args,_If,_Ip),NULL,Status) :-
+	get_name(Funct,FL_SLASH),
+	parsing_error(Funct,ERROR_SYMBOL,Status).
+
+term_descriptor_arity(TermArity) :-
+	is_flnumber_struct(TermArity),
+	!.
+
+term_descriptor_arity(TermArity) :-
+	is_anonymous_flvar_struct(TermArity),
+	!.
 /****************************************************************************
   flora_parse_fact(+CanoniTerm,-Code,-Status)
 ****************************************************************************/
@@ -4666,12 +4708,17 @@ parse_body_attmeth_template(CanoniTerm,Code,Status) :-
         ).
 
 /****************************************************************************
-  term_template(+CanoniTerm,+TransFlag,-Code,-Status)
+  term_template(+CanoniTerm,+TransFlag,+AllowVarArgsNum,-Code,-Status)
   Term template can be defined recursively:
     1) primitive structures except named variables are all term templates
     2) Term(_,_,...) is a term template if Term is a term template
+
+    +AllowVarArgsNumn - allow terms with variable number of arguments
 ****************************************************************************/
-term_template(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),_TransFlag,Code,Status) :-
+term_template(CanoniTerm,TransFlag,Code,Status) :-
+	term_template(CanoniTerm,TransFlag,DISALLOW_TERM_VARARGS,Code,Status).
+
+term_template(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),_TransFlag,AllowVarArgsNum,Code,Status) :-
         (get_name(Funct,FL_LOAD); get_name(Funct,FL_ADD)),
 	!,
         flobject_struct(Funct,FunctCode),
@@ -4679,7 +4726,7 @@ term_template(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),_TransFlag,Code,St
 	->
             ( get_name(F,FL_RIGHTTO)
 	    ->
-                anonymous_varlist(Args,AList,S1),
+                anonymous_varlist(Args,AllowVarArgsNum,AList,S1),
                 (S1 == []
 		->
 	            flobject_struct(F,FCode),
@@ -4693,7 +4740,7 @@ term_template(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),_TransFlag,Code,St
 	        parsing_error(Term,ERROR_TEMPLATE,Status)
             )
         ;
-            anonymous_varlist([Term],AList,Status),
+            anonymous_varlist([Term],AllowVarArgsNum,AList,Status),
             ( Status == []
 	    ->
 		flterm_struct(FunctCode,1,AList,Code)
@@ -4702,18 +4749,18 @@ term_template(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),_TransFlag,Code,St
 	    )
         ).
 
-term_template(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,Code,Status) :-
+term_template(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,_AllowVarArgsNum,Code,Status) :-
 	get_atom(Funct,F),
 	is_curi_op(F),
 	!,
 	parse_curi(Args,TransFlag,NULL,Code,Status).
 
                 
-term_template(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,Code,Status) :-
+term_template(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,AllowVarArgsNum,Code,Status) :-
 	!,
         term_template(Funct,TransFlag,F,S),
         ( S == [] ->
-            anonymous_varlist(Args,AList,Status),
+            anonymous_varlist(Args,AllowVarArgsNum,AList,Status),
 	    (Status == [] -> 
                 ((is_fltransactionalobject_struct(F)
 		 ; is_fltransactionalterm_struct(F)
@@ -4731,7 +4778,7 @@ term_template(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,Code,Statu
 	  Status=S
         ).
 
-term_template(ObjectTerm,_TransFlag,Code,Status) :-
+term_template(ObjectTerm,_TransFlag,_AllowVarArgsNum,Code,Status) :-
 %%  primitive structures except named variables
 	flobject_struct(ObjectTerm,Code),
 	!,
@@ -4742,7 +4789,7 @@ term_template(ObjectTerm,_TransFlag,Code,Status) :-
 	    Status = []
 	).
 
-term_template(ObjectTerm,ALLOW_TRANS,Code,Status) :-
+term_template(ObjectTerm,ALLOW_TRANS,_AllowVarArgsNum,Code,Status) :-
 	fltransactionalobject_struct(ObjectTerm,Code),
 	!,
 	(is_fltransactionalvar_struct(Code),
@@ -4753,17 +4800,21 @@ term_template(ObjectTerm,ALLOW_TRANS,Code,Status) :-
 	    Status = []
 	).
 
-term_template(CanoniTerm,_TransFlag,_Code,Status) :-
+term_template(CanoniTerm,_TransFlag,_AllowVarArgsNum,_Code,Status) :-
 	parsing_error(CanoniTerm,ERROR_TEMPLATE,Status).
 
 /****************************************************************************
-  anonymous_varlist(+List,-CodeList,-Status)
+  anonymous_varlist(+List,+AllowVarArgsNum,-CodeList,-Status)
   parse a list of anonymous variables
 ****************************************************************************/
-anonymous_varlist([],[],[]) :- !.
-anonymous_varlist([H|L],[HCode|LCode],Status) :-
+anonymous_varlist(List,CodeList,Status) :-
+	anonymous_varlist(List,DISALLOW_TERM_VARARGS,CodeList,Status).
+anonymous_varlist([],_AllowVarArgsNum,[],[]) :- !.
+anonymous_varlist([H|L],AllowVarArgsNum,[HCode|LCode],Status) :-
         ( get_flvar_struct(H,HCode), is_anonymous_flvar_struct(HCode) ->
-            anonymous_varlist(L,LCode,Status)
+            anonymous_varlist(L,AllowVarArgsNum,LCode,Status)
+        ; get_atom(H,HAtom), HAtom==FL_STAR, flobject_struct(H,HCode) ->
+            anonymous_varlist(L,AllowVarArgsNum,LCode,Status)
         ;
             parsing_error(H,EXP_ANONYVAR,Status)
         ).

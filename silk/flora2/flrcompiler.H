@@ -161,7 +161,7 @@
 	compiling_flrshell_command/0,
 	symbol/7,
 	nowarn_symbol/5,
-	make_symbol_context_status/10,
+	make_symbol_context_status/12,
 	compiling_warning/3,
 	compiling_error/3,
 	set_production_mode/1,

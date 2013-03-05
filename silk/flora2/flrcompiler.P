@@ -347,6 +347,14 @@ is_imvdsigspecop(FL_INMVDSIGARR).
 is_prdynrule(PRDYNRULE(Head,Body,HVars,BVars,PreBody,PostBody,Descriptor),
 	     Head,Body,HVars,BVars,PreBody,PostBody,Descriptor).
 
+is_fltermdescriptor(FLTERMDESCRIPTOR(Funct,Arity),Funct,N) :-
+	is_flnumber(Arity,N),!.
+is_fltermdescriptor(FLTERMDESCRIPTOR(Funct,Arity),Funct,FL_STAR) :-
+	is_anonymous_flvariable(Arity,_Idx),!.
+is_fltransactionaltermdescriptor(FLTRANSACTIONALTERMDESCRIPTOR(Funct,Arity),Funct,N) :-
+	is_flnumber(Arity,N),!.
+is_fltransactionaltermdescriptor(FLTRANSACTIONALTERMDESCRIPTOR(Funct,Arity),Funct,FL_STAR) :-
+	is_anonymous_flvariable(Arity,_Idx),!.
 /****************************************************************************
   approx_flindex(+ParserTerm,-Index)
 
@@ -3075,18 +3083,18 @@ compile_symbol_context_list([H|L],Status) :-
   compile a symbol for which compiler does NOT check context usage
 ****************************************************************************/
 compile_symbol_literal(ParserTerm,Status) :-
-	( is_fltransactionalterm(ParserTerm,Funct,N,_Args) ->
-	    compile_symbol_term(Funct,N,NULL,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL),
-	    Status = []
-	; is_flterm(ParserTerm,Funct,N,_Args) ->
-	    compile_symbol_term(Funct,N,NULL,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL),
-	    Status = []
+	( is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
+	    compile_symbol_term(Funct,N,Args,NULL,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,Status)
+	; is_flterm(ParserTerm,Funct,N,Args) ->
+	    compile_symbol_term(Funct,N,Args,NULL,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status)
 	; is_flatom(ParserTerm,_Atom) ->
-	    compile_symbol_term(ParserTerm,0,NULL,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL),
-	    Status = []
+	    compile_symbol_term(ParserTerm,0,NULL,NULL,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status)
 	; is_fltransactionalatom(ParserTerm,_Atom) ->
-	    compile_symbol_term(ParserTerm,0,NULL,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL),
-	    Status = []
+	    compile_symbol_term(ParserTerm,0,NULL,NULL,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,Status)
+	; is_fltransactionaltermdescriptor(ParserTerm,Funct,Arity) ->
+	    compile_symbol_term(Funct,Arity,NULL,NULL,ANY_SYMBOL_CONTEXT,TRANSACTIONAL_SYMBOL,Status)
+	; is_fltermdescriptor(ParserTerm,Funct,Arity) ->
+	    compile_symbol_term(Funct,Arity,NULL,NULL,ANY_SYMBOL_CONTEXT,NONTRANSACTIONAL_SYMBOL,Status)
 	; is_fludfsymbol(ParserTerm,Term) ->
 	    compile_symbol_literal(Term,NULL,UDF_SYMBOL,Status)
 	; is_flsensorsymbol(ParserTerm,Term) ->
@@ -3105,18 +3113,14 @@ compile_symbol_literal(ParserTerm,Status) :-
 	!.
 
 compile_symbol_literal(ParserTerm,WS,Context,Status) :-
-	( is_fltransactionalterm(ParserTerm,Funct,N,_Args) ->
-	    compile_symbol_term(Funct,N,WS,Context,TRANSACTIONAL_SYMBOL),
-	    Status = []
-	; is_flterm(ParserTerm,Funct,N,_Args) ->
-	    compile_symbol_term(Funct,N,WS,Context,NONTRANSACTIONAL_SYMBOL),
-	    Status = []
+	( is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
+	    compile_symbol_term(Funct,N,Args,WS,Context,TRANSACTIONAL_SYMBOL,Status)
+	; is_flterm(ParserTerm,Funct,N,Args) ->
+	    compile_symbol_term(Funct,N,Args,WS,Context,NONTRANSACTIONAL_SYMBOL,Status)
 	; is_flatom(ParserTerm,_Atom) ->
-	    compile_symbol_term(ParserTerm,0,WS,Context,NONTRANSACTIONAL_SYMBOL),
-	    Status = []
+	    compile_symbol_term(ParserTerm,0,NULL,WS,Context,NONTRANSACTIONAL_SYMBOL,Status)
 	; is_fltransactionalatom(ParserTerm,_Atom) ->
-	    compile_symbol_term(ParserTerm,0,WS,Context,TRANSACTIONAL_SYMBOL),
-	    Status = []
+	    compile_symbol_term(ParserTerm,0,NULL,WS,Context,TRANSACTIONAL_SYMBOL,Status)
 	;
 	    approx_flindex(Funct,Index),
 	    compiling_error(Index,ERROR_SYMBOL,Err),
@@ -3125,11 +3129,37 @@ compile_symbol_literal(ParserTerm,WS,Context,Status) :-
 	!.
 
 /****************************************************************************
-  compile_symbol_term(+Funct,+N,+WS,+Context,+Transactional)
+  compile_symbol_term(+Funct,+N,+Args,+WS,+Context,+Transactional,-Status)
 ****************************************************************************/
-compile_symbol_term(Funct,N,WS,Context,Transactional) :-
+compile_symbol_term(Funct,N,Args,WS,Context,Transactional,Status) :-
 	flora_get_flatomvar_name(Funct,Name),
-	add_nowarn_symbol(Name,N,WS,Context,Transactional).
+	(symbol_star_argument(Args) ->
+		(N==1 ->
+			add_nowarn_symbol(Name,FL_STAR,WS,Context,Transactional),
+			Status = []
+		;
+			approx_flindex(Funct,Index),
+			compiling_error(Index,ERROR_SYMBOL_CONTEXT_STAR_ARG,Err),
+			Status = [Err]
+		)
+	;
+		add_nowarn_symbol(Name,N,WS,Context,Transactional),
+		Status = []
+	).
+
+/****************************************************************************
+  symbol_star_argumen(+Args)
+****************************************************************************/
+symbol_star_argument([HArg]) :-
+	flora_get_flatomvar_name(HArg,ArgName),
+	ArgName==FL_STAR,!.
+
+symbol_star_argument([HArg,_TArgs]) :-
+	flora_get_flatomvar_name(HArg,ArgName),
+	ArgName==FL_STAR,!.
+
+symbol_star_argument([_HArg,TArgs]) :-
+	symbol_star_argument(TArgs).
 
 /****************************************************************************
   compile_flatomvar(+T,-Code)
@@ -3798,14 +3828,18 @@ construct_export_struct(TermCode,WSCode,IsUpdatableCode,ModuleListCode,Code) :-
 %% retractall flora_defined_udf_registry/4.
 %% If overriding module FLORA_DEFAULT_WORKSPACE, we also
 %% retractall flora_used_udf_registry/5.
-compile_user_defined_function_definition(Function,_Body,_ReturnValue,CodeList-CodeList,Facts-Facts,U-U,[Err]) :-
-	is_flterm_or_flatom(Function,Funct,N,_),
-	flora_get_flatomvar_name(Funct,Name),
-	has_symbol(Name,N,_,_,_,FUNCTION_SYMBOL,_),
-	\+ has_nowarn_symbol(Name,N,_WS,UDF_SYMBOL,_),
-	!,
-	approx_flindex(Function,Index),
-	compiling_error(Index,ERROR_UDF_SYMBOL,Err).
+/*
+%% This is now redundant
+%%compile_user_defined_function_definition(Function,_Body,_ReturnValue,CodeList-CodeList,Facts-Facts,U-U,[Err]) :-
+%%	is_flterm_or_flatom(Function,Funct,N,_),
+%%	flora_get_flatomvar_name(Funct,Name),
+%%	has_symbol(Name,N,_,_,_,FUNCTION_SYMBOL,_),
+%%	\+ has_nowarn_symbol(Name,N,_WS,UDF_SYMBOL,_),
+%%	\+ has_nowarn_symbol(Name,FL_STAR,_WS,UDF_SYMBOL,_),
+%%	!,
+%%	approx_flindex(Function,Index),
+%%	compiling_error(Index,ERROR_UDF_SYMBOL,Err).
+*/
 
 compile_user_defined_function_definition(Function,Body,ReturnValue,CodeList-ListTail,FactDiffList,UDFPreds-UDFPredsTail,Status) :-
 	set_context(compiling_udf_definition),
@@ -5070,57 +5104,65 @@ verify_symbol_context(Funct,Arity,_WS,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,[
 	),
 	!.
 
-%% do not check workspace for function symbols
-verify_symbol_context(Funct,Arity,WS,FUNCTION_SYMBOL,Transactional,[]):-
-	flora_get_flatomvar_name(Funct,Name),
-	has_nowarn_symbol(Name,Arity,_,FUNCTION_SYMBOL,Transactional),
-  	approx_flindex(Funct,Index),
-	get_index_line(Index,Line),
-	add_symbol(Name,Arity,WS,Index,Line,FUNCTION_SYMBOL,Transactional),
-	!.
-
-verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,[]):-
-	flora_get_flatomvar_name(Funct,Name),
-	has_nowarn_symbol(Name,Arity,StoredWS,SymbolContext,Transactional),
-	%% If StoredWS is an anonymous variable - then ignore warnings
-	is_flvariable(StoredWS,VarName,_VarIndex),
-	VarName == FL_UNDERSCORE,
-  	approx_flindex(Funct,Index),
-	get_index_line(Index,Line),
-	add_symbol(Name,Arity,WS,Index,Line,SymbolContext,Transactional),
-	!.
-
-verify_symbol_context(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
-	flora_get_flatomvar_name(Funct,Name),
-	%% if workspace for symbol is NULL then ignore warnings
-	%% only if StoredWS is current module or NULL
-	has_nowarn_symbol(Name,Arity,NULL,SymbolContext,Transactional),
-  	approx_flindex(Funct,Index),
-	get_index_line(Index,Line),
-	add_symbol(Name,Arity,NULL,Index,Line,SymbolContext,Transactional),
-	!.
-
-verify_symbol_context(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
-	flora_get_flatomvar_name(Funct,Name),
-	%% if workspace for symbol is NULL then we ignore warnings
-	%% only if StoredWS is current module or NULL
-	has_nowarn_symbol(Name,Arity,FL_THISMODULE,SymbolContext,Transactional),
-	!,
-  	approx_flindex(Funct,Index),
-	get_index_line(Index,Line),
-	add_symbol(Name,Arity,NULL,Index,Line,SymbolContext,Transactional).
-
-verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,[]):-
-	flora_get_flatomvar_name(Funct,Name),
-	%% if workspace for symbol is not NULL then we ignore warnings
-	%% only if StoredWS has the same name as WS
-	WS \= NULL,
-	flora_get_flatomvar_name(WS,WSName),
-	has_nowarn_symbol(Name,Arity,WSName,SymbolContext,Transactional),
-	!,
-  	approx_flindex(Funct,Index),
-	get_index_line(Index,Line),
-	add_symbol(Name,Arity,WS,Index,Line,SymbolContext,Transactional).
+/*
+%%%% This is now redundant
+%%%% do not check workspace for function symbols
+%%verify_symbol_context(Funct,Arity,WS,FUNCTION_SYMBOL,Transactional,[]):-
+%%	flora_get_flatomvar_name(Funct,Name),
+%%	(has_nowarn_symbol(Name,Arity,_,FUNCTION_SYMBOL,Transactional);
+%%	has_nowarn_symbol(Name,FL_STAR,_,FUNCTION_SYMBOL,Transactional)),
+%% 	approx_flindex(Funct,Index),
+%%	get_index_line(Index,Line),
+%%	add_symbol(Name,Arity,WS,Index,Line,FUNCTION_SYMBOL,Transactional),
+%%	!.
+%%%
+%%verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,[]):-
+%%	flora_get_flatomvar_name(Funct,Name),
+%%	(has_nowarn_symbol(Name,Arity,StoredWS,SymbolContext,Transactional);
+%%	has_nowarn_symbol(Name,FL_STAR,StoredWS,SymbolContext,Transactional)),
+%%	%% If StoredWS is an anonymous variable - then ignore warnings
+%%	is_flvariable(StoredWS,VarName,_VarIndex),
+%%	VarName == FL_UNDERSCORE,
+%%  	approx_flindex(Funct,Index),
+%%	get_index_line(Index,Line),
+%%	add_symbol(Name,Arity,WS,Index,Line,SymbolContext,Transactional),
+%%	!.
+%%%
+%%verify_symbol_context(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
+%%	flora_get_flatomvar_name(Funct,Name),
+%%	%% if workspace for symbol is NULL then ignore warnings
+%%	%% only if StoredWS is current module or NULL
+%%	(has_nowarn_symbol(Name,Arity,NULL,SymbolContext,Transactional);
+%%	has_nowarn_symbol(Name,FL_STAR,NULL,SymbolContext,Transactional)),
+%%  	approx_flindex(Funct,Index),
+%%	get_index_line(Index,Line),
+%%	add_symbol(Name,Arity,NULL,Index,Line,SymbolContext,Transactional),
+%%	!.
+%%%
+%%verify_symbol_context(Funct,Arity,NULL,SymbolContext,Transactional,[]):-
+%%	flora_get_flatomvar_name(Funct,Name),
+%%	%% if workspace for symbol is NULL then we ignore warnings
+%%	%% only if StoredWS is current module or NULL
+%%	(has_nowarn_symbol(Name,Arity,FL_THISMODULE,SymbolContext,Transactional);
+%%	has_nowarn_symbol(Name,FL_STAR,FL_THISMODULE,SymbolContext,Transactional)),
+%%	!,
+%%  	approx_flindex(Funct,Index),
+%%	get_index_line(Index,Line),
+%%	add_symbol(Name,Arity,NULL,Index,Line,SymbolContext,Transactional).
+%%%
+%%verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,[]):-
+%%	flora_get_flatomvar_name(Funct,Name),
+%%	%% if workspace for symbol is not NULL then we ignore warnings
+%%	%% only if StoredWS has the same name as WS
+%%	WS \= NULL,
+%%	flora_get_flatomvar_name(WS,WSName),
+%%	(has_nowarn_symbol(Name,Arity,WSName,SymbolContext,Transactional);
+%%	has_nowarn_symbol(Name,FL_STAR,WSName,SymbolContext,Transactional)),
+%%	!,
+%%  	approx_flindex(Funct,Index),
+%%	get_index_line(Index,Line),
+%%	add_symbol(Name,Arity,WS,Index,Line,SymbolContext,Transactional).
+*/
 
 verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextStatus):-
 	flora_get_flatomvar_name(Funct,Name),
@@ -5134,7 +5176,7 @@ verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextSt
 	    Index > 0,
 	    make_symbol_context_status(SContext,SLine,' in the same file ',
 				       STransactional,
-				       SArity,Arity,
+				       SArity,Name,Arity,WS,
 				       Index,SymbolContext,Transactional,
 				       SymbolContextStatus),
 	    SymbolContextStatus \== [],
@@ -5151,224 +5193,254 @@ verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextSt
 verify_symbol_context(_Funct,_Arity,_WS,_SymbolContext,_Transactional,[]).
 
 /****************************************************************************
-make_symbol_context_status(+UsedContext,+UsedLine,+UsedFileMsg,+UsedTransactional,+UsedArity,+SymbolArity,+SymbolIndex,+SymbolContext,+SymbolTransactional,-Status)
+suppress_symbol_warning(+Name,+Arity,+WS,+SymbolContext,+Transactional)
 ****************************************************************************/
-make_symbol_context_status(_UsedContext,UsedLine,UsedFileMsg,UsedTransactional,_UsedArity,_SymbolArity,SymbolIndex,_SymbolContext,SymbolTransactional,ContextStatus) :-
+%% do not check workspace for function symbols
+suppress_symbol_warning(Name,Arity,_WS,FUNCTION_SYMBOL,Transactional):-
+	(has_nowarn_any_symbol(Name,Arity,_,FUNCTION_SYMBOL,Transactional);
+	has_nowarn_any_symbol(Name,FL_STAR,_,FUNCTION_SYMBOL,Transactional)),
+	!.
+
+suppress_symbol_warning(Name,Arity,_WS,SymbolContext,Transactional):-
+	(has_nowarn_any_symbol(Name,Arity,StoredWS,SymbolContext,Transactional);
+	has_nowarn_any_symbol(Name,FL_STAR,StoredWS,SymbolContext,Transactional)),
+	%% If StoredWS is an anonymous variable - then ignore warnings
+	is_flvariable(StoredWS,VarName,_VarIndex),
+	VarName == FL_UNDERSCORE,
+	!.
+
+suppress_symbol_warning(Name,Arity,NULL,SymbolContext,Transactional):-
+	%% if workspace for symbol is NULL then ignore warnings
+	%% only if StoredWS is current module or NULL
+	(has_nowarn_any_symbol(Name,Arity,NULL,SymbolContext,Transactional);
+	has_nowarn_any_symbol(Name,FL_STAR,NULL,SymbolContext,Transactional)),
+	!.
+
+suppress_symbol_warning(Name,Arity,NULL,SymbolContext,Transactional):-
+	%% if workspace for symbol is NULL then we ignore warnings
+	%% only if StoredWS is current module or NULL
+	(has_nowarn_any_symbol(Name,Arity,FL_THISMODULE,SymbolContext,Transactional);
+	has_nowarn_any_symbol(Name,FL_STAR,FL_THISMODULE,SymbolContext,Transactional)),
+	!.
+
+suppress_symbol_warning(Name,Arity,WS,SymbolContext,Transactional):-
+	%% if workspace for symbol is not NULL then we ignore warnings
+	%% only if StoredWS has the same name as WS
+	WS \= NULL,
+	flora_get_flatomvar_name(WS,WSName),
+	(has_nowarn_any_symbol(Name,Arity,WSName,SymbolContext,Transactional);
+	has_nowarn_any_symbol(Name,FL_STAR,WSName,SymbolContext,Transactional)),
+	!.
+
+/****************************************************************************
+compiling_symbol_warning(+Name,+Arity,+WS,+SymbolContext,+Transactional,+Index,+Mesg,-Status)
+****************************************************************************/
+compiling_symbol_warning(Name,Arity,WS,SymbolContext,Transactional,_Index,_Mesg,[]):-
+	suppress_symbol_warning(Name,Arity,WS,SymbolContext,Transactional),
+	!.
+
+compiling_symbol_warning(_Funct,_Arity,_WS,_SymbolContext,_Transactional,Index,Mesg,[Warning]):-
+	compiling_warning(Index,Mesg,Warning).
+
+/****************************************************************************
+make_symbol_context_status(+UsedContext,+UsedLine,+UsedFileMsg,+UsedTransactional,+UsedArity,+SymbolName,+SymbolArity,+SymbolWS,+SymbolIndex,+SymbolContext,+SymbolTransactional,-Status)
+****************************************************************************/
+make_symbol_context_status(_UsedContext,UsedLine,UsedFileMsg,UsedTransactional,_UsedArity,_SymbolName,_SymbolArity,_SymbolWS,SymbolIndex,_SymbolContext,SymbolTransactional,ContextStatus) :-
 	UsedTransactional\=SymbolTransactional,
 	!,
 	(SymbolTransactional==TRANSACTIONAL_SYMBOL
-	-> compiling_warning(SymbolIndex,
+	-> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
 			     [WARN_TRANSACTIONAL_SYMBOL,ERRLINE_NO,
 			      UsedLine,UsedFileMsg],
-			     Err)
-	; compiling_warning(SymbolIndex,
+			     ContextStatus)
+	; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
 			    [WARN_NONTRANSACTIONAL_SYMBOL,ERRLINE_NO,
 			     UsedLine,UsedFileMsg],
-			    Err)
-	),
-	ContextStatus=[Err].
+			    ContextStatus)
+	).
 
-make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,FUNCTION_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,FUNCTION_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	( UsedContext==UDF_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_FUNC_UDF_ARITY_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==FUNCTION_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_FUNC_ARITY_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; %% for the following, we warn only if there was prior use as
 	  %% hilog predicate, modular prolog predicate, or sensor
 	  %% with the ***same*** number of arguments
 	  UsedContext==PREDICATE_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_FUNC_PREDICATE_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==PROLOG_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_FUNC_PROLOG_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==SENSOR_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_FUNC_SENS_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 /*
 	; UsedContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_warning(SymbolIndex, WARN_BUILTIN_SYMBOL, Err)
-	    ; compiling_warning(SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, Err)
-	    ),
-	    ContextStatus=[Err]
+	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_SYMBOL, ContextStatus)
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, ContextStatus)
+	    )
 */
 	;
 		ContextStatus=[]
         ),
 	!.
 
-make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,PREDICATE_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,PREDICATE_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	( UsedContext==UDF_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_PREDICATE_UDF_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==FUNCTION_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_PREDICATE_FUNC_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==PREDICATE_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==PROLOG_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_PREDICATE_PROLOG_ARITY_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==SENSOR_SYMBOL, UsedArity==SymbolArity,
 	    \+compiling_flrshell_command ->
 	    compiling_error(SymbolIndex,
 			    [ERROR_PREDICATE_SENS_SYMBOL,ERRLINE_NO,
 			     UsedLine,UsedFileMsg],
 			    Err),
-	    ContextStatus=[Err]
+	    ContextStatus = [Err]
 	; UsedContext==SENSOR_SYMBOL, \+compiling_flrshell_command ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [ERROR_PREDICATE_SENS_SYMBOL,ERRLINE_NO,
 			      UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	;
 	    ContextStatus=[]
 	),
 	!.
 
-make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,UDF_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,UDF_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	( UsedContext==PROLOG_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_UDF_PROLOG_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==FUNCTION_SYMBOL,
 	    (UsedArity==SymbolArity
 	    -> compiling_error(SymbolIndex,
-			       [WARN_UDF_FUNC_SYMBOL,ERRLINE_NO,
-				UsedLine,UsedFileMsg],
-			       Err)
-	    ; compiling_warning(SymbolIndex,
+			       [ERROR_UDF_SYMBOL, %%WARN_UDF_FUNC_SYMBOL,
+				ERRLINE_NO, UsedLine,UsedFileMsg],
+			       Err),
+		ContextStatus = [Err]
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
 				[WARN_UDF_FUNC_ARITY_SYMBOL,ERRLINE_NO,
 				 UsedLine,UsedFileMsg],
-				Err)
-	    ),
-	    ContextStatus=[Err]
+				ContextStatus)
+	    )
 	; UsedContext==PREDICATE_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_warning(SymbolIndex,
+	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
 				 [WARN_UDF_PREDICATE_SYMBOL,ERRLINE_NO,
 				  UsedLine,UsedFileMsg],
-				 Err)
-	    ; compiling_warning(SymbolIndex,
+				 ContextStatus)
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
 				[WARN_UDF_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
 				 UsedLine,UsedFileMsg],
-				Err)
-	    ),
-	    ContextStatus=[Err]
+				ContextStatus)
+	    )
 	; UsedContext==SENSOR_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_UDF_SENSOR_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_warning(SymbolIndex, WARN_BUILTIN_SYMBOL, Err)
-	    ; compiling_warning(SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, Err)
-	    ),
-	    ContextStatus=[Err]
+	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_SYMBOL, ContextStatus)
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, ContextStatus)
+	    )
 	;
 	    ContextStatus=[]
 	),
 	!.
 
-make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,SENSOR_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,SENSOR_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	( UsedContext==UDF_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_SENSOR_UDF_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==FUNCTION_SYMBOL, UsedArity==SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_SENSOR_FUNC_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==PREDICATE_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==PREDICATE_SYMBOL, UsedArity==SymbolArity ->
 	    (\+compiling_flrshell_command ->
 		compiling_error(SymbolIndex,
 			      [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err)
+			      Err),
+		ContextStatus = [Err]
 	    %% in the FLORA shell just give a warning
-	    ; compiling_warning(SymbolIndex,
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err)
-	    ),
-	    ContextStatus=[Err]
+			      ContextStatus)
+	    )
 	; UsedContext==SENSOR_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_SENSOR_ARITY_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==PROLOG_SYMBOL,
 	    %% prolog symbol that comes from a sensor has 2 more args: file+line
 	    (UsedArity=\=SymbolArity
-	    -> compiling_warning(SymbolIndex,
+	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
 				 [ERROR_SENSOR_PROLOG_SYMBOL,ERRLINE_NO,
 				  UsedLine,UsedFileMsg],
-				 Err)
+				 ContextStatus)
 	    ; compiling_error(SymbolIndex,
 			      [ERROR_SENSOR_PROLOG_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err)
-	    ),
-	    ContextStatus=[Err]
+			      Err),
+	    	ContextStatus=[Err]
+	    )
 	; UsedContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_error(SymbolIndex, WARN_BUILTIN_SYMBOL, Err)
-	    ; compiling_warning(SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, Err)
-	    ),
-	    ContextStatus=[Err]
+	    -> compiling_error(SymbolIndex, WARN_BUILTIN_SYMBOL, Err),
+	    	ContextStatus=[Err]
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, ContextStatus)
+	    )
 	;
 	    ContextStatus=[]
 	),
 	!.
 
-make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolArity,SymbolIndex,PROLOG_SYMBOL,_SymbolTransactional,ContextStatus) :-
+make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,PROLOG_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	%% MK: can this happen in the FLORA shell?
 	( UsedContext==UDF_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_error(SymbolIndex,
@@ -5377,11 +5449,10 @@ make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,U
 			    Err),
 		ContextStatus=[Err]
 	; UsedContext==PROLOG_SYMBOL, UsedArity\=SymbolArity ->
-	    compiling_warning(SymbolIndex,
+	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PROLOG_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_PROLOG_ARITY_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      Err),
-	    ContextStatus=[Err]
+			      ContextStatus)
 	; UsedContext==FUNCTION_SYMBOL, UsedArity==SymbolArity ->
 		compiling_error(SymbolIndex,
 				[ERROR_PROLOG_FUNC_SYMBOL,ERRLINE_NO,
@@ -5393,25 +5464,25 @@ make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,U
 	    -> compiling_error(SymbolIndex,
 			       [ERROR_PROLOG_PREDICATE_SYMBOL,ERRLINE_NO,
 				UsedLine,UsedFileMsg],
-			       Err)
-	    ; compiling_warning(SymbolIndex,
+			       Err),
+	    	ContextStatus=[Err]
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PROLOG_SYMBOL,SymbolTransactional,SymbolIndex,
 				[WARN_PROLOG_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
 				 UsedLine,UsedFileMsg],
-				Err)
-	    ),
-	    ContextStatus=[Err]
+				ContextStatus)
+	    )
 	; UsedContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_error(SymbolIndex, WARN_BUILTIN_SYMBOL, Err)
-	    ; compiling_warning(SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, Err)
-	    ),
-	    ContextStatus=[Err]
+	    -> compiling_error(SymbolIndex, WARN_BUILTIN_SYMBOL, Err),
+		    ContextStatus=[Err]
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PROLOG_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, ContextStatus)
+	    )
 	;
 	    ContextStatus=[]
 	),
 	!.
 
-make_symbol_context_status(_,_,_,_,_,_,_,_,_,[]).
+make_symbol_context_status(_,_,_,_,_,_,_,_,_,_,_,[]).
 
 
 /****************************************************************************
@@ -10384,6 +10455,13 @@ has_symbol(Name,N,WS,Index,LineNumber,Context,Transactional) :-
 has_nowarn_symbol(Name,N,WS,Context,Transactional) :-
 	nowarn_symbol(Name,N,WS,Context,Transactional),
 	!.
+
+has_nowarn_any_symbol(Name,N,WS,_Context,Transactional) :-
+	nowarn_symbol(Name,N,WS,ANY_SYMBOL_CONTEXT,Transactional),
+	!.
+
+has_nowarn_any_symbol(Name,N,WS,Context,Transactional) :-
+	has_nowarn_symbol(Name,N,WS,Context,Transactional).
 
 flora_clear_compilation_symbols :-
         %% following \+ is a workaround for an XSB garbage collection bug:

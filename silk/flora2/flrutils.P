@@ -2044,36 +2044,65 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
 	print_load_error_count(ErrNumFinal),
 	incr_flora_update_counter.
 
+
+/*************************************************************************
+find_nowarn_any_symbol(+StorageName,+SymbolName,+SymbolArity,+SymbolWS,+SymbolContext,+SymbolTransactional)
+Returns true if symbol was specified in a symbol_context directive
+in another loaded file - either in a particular SymbolContext or in any context
+(as Symbol/?)
+*************************************************************************/
+
+find_nowarn_any_symbol(StorageName,SymbolName,SymbolArity,SymbolWS,_SymbolContext,SymbolTransactional) :-
+	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,SymbolWS,ANY_SYMBOL_CONTEXT,SymbolTransactional,_)),
+	!.
+
+find_nowarn_any_symbol(StorageName,SymbolName,SymbolArity,SymbolWS,SymbolContext,SymbolTransactional) :-
+	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,SymbolWS,SymbolContext,SymbolTransactional,_)).
+
+/*************************************************************************
+find_nowarn_any_symbol_any_arity(+StorageName,+SymbolName,+SymbolArity,+SymbolWS,+SymbolContext,+SymbolTransactional)
+Returns true if symbol was specified in a symbol_context directive
+in another loaded file - either with SymbolContext or with ANY_SYMBOL_CONTEXT
+and either with a constant SymbolArity or variable arity (?)
+*************************************************************************/
+
+find_nowarn_any_symbol_any_arity(StorageName,SymbolName,_SymbolArity,SymbolWS,SymbolContext,SymbolTransactional) :-
+	find_nowarn_any_symbol(StorageName,SymbolName,FL_STAR,SymbolWS,SymbolContext,SymbolTransactional),
+	!.
+
+find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,SymbolWS,SymbolContext,SymbolTransactional) :-
+	find_nowarn_any_symbol(StorageName,SymbolName,SymbolArity,SymbolWS,SymbolContext,SymbolTransactional).
+
 %% MK: Need to add cases to warn about Prolog predicates and sensors!!!
 make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,FUNCTION_SYMBOL,SymbolTransactional,[]) :-
-	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,_,FUNCTION_SYMBOL,SymbolTransactional,_)),
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,_,FUNCTION_SYMBOL,SymbolTransactional),
 	!.
 
 make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,UDF_SYMBOL,SymbolTransactional,[]) :-
-	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,_,UDF_SYMBOL,SymbolTransactional,_)),
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,_,UDF_SYMBOL,SymbolTransactional),
 	!.
 
 make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,PROLOG_SYMBOL,SymbolTransactional,[]) :-
-	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,_,PROLOG_SYMBOL,SymbolTransactional,_)),
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,_,PROLOG_SYMBOL,SymbolTransactional),
 	!.
 
 make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
-	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,StoredWS,PREDICATE_SYMBOL,SymbolTransactional,_)),
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,StoredWS,PREDICATE_SYMBOL,SymbolTransactional),
 	!,
 	%% If StoredWS is anonymous variable - then ignore warnings
 	is_flvariable(StoredWS,VarName,_VarIndex),
 	VarName == FL_UNDERSCORE.
 
 make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
-	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,NULL,PREDICATE_SYMBOL,SymbolTransactional,_)),
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,NULL,PREDICATE_SYMBOL,SymbolTransactional),
 	!.
 
 make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
-	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,FL_THISMODULE,PREDICATE_SYMBOL,SymbolTransactional,_)),
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,FL_THISMODULE,PREDICATE_SYMBOL,SymbolTransactional),
 	!.
 
 make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
-	flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,WS,PREDICATE_SYMBOL,SymbolTransactional,_)),
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,WS,PREDICATE_SYMBOL,SymbolTransactional),
 	!.
 
 %% This case is handled differently from the compiler (error instead of warning)
@@ -2109,9 +2138,9 @@ make_symbol_context_load_status(_StorageName,UsedLine,UsedFile,PROLOG_SYMBOL,_Us
 			Err),
 	ContextStatus=[Err].
 
-make_symbol_context_load_status(_StorageName,UsedLine,UsedFile,UsedContext,UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus) :-
+make_symbol_context_load_status(_StorageName,UsedLine,UsedFile,UsedContext,UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus) :-
 	flora_concat_atoms([' in file ',UsedFile],UsedFileMsg),
-	make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,UsedTransactional,UsedArity,SymbolArity,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus).
+	make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus).
 
 
 

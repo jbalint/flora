@@ -135,7 +135,7 @@
 	flora_get_compilation_liboptions/1,
 	symbol/7,
 	nowarn_symbol/5,
-	make_symbol_context_status/10,
+	make_symbol_context_status/12,
 	compiling_error/3,
 	is_flvariable/3
    from flrcompiler.
