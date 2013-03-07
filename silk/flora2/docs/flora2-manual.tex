@@ -7605,9 +7605,9 @@ illustrate the use of aggregates (some borrowed from the \FLORID manual):
 %%
 \begin{quote}
 \begin{verbatim}
-      ?- ?Z = min{?S|John[salary(?Year)->?S]}.
-      ?- ?Z = count{?Year|John.salary(?Year) < max{?S|John[salary(?Y)->?S], ?Y < ?Year}}.
-      ?- avg{?S[?Who]|?Who:employee[salary(?Year)->?S]} > 20000. 
+?- ?Z = min{?S|John[salary(?Year)->?S]}.
+?- ?Z = count{?Year|John.salary(?Year) < max{?S|John[salary(?Y)->?S], ?Y < ?Year}}.
+?- avg{?S[?Who]|?Who:employee[salary(?Year)->?S]} > 20000. 
 \end{verbatim}
 \end{quote}
 %%
@@ -8301,7 +8301,7 @@ would bind \texttt{?X}  to \texttt{sens1} or \texttt{sens2}
 (cf. Section~\ref{sec-lowlevel}).
 
   
-\section{Rearranging the Order of Subgoals at Run Time}.
+\section{Rearranging the Order of Subgoals at Run Time}
 \label{sev-rearanging}
 
 Sometimes certain subgoals should be executed only if certain arguments are
@@ -11231,7 +11231,7 @@ will be in the file \texttt{temp} and will have the same structure as before:
 %% 
 
 
-\subsection{Tracing Tabled Calls via Forest Logging}
+\subsection{Tracing Tabled Calls via Forest Logging}\label{sec-logforest}
 
 While the regular Call-Redo-Exit-Fail logging is useful in many cases, it
 is extremely slow and generates large amounts of output. A program that
@@ -11267,9 +11267,10 @@ In the latter case, logging will start after this subgoal gets
 executed. 
 To stop forest logging, issue the command {\tt \_nologforest}. 
 
-Every call in a forest log has an Id, which is a non-negative integer.
 The entries in the log represent the following actions that occur during
-tabled evaluation of queries.
+tabled evaluation of queries and every entry has an Id which is a
+non-negative integer. 
+
 %%
 \begin{itemize}
 \item \emph{A call to a tabled subgoal}. When a call to a tabled subgoal $\tt S_1$ is
@@ -11280,7 +11281,7 @@ tabled evaluation of queries.
    call(Id)[goal->S1, stage->Stage, parent->S2].
 \end{verbatim}
   %% 
-  where $Id$ is the generated Id of the call and $Stage$ is
+  where {\tt Id} is the generated Id of the call and {\tt Stage} is
   \begin{itemize}
   \item {\tt new} if $\tt S_1$ is a new subgoal.
   \item {\tt comp} if $\tt S_1$ is an old \emph{completed} subgoal.
@@ -11288,18 +11289,27 @@ tabled evaluation of queries.
     has not been fully evaluated yet).
   \end{itemize}
   %% 
+
   If $\tt S_1$ is the first tabled subgoal in an evaluation, $\tt S_2$ is
   represented by the atom {\tt null}.
+  If the call is negative, a similar fact of the form
+  {\tt negative\_call(Id)[goal->S1, stage->Stage, parent->S2]} is logged. 
   
-\item \emph{Derivation of a new answer}. When a new answer $A$ is derived for 
+\item \emph{Derivation of a new answer}. When a new unconditional
+  answer {\tt A} is derived for  
   subgoal \texttt{S}  and added to the table, the following fact is logged:
 %%
 \begin{verbatim}
    answer(Id)[goal->S, answer->A].
 \end{verbatim}
 %%
-  As before, \emph{Id} is the identity number generated for this particular
+  As before, {\tt Id} is the identity number generated for this particular
   action. 
+
+  When a new conditional answer {\tt A} is derived for subgoal \texttt{S}
+  and the delayed literals are {\tt D}, a log of the form
+  {\tt conditional\_answer(Id)[goal->S, answer->A, delayed\_literals->D]}
+  is recorded. 
 
 \item \emph{Return of an answer to a consuming subgoal}. When an answer $A$ is
   computed and
@@ -11312,6 +11322,19 @@ tabled evaluation of queries.
    answer_to_consumer(Id)[goal->S, answer->A, consumer->ST].
 \end{verbatim}  
 %% 
+  If \texttt{A} is conditional, this entry
+  {\tt delayed\_answer\_to\_consumer(Id)[goal->S, answer->A, consumer->ST]} 
+  is recorded. 
+
+\item \emph{Delaying a negative literal}. When a selected negative
+  literal {\tt N} of a node {\tt S} is delayed due to its involvement
+  in a loop through negation, and {\tt S} is in a derivation tree for
+  $\tt S_T$, a fact of this form is logged.
+%%
+\begin{verbatim}  
+   delay(Id)[delayed_literal->N, parent->ST].
+\end{verbatim}  
+%% 
 
 \item \emph{Subgoal completion}. When a set ${\cal S}$ of subgoals is 
   completely evaluated, for each $\texttt{S} \in {\cal S}$ a fact of the following
@@ -11321,8 +11344,8 @@ tabled evaluation of queries.
    completed(Id)[goal->S, sccnum->SCCNum].
 \end{verbatim}  
 %% 
-  Here $SCCNum$ is an Id generated for the set of subgoals ${\cal S}$.
-  If \texttt{S}  is completed early, $SCCNum$ is the atom {\tt ec}. 
+  Here {\tt SCCNum} is the identifier generated for the set of subgoals ${\cal S}$.
+  If \texttt{S}  is completed early, {\tt SCCNum} is the atom {\tt ec}. 
   
 \item \emph{Table abolishes}. There are three occasions where tables are abolished.
   \begin{itemize}
@@ -11361,31 +11384,46 @@ tabled evaluation of queries.
 By default, logs are sent to the current output stream. However, it is
 usually more convenient
 to dump the logs to a file using the following command:
-{\tt \_logforest(File)}. For instance,
-executing
+{\tt \_logforest(File)}. For instance, executing
 %%
 \begin{verbatim}
-   ?- _logforest('foobar.txt').
+   ?- _logforest('foobar.flr').
 \end{verbatim}
 %% 
-will direct \FLORA to dump the entire forest log into the file {\tt foobar.txt}.
+will direct \FLORA to dump the entire forest log into the file {\tt foobar.flr}.
+In case where the user also wants to examine the original XSB's forest
+logging trace, the following command can be executed: 
+{\tt \_logforest(FloraTraceFile,XSBTraceFile)}. For instance, executing
+%%
+\begin{verbatim}
+   ?- _logforest('foobar.flr', 'foobar.P').
+\end{verbatim}
+%% 
+will dump the trace in the above \FLORA format into the file {\tt foobar.flr}
+and keep the original XSB's forest log in the file {\tt foobar.P}. 
 
 We may want to skip certain types of log entries in some circumstances such
 as reducing log file sizes. \FLORA provides {\tt \_logforest(HideOptions)} and 
 {\tt \_logforest(File, HideOptions)}, where {\tt HideOptions} is a list of log
 types to be skipped.
-Its elements can only be {\tt call, answer, answer\_to\_consumer, completed, 
-table\_abolished} and {\tt error}. For instance, 
+The elements of {\tt HideOptions} can only be {\tt call,
+  negative\_call, delayed\_call,  answer, conditional\_answer,
+  answer\_to\_consumer, delayed\_answer\_to\_consumer, completed,
+  table\_abolished}, and {\tt error}. For instance,  
 %%
 \begin{verbatim}
    ?- _logforest([table_abolished, error]).
-   ?- _logforest('foobar.txt', [table_abolished, error]).
+   ?- _logforest('foobar.flr', [table_abolished, error]).
 \end{verbatim}
 %% 
 will not record logs for table abolish and error actions. 
-Note that {\tt \_logforest(HideOptions)} and {\tt \_logforest(File)} will not 
-be mixed since \FLORA checks whether its argument is a list or not to tell 
+
+Note that {\tt \_logforest(FloraTraceFile,XSBTraceFile)} and 
+{\tt \_logforest(File,HideOptions)} will not be mixed since \FLORA
+checks whether their second argument is a list or not to tell
 which command is executed. 
+Similarly, {\tt \_logforest(HideOptions)} and {\tt \_logforest(File)}
+will not be mixed.
 
 It is important to keep in mind, however, that \emph{no} output
 is produced (to the file or output stream) unless the user issues the command
@@ -11408,7 +11446,7 @@ directly in the XSB format.
 There is also a version of this command for saving the log in a file:
 %%
 \begin{verbatim}
-   ?- _logforestlow('foobar.txt').
+   ?- _logforestlow('foobar.flr').
 \end{verbatim}
 %% 
 As before, one should remember to issue the command \texttt{\_nologforest}
@@ -11548,6 +11586,150 @@ Unifying in the fast mode can lead to hard-to-find errors, although \FLORA
 makes attempts to limit the damage and the probability of serious problems
 occurring due to this mode of unification is low.
 
+\subsection{Non-Termination Analysis}
+
+\index{non-termination}
+\index{terminyzer}
+
+There are two main non-termination causes in \FLORA, i.e., infinitely
+many calls and infinitely many answers, and both of them are formed by
+a set of recursive subgoals together with function symbols. 
+Since non-termination is normally very hard to debug, \FLORA thus 
+implements an automatic non-\emph{Termin}ation Anal\emph{yzer},
+\texttt{terminyzer}, to help the user to locate and explain
+non-terminating behaviors. 
+
+When a non-termination is suspected, we suppose that the execution is
+stopped after a time limit set by the user or after the evaluation 
+starts producing queries or answers that exceed certain size limits.
+\texttt{Terminyzer} then analyzes the execution's forest logging trace
+and reports the sequences of tabled unfinished calls and their
+respective rule ids (the rules in the user program from which these
+calls are issued) that actually caused the non-termination.
+Below, we describe the usage of \texttt{Terminyzer} and more
+information can be found in \cite{terminyzer}.
+
+To start \texttt{Terminyzer}, the user issues the following command
+%% 
+\begin{verbatim}
+    ?- terminyzer(XSBTraceFile,SummaryFile)@_prolog(flrterminyzer).
+\end{verbatim}
+%% 
+where {\tt XSBTraceFile} is the XSB logforest trace that can be
+obtained by {\tt \_logforest} as described in
+Section~\ref{sec-logforest} and {\tt SummaryFile} is the analysis
+summary in \FLORA loadable format.  
+The entries in the summary file locate and explain a non-termination
+if it happens and they are as follows.
+%% 
+\begin{itemize}
+\item \emph{Logforest file}. The logforest trace file being analyzed
+  is recorded as:
+%% 
+\begin{verbatim}
+   logfile(XSBTraceFile).
+\end{verbatim}
+%% 
+
+\item \emph{Unfinished tabled calls}.
+  If a tabled subgoal $\tt S_1$ in module {\tt M} is called from a
+  derivation tree for $\tt S_2$ because of the rule whose id is
+  {\tt RId} (i.e., $\tt S_2$ matches this rule's head and $\tt S_1$
+  matches one of its body subgoals) and $\tt S_1$ is incomplete, the
+  following two \FLORA molecules are recorded: 
+%% 
+\begin{verbatim}
+   node[nodeid->NId,subgoal->S1,module->M,ruleid->RId,type->unfinishedcall].
+   edge[edgeid->EId,parent ->S2,child->S1,ruleid->RId,type->unfinishedcall].
+\end{verbatim}
+%% 
+  where {\tt nodeid} is a unique node id generated for each
+  non-variant subgoal and 
+  {\tt edgeid} is the unique id generated for this call from $\tt S_2$
+  to $\tt S_1$. 
+  Both ids are non-negative integers and they preserve the
+  temporal orders of subgoal and call creation during evaluation.
+  {\tt Type} records the type of this subgoal and call as {\tt unfinishedcall}.
+
+  Besides, the number of unfinished subgoals and calls are also
+  recorded as follows:
+%% 
+\begin{verbatim}
+   number_of_nodes(NumOfSubgoals,unfinishedcall).
+   number_of_edges(NumOfCalls,unfinishedcall).
+\end{verbatim}
+%% 
+  Here the notions of node and edge are borrowed from
+  \cite{terminyzer}, where the relationships among unfinished subgoals
+  are captured by a graph. 
+
+\item \emph{Infinitely many subgoals}. 
+  If the trace is for a non-termination caused by infinitely many
+  subgoals, then these subgoals have to be generated by a set of
+  recursive predicates together with function symbols.
+  Furthermore, every cycle of calls to these recursive predicates
+  produce a set of increasingly deeper subgoals.
+  For each of the subgoals produced by the first cycle of recursive
+  calls, a node of type {\tt loopcall} is recorded as follows:
+%% 
+\begin{verbatim}
+   node[nodeid->NId,subgoal->S,module->M,ruleid->RId,type->loopcall].
+\end{verbatim}
+%% 
+  where {\tt nodeid, module}, and {\tt ruleid} are the same as in the
+  case of {\tt unfinishedcall}. 
+  
+\item \emph{Infinitely many answers}. 
+  When the trace is for a non-terminating evaluation caused by
+  infinitely many answers, these answers are produced by a set of
+  recursive predicates together with function symbols. 
+  These set of recursive unfinished subgoals and their relationships
+  are also identified. 
+  If a tabled subgoal $\tt S_1$ in module {\tt M} is called from a
+  derivation tree for $\tt S_2$ because of the rule whose id is
+  {\tt RId} and $\tt S_1$ is producing answers which will returned to
+  $\tt S_2$, then the following two facts are recorded:
+%% 
+\begin{verbatim}
+   node[nodeid->NId,subgoal->S1,module->M,ruleid->RId,type->answerflow].
+   edge[edgeid->EId,parent ->S2,child->S1,ruleid->RId,type->answerflow].
+\end{verbatim}
+%% 
+  where {\tt nodeid} and {\tt edgeid} are the respective node id and
+  edge id generated for unfinished calls. 
+  The number of {\tt answerflow} nodes and edges are kept as
+%% 
+\begin{verbatim}
+   number_of_nodes(NumOfNodes,answerflow).
+   number_of_edges(NumOfEdges,answerflow).
+\end{verbatim}
+%% 
+
+  If a sequence of predicates are involved in a recursive loop, they
+  are recorded as 
+%% 
+\begin{verbatim}
+   loop[loopid->LoopId, nodes->LoopNodeIds].
+\end{verbatim}
+%% 
+  where {\tt loopid} is a unique id generated for each recursive loop
+  and {\tt nodes} are the sequence of involved subgoal node ids.
+  This sequence also keeps calling relationship among its subgoals. 
+  For instance, {\tt loop[loopid->1, nodes->[5,6,5]]} says
+  that subgoal 5 calls subgoal 6 and subgoal 6 calls subgoal 5, and
+  this recursion is producing infinitely many answers. 
+  The number of such loops are stored as
+%% 
+\begin{verbatim}
+   number_of_loops(NumOfLoops).
+\end{verbatim}
+%% 
+\end{itemize}
+
+The information produced by {\tt terminyzer} can be used to locate
+non-terminations, i.e., the set of recursive predicates and their
+respective rule ids that are responsible for either infinitely many
+subgoals or infinitely many answers. 
 
 \section{Optimizations}
 
