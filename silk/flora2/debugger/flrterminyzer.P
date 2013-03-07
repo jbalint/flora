@@ -1,0 +1,597 @@
+/* File:		flrterminyzer.P
+** 
+** Author(s): Senlin Liang
+**
+** Copyright (C) by
+**      The Research Foundation of the State University of New York, 2011;
+**      and Vulcan, Inc., 2011.
+**
+** All rights reserved.
+**
+** For information about licensing terms, please see
+** http://silk.projects.semwebcentral.org/flora2-license.html
+**
+**
+*/
+
+:- compiler_options([xpp_on]).
+
+:- import append/3, 
+	length/2, 
+	member/2, 
+	reverse/2, 
+	ith/3
+   from basics.
+:- import min_list/2,
+	max_list/2,
+	last/2
+   from lists.
+:- import variant/2 from subsumes.
+:- import 
+	path_sysop/2,
+	path_sysop/3 
+   from file_io.
+:- import flora_decode_oid_as_atom/2 from flrdecode. 
+
+
+:- use_subsumptive_tabling path/3.
+
+%% Type = unfinishedcall or answerflow
+:-  dynamic node/3,		%% (Counter,Call,Type)
+	node_num/2,			%% (NodeNum,Type)
+	edge/5,				%% (Counter,Call,Parent,RuleId,Type)
+	edge_num/2,			%% (EdgeNum,Type)
+	loop/2,				%% (Counter,Nodes)
+	loop_num/1.			%% (LoopNum)
+
+%% indexing graphs
+:-  index(node/3,[1,3,2+3,1+3]),
+	index(edge/5,[1,4,2+3+4]),
+	index(loop/3,[3]),
+	index(loop_num/2,[2]).
+
+%% import log entries from usermod, where load_dyn loads facts 
+:- import tc/3, na/3, ar/3, cmp/2 from usermod.
+
+%% indexing logs 
+:-  dynamic tc/3, na/3, ar/3, cmp/2.
+:-  index(cmp/2,[1,2]),
+	index(ar/3,[3,1+2+3]),
+	index(na/3,[3]).
+
+%% certain unwanted logs are deleted during preprocessing 
+:-  dynamic hide_this_ctrace_pred/1.
+:-  assert(hide_this_ctrace_pred(flora_storage_module)),
+	assert(hide_this_ctrace_pred(flora_is_fdb_storage)),
+	assert(hide_this_ctrace_pred(flora_fdb_storage_name)),
+	assert(hide_this_ctrace_pred(op_synonym)).
+
+%% preprocessed file names in the form of (Type,Filename)
+:- dynamic processed_logfiles/2.
+
+:- export terminyzer/2.
+
+%% check whether a trace should be hidden
+hide_this_ctrace([]).
+hide_this_ctrace([H|T]) :-
+	functor(H,Pred,_),
+	(hide_this_ctrace_pred(Pred) -> fail; hide_this_ctrace(T)).
+
+preprocess(LogFile) :-
+	path_sysop(basename,LogFile,BaseFile),
+	atom_concat(BaseFile,'_callcmp.P',CallCmpFile),
+	atom_concat(BaseFile,'_ar.P',ARFile),
+	atom_concat(BaseFile,'_na.P',NAFile),
+	assert(processed_logfiles(callcmp,CallCmpFile)),
+	assert(processed_logfiles(ar,ARFile)),
+	assert(processed_logfiles(na,NAFile)),
+	open(CallCmpFile,write,CCS),
+	open(ARFile,write,ARS),
+	open(NAFile,write,NAS),
+	see(LogFile),
+	preprocess(CCS,ARS,NAS),
+	seen,
+	close(CCS),
+	close(ARS),
+	close(NAS),
+	writeln_list(['Preprocessing logforest file: ',LogFile]),
+	writeln_list(['  Call-completion logs are written to file: ',CallCmpFile]),
+	writeln_list(['  Answer-return-to-consumer logs are written to file: ',ARFile]),
+	writeln_list(['  New-answer logs are written to file: ',NAFile]).
+
+%% preprocess the log file
+preprocess(CCS,ARS,NAS) :-
+	repeat,
+	read(Term),
+	(Term == end_of_file, !
+	;
+		Term =.. [CTracePred|_],
+		(hide_this_ctrace_pred(CTracePred) -> fail ; true),
+		((Term = tc(S1,S2,Stage,Counter); Term = nc(S1,S2,Stage,Counter)) -> 
+			member(Stage,[new,incmp]),
+			hide_this_ctrace([S1,S2]),
+			write_canonical(CCS,tc(S1,S2,Counter)), writeln(CCS,'.')
+		; (Term = na(A,S,Counter); Term = nda(A,S,_D,Counter)) -> 
+			hide_this_ctrace([A,S]),
+			write_canonical(NAS,na(A,S,Counter)), writeln(NAS,'.')
+		; (Term = ar(A,S,ST,Counter); Term = dar(A,S,ST,Counter)) ->
+			hide_this_ctrace([A,S,ST]),
+			write_canonical(ARS,ar(S,ST,Counter)), writeln(ARS,'.')
+		; Term = cmp(S,_SCCNum,Counter) -> 
+			hide_this_ctrace([S]),
+			write_canonical(CCS,cmp(S,Counter)), writeln(CCS,'.')
+	    %% stop processing when see a _halt or error or throw
+		; Term = throw(_Error,_S,_Counter) -> fail, !
+		; Term = err(_S,_Counter) -> fail, !
+		; true
+		),
+	    fail
+	),
+	!.
+preprocess(_,_,_).
+
+%% auxiliary predicates
+xsb_abort(L) :- writeln_list(L), halt.
+
+writeln_list(L) :- write_list(L), nl.
+writeln_list(L,S) :- write_list(L,S), nl(S).
+
+write_list([]).
+write_list([H|T]) :- write(H), write_list(T).
+write_list([],_S).
+write_list([H|T],S) :- write(S,H), write_list(T,S).
+
+%% graph constructions
+build_graph([],_Type).
+%% unfinished call graph
+build_graph([(_Id,Goal,_Parent)|T],unfinishedcall) :- 
+	%% when variant tabling is used, it is not correct to use unification
+	%% For instance, the following sequence of logs
+	%% tc(a(X)), where a(X) will not terminate
+	%% tc(a(f(1))), which terminates
+	%% cmp(a(f(1))), which will complete both a(X) and a(f(1))
+	%% cmp(Goal,_,_),
+	%% The following completely correct implementation is 10 times slower!
+	cmp(GoalVariant,_),
+	variant(Goal,GoalVariant),
+	!,
+	build_graph(T,unfinishedcall).
+build_graph([(_Id,Goal,Parent)|T],unfinishedcall) :-
+	%% Parent has to be added before Goal
+	add_node(Parent,unfinishedcall,ParentId),
+	add_node(Goal,unfinishedcall,GoalId),
+	%% get the rule id of this call, last argument [Module, tracing(_,RuleId)]
+	Goal =.. GoalFlatten,
+	last(GoalFlatten,[_Module,tracing(_,Rule)]),
+	add_edge(GoalId,ParentId,Rule,unfinishedcall,_EdgeId),
+	build_graph(T,unfinishedcall).
+%% answer flow graph
+build_graph([(Goal-Parent)|T],answerflow) :-
+	%% get the node ids in unfinished call graph
+	(node(GoalId,GoalVariant,unfinishedcall),
+		variant(Goal,GoalVariant),
+		node(ParentId,ParentVariant,unfinishedcall),
+		variant(Parent,ParentVariant)
+	;
+		xsb_abort(['Error in building answerflow graph: unrecognized goal-parent detected\n',
+				   'Goal: ',Goal, '\nParent: ', Parent])
+	),
+	(node(GoalId,Goal,answerflow) -> 	
+		true
+	; 
+		assert(node(GoalId,Goal,answerflow))
+	),
+	(node(ParentId,Parent,answerflow) -> 
+		true
+	; 
+		assert(node(ParentId,Parent,answerflow))
+	),
+	%% get the edge id in the unfinished call graph
+	edge(EdgeId,GoalId,ParentId,Rule,unfinishedcall),
+	(edge(EdgeId,GoalId,ParentId,Rule,answerflow) -> 
+		true
+	; 
+		assert(edge(EdgeId,GoalId,ParentId,Rule,answerflow))
+	),
+	build_graph(T,answerflow).
+
+add_node(Node,Type,NodeId) :- 
+	node(NodeId,NodeVariant,Type),
+	variant(Node,NodeVariant),
+	!.
+add_node(Node,Type,NodeId) :-
+	node_num(NodeNum,Type),
+	NodeId is NodeNum+1,
+	retractall(node_num(NodeNum,Type)),
+	assert(node_num(NodeId,Type)),
+	assert(node(NodeId,Node,Type)).
+
+add_edge(ProducerId,ConsumerId,Rule,Type,EdgeId) :-
+	edge(EdgeId,ProducerId,ConsumerId,Rule,Type),
+	!.
+add_edge(ProducerId,ConsumerId,Rule,Type,EdgeId) :-
+	edge_num(EdgeNum,Type),
+	EdgeId is EdgeNum+1,
+	retractall(edge_num(EdgeNum,Type)),
+	assert(edge_num(EdgeId,Type)),
+	assert(edge(EdgeId,ProducerId,ConsumerId,Rule,Type)).
+
+build_loop([]).
+build_loop([Node|T]) :-
+	(path(Node,Node,Path),
+		(Path = [] -> 
+			true 
+		;
+			min_list(Path,MinPathNode),
+			Node =< MinPathNode
+		),
+		append(Path,[Node],PathTail),
+		loop_num(LoopNum),
+		LoopNum1 is LoopNum+1,
+		retractall(loop_num(LoopNum)),
+		assert(loop_num(LoopNum1)),
+		assert(loop(LoopNum1,[Node|PathTail])),
+		fail
+	;
+		true
+	),
+	build_loop(T).
+
+%% path(+Start,+End,-MiddleNodes) 
+%% Compute answer-flow paths
+path(X,Y,[]) :- edge(_,Y,X,_,answerflow).
+path(X,Y,[Z|Path]) :- 
+	edge(_,Z,X,_,answerflow),
+	Z =\= X,
+	Z =\= Y,
+	path(Z,Y,Path),
+	\+ member(Z,Path).
+
+%% Type: unfinishedcall or answerflow
+%% Format: text or xsb or flora
+print_graph(Type,Format) :- current_output(S), print_graph(Type,Format,S).
+print_graph(Type,Format,S) :-
+	(Format == text ->
+		writeln_list(['----',Type,' analysis summary----'],S),
+		writeln(S,'Graph nodes are in the format of node[nodeid->Id,subgoal->Subgoal,module->Module,ruleid->RuleId,type->GraphType]'),
+		writeln(S,'Node Ids for answer-flow graph are the corresponding unfinished call graph node Ids')
+	; Format == flora ->
+		writeln_list(['// ----',Type,' analysis summary----'],S),
+		writeln(S,'// Graph nodes are in the format of node[nodeid->Id,subgoal->Subgoal,module->Module,ruleid->RuleId,type->GraphType]'),
+		writeln(S,'// Node Ids for answer-flow graph are the corresponding unfinished call graph node ids'), 
+		writeln(S,'// Type can be either unfinishedcall or answerflow')
+	),
+	findall(Id,node(Id,_Call,Type),Ids0),
+	sort(Ids0,Ids),
+	print_nodes(Ids,Type,Format,S),
+	node_num(NodesNum,Type),
+	(Format == text -> 
+		writeln_list(['Number of nodes: ',NodesNum],S), nl(S),
+		writeln(S,'Edges are in the format of edge[edgeid->EdgeId, parent->ParentSubgoalNodeId, child->ChildSubgoalNodeId, ruleid->RuleId, type->GraphType]'),
+		writeln(S,'Edge Ids for answer-flow graph are the corresponding unfinished call graph edge Ids')
+	; Format == flora -> 
+		writeln(S,'// Number of nodes'),
+		writeln_list([number_of_nodes(NodesNum,Type),'.\n'],S),
+		writeln(S,'// Edges are in the format of edge[edgeid->EdgeId, parent->ParentSubgoalNodeId, child->ChildSubgoalNodeId, ruleid->RuleId, type->GraphType]'),
+		writeln(S,'// Edge Ids for answer-flow graph are the corresponding unfinished call graph edge Ids')
+	),
+	findall((Id,ProducerId,ConsumerId,RuleId),
+		    edge(Id,ProducerId,ConsumerId,RuleId,Type),
+			Edges0),
+	sort(Edges0,Edges),
+	print_edges(Edges,Type,Format,S),
+	edge_num(EdgesNum,Type),
+	(Format == text -> 
+		writeln_list(['Number of edges: ',EdgesNum],S)
+	; Format == flora ->
+		writeln(S,'// Number of edges'),
+		writeln_list([number_of_edges(EdgesNum,Type),'.'],S)
+	).
+
+print_loop(Format) :- current_output(S), print_loop(Format,S).
+print_loop(Format,S) :-
+	findall((Id,Loop),loop(Id,Loop),Loops0),
+	sort(Loops0,Loops),
+	(Format == text ->
+		writeln(S,'Answer-flow loops are in the format of loop[loopid->LoopId, nodes->LoopNodeIds]')
+	; Format == flora ->
+		writeln(S,'// Answer-flow loops are in the format of loop[loopid->LoopId, nodes->LoopNodeIds]')
+	),
+	aux_print_loop(Loops,Format,S),
+	loop_num(LoopsNum),
+	(Format == text ->
+		writeln_list(['Number of loops: ',LoopsNum],S)
+	; Format == flora ->
+		writeln(S,'// Number of loop'),
+		writeln_list([number_of_loops(LoopsNum),'.'],S)
+	).
+
+aux_print_loop([],_Format,_S).
+aux_print_loop([(Id,LoopNodes)|T],Format,S) :-
+	(Format == text ->
+		writeln_list(['  loop[loopid->',Id,', nodes->',LoopNodes,']'],S)
+	; Format == flora ->
+		writeln_list(['loop[loopid->',Id,', nodes->',LoopNodes,'].'],S)
+	),
+	aux_print_loop(T,Format,S).
+	
+%% given Id, decode its XSB-call into Flora format and get pred, module, and ruleid 
+decode_call(Id,Call,CallFlora,PredFlora,ModuleFlora,RuleFlora) :-
+	node(Id,Call,unfinishedcall),
+	(Call =.. [_Wrapper,Pred|CallFlatten], !; Pred = Call),	
+	last(CallFlatten,[Module,tracing(_,Rule)]),
+	flora_decode_oid_as_atom(Call,CallFlora),
+	flora_decode_oid_as_atom(Pred,PredFlora),
+	flora_decode_oid_as_atom(Module,ModuleFlora),
+	flora_decode_oid_as_atom(Rule,RuleFlora).
+
+print_nodes([],_Type,_Format,_S). 
+print_nodes([Id|T],Type,Format,S) :-
+	decode_call(Id,_Call,CallFlora,_Pred,Module,Rule),
+	(Format == text -> 
+		writeln_list(['  node[nodeid->',Id,', subgoal->',CallFlora,', module->',Module,', ruleid->',Rule,', type->',Type,']'],S)
+	; Format == flora ->
+		writeln_list(['node[nodeid->',Id,', subgoal->',CallFlora,', module->',Module,', ruleid->',Rule,', type->',Type,'].'],S)
+	),
+	print_nodes(T,Type,Format,S).
+print_edges([],_Type,_Format,_S).
+print_edges([(Id,Producer,Consumer,RuleId)|T],Type,Format,S) :-
+	(Format == text ->
+		writeln_list(['  edge[edgeid->',Id,', parent->',Consumer,', child->',Producer,', ruleid->',RuleId,', type->',Type,']'],S)
+	; Format == flora ->
+		writeln_list(['edge[edgeid->',Id,', parent->',Consumer,', child->',Producer,', ruleid->',RuleId,', type->', Type,'].'],S)
+	),
+	print_edges(T,Type,Format,S).
+
+print_loop_call(Pattern,LastNonLoopId,Format) :-
+	current_output(S),
+	print_loop_call(Pattern,LastNonLoopId,Format,S).
+print_loop_call([],_LastNonLoopId,Format,S) :- 
+	(Format == text ->
+		writeln(S,'----loop-call analysis summary: none infinitely deep call loop detected----')
+	; Format == flora ->
+		writeln(S,'// loop-call analysis summary: none infinitely deep call loop detected')
+	),
+	!.
+print_loop_call(Pattern,LastNonLoopId,Format,S) :-
+	(Format == text ->
+		writeln(S,'----loop-call analysis summary: infinitely deep call loop detected----'),
+		writeln(S,'Nodes are in the format of node[nodeid->Id,subgoal->Subgoal,module->Module,ruleid->RuleId,type->loopcall]')
+	; Format == flora ->
+		writeln(S,'// loop-call analysis summary: infinitely deep call loop detected'),
+		writeln(S,'// Nodes are in the format of node[nodeid->Id,subgoal->Subgoal,module->Module,ruleid->RuleId,type->loopcall]')
+	),
+	length(Pattern,PatternLen),
+	LoopStartNodeId is LastNonLoopId+1,
+	LoopEndNodeId is LastNonLoopId+PatternLen,
+	numlist(LoopStartNodeId,LoopEndNodeId,IdListLoop),
+	print_nodes(IdListLoop,loopcall,Format,S).
+
+numlist(Low,High,[]) :- Low > High, !.
+numlist(Low,High,[Low|List]) :- Low1 is Low+1, numlist(Low1,High,List).
+
+collect_call_ruleid(Id,MaxId,[]) :- Id > MaxId, !.
+collect_call_ruleid(Id,MaxId,[Pred-Rule|CallRuleT]) :- 
+	Id1 is Id+1,
+	collect_call_ruleid(Id1,MaxId,CallRuleT),
+	decode_call(Id,_Call,_CallFlora,Pred,_Module,Rule).
+
+loop_call(FinalPattern,FloraFile) :-
+	node_num(IdLen,unfinishedcall),
+	collect_call_ruleid(1,IdLen,CallRules),
+	findall(Id,node(Id,_Call,unfinishedcall),IdsUnsorted),
+	sort(IdsUnsorted,Ids),
+	MaxPatternLen is IdLen/2,
+	(patterns(CallRules,Ids,1,MaxPatternLen,Patterns,Lengths,Times,Borders),
+		optimal_pattern(Lengths,Times,OptimalLength,_OptimalTime),	
+		ith(OptimalIdx,Lengths,OptimalLength),
+		ith(OptimalIdx,Patterns,OptimalPattern),
+		ith(OptimalIdx,Borders,OptimalBorders),
+		OptimalBorders = [B0|_],
+		roll_back(OptimalPattern,B0,FinalPattern,LastNonLoopNodeId),
+		!
+	;
+		FinalPattern = [],
+		LastNonLoopNodeId is 0
+	),
+	print_loop_call(FinalPattern,LastNonLoopNodeId,text), nl,
+	open(file(FloraFile),append,OutputFlora),
+	print_loop_call(FinalPattern,LastNonLoopNodeId,flora,OutputFlora), nl(OutputFlora),
+	close(OutputFlora).
+
+roll_back(FinalPattern,1,FinalPattern,1) :- !.
+roll_back(OptimalPattern,B0,FinalPattern,LastId) :-
+	decode_call(B0,_Call,_CallFlora,Pred,_Module,Rule),
+	last(OptimalPattern,PredVariant-RuleVariant),
+	variant(Pred,PredVariant),
+	variant(Rule,RuleVariant),
+	!,
+	append(PatternPrefix,[_],OptimalPattern),
+	B1 is B0 - 1,
+	roll_back([Pred-Rule|PatternPrefix],B1,FinalPattern,LastId).
+roll_back(FinalPattern,LastId,FinalPattern,LastId) :- !.
+
+unfinished_call(LogFile,FloraFile) :-
+	ensure_loaded(LogFile,dynca),
+	findall(Id,cmp(_,Id),CmpIds),
+	(max_list(CmpIds,MaxCmpId) ; MaxCmpId is 0),
+	%% build unfinishedcall graph
+	assert(node(1,null,unfinishedcall)),
+	assert(node_num(1,unfinishedcall)),
+	assert(edge_num(0,unfinishedcall)),
+	findall((Id,Goal,Parent),(tc(Goal,Parent,Id), Id>MaxCmpId),Triples),
+	sort(Triples,TriplesSorted),
+	%% build unfinished call graph
+	build_graph(TriplesSorted,unfinishedcall),
+	%% terminated evaluation
+	node_num(NodeNum,unfinishedcall),
+	(NodeNum == 1 -> fail; true),
+	%% print out analysis summary
+	writeln_list(['Unfinished-call analysis logfile: ',LogFile]), nl,
+	print_graph(unfinishedcall,text), nl,
+	%% write summary to file
+	%% write to Flora loadable format
+	open(file(FloraFile),append,OutputFlora),
+	print_graph(unfinishedcall,flora,OutputFlora), nl(OutputFlora),
+	flush_output(OutputFlora), 
+	close(OutputFlora), 
+	!.
+unfinished_call(LogFile,FloraFile) :-
+	writeln_list(['Unfinished-call analysis logfile: ',LogFile]), nl,
+	writeln('No unfinished-call detected. Evaluation terminated'), nl,
+	open(file(FloraFile),append,OutputFlora),
+	writeln(OutputFlora,'// No unfinished-call detected. Evaluation terminated'), nl(OutputFlora),
+	close(OutputFlora).
+	
+answer_flow(LogFile,FloraFile) :-
+	ensure_loaded(LogFile,dynca),
+	findall(Id,cmp(_,Id),CmpIds),
+	(max_list(CmpIds,MaxCmpId) -> true ; MaxCmpId is 0),
+	findall(Id,(ar(_Goal,_Parent,Id),Id>MaxCmpId),Ids0),
+	(Ids0 = [] -> fail ; true),
+	sort(Ids0,Ids),
+	producer_consumer_seq(Ids,PCSeq,PCSeqIds),
+	(PCSeq = [_H] ->
+		OptimalPattern = PCSeq,
+		OptimalLength is 1,
+		length(Ids,OptimalTime),
+		OptimalBorders = Ids
+	;
+		length(PCSeq,PCSeqLen),
+		MaxPatternLen is PCSeqLen/2,
+		patterns(PCSeq,PCSeqIds,1,MaxPatternLen,Patterns,Lengths,Times,Borders),
+		optimal_pattern(Lengths,Times,OptimalLength,OptimalTime),
+		ith(OptimalIdx,Lengths,OptimalLength),
+		ith(OptimalIdx,Patterns,OptimalPattern),
+		ith(OptimalIdx,Borders,OptimalBorders)
+	),
+	%% build answerflow graph
+	build_graph(OptimalPattern,answerflow),
+	findall(NodeId,node(NodeId,_,answerflow),NodeIds),
+	length(NodeIds,NumOfNodes),
+	assert(node_num(NumOfNodes,answerflow)),
+	findall(EdgeId,edge(EdgeId,_,_,_,answerflow),EdgeIds),
+	length(EdgeIds,NumOfEdges),
+	assert(edge_num(NumOfEdges,answerflow)),
+	%% find troubling loops
+	sort(NodeIds,NodeList),
+	assert(loop_num(0)),
+	build_loop(NodeList),
+	%% print out answer flow summary
+	writeln_list(['Answer-flow analysis logfile: ',LogFile]), nl,
+	print_graph(answerflow,text), nl,
+	print_loop(text), nl,
+	%% print out answer flow summary to file
+	open(file(FloraFile),append,OutputFlora),
+	print_graph(answerflow,flora,OutputFlora), nl(OutputFlora),
+	print_loop(flora,OutputFlora), nl(OutputFlora),
+	flush_output(OutputFlora), 
+	close(OutputFlora), 
+	!.
+answer_flow(LogFile,FloraFile) :-
+	writeln_list(['Answer-flow analysis logfile: ',LogFile]), nl,
+	writeln('No infinitely many answers generation pattern detected'), nl,
+	open(file(FloraFile),append,OutputFlora),
+	writeln(OutputFlora,'// No infinitely many answers generation pattern detected'), nl(OutputFlora),
+	close(OutputFlora).
+
+producer_consumer_seq([],[],[]).
+producer_consumer_seq([H|T],PCSeq,PCSeqIds) :-
+	producer_consumer_seq(T,PCSeqT,PCSeqIdsT),
+	ar(Goal,Parent,H),
+	((PCSeqT = [GoalV-ParentV|_], variant(Goal,GoalV), variant(Parent,ParentV)) ->
+		PCSeq = PCSeqT,
+		PCSeqIds = PCSeqIdsT
+	;
+		PCSeq = [Goal-Parent|PCSeqT],
+		PCSeqIds = [H|PCSeqIdsT]
+	).
+
+%% find the patterns and their repeated times
+%% borders the list of id's of its last element
+patterns(_PCSeq,_Ids,Len,MaxLen,[],[],[],[]) :- Len > MaxLen, !.
+patterns(PCSeq,Ids,Len,MaxLen,Patterns,Lengths,Times,Borders) :- 
+	LenN is Len+1,
+	patterns(PCSeq,Ids,LenN,MaxLen,PatternsN,LengthsN,TimesN,BordersN),
+	length(Pattern,Len),
+	append(PCSeqPrefix,Pattern,PCSeq),
+	one_pattern(PCSeqPrefix,Pattern,Ids,Len,Time,BorderR),
+	reverse(BorderR,Border),
+	(Time > 1 ->
+		Patterns = [Pattern|PatternsN],
+		Lengths = [Len|LengthsN],
+		Times = [Time|TimesN],
+		Borders = [Border|BordersN]
+	;
+		Patterns = PatternsN,
+		Lengths = LengthsN,
+		Times = TimesN,
+		Borders = BordersN
+	).
+
+one_pattern(PCSeq,Pattern,Ids,Len,Time,Border) :-
+	(append(PCSeqPrefix,Pattern,PCSeq) ->
+		length(TmpB,Len),
+		append(IdsPrefix,TmpB,Ids),
+		one_pattern(PCSeqPrefix,Pattern,IdsPrefix,Len,TimePrefix,BorderPrefix),
+		Time is TimePrefix+1,
+		last(Ids,LastId),
+		Border = [LastId|BorderPrefix]
+	;
+		Time is 1,
+		%% in case all are repeated, so the starting point is 0
+		(last(Ids,LastId) -> true ; LastId is 0),
+		Border = [LastId]
+	).
+
+%% length*times should be maximized
+%% if two patterns have same length*times, choose the one with smaller length
+optimal_pattern([Length],[Time],Length,Time). 
+optimal_pattern([LengthsH|LengthsT],[TimesH|TimesT],OptimalLength,OptimalTime) :-
+	optimal_pattern(LengthsT,TimesT,OptimalLengthT,OptimalTimeT),
+	((LengthsH * TimesH < OptimalLengthT * OptimalTimeT ;
+		(LengthsH * TimesH =:= OptimalLengthT * OptimalTimeT, 
+			LengthsH > OptimalLengthT)
+	 ) -> 
+		OptimalLength is OptimalLengthT,
+		OptimalTime is OptimalTimeT
+	;
+		OptimalLength is LengthsH,
+		OptimalTime is TimesH
+	).
+
+
+terminyzer(LogFile,FloraFile) :-
+	%% preprocess logfile 
+	preprocess(LogFile),
+	path_sysop(basename,LogFile,BaseFile),
+	atom_concat(BaseFile,'_callcmp.P',CallCmpFile),
+	atom_concat(BaseFile,'_ar.P',ARFile),
+	%% print out LogFile name
+	open(file(FloraFile),write,OutputFlora),
+	writeln(OutputFlora,'// Logforest trace filename'),
+	writeln_list(['logfile(''',LogFile,''').'],OutputFlora), nl(OutputFlora),
+	close(OutputFlora),
+	%% unfinished-call analysis
+	unfinished_call(CallCmpFile,FloraFile),
+	%% checking whether a terminating evaluation
+	node_num(NodeNum,unfinishedcall),
+	%% perform infinitely nested call analysis
+	(NodeNum == 1 -> 
+		true
+	; 
+		loop_call(CallRulePattern,FloraFile),
+		%% answer-flow analysis
+		(CallRulePattern \= [] -> true; answer_flow(ARFile,FloraFile))
+	),	
+	%% printout summary files
+	writeln_list(['Terminyzer analysis summary is written to Flora file: ',FloraFile]), nl,
+	%% delete temp logfiles
+	writeln_list(['Deleting temporary logfiles:']),
+	path_sysop(rm,CallCmpFile),
+	writeln_list(['  ',CallCmpFile,' deleted']),
+	path_sysop(rm,ARFile),
+	writeln_list(['  ',ARFile,' deleted']),
+	processed_logfiles(na,NAFile),
+	path_sysop(rm,NAFile),
+	writeln_list(['  ',NAFile,' deleted']).
