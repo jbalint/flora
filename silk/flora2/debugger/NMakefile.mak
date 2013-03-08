@@ -25,6 +25,7 @@ PROLOGEXT = .P
 
 ALLOBJS=  flrdebugger$(OBJEXT) \
 	flrtabledump$(OBJEXT) \
+	flrterminyzer$(OBJEXT) \
 	dynamic_data.dat \
 	static_data.dat
 
