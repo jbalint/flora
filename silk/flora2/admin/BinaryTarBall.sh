@@ -30,6 +30,8 @@ files=" \
     	./flora2/genincludes/*.flh \
     	./flora2/headerinc/*.flh \
     	./flora2/includes/*.flh \
+    	./flora2/includes/*.fli \
+    	./flora2/includes/Makefile ./flora2/includes/NMakefile.mak \
     	./flora2/includes/Makefile ./flora2/includes/NMakefile.mak \
     	./flora2/lib/*.flr ./flora2/lib/Makefile ./flora2/lib/NMakefile.mak \
 	./flora2/lib/include/*flh \
