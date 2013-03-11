@@ -20,7 +20,10 @@
 
 #include "flora_porting.flh"
 #include "flora_terms.flh"
+:- dynamic fact_seen(_).
+:- index(fact_seen/1,trie).
 
+:- dynamic fact_line_status(_).
 
 :- import
 	put_attr/3,
@@ -37,7 +40,6 @@
 	flora_module_path_get/1,
 	flora_slash/1,
 	flora_cputime/1,
-	flora_walltime/1,
 	flora_set_counter/2,
 	flora_get_counter/2,
 	flora_increment_counter/4,
@@ -128,14 +130,15 @@
 
 :- import
 	flora_clear_compilation_permaoptions/0,
-	flora_reset_compiler/1,
+	flora_reset_compiler/0,
 	flora_compile_pathexp/3,
-	flora_compile/6,
+	flora_compile/5,
+        flora_compile_fact/3,
         flora_compile_add/5,
 	flora_get_compilation_liboptions/1,
 	symbol/7,
 	nowarn_symbol/5,
-	make_symbol_context_status/12,
+	make_symbol_context_status/10,
 	compiling_error/3,
 	is_flvariable/3
    from flrcompiler.
@@ -146,12 +149,14 @@
 	flora_coder_write_conditional_prolog_bridge_rule/2,
 	flora_extern_code/2,
 	flora_build_struct/7,
-	flora_intern_code/4
+	flora_intern_code/4,
+	flora_write_struct/3
    from flrcoder.
 
 %% support for undefinedness
 :- import 
-	flora_debug_code/3
+	flora_debug_code/3,
+	flora_build_debug_inter_codelist/2
    from flrundefined.
 
 :- import
@@ -230,7 +235,7 @@
    from flrdecode.
 
 :- import
-        matching_rule_signature/6
+        matching_rule_signature/8
    from flrcanon.
 
 :- import check_for_dependencies/2 from flrdependency.
@@ -257,6 +262,8 @@
 	flora_compile_system_module/1,
 	flora_load_module_util/1,
 	flora_load_module_util/2,
+        flora_loadfact_module_util/1,
+	flora_loadfact_module_util/2,
         flora_save_module_util/1,
         flora_save_module_util/2,
 	FL_DUMP/1,
@@ -296,7 +303,6 @@
 
 	flora_read_canonical_and_insert/2,
 	flora_read_symbols_canonical_and_insert/3,
-	flora_read_descriptor_metafacts_canonical_and_insert/0,
 	flora_load_system_module_util/1,
 	flora_measure_time/2,
 	
