@@ -33,7 +33,6 @@
 
 :- import
 	flora_load_module_util/2, flora_load_module_util/1,
-        flora_loadfact_module_util/2, flora_loadfact_module_util/1,
 	flora_add_module_dyn/2, flora_add_module_dyn/1,
         flora_save_module_util/2, flora_save_module_util/1,
 	flora_abort/1,
@@ -87,7 +86,6 @@
 	flora_shell/0,
 	('_flimport')/1,
 	('_load')/1,
-        ('_loadfact')/1,
 	('_compile')/1,
 	('_add')/1,
 	('_compileadd')/1,
@@ -119,37 +117,35 @@
    ; flora_concat_atoms([FloraDir,platforms,S,unix],PlatformSpecificDir)
    ),
    assert(library_directory(PlatformSpecificDir)),
-   [floraInstallMode].
+   load_dyn(floraInstallMode).
 
 ?- current_predicate(flrregistry:flora_configuration/2),
    flora_configuration(standalone,no),
    flora_configuration(standalone,yes),
-   abort('FLORA-2 is loaded as a package and as a standalone application').
+   abort('FLORA-2 cannot be loaded both as an XSB package and as a standalone application').
 
 bootstrap_flora :-
 	\+ flora_configuration(loaded,yes),
 	flora_configuration(installdir,FloraDir),
 	flora_slash(S),
 	flora_concat_atoms([pkgs,S,prolog],PkgsProlog),
+	flora_concat_atoms(['AT',S,prolog],ATsProlog),
 	(flora_running_under(windows)
 	-> flora_concat_atoms([platforms,S,windows],PlatformSpecificDir)
 	; flora_concat_atoms([platforms,S,unix],PlatformSpecificDir)
 	),
-	(
-	  %% running FLORA as a standalone version
-	  flora_configuration(standalone,yes),
-	  !,
-	  (\+ library_directory(FloraDir)
-	  -> asserta(library_directory(FloraDir))
-	  ; true
-	  ),
-	  [flrversion],
-	  flora_assert_directories([syslib,datatypes,lib,debugger,pkgs,PkgsProlog,p2h,PlatformSpecificDir])
+	( flora_configuration(standalone,yes) ->
+	    %% running FLORA as a standalone version
+	    (\+ library_directory(FloraDir) -> asserta(library_directory(FloraDir))
+	    ; true
+	    ),
+	    [flrversion],
+	    flora_assert_directories([syslib,datatypes,lib,debugger,pkgs,'AT',PkgsProlog,ATsProlog,p2h,PlatformSpecificDir])
 	;
-	  %% running FLORA as an XSB package
-	  bootstrap_package([flora2,syslib,lib,debugger,pkgs,PkgsProlog,p2h,PlatformSpecificDir],
-			    flora),
-	  [flrversion]
+	    %% running FLORA as an XSB package
+	    bootstrap_package([flora2,syslib,datatypes,lib,debugger,pkgs,'AT',PkgsProlog,p2h,PlatformSpecificDir],
+			      flora),
+	    [flrversion]
 	),
 	!,
 	assert(flora_configuration(loaded,yes)),
@@ -158,12 +154,14 @@ bootstrap_flora :-
 	flora_concat_atoms([FloraDir,S,flrincludes],FlrIncludes),
 	flora_concat_atoms([FloraDir,S,genincludes],GenIncludes),
 	flora_concat_atoms([FloraDir,S,lib,S,include],LibIncludes),
+	flora_concat_atoms([FloraDir,S,'AT',S,include],ATIncludes),
 	assert(xpp_include_dir(Closure)),
 	assert(xpp_include_dir(Includes)),
 	assert(xpp_include_dir(FlrIncludes)),
 	assert(xpp_include_dir(GenIncludes)),
 	assert(xpp_include_dir(LibIncludes)),
-	assert(flora_configuration(includedirs, [Closure,Includes,FlrIncludes,GenIncludes,LibIncludes])),
+	assert(xpp_include_dir(ATIncludes)),
+	assert(flora_configuration(includedirs, [Closure,Includes,FlrIncludes,GenIncludes,LibIncludes,ATIncludes])),
 	flora_set_counter(FLORA_COMPILATION_COUNTER,0), % disambiguates _# in _add
 	%% *-indexing only to the level 2
 	%% Deeper than 2 may be bad for HiLog and F-logic,
@@ -278,9 +276,7 @@ process_import_statement(What,AsWhat,FileMod) :-
 
 
 '_load'(File>>Module) :- !, flora_load_module_util(File,Module).
-'_loadfact'(File>>Module) :- !, flora_loadfact_module_util(File,Module).
 '_load'(File) :- flora_load_module_util(File).
-'_loadfact'(File) :- flora_loadfact_module_util(File).
 
 '_tabledump'(X,Y)   :- flora_dump_tables(X,Y).
 '_tabledump'(X,Y,Z) :- flora_dump_tables(X,Y,Z).

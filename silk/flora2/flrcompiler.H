@@ -40,6 +40,7 @@
 
 :- import
 	memberchk/2,
+	member/2,
 	subset/2,
 	append/3,
 	flatten/2,
@@ -136,6 +137,8 @@
 
 :- import flora_nodefp/2 from flrnodefp.
 
+:- import flora_simple_primitive/4 from flrsimpleprimitive.
+
 :- dynamic compile_with_var_module(_).
 
 :- dynamic dynrule_warnings(_).
@@ -149,18 +152,18 @@
 	flora_get_compilation_liboptions/1,
         flora_reset_newvar/0,
         flora_new_varobj/3,
-	flora_reset_compiler/0, 
+	flora_reset_compiler/1, 
 	flora_compile_pathexp/3,
 	flora_compile_add/5,
-	flora_compile/5,
-        flora_compile_fact/3,
+	flora_compile/6,
 	flora_clear_compilation_symbols/0,
 	%%flora_compiler_permaoption/1,
 	compiling_flrshell_command/0,
 	symbol/7,
 	nowarn_symbol/5,
-	make_symbol_context_status/10,
+	make_symbol_context_status/12,
 	compiling_warning/3,
 	compiling_error/3,
+	set_production_mode/1,
 	is_fltoken/3,
 	is_flvariable/3.
