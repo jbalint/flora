@@ -528,26 +528,26 @@ decode_hilog_term(HiLogPred,Args,Code,Level,Depth) :-
 %%%%%%%%%%%%%%%%%%%%%% Decode Prolog Call %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% flora prolog-style builtin: declared as flora_prlg in flrprolog.P
-decode_prolog_call([F,Args,Arity],Code,Depth) :-
+decode_prolog_call([F,Args,Arity],_WS,Code,Depth) :-
 	(flora_prlgdef(F,Arity) ; flora_prlgdef_repl(F,Arity,_,_)),
 	!,
 	Depth1 is Depth+1,
 	decode_builtin(F,Arity,Args,Code,Depth1).
-decode_prolog_call([FLLIBDELAYEDLITERAL,[FL_DEFLTNEG,_,_,[Call|_]],4],Code,Depth) :-
+decode_prolog_call([FLLIBDELAYEDLITERAL,[FL_DEFLTNEG,_,_,[Call|_]],4],_WS,Code,Depth) :-
 	!,
 	Depth1 is Depth+1,
 	decode_literal_internal(Call,Code,1,Depth1).
-decode_prolog_call([FLLIBDELAYEDLITERAL,[FL_UNDEFEATED,_,_,[Call|_]],4],[Code, ' /* testing defeasibility of rule */'],Depth) :-
+decode_prolog_call([FLLIBDELAYEDLITERAL,[FL_UNDEFEATED,_,_,[Call|_]],4],_WS,[Code, ' /* testing defeasibility of rule */'],Depth) :-
 	!,
 	decode_literal_internal(Call,Code,0,Depth).
 %% other cases of FLLIBDELAYEDLITERAL
-decode_prolog_call([FLLIBDELAYEDLITERAL,[F,_,_,Args],4],Code,Depth) :-
+decode_prolog_call([FLLIBDELAYEDLITERAL,[F,_,_,Args],4],_WS,Code,Depth) :-
 	length(Args,N),
 	flora_delayed_builtin_literal(F,N),
 	!,
 	Depth1 is Depth+1,
 	decode_builtin(F,N,Args,Code,Depth1).
-decode_prolog_call([FLLIBDELAYEDLITERAL,[F,_,_,Args],4],[Code, ' /* sensor */'],Depth) :-
+decode_prolog_call([FLLIBDELAYEDLITERAL,[F,_,_,Args],4],_WS,[Code, ' /* sensor */'],Depth) :-
 	length(Args,N),
 	N2 is N-2,
 	(F = _:F2, flora_delayed_sensor_literal((F2,_),N2,_)
@@ -558,19 +558,19 @@ decode_prolog_call([FLLIBDELAYEDLITERAL,[F,_,_,Args],4],[Code, ' /* sensor */'],
 	Depth1 is Depth+1,
 	decode_builtin(F2,N2,Args2,Code,Depth1).
 
-decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],Code,Depth) :-
+decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],_WS,Code,Depth) :-
 	Term =.. [FLLIBDELAYEDLITERAL,FL_DELAYQUANT,_,_,[QuantType,Cond,Goal]],
 	!,
 	NewTerm = FL_DELAYQUANT(QuantType,Cond,Goal),
 	Depth1 is Depth+1,
 	decode_literal_internal(NewTerm,Code,1,Depth1).
-decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],Code,Depth) :-
+decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],_WS,Code,Depth) :-
 	Term =.. [FLLIBDELAYEDLITERAL|Args],
 	Args = [FL_DEFLTNEG,_,_,[Call|_]],
 	!,
 	Depth1 is Depth+1,
 	decode_literal_internal(Call,Code,1,Depth1).
-decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],Code,Depth) :-
+decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],_WS,Code,Depth) :-
 	Term =.. [FLLIBDELAYEDLITERAL|Args],
 	!,
 	Args = [F,_,_,Args1],
@@ -580,18 +580,18 @@ decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],Code,Depth) :-
 	; Code = [Code1, ' /* delayed literal */']
 	).
 %% ignore flora_execute_delayed_literals
-decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],[],_Depth) :-
+decode_prolog_call([':',[FLDELAYSUPPORTMOD,Term],2],_WS,[],_Depth) :-
 	Term =.. [FLORA_DELAY_CHECKER|_],
 	!.
 %% ignore FL_SILENT_EQUAL
-decode_prolog_call([FL_SILENT_EQUAL,_,2],[],_Depth) :-
+decode_prolog_call([FL_SILENT_EQUAL,_,2],_WS,[],_Depth) :-
 	!.
 %% prolog call mod:p(args) 
-decode_prolog_call([':',[Module,Term],2],Code,Depth) :-
+decode_prolog_call([':',[Module,Term],2],WS,Code,Depth) :-
 	!,
 	Term =.. [F|Args],
 	functor(Term,_,Arity),
-	workspace_prolog_code(F,Arity,Module,PrlgSuffixCode),
+	workspace_prolog_code(F,Arity,Module,WS,PrlgSuffixCode),
 	escape(F,EscF),
 	(Args == []
 	->  Code = ['${',EscF,PrlgSuffixCode,'}']
@@ -602,9 +602,9 @@ decode_prolog_call([':',[Module,Term],2],Code,Depth) :-
 	).
 	
 %% neg-negated regular prolog call (for negatable modularized prolog preds)
-decode_prolog_call([neg(F),Args,Arity],Code,Depth) :-
+decode_prolog_call([neg(F),Args,Arity],WS,Code,Depth) :-
         escape(F,EscF),
-	workspace_prolog_code(F,Arity,_,PrlgSuffixCode),
+	workspace_prolog_code(F,Arity,_,WS,PrlgSuffixCode),
 	(Args == []
 	->  Code = ['${neg ',EscF,PrlgSuffixCode,'}']
 	;
@@ -616,14 +616,14 @@ decode_prolog_call([neg(F),Args,Arity],Code,Depth) :-
 %% udf_hilog_predicate(Call,_,Var) is not printed. Instead, Var is bound to Call
 %% This is needed because this Var is used in other parts of displayed answers,
 %% so we want to show what those answers really are.
-decode_prolog_call([UDFHILOGPREDICATENAME,[Call,_,Var],_Arity],[],_Depth) :-
+decode_prolog_call([UDFHILOGPREDICATENAME,[Call,_,Var],_Arity],_WS,[],_Depth) :-
 	!,
 	Call=Var.
 
 %% regular prolog call
-decode_prolog_call([F,Args,Arity],Code,Depth) :-
+decode_prolog_call([F,Args,Arity],WS,Code,Depth) :-
         escape(F,EscF),
-	workspace_prolog_code(F,Arity,_,PrlgSuffixCode),
+	workspace_prolog_code(F,Arity,_,WS,PrlgSuffixCode),
 	(Args == []
 	->  Code = ['${',EscF,PrlgSuffixCode, '}']
 	;
@@ -637,7 +637,7 @@ decode_builtin(F,1,[Arg],Code,Depth) :-
 	!,
 	Depth1 is Depth+1,
         escape(F,EscF),
-	workspace_prolog_code(F,1,_,PrlgSuffixCode),
+	workspace_prolog_code(F,1,_,_WS,PrlgSuffixCode),
 	decode_literal_internal(Arg,ArgCode,1,Depth1),
 	((flora_opdef(_,fx,F); flora_opdef(_,fy,F))
 	%% This deals with unary ops and prints them as op arg
@@ -663,11 +663,11 @@ decode_builtin(F,_,Args,[EscF,'(',ArgsCode,')', PlgCode],Depth) :-
 	; PlgCode = '@_prolog'
 	).
 
-standard_FLORA_prolog_functor(P,A) :- flora_prlgdef(P,A).
-standard_FLORA_prolog_functor(P,A) :- flora_prlgdef_repl(P,A,_,_).
-standard_FLORA_prolog_functor(P,A) :- flora_modular_prlgdef(P,A).
-standard_FLORA_prolog_functor(P,A,M) :- flora_modular_prlgdef(P,A,M).
-standard_FLORA_prolog_functor(P,A) :- flora_delayed_builtin_literal(P,A).
+standard_plain_prolog_functor(P,A) :- flora_prlgdef(P,A).
+standard_plain_prolog_functor(P,A) :- flora_prlgdef_repl(P,A,_,_).
+standard_plain_prolog_functor(P,A) :- flora_delayed_builtin_literal(P,A).
+standard_modular_prolog_functor(P,A) :- flora_modular_prlgdef(P,A).
+standard_modular_prolog_functor(P,A,M) :- flora_modular_prlgdef(P,A,M).
 
 
 %%%%%%%%%%%%%%%%%%%%%% IF %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -910,17 +910,21 @@ decode_commalist_add_separator(G,CodeG,ConversionCall,_Separator) :-
 	
 %%%%%%%%%%%%%%%%%%%%%%%%%%% workspace_code %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 workspace_code(WS,WSCode) :-
-	(((WS==main);(WS==FL_THISMODULE);(WS==FL_INVALIDMODULE))
+	%%(((WS==FLORA_DEFAULT_WORKSPACE);(WS==FL_THISMODULE);(WS==FL_INVALIDMODULE))
+	((WS==FL_INVALIDMODULE)
 	-> WSCode = []
 	; flora_display_mode(silk) ->  WSCode = []
 	; WSCode = ['@',WS]
 	).
 
 %% if Module is a variable then no prolog module
-workspace_prolog_code(F,Arity,Module,Code) :-
-	(standard_FLORA_prolog_functor(F,Arity) -> Code = ''
-	; standard_FLORA_prolog_functor(F,Arity,Module) -> Code = ''
-	; flora_display_mode(silk) -> Code = ''
+%% WS is the module for modularized Prolog predicates
+workspace_prolog_code(F,Arity,Module,WS,Code) :-
+	(
+	  flora_display_mode(silk) -> Code = ''
+	; standard_modular_prolog_functor(F,Arity) -> Code = ['@',WS]
+	; standard_modular_prolog_functor(F,Arity,WS) -> Code = ['@',WS]
+	; standard_plain_prolog_functor(F,Arity) -> Code = ''
 	; var(Module) -> Code = '@_prolog'
 	; Code = ['@_prolog(',Module,')']
 	).
@@ -1393,7 +1397,7 @@ decode_literal_internal((Call FL_METAUNIV [Pred|Args], ModCall = Module:Call, ca
 	atom(Module),
 	!,
 	Term =.. [Pred|Args],
-	decode_prolog_call([':',[Module,Term],2],Code,Depth).
+	decode_prolog_call([':',[Module,Term],2],_WS,Code,Depth).
 
 %% Call prolog predicate in a different module; must be before commalist
 %% We loose the module name in decoding. Case of =..
@@ -1580,7 +1584,7 @@ decode_literal_internal(CallIn,Code,Level,Depth) :-
             -> decode_nontabled_hilog_call(BasenameOrPred,Args,WS,Code,Level,Depth1)
 	    ; Type == (prolog)
 	    ->  functor(Call,Functor,Arity),
-		decode_prolog_call([Functor,Args,Arity],Code,Depth1)
+		decode_prolog_call([Functor,Args,Arity],WS,Code,Depth1)
 	    ; Type == (flogic)
 	    -> decode_molecule(BasenameOrPred,Args,WS,Code,Level,Depth1)
 	    ; Type == (neg_flogic)
@@ -1592,11 +1596,11 @@ decode_literal_internal(CallIn,Code,Level,Depth) :-
 		; flora_modular_prlgdef(BasenameOrPred,Arity1,WS)
 		)
 	    ->  flrtrim_last(Args,Args1),
-		decode_prolog_call([BasenameOrPred,Args1,Arity1],Code,Depth1)
+		decode_prolog_call([BasenameOrPred,Args1,Arity1],WS,Code,Depth1)
 	    ; Type == (neg_flora)
 	    -> %% need to get rid of the Caller argument
 		length(Args,Arity), Arity1 is Arity-1, flrtrim_last(Args,Args1),
-		decode_prolog_call([neg(BasenameOrPred),Args1,Arity1],Code,Depth1)
+		decode_prolog_call([neg(BasenameOrPred),Args1,Arity1],WS,Code,Depth1)
 	    ;	%% cannot decode
 		%%flora_warning_line('~w: decode_literal_internal/3 failed to decode', [Call]),
 		flora_concat_items([Call], Code1),
