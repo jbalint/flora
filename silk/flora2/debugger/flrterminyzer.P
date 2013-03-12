@@ -73,7 +73,24 @@
 hide_this_ctrace([]).
 hide_this_ctrace([H|T]) :-
 	functor(H,Pred,_),
-	(hide_this_ctrace_pred(Pred) -> fail; hide_this_ctrace(T)).
+	(hide_this_pred(Pred) -> fail
+	; 
+		hide_this_ctrace(T)
+	).
+
+hide_this_pred(P) :- hide_this_ctrace_pred(P), !.
+hide_this_pred(P) :-
+	str_length(P,PLen),
+	(	%% _$_$_flora'mod'Module'candidate and _$_$_flora'mod'Module'strict_candidate	
+		CandidateStart is PLen-9,
+		substring(P,CandidateStart,PLen,Candidate),
+		Candidate == 'candidate'
+	;
+		%% _$_$_flora'mod'Module'tabled_unnumber_call
+		Tabled_unnumber_callStart is PLen-20,
+		substring(P,Tabled_unnumber_callStart,PLen,Tabled_unnumber_call),
+		Tabled_unnumber_call == 'tabled_unnumber_call'
+	).
 
 preprocess(LogFile) :-
 	path_sysop(basename,LogFile,BaseFile),
@@ -106,8 +123,6 @@ preprocess(CCS,ARS,NAS) :-
 		Term = throw(_Error,_S,_Counter) ;
 		Term = err(_S,_Counter)), !
 	;
-		Term =.. [CTracePred|_],
-		(hide_this_ctrace_pred(CTracePred) -> fail ; true),
 		((Term = tc(S1,S2,Stage,Counter); Term = nc(S1,S2,Stage,Counter)) -> 
 			member(Stage,[new,incmp]),
 			hide_this_ctrace([S1,S2]),
@@ -152,13 +167,13 @@ build_graph(unfinished,[(_Id,Goal,_Parent)|T]) :-
 	build_graph(unfinished,T).
 build_graph(unfinished,[(_Id,Goal,Parent)|T]) :-
 	%% check whether they are decodable
-	decode_call(Parent,_,_,_,_), 
-	decode_call(Goal,_,_,_,_),
+	decode_call(Parent,_,_,_), 
+	decode_call(Goal,_,_,_),
 	!,
 	%% Parent has to be added before Goal
 	add_node(Parent,ParentId),
 	add_node(Goal,GoalId),
-	decode_call(GoalId,_,_,_,Rule),
+	decode_call(GoalId,_,_,Rule),
 	add_edge(GoalId,ParentId,Rule),
 	build_graph(unfinished,T).
 build_graph(unfinished,[_H|T]) :- build_graph(unfinished,T).
@@ -219,10 +234,10 @@ print_graph(unfinished,Format,S) :-
 		writeln(S,'----Unfinished-call analysis summary----'),
 		processed_logfiles(callcmp,CallCmpFile),
 		writeln_list(['Unfinished-call analysis logfile: ',CallCmpFile,'\n']), 
-		writeln(S,'Unfinished subgoals have the format unfinished_subgoal(SubgoalId)[subgoal->Subgoal,module->Module,ruleid->RuleId]')
+		writeln(S,'Unfinished subgoals have the format unfinished_subgoal(SubgoalId)[subgoal->Subgoal,ruleid->RuleId]')
 	; Format == flora ->
 		writeln(S,'// ----Unfinished-call analysis summary----'),
-		writeln(S,'// Unfinished subgoals have the format unfinished_subgoal(SubgoalId)[subgoal->Subgoal,module->Module,ruleid->RuleId]')
+		writeln(S,'// Unfinished subgoals have the format unfinished_subgoal(SubgoalId)[subgoal->Subgoal,ruleid->RuleId]')
 	),
 	findall(Id,unfinished_node(Id,_Call),Ids0),
 	sort(Ids0,Ids),
@@ -280,29 +295,26 @@ print_graph(answerflow,Format,S) :-
 	    writeln_list([number_of_subgoals(answerflowloop,LoopSize),'.'],S)
 	).
 
-%% Decode XSB-call into Flora format and get pred, module, and ruleid 
-decode_call(Id,CallFlora,PredFlora,ModuleFlora,RuleFlora) :-
+%% Decode XSB-call into Flora format and get pred and ruleid 
+decode_call(Id,CallFlora,PredFlora,RuleFlora) :-
 	integer(Id),
 	!,
 	unfinished_node(Id,Call),
-	decode_call(Call,CallFlora,PredFlora,ModuleFlora,RuleFlora).
-decode_call(Call,CallFlora,PredFlora,ModuleFlora,RuleFlora) :-
+	decode_call(Call,CallFlora,PredFlora,RuleFlora).
+decode_call(Call,CallFlora,PredFlora,RuleFlora) :-
 	(Call =.. [_Wrapper,Pred|CallFlatten], !; Pred = Call),
-	last(CallFlatten,[Module,tracing(_,Rule)]),
+	last(CallFlatten,[_,tracing(_,Rule)]),
 	flora_decode_oid_as_atom(Call,CallFlora),
 	flora_decode_oid_as_atom(Pred,PredFlora),
-	flora_decode_oid_as_atom(Module,ModuleFlora),
 	flora_decode_oid_as_atom(Rule,RuleFlora).
-	%% write('Call:'), writeln(Call),
-	%% write('CallFlora:'), writeln(CallFlora).
 
 print_nodes(_Type,[],_Format,_S). 
 print_nodes(unfinished,[Id|T],Format,S) :-
-	decode_call(Id,CallFlora,_Pred,Module,Rule),
+	decode_call(Id,CallFlora,_Pred,Rule),
 	(Format == text -> 
-	    writeln_list(['  unfinished_subgoal(',Id,')[subgoal->',CallFlora,', module->',Module,', ruleid->',Rule,']'],S)
+	    writeln_list(['  unfinished_subgoal(',Id,')[subgoal->',CallFlora,', ruleid->',Rule,']'],S)
 	; Format == flora ->
-	    writeln_list(['unfinished_subgoal(',Id,')[subgoal->',CallFlora,', module->',Module,', ruleid->',Rule,'].'],S)
+	    writeln_list(['unfinished_subgoal(',Id,')[subgoal->',CallFlora,', ruleid->',Rule,'].'],S)
 	),
 	print_nodes(unfinished,T,Format,S).
 
@@ -349,7 +361,7 @@ collect_call_ruleid(Id,MaxId,[]) :- Id > MaxId, !.
 collect_call_ruleid(Id,MaxId,[Pred-Rule|CallRuleT]) :- 
 	Id1 is Id+1,
 	collect_call_ruleid(Id1,MaxId,CallRuleT),
-	decode_call(Id,_CallFlora,Pred,_Module,Rule).
+	decode_call(Id,_CallFlora,Pred,Rule).
 
 loop_call(OptimalLength,FloraFile) :-
 	node_num(unfinished,IdLen),
@@ -375,7 +387,7 @@ loop_call(OptimalLength,FloraFile) :-
 
 roll_back(_FinalPattern,LastId,LastId) :- !.
 roll_back(OptimalPattern,B0,LastId) :-
-	decode_call(B0,_CallFlora,Pred,_Module,Rule),
+	decode_call(B0,_CallFlora,Pred,Rule),
 	last(OptimalPattern,PredVariant-RuleVariant),
 	variant(Pred,PredVariant),
 	variant(Rule,RuleVariant),
