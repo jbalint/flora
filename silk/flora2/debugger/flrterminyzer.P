@@ -28,10 +28,14 @@
 	path_sysop/2,
 	path_sysop/3 
    from file_io.
-:- import flora_decode_oid_as_atom/2 from flrdecode. 
+:- import 
+	flora_display_mode/1,
+	flora_decode_oid_as_atom/2 
+   from flrdecode. 
 
 %% graph predicates
-:-  dynamic unfinished_node/2,	%% (Counter,Call)
+:- dynamic
+	unfinished_node/2,			%% (Counter,Call)
 	unfinished_edge/4,			%% (Counter,CallId,ParentId,RuleId)
 	answerflow_node/1,			%% (UnfinishedCallId)
 	answerflow_edge/1,			%% (UnfinishedEdgeId)
@@ -49,8 +53,8 @@
 :-  dynamic tc/3, na/3, ar/3, cmp/2.
 :-  index(ar/3,[3]).
 
-%% certain unwanted logs are deleted during preprocessing 
-:-  dynamic hide_this_ctrace_pred/1.
+%% certain unwanted logs are skipped during preprocessing
+:- dynamic hide_this_ctrace_pred/1.
 :-  assert(hide_this_ctrace_pred(dtype_sub)),
 	assert(hide_this_ctrace_pred(fllibmodobj_internal)),
 	assert(hide_this_ctrace_pred(flora_canonic_wrapper_symbol)),
@@ -63,6 +67,9 @@
 	assert(hide_this_ctrace_pred(module_name_syntax_internal)),
 	assert(hide_this_ctrace_pred(negate_wrapper)),
 	assert(hide_this_ctrace_pred(op_synonym)).
+
+%% if in silk syntax, terminator_sym(';')
+:- dynamic terminator_sym/1. 
 
 %% preprocessed file names in the form of (Type,Filename)
 :- dynamic processed_logfiles/2.
@@ -230,6 +237,7 @@ build_loop([(_Producer-Consumer)|T],[ConsumerId|LoopNodes]) :-
 %% Format: text or flora
 print_graph(Type,Format) :- current_output(S), print_graph(Type,Format,S).
 print_graph(unfinished,Format,S) :-
+	terminator_sym(TerminatorSym),
 	(Format == text ->
 		writeln(S,'----Unfinished-call analysis summary----'),
 		processed_logfiles(callcmp,CallCmpFile),
@@ -241,29 +249,30 @@ print_graph(unfinished,Format,S) :-
 	),
 	findall(Id,unfinished_node(Id,_Call),Ids0),
 	sort(Ids0,Ids),
-	print_nodes(unfinished,Ids,Format,S),
+	print_nodes(unfinished,Ids,Format,S,TerminatorSym),
 	node_num(unfinished,NodesNum),
 	(Format == text -> 
 	    writeln_list(['The number of unfinished subgoals: ',NodesNum,'\n'],S),
 	    writeln(S,'Unfinished subgoal relationships have the format unfinished_call(CallId)[parent->ParentSubgoalId, child->ChildSubgoalId, ruleid->RuleId]')
 	; Format == flora -> 
 	    writeln(S,'// The number of unfinished subgoals'),
-	    writeln_list([number_of_subgoals(unfinished,NodesNum),'.\n'],S),
+	    writeln_list([number_of_subgoals(unfinished,NodesNum),TerminatorSym,'\n'],S),
 	    writeln(S,'// Unfinished subgoal relationships have the format unfinished_call(CallId)[parent->ParentSubgoalId, child->ChildSubgoalId, ruleid->RuleId]')
 	),
 	findall((Id,ProducerId,ConsumerId,RuleId),
 		unfinished_edge(Id,ProducerId,ConsumerId,RuleId),
 		Edges0),
 	sort(Edges0,Edges),
-	print_edges(unfinished,Edges,Format,S),
+	print_edges(unfinished,Edges,Format,S,TerminatorSym),
 	edge_num(unfinished,EdgesNum),
 	(Format == text -> 
 	    writeln_list(['The number of unfinished calls: ',EdgesNum],S)
 	; Format == flora ->
 	    writeln(S,'// The number of unfinished calls'),
-	    writeln_list([number_of_calls(unfinished,EdgesNum),'.'],S)
+	    writeln_list([number_of_calls(unfinished,EdgesNum),TerminatorSym],S)
 	).
 print_graph(answerflow,Format,S) :-
+	terminator_sym(TerminatorSym),
 	findall(Id,answerflow_node(Id),NodeIds0),
 	sort(NodeIds0,NodeIds),
 	node_num(answerflow,NodesNum),
@@ -286,13 +295,13 @@ print_graph(answerflow,Format,S) :-
 	    writeln(S,'// ----Answer-flow analysis summary----'),
 	    writeln(S,'// Answer-flow subgoals and their relationships have the format answerflow[subgoals->SubgoalIds, calls->CallIds, loop->LoopIds]'),
 		writeln(S,'// Subgoal and call ids used here are the involved unfinished subgoal and call ids'),
-		writeln_list(['answerflow[subgoals->',NodeIds,', calls->',EdgeIds, ', loop->',LoopNodes,'].'],S),
+		writeln_list(['answerflow[subgoals->',NodeIds,', calls->',EdgeIds, ', loop->',LoopNodes,']',TerminatorSym],S),
 		writeln(S,'// The number of answerflow subgoals'),
-	    writeln_list([number_of_subgoals(answerflow,NodesNum),'.'],S),
+	    writeln_list([number_of_subgoals(answerflow,NodesNum),TerminatorSym],S),
 		writeln(S,'// The number of answerflow calls'),
-	    writeln_list([number_of_calls(answerflow,EdgesNum),'.'],S),
+	    writeln_list([number_of_calls(answerflow,EdgesNum),TerminatorSym],S),
 		writeln(S,'// The size of answerflow loop'),
-	    writeln_list([number_of_subgoals(answerflowloop,LoopSize),'.'],S)
+	    writeln_list([number_of_subgoals(answerflowloop,LoopSize),TerminatorSym],S)
 	).
 
 %% Decode XSB-call into Flora format and get pred and ruleid 
@@ -308,24 +317,24 @@ decode_call(Call,CallFlora,PredFlora,RuleFlora) :-
 	flora_decode_oid_as_atom(Pred,PredFlora),
 	flora_decode_oid_as_atom(Rule,RuleFlora).
 
-print_nodes(_Type,[],_Format,_S). 
-print_nodes(unfinished,[Id|T],Format,S) :-
+print_nodes(_Type,[],_Format,_S,_TerminatorSym). 
+print_nodes(unfinished,[Id|T],Format,S,TerminatorSym) :-
 	decode_call(Id,CallFlora,_Pred,Rule),
 	(Format == text -> 
 	    writeln_list(['  unfinished_subgoal(',Id,')[subgoal->',CallFlora,', ruleid->',Rule,']'],S)
 	; Format == flora ->
-	    writeln_list(['unfinished_subgoal(',Id,')[subgoal->',CallFlora,', ruleid->',Rule,'].'],S)
+	    writeln_list(['unfinished_subgoal(',Id,')[subgoal->',CallFlora,', ruleid->',Rule,']',TerminatorSym],S)
 	),
-	print_nodes(unfinished,T,Format,S).
+	print_nodes(unfinished,T,Format,S,TerminatorSym).
 
-print_edges(_Type,[],_Format,_S).
-print_edges(unfinished,[(Id,Producer,Consumer,RuleId)|T],Format,S) :-
+print_edges(_Type,[],_Format,_S,_TerminatorSym).
+print_edges(unfinished,[(Id,Producer,Consumer,RuleId)|T],Format,S,TerminatorSym) :-
 	(Format == text ->
 	    writeln_list(['  unfinished_call(',Id,')[parent->',Consumer,', child->',Producer,', ruleid->',RuleId,']'],S)
 	; Format == flora ->
-	    writeln_list(['unfinished_call(',Id,')[parent->',Consumer,', child->',Producer,', ruleid->',RuleId,'].'],S)
+	    writeln_list(['unfinished_call(',Id,')[parent->',Consumer,', child->',Producer,', ruleid->',RuleId,']',TerminatorSym],S)
 	),
-	print_edges(unfinished,T,Format,S).
+	print_edges(unfinished,T,Format,S,TerminatorSym).
 
 print_loop_call(PatternLen,LastNonLoopId,Format) :-
 	current_output(S),
@@ -338,6 +347,7 @@ print_loop_call(0,_LastNonLoopId,Format,S) :-
 	),
 	!.
 print_loop_call(PatternLen,LastNonLoopId,Format,S) :-
+	terminator_sym(TerminatorSym),
 	LoopStartNodeId is LastNonLoopId+1,
 	LoopEndNodeId is LastNonLoopId+PatternLen,
 	numlist(LoopStartNodeId,LoopEndNodeId,IdListLoop),
@@ -349,9 +359,9 @@ print_loop_call(PatternLen,LastNonLoopId,Format,S) :-
 	; Format == flora ->
 		writeln(S,'// Loop-call analysis summary: infinite call loop detected----'),
 		writeln(S,'// Loop subgoals have the format of call_loop[subgoals->UnfinishedSubgoalIds]'),
-		writeln_list(['call_loop[subgoals->',IdListLoop,'].'],S),
+		writeln_list(['call_loop[subgoals->',IdListLoop,']',TerminatorSym],S),
 		writeln(S,'// The size of call loop'),
-	    writeln_list([number_of_subgoals(callloop,PatternLen),'.'],S)
+	    writeln_list([number_of_subgoals(callloop,PatternLen),TerminatorSym],S)
 	).
 
 numlist(Low,High,[]) :- Low > High, !.
@@ -540,17 +550,24 @@ optimal_pattern([LengthsH|LengthsT],[TimesH|TimesT],OptimalLength,OptimalTime) :
 	    OptimalTime is TimesH
 	).
 
-
 terminyzer(LogFile,FloraFile) :-
 	%% preprocess logfile 
 	preprocess(LogFile),
 	path_sysop(basename,LogFile,BaseFile),
 	atom_concat(BaseFile,'_callcmp.P',CallCmpFile),
 	atom_concat(BaseFile,'_ar.P',ARFile),
+	%% check whether in silk syntax
+	(flora_display_mode(silk) -> 
+		assert(terminator_sym(';')),
+		TerminatorSym = ';'
+	; 
+		assert(terminator_sym('.')),
+		TerminatorSym = '.'
+	),
 	%% print out LogFile name
 	open(file(FloraFile),write,OutputFlora),
 	writeln(OutputFlora,'// logforest trace filename'),
-	writeln_list(['logfile(''',LogFile,''').'],OutputFlora), nl(OutputFlora),
+	writeln_list(['logfile(''',LogFile,''')',TerminatorSym],OutputFlora), nl(OutputFlora),
 	close(OutputFlora),
 	%% unfinished-call analysis
 	unfinished_call(CallCmpFile,FloraFile),
@@ -574,4 +591,4 @@ terminyzer(LogFile,FloraFile) :-
 	writeln_list(['  ',ARFile,' deleted']),
 	processed_logfiles(na,NAFile),
 	path_sysop(rm,NAFile),
-	writeln_list(['  ',NAFile,' deleted']).
+	writeln_list(['  ',NAFile,' deleted\n']).
