@@ -173,6 +173,8 @@ is_flifthen(FLIFTHEN(Cond,Then),Cond,Then).
 is_fluniveqform(FLUNIVEQFORM(Left,Right),Left,Right).
 %% Meta =..
 is_flmetauniv(FLMETAUNIV(Left,Right),Left,Right).
+%% -->>: Prolog ->
+is_flprologifthen(FLPROLOGIFTHEN(Left,Right),Left,Right).
 
 is_reifyop(FLREIFYOP(Formula),Formula).
 
@@ -4690,6 +4692,11 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    BodyHeadList = [],
 	    compile_flmetauniv(Left,Right,OidCode,SpecCode,Status)
 
+	; is_flprologifthen(ParserTerm,Left,Right) ->
+	    BodyHeadList = [],
+	    compile_flprologifthen(Left,Right,SpecCode,Status),
+	    OidCode=NULL
+
 	; is_flcontrolconstruct(ParserTerm,Wrapper,Cond,Action) ->
 	    BodyHeadList = [],
 	    compile_flcontrolconstruct(Cond,Action,Wrapper,SpecCode,Status),
@@ -4825,6 +4832,26 @@ compile_flmetauniv(Left,Right,OidCode,Code,Status) :-
 	;
 	    Status=S1
 	).
+
+/****************************************************************************
+  compile_flprologifthen(+Left,+Right,-Code,-Status)
+  Compiling -->>
+****************************************************************************/
+compile_flprologifthen(Left,Right,Code,Status) :-
+        set_context(goal_reification),
+	compile_body(Left,LeftCode,S1),
+	( no_errors_found(S1) ->
+	    compile_body(Right,RightCode,Status),
+	    ( no_errors_found(Status) ->
+		atomobj_struct(('->'),ArrowObj),
+		prologterm_struct(ArrowObj,2,[LeftCode,RightCode],Code)
+	    ;
+		true
+	    )
+	;
+	  Status=S1
+	),
+        clear_context(goal_reification).
 
 
 /****************************************************************************
@@ -8591,7 +8618,7 @@ compile_prologalllibobj(ParserTerm,Module,Nesting,Object,OidCode,Code,BodyHeadLi
 
 /****************************************************************************
   compile_prlgterm(+FunctTerm,+Arity,+ArgList,+Nesting,-Object,-OidCode,-Code,?BodyHeadList,-Status)
-  compile_prlgterm(+FunctTerm,+Arity,+ArgList,+Nesting,-Object,-OidCode,-Code,?BodyHeadList,-Status)
+  compile_prlgterm(+FunctTerm,+Arity,+ArgList,+PlgModule,+Nesting,-Object,-OidCode,-Code,?BodyHeadList,-Status)
   
  +Nesting - needed for nested user defined functions
  ?BodyHeadList - code to add at the beginning of the body

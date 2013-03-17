@@ -31,6 +31,10 @@ file_list=*.flr
 exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
     	      basetype_moo.flr basetype_foo.flr \
               add1.flr add2.flr \
+    	      terminyzer0.flr \
+    	      terminyzer0_log.flr \
+    	      terminyzer1.flr \
+    	      terminyzer2.flr \
               trailer.flr \
               sensortest_declarations.flr sensortest_usedecl.flr \
               ruleupdates.flr reif_foo.flr \
@@ -45,6 +49,10 @@ exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
 	      test_builtin_err.flr \
     	      test_delays_errors1.flr test_delays_errors2.flr \
               test_delays_errors3.flr \
+    	      justification_test_fl.flr \\
+    	      justification_test_prog.flr \\
+    	      justification_test_prog_aux.flr \\
+    	      justification_test_just.flr \\
               atco_specific2.flr \
               atco_specific2_aux.flr"
 
