@@ -30,7 +30,7 @@
 (defconst flora-emacs-p (not flora-xemacs-p))
 
 (defmacro flora-buffer-live-p (buf)
-  (` (and (, buf) (get-buffer (, buf)) (buffer-name (get-buffer (, buf))))))
+  `( (and (, buf) (get-buffer (, buf)) (buffer-name (get-buffer (, buf))))))
 
 (defconst flora-temp-file-prefix
   (cond (flora-emacs-p temporary-file-directory)
