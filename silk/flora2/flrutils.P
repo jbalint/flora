@@ -1971,6 +1971,9 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
 	repeat,
 	read_canonical(Term),
 	( Term == end_of_file, !
+	; Term = symbol_warnings_flag(_Flag,FileName)->
+	    storage_insert_fact(StorageName,Term,_Inserted),
+	    fail
 	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,USE_UDF_SYMBOL,SymbolTransactional,FileName),
 	    %% Note: we are testing in the same storage name == same module.
 	    %% Therefore, the WS argument is unimportant
@@ -2073,38 +2076,10 @@ find_nowarn_any_symbol_any_arity(StorageName,SymbolName,_SymbolArity,SymbolWS,Sy
 find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,SymbolWS,SymbolContext,SymbolTransactional) :-
 	find_nowarn_any_symbol(StorageName,SymbolName,SymbolArity,SymbolWS,SymbolContext,SymbolTransactional).
 
-%% MK: Need to add cases to warn about Prolog predicates and sensors!!!
-make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,FUNCTION_SYMBOL,SymbolTransactional,[]) :-
-	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,_,FUNCTION_SYMBOL,SymbolTransactional),
-	!.
 
-make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,UDF_SYMBOL,SymbolTransactional,[]) :-
-	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,_,UDF_SYMBOL,SymbolTransactional),
-	!.
-
-make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,PROLOG_SYMBOL,SymbolTransactional,[]) :-
-	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,_,PROLOG_SYMBOL,SymbolTransactional),
-	!.
-
-make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
-	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,StoredWS,PREDICATE_SYMBOL,SymbolTransactional),
-	!,
-	%% If StoredWS is anonymous variable - then ignore warnings
-	is_flvariable(StoredWS,VarName,_VarIndex),
-	VarName == FL_UNDERSCORE.
-
-make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
-	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,NULL,PREDICATE_SYMBOL,SymbolTransactional),
-	!.
-
-make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
-	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,FL_THISMODULE,PREDICATE_SYMBOL,SymbolTransactional),
-	!.
-
-make_symbol_context_load_status(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,[]) :-
-	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,WS,PREDICATE_SYMBOL,SymbolTransactional),
-	!.
-
+/*************************************************************************
+make_symbol_context_load_status(+StorageName,+UsedLine,+UsedFile,+UsedContext,+UsedTransactional,+UsedArity,+SymbolName,+SymbolArity,+WS,+SymbolIndex,+SymbolContext,+SymbolTransactional,+ContextStatus)
+*************************************************************************/
 %% This case is handled differently from the compiler (error instead of warning)
 make_symbol_context_load_status(_StorageName,UsedLine,UsedFile,UDF_SYMBOL,_UsedTransactional,UsedArity,_SymbolName,SymbolArity,_WS,SymbolIndex,FUNCTION_SYMBOL,_SymbolTransactional,ContextStatus) :-
 	UsedArity==SymbolArity,
@@ -2138,10 +2113,62 @@ make_symbol_context_load_status(_StorageName,UsedLine,UsedFile,PROLOG_SYMBOL,_Us
 			Err),
 	ContextStatus=[Err].
 
-make_symbol_context_load_status(_StorageName,UsedLine,UsedFile,UsedContext,UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus) :-
+make_symbol_context_load_status(StorageName,UsedLine,UsedFile,UsedContext,UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus) :-
 	flora_concat_atoms([' in file ',UsedFile],UsedFileMsg),
-	make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus).
+	symbol_context_warnings_off(StorageName,UsedLine,UsedFile,UsedContext,UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,SymbolContext,SymbolTransactional),
+	make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus),
+	clear_turnoff_symbol_warnings_flag.
 
+
+
+/*************************************************************************
+symbol_context_warnings_off(+StorageName,+UsedLine,+UsedFile,+UsedContext,+UsedTransactional,+UsedArity,+SymbolName,+SymbolArity,+WS,+SymbolIndex,+SymbolContext,+SymbolTransactional) :-
+*************************************************************************/
+%% MK: Need to add cases to warn about Prolog predicates and sensors!!!
+symbol_context_warnings_off(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,_SymbolName,_SymbolArity,_WS,_SymbolIndex,_SymbolContext,_SymbolTransactional) :-
+	flora_storage_find_fact(StorageName,symbol_warnings_flag(Flag,_)),
+	!,
+	set_turnoff_symbol_warnings_flag(Flag).
+	
+symbol_context_warnings_off(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,FUNCTION_SYMBOL,SymbolTransactional) :-
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,_,FUNCTION_SYMBOL,SymbolTransactional),
+	!,
+	set_turnoff_symbol_warnings_flag(FLORA_WARNOFF).
+
+symbol_context_warnings_off(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,UDF_SYMBOL,SymbolTransactional) :-
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,_,UDF_SYMBOL,SymbolTransactional),
+	!,
+	set_turnoff_symbol_warnings_flag(FLORA_WARNOFF).
+
+symbol_context_warnings_off(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,PROLOG_SYMBOL,SymbolTransactional) :-
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,_,PROLOG_SYMBOL,SymbolTransactional),
+	!,
+	set_turnoff_symbol_warnings_flag(FLORA_WARNOFF).
+
+symbol_context_warnings_off(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,_WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional) :-
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,StoredWS,PREDICATE_SYMBOL,SymbolTransactional),
+	!,
+	set_turnoff_symbol_warnings_flag(FLORA_WARNOFF),
+	%% If StoredWS is anonymous variable - then ignore warnings
+	is_flvariable(StoredWS,VarName,_VarIndex),
+	VarName == FL_UNDERSCORE.
+
+symbol_context_warnings_off(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional):-
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,NULL,PREDICATE_SYMBOL,SymbolTransactional),
+	!,
+	set_turnoff_symbol_warnings_flag(FLORA_WARNOFF).
+
+symbol_context_warnings_off(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,NULL,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional) :-
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,FL_THISMODULE,PREDICATE_SYMBOL,SymbolTransactional),
+	!,
+	set_turnoff_symbol_warnings_flag(FLORA_WARNOFF).
+
+symbol_context_warnings_off(StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,SymbolName,SymbolArity,WS,_SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional) :-
+	find_nowarn_any_symbol_any_arity(StorageName,SymbolName,SymbolArity,WS,PREDICATE_SYMBOL,SymbolTransactional),
+	!,
+	set_turnoff_symbol_warnings_flag(FLORA_WARNOFF).
+
+symbol_context_warnings_off(_StorageName,_UsedLine,_UsedFile,_UsedContext,_UsedTransactional,_UsedArity,_SymbolName,_SymbolArity,_WS,_SymbolIndex,_SymbolContext,_SymbolTransactional).
 
 
 %% Attach attribute FLSYSRULEUPDATE before inserting fact into trie
@@ -4245,6 +4272,12 @@ write_use_symbols(LocalName,FLS2File):-
 	).
 
 write_use_symbols(_,_).
+
+write_nowarn_symbols(LocalName) :-
+	symbol_warnings_flag(Flag),
+	write_canonical(symbol_warnings_flag(Flag,LocalName)),
+	flora_write_atom('.'),
+	nl.
 
 write_nowarn_symbols(LocalName) :-
 	findall(flora_nowarn_symbol(Name,N,WS,Context,Transactional,LocalName),

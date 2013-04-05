@@ -66,6 +66,7 @@
 :- dynamic HEADVARS_PREDICATE/1.
 :- index(BODYVARS_PREDICATE/1,0).
 :- index(HEADVARS_PREDICATE/1,0).
+:- dynamic symbol_warnings_flag(_).
 
 
 /****************************************************************************
@@ -3133,6 +3134,16 @@ compile_symbol_literal(ParserTerm,WS,Context,Status) :-
 /****************************************************************************
   compile_symbol_term(+Funct,+N,+Args,+WS,+Context,+Transactional,-Status)
 ****************************************************************************/
+compile_symbol_term(Funct,0,_Args,NULL,_Context,NONTRANSACTIONAL_SYMBOL,[]) :-
+	flora_get_flatomvar_name(Funct,FLORA_WARNOFF),
+	set_turnoff_symbol_warnings_flag(FLORA_WARNOFF),
+	!.
+
+compile_symbol_term(Funct,0,_Args,NULL,_Context,NONTRANSACTIONAL_SYMBOL,[]) :-
+	flora_get_flatomvar_name(Funct,FLORA_CONSTOFF),
+	set_turnoff_symbol_warnings_flag(FLORA_CONSTOFF),
+	!.
+
 compile_symbol_term(Funct,N,Args,WS,Context,Transactional,Status) :-
 	flora_get_flatomvar_name(Funct,Name),
 	(symbol_star_argument(Args) ->
@@ -5262,6 +5273,10 @@ suppress_symbol_warning(Name,Arity,WS,SymbolContext,Transactional):-
 /****************************************************************************
 compiling_symbol_warning(+Name,+Arity,+WS,+SymbolContext,+Transactional,+Index,+Mesg,-Status)
 ****************************************************************************/
+compiling_symbol_warning(_Name,_Arity,_WS,_SymbolContext,_Transactional,_Index,_Mesg,[]):-
+	symbol_warnings_flag(FLORA_WARNOFF),
+	!.
+
 compiling_symbol_warning(Name,Arity,WS,SymbolContext,Transactional,_Index,_Mesg,[]):-
 	suppress_symbol_warning(Name,Arity,WS,SymbolContext,Transactional),
 	!.
@@ -10439,6 +10454,10 @@ add_symbol(_Name,_N,_WS,_Index,_LineNumber,_Context,_Transactional) :-
 	%% too confusing for the user
 	compiling_flrshell_command,
 	!.
+%% if checking symbols for constants is off, then do not add constant symbols
+add_symbol(_Name,0,_WS,_Index,_LineNumber,_Context,_Transactional) :-
+	symbol_warnings_flag(FLORA_CONSTOFF),
+	!.
 add_symbol(Name,N,NULL,Index,LineNumber,Context,Transactional) :-
 	!,
 	assert(symbol(Name,N,NULL,Index,LineNumber,Context,Transactional)).
@@ -10493,8 +10512,14 @@ has_nowarn_any_symbol(Name,N,WS,Context,Transactional) :-
 flora_clear_compilation_symbols :-
         %% following \+ is a workaround for an XSB garbage collection bug:
 	(\+ symbol(_,_,_,_,_,_,_) -> true ; retractall(symbol(_,_,_,_,_,_,_))),
-	(\+ nowarn_symbol(_,_,_,_,_) -> true ; retractall(nowarn_symbol(_,_,_,_,_))).
+	(\+ nowarn_symbol(_,_,_,_,_) -> true ; retractall(nowarn_symbol(_,_,_,_,_))),
+	clear_turnoff_symbol_warnings_flag.
 
+set_turnoff_symbol_warnings_flag(Flag):- 
+	assert(symbol_warnings_flag(Flag)).
+
+clear_turnoff_symbol_warnings_flag:- 
+	(\+ symbol_warnings_flag(_) -> true ; retractall(symbol_warnings_flag(_))).
 
 /****************************************************************************
 no_errors_found(+Status)
