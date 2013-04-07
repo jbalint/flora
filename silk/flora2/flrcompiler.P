@@ -609,7 +609,7 @@ pure_naf_struct_flora(Goal,FreeVars,PRSILKNAF(WrappedGoal,FreeVars,Line,CurrFile
 naf_struct_flora(Goal,FreeVars,Code) :-
 	pure_naf_struct_flora(Goal,FreeVars,PureSilkNAFcode),
 	%% delay default negation
-	delay_struct(NO_INDEX,FL_DEFLTNEG,[PureSilkNAFcode],Code).
+	delay_naf_struct(PureSilkNAFcode,Code).
 
 %% delay struct
 delay_struct(Index,DelayOp,Args,Code) :-
@@ -618,6 +618,20 @@ delay_struct(Index,DelayOp,Args,Code) :-
 	%% this never gives out errors, so no need for file/nline args
 	prologterm_struct(FLLIBDELAYEDLITERAL,4,
 			  [DelayOp,CurrFileName,Line,CodeList],
+			  FLDELAYSUPPORTMOD,
+			  Code).
+
+delay_defeat_struct(Index,DefeatCond,Headvars,HeadvarNames,DynHead,Code) :-
+	code_line_and_file_by_index(Index,Line,CurrFileName),
+	prologterm_struct(FLLIBDEFEATDELAY,6,
+			  [CurrFileName,Line,
+			   DefeatCond,DynHead,
+			   Headvars,HeadvarNames],
+			  FLDELAYSUPPORTMOD,
+			  Code).
+
+delay_naf_struct(PureSilkNAFcode,Code) :-
+	prologterm_struct(FLLIBNAFDELAY,1,[PureSilkNAFcode],
 			  FLDELAYSUPPORTMOD,
 			  Code).
 
@@ -4104,9 +4118,10 @@ construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVa
 	    ( approx_prindex(Head,HeadIdx) -> true
 	    ; HeadIdx=NO_INDEX
 	    ),
-	    delay_struct(HeadIdx,FL_UNDEFEATED,
-			 [DefeatCondCode,EmptyListObj,EmptyListObj,DummyVarObj4Head],
-			 DelayedDefeatCondCode)
+	    delay_defeat_struct(HeadIdx,DefeatCondCode,
+				EmptyListObj,EmptyListObj, %% no code 4 headvars
+				DummyVarObj4Head,  %% will be bound to head
+				DelayedDefeatCondCode)
 	;
 	    DelayedDefeatCondCode = true
 	),
@@ -4117,7 +4132,8 @@ construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVa
 %% FL_UNDEFEATED is a modularized Prolog predicate
 %% The difference is that instead of NewVar we insert head code at compile time.
 construct_static_defeasible_condition(HeadCode,DescrIdCode,DescrVarsTerm,DelayedDefeatCondCode) :-
-	(has_permaoption(FLDEFEASIBLE(LibModule)), \+ has_context(compiling_udf_definition)
+	(has_permaoption(FLDEFEASIBLE(LibModule)),
+	    \+ has_context(compiling_udf_definition)
 	->
 	    %% create FL_UNDEFEATED(DescrIdCode,NewVar,ThisModule)
 	    thismodule_struct(ThisModule),
@@ -4138,9 +4154,10 @@ construct_static_defeasible_condition(HeadCode,DescrIdCode,DescrVarsTerm,Delayed
 	    ( approx_prindex(HeadCode,HeadIdx) -> true
 	    ; HeadIdx=NO_INDEX
 	    ),
-	    delay_struct(HeadIdx,FL_UNDEFEATED,
-			 [DefeatCondCode,HeadCodeVarsStruct,HeadCodeVarNamesStruct,NULL],
-			 DelayedDefeatCondCode)
+	    delay_defeat_struct(HeadIdx,DefeatCondCode,
+				HeadCodeVarsStruct,HeadCodeVarNamesStruct,
+				NULL, %% head code
+				DelayedDefeatCondCode)
 	;
 	    DelayedDefeatCondCode = true
 	),

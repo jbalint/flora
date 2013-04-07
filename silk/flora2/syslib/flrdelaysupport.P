@@ -27,6 +27,8 @@
 :- import get_trigger_goal/2 from constraintLib.
 
 :- import
+	%%flrtrim_last/2,
+	%%flrground/1,
 	flrterm_vars/3,
 	%% this one separates regular from attributed vars
 	flrterm_vars_split/4
@@ -51,10 +53,6 @@
 
 :- import flora_when/2 from flrutils.
 
-:- import
-	%%flrtrim_last/2,
-	flrground/1
-   from flora_ground.
 %%:- import flora_decode_predicate/6 from flrwrapper.
 
 :- dynamic delay_spec_to_predicate/6.
@@ -67,6 +65,8 @@
 :- export
 	FLORA_DELAY_CHECKER/2,
 	FLLIBDELAYEDLITERAL/4,
+	FLLIBDEFEATDELAY/6,
+	FLLIBNAFDELAY/1,
 	FLLIBRECORDSENSORS/2.
 :- export
 	flora_register_sensor/2,
@@ -80,9 +80,6 @@
 
 /*
 :- export
-	flora_default_negation_wrapper/3,
-	flora_defeat_condition_wrapper/6,
-
 	flora_unequal_builtin/4,
 	flora_greaterthan_builtin/4,
 	flora_greaterequal_builtin/4,
@@ -128,13 +125,31 @@ FLLIBDELAYEDLITERAL(Builtin,FileN,Line,Args) :-
 	; flora_when(Condition,Call)
 	).
 
-/******************** Actual definitions of builtins ***********************/
+%% Delay wrapper for the FL_UNDEFEATED condition
+%% _File,_Line,_VarnameList - not used currently:
+%% we are not issuing nongroundedness errors
+FLLIBDEFEATDELAY(_File,_Line,DefeatCond,DynHead,VarList,_VarnameList) :-
+	term_arg(DefeatCond,1,RuleId),
+	term_arg(DefeatCond,4,Module),
+	(is_strict_rule(RuleId,Module) -> true
+	; is_cyclic(DefeatCond) -> fail
+	%% Not checking for groundedness
+	;
+	    flrterm_vars(DynHead,DynVars,1),
+	    (ground((DynVars,VarList)) -> DefeatCond
+	    ; flora_when(ground((VarList,DynVars)),DefeatCond)
+	    )
+	).
 
-/********************** Wrapper for NAF ************************************/
-%% WFS not/naf are delayed, no errors issued
-%% Note: \+ is NOT delayed
-flora_default_negation_wrapper(_File,_Line,NafCall) :-
-	NafCall.
+FLLIBNAFDELAY(Goal) :-
+	(experimental(delay_naf) ->
+	    term_arg(Goal,2,Vars),
+	    flora_when(ground(Vars),Goal)
+	;
+	    Goal
+	).
+
+/******************** Actual definitions of builtins ***********************/
 
 /********************* Action to be executed for WRAP_DIFFOBJEQL ***********/
 flora_diffojbeql_action(X,Y,_Call) :- 
@@ -145,52 +160,10 @@ flora_diffojbeql_action(X,Y,_Call) :-
 flora_diffojbeql_action(_X,_Y,Call) :- 
 	Call.
 
-/********************** Wrapper for undefeated *******************************
-flora_defeat_condition_wrapper(+File,+Line,+DefeatCond,+VarList,+VarnameList,+DynHead)
-          VarList, VarnameList - vars in the head collected at compile time
-	  DynHead - the dynamically created head.
-          If VarList, VarnameList are non-nil, then DynHead = NULL
-	  If DynHead != NULL, then VarList and VarnameList are vars
-	  in the static head.
-*****************************************************************************/
-/*
-flora_defeat_condition_wrapper(File,Line,DefeatCond,VarList,VarnameList,DynHead) :-
-	(ground(VarList) -> true
-	; issue_nongroundedness_error(File,Line,VarList,VarnameList)
-	),
-	check_dynamic_rule_head_for_groundedness(File,Line,DynHead),
-	!,
-	DefeatCond.
-*/
-/* This version of flora_defeat_condition_wrapper takes a new approach:
-   If undefeated is true, then nongroundedness does not
-   matter - the answer is correct since the meaning is 
-         not exists varsOf(rule-tag) defeated(rule-tag))
-   If DefeatCond is false, there exist values for varsOf(rule-tag) such that
-   defeated(rule-tag) is true. In this case, we cannot return a correct answer,
-   so we issue an error.
-*/
-flora_defeat_condition_wrapper(File,Line,DefeatCond,VarList,VarnameList,DynHead) :-
-	%% Note: for safety should be DefeatCond->true,
-	%% but this cuts over tables. Somehow it works without the ->true.
-	(is_cyclic(DynHead) -> fail
-	%% If this delay condition is for a currently strict rule,
-	%% do not execute the condition - just assume the condition is TRUE!!
-	; 
-	    %%arg(1,DefeatCond,RuleId),
-	    %%arg(4,DefeatCond,Module),
-	    term_arg(DefeatCond,1,RuleId),
-	    term_arg(DefeatCond,4,Module),
-	    is_strict_rule(RuleId,Module)
-	-> true
-	; DefeatCond
-	; check_dynamic_rule_head_for_groundedness(File,Line,DynHead),
-	    (ground(VarList) -> true
-	    ; issue_nongroundedness_error(File,Line,VarList,VarnameList)
-	    ),
-	    fail
-	).
 
+/*
+%% Not used. May use later if we decide to issue nongroundedness errors again.
+%% Currently, nongroundedness will result in truth value = u
 issue_nongroundedness_error(_,_,[],[]) :- !.
 issue_nongroundedness_error(File,Line,[Var|VarList],[VarName|VarnameList]) :-
 	(ground(Var) -> issue_nongroundedness_error(File,Line,VarList,VarnameList)
@@ -209,6 +182,7 @@ check_dynamic_rule_head_for_groundedness(File,Line,DynHead) :-
 		      FLORA_ABORT_NOTRACE
 		     )
 	).
+*/
 
 
 %% !=
@@ -505,22 +479,6 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
 
 
 ?-
-   %% default negation
-   flora_register_delay(builtin,FL_DEFLTNEG,F,L,
-			[NafCall],
-			flora_default_negation_wrapper(F,L,NafCall),
-			%% the actual condition is made by make_delay_condition
-			NafCall),
-   flora_register_delay(builtin,FL_UNDEFEATED,F,L,
-			[DefeatCond,VarList,VarnameList,DynHead],
-			flora_defeat_condition_wrapper(F,L,DefeatCond,
-						       VarList,
-						       VarnameList,
-						       DynHead),
-			%% this will be postprocessed by make_delay_condition/4
-			%% It takes the terms below and makes
-			%% (ground(VarList),ground(DynHead))),
-			(VarList,DynHead)),
     flora_register_delay(builtin,WRAP_DIFFOBJEQL,F,L,
 			 [X,Y,DiffObjEqlCall],
 			 flora_diffojbeql_action(X,Y,DiffObjEqlCall),
@@ -589,6 +547,7 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
 			flora_ischarlist_builtin(F,L,X),
 			(nonvar(X))),
 
+   /*
    %% These should be deleted when we switch to _atom and such names
    flora_register_delay(builtin,number,F,L,[X],
 			flora_number_builtin(F,L,X),
@@ -609,7 +568,7 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
 			flora_atomic_builtin(F,L,X),
 			(nonvar(X))),
    %% The above should be deleted when we switch to _atom and such names
-
+   */
 
    flora_register_delay(builtin,FL_DELAYQUANT,F,L,[Quant,Condition,Goal],
 			flora_delay_quantifier(F,L,[Quant,Condition,Goal]),
@@ -619,38 +578,7 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
    true.
 
 
-make_delay_condition(FL_UNDEFEATED,Args,CondIn,CondOut) :-
-	!,
-	Args = [UndefeatedLit|_],
-	%%arg(1,UndefeatedLit,RuleId),
-	%%arg(4,UndefeatedLit,Module),
-	term_arg(UndefeatedLit,1,RuleId),
-	term_arg(UndefeatedLit,4,Module),
-	(is_strict_rule(RuleId,Module)
-	-> CondOut = true
-	; CondIn = (CompiletimeCond,RuntimeCond),
-	    %% using flora_term_variables/2 or flrterm_vars/3
-	    %% instead of term_variables/2 is
-	    %% important here. Otherwise FL_UNDEFEATED in dynamically inserted
-	    %% rules will be delayed incorrectly due to caller variables.
-	    %%flora_term_variables(RuntimeCond,RuntimeCondVars),
-	    %% 1 below means: ignore caller vars in negative literals
-	    flrterm_vars(RuntimeCond,RuntimeCondVars,1),
-	    CondOut = ground((CompiletimeCond,RuntimeCondVars))
-	).
-make_delay_condition(FL_DEFLTNEG,_Args,Goal,CondOut) :-
-	!,
-	(experimental(delay_naf) ->
-	%%(true ->
-	    %% delaying NAF
-	    %% Arg 2 is a list of the originally free vars in Goal
-	    %%arg(2,Goal,Vars)
-	    term_arg(Goal,2,Vars)
-	;
-	    %% not delaying NAF
-	    Vars = []
-	),
-	CondOut = ground(Vars).
+%% make_delay_condition is not used now, but keep it just in case
 %% catchall
 make_delay_condition(_,_,Cond,Cond).
 
