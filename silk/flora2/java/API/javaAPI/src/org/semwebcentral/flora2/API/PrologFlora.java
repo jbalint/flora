@@ -481,6 +481,8 @@ public class PrologFlora extends FloraConstants
 		throw new FlrException("InterProlog failed to start its SubProcess Engine", e2);
 	    }
 	}
+	if (File.separatorChar=='\\') // On Windows hack the separator to avoid incorrect escaping on the Prolog side
+		FloraRootDir = FloraRootDir.replace('\\','/');
 	initCommandStrings(FloraRootDir);
 	executeInitCommands();
 	//load configuration file containing debugger config
