@@ -95,7 +95,7 @@ public class PrologFlora extends FloraConstants
 
     /* Function to use _load to load FLORA-2 file into moduleName
     ** fileName   : name of the file to load
-    ** moduleName : name of FLORA module in which to load
+    ** moduleName : name of FLORA module in which to load; beware this is parsed by Prolog, so it may need quoting
     */
     public boolean loadFile(String fileName,String moduleName)
     {
