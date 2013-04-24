@@ -1987,14 +1987,28 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
 	    fail
 	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,UDF_SYMBOL,SymbolTransactional,FileName),
 	    %% If there is another function definition for the same symbol/arity
-	    %% in a previous file, give an error unless nowarn is specified
+	    %% in a previous file, give an error
 	    flora_storage_find_fact(StorageName,flora_symbol(SymbolName,SymbolArity,_WS,_UsedIndex,UsedLine,UDF_SYMBOL,SymbolTransactional,UsedFileName)),
-	    \+ flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,_,UDF_SYMBOL,SymbolTransactional,FileName)),
+	    %% \+ flora_storage_find_fact(StorageName,flora_nowarn_symbol(SymbolName,SymbolArity,_,UDF_SYMBOL,SymbolTransactional,FileName)),
 	    UsedFileName\=FileName
 	->
 	    compiling_error(SymbolIndex,
 			    [ERROR_OVERRIDING_UDF,
-			     ' (see file ',UsedFileName,', line ',UsedLine,')'],
+			     ' (prior definition: file ',UsedFileName,', line ',UsedLine,')'],
+			    Stat),
+	    ContextStatus = [Stat],
+	    util_load_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
+	    flora_increment_counter(flora_load_errors,ErrNum,_,_),
+            storage_insert_fact(StorageName,Term,_Inserted),
+	    fail
+	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,UDF_SYMBOL,SymbolTransactional,FileName),
+	    %% If there is a hilog predicate of the same arity defined in a previous file, give an error
+	    flora_storage_find_fact(StorageName,flora_symbol(HILOG_SYMBOL_NAME,SymbolArity,_WS,_UsedIndex,UsedLine,FUNCTION_SYMBOL,SymbolTransactional,UsedFileName)),
+	    UsedFileName\=FileName
+	->
+	    compiling_error(SymbolIndex,
+			    [ERROR_HILOG_UDF,
+			     ' ',UsedFileName,', line ',UsedLine],
 			    Stat),
 	    ContextStatus = [Stat],
 	    util_load_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
@@ -2010,7 +2024,7 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
 	    flora_increment_counter(flora_load_errors,ErrNum,_,_),
             storage_insert_fact(StorageName,Term,_Inserted),
 	    fail
-	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,SymbolContext,SymbolTransactional,FileName),
+	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,SymbolContext,SymbolTransactional,FileName), SymbolName\=HILOG_SYMBOL_NAME,
 	    (flora_storage_find_fact(StorageName,flora_symbol(SymbolName,UsedArity,_,_UsedIndex,UsedLine,UsedContext,UsedTransactional,UsedFileName))
 	    ; flora_storage_find_fact(CommonFLSstorage,flora_symbol(SymbolName,UsedArity,_,_UsedIndex,UsedLine,UsedContext,UsedTransactional,UsedFileName))
 	    ),

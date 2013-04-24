@@ -1084,6 +1084,7 @@ determine_caller_info(Context,Caller) :-
 	!.
 splice_in_caller_argument(Context,Args,NewArgs) :-
 	determine_caller_info(Context,Caller),
+	%% TODO: see if we can get rid of flattening
 	flatten([Args,Caller],NewArgs).
 
 %% special treatment of _overrides/2/4, _opposes/2/4, _cancel/1/2,
@@ -5112,8 +5113,17 @@ verify_symbol_context(Funct,Arity,SymbolContext,Transactional,Status) :-
 	verify_symbol_context(Funct,Arity,NULL,SymbolContext,Transactional,Status).
 
 %% If term name is a variable, do not check 
+/*
 verify_symbol_context(Funct,_Arity,_WS,_SymbolContext,_Transactional,[]):-
 	is_flvariable(Funct,_Name,_Index),
+	!.
+*/
+
+%% If term name is a variable, add a record with anonymous variable
+verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,Status):-
+	is_flvariable(Funct,_Name,Index),
+	flatom_struct(HILOG_SYMBOL_NAME,Index,VarFunct),
+	verify_symbol_context(VarFunct,Arity,WS,SymbolContext,Transactional,Status),
 	!.
 
 %% Already checked symbol: do not check again and do not record duplicates(!)
@@ -5224,7 +5234,7 @@ verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextSt
 	!,
   	approx_flindex(Funct,Index),
         %% Check if symbol was used before in a different context
-	( has_symbol(Name,SArity,_,_SIndex,SLine,SContext,STransactional),
+	( has_symbol(Name,SArity,_,_SIndex,SLine,SContext,STransactional), Name\=HILOG_SYMBOL_NAME,
 	    %% Index > 0 ensures that symbols introduced by the compiler
 	    %% are not checked
 	    integer(Index),
@@ -5769,6 +5779,18 @@ compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,Nesting,Object,P
 
 
 /****************************************************************************
+  find_user_defined_function(+BaseName,+N,+Args,-FArgs,-Predicate,-ReturnValue) 
+
+  Indicate if there is an active UDF
+****************************************************************************/
+find_user_defined_function(BaseName,N,_Args,FArgs,Predicate,ReturnValue) :-
+	has_permaoption(user_defined_function(BaseName,N,FArgs,Predicate,ReturnValue)),
+	!.
+find_user_defined_function(BaseName,N,_Args,FArgs,Predicate,ReturnValue) :-
+	flora_used_udf_registry(BaseName,N,FArgs,Predicate,ReturnValue),
+	!.
+
+/****************************************************************************
   has_user_defined_function(+Funct,+N,+Args,-FArgs,-Predicate,-ReturnValue) 
 
   Indicate if there is an active UDF
@@ -5778,14 +5800,7 @@ has_user_defined_function(Funct,N,_Args,FArgs,Predicate,ReturnValue) :-
 	(flrsynonym:flora_op_synonym(Name,BaseName)
 	; BaseName = Name
 	),
-	has_permaoption(user_defined_function(BaseName,N,FArgs,Predicate,ReturnValue)),
-	!.
-has_user_defined_function(Funct,N,_Args,FArgs,Predicate,ReturnValue) :-
-	flora_get_flatomvar_name(Funct,Name),
-	(flrsynonym:flora_op_synonym(Name,BaseName)
-	; BaseName = Name
-	),
-	flora_used_udf_registry(BaseName,N,FArgs,Predicate,ReturnValue),
+	find_user_defined_function(BaseName,N,_Args,FArgs,Predicate,ReturnValue),
 	!.
 
 has_user_defined_function(Funct,N,Args,Args,Predicate,ReturnValue) :-
@@ -5794,6 +5809,7 @@ has_user_defined_function(Funct,N,Args,Args,Predicate,ReturnValue) :-
 	Args\=null,
 	is_flvariable(Funct,VarName,Idx),
 	\+ has_context(compiling_udf_varname(VarName,Idx)),
+	find_user_defined_function(_BaseName,N,_PArgs,_FArgs,_FPredicate,_FReturnValue),
 	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
 
 
@@ -5807,7 +5823,6 @@ form_udf_hilog_predicate(Funct,N,Args,NewPredicateCode,NewReturnValueObj):-
 	get_udf_hilog_predicate_funct(NPFunct,NPName),
 	new_prvariable(NO_INDEX,NewReturnValueObj),
 	prvar_to_flvar_struct(NewReturnValueObj,NewReturnValue),
-	%% fllist_struct(Args,[],NO_INDEX,FArgs),
 	flterm_struct(Funct,N,Args,OrigPredicateCode),
 	flterm_struct(NPFunct,3,[OrigPredicateCode,N,NewReturnValue],NewPredicateCode),
 	flora_define_modular_prolog(NPName,3).
