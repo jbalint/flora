@@ -85,16 +85,20 @@ Frame Logic
 <hr/>
 <p>
 <!--Don't touch! The date gets updated when you commit changes to this page-->
-$Date: 2009/07/04 23:11:27 $
+$Date:: 2009/07/04#$
 </p>
 
+<!--
 </pre>
-<P>
+<p>
 <?php //include "counter.php";    ?>
+-->
 <!-- update counter -->
+<!--
 <?php //$number = CounterImage(); ?>
 </p>
 <pre>
+-->
 
 </body>
 </html>

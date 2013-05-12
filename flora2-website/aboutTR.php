@@ -108,16 +108,20 @@ Transaction Logic
 <hr/>
 <p>
 <!--Don't touch! The date gets updated when you commit changes to this page-->
-$Date: 2008/07/28 20:11:29 $
+$Date:: 2008/07/28#$
 </p>
 
+<!--
 </pre>
-<P>
+<p>
 <?php //include "counter.php";    ?>
+-->
 <!-- update counter -->
+<!--
 <?php //$number = CounterImage(); ?>
 </p>
 <pre>
+-->
 
 </body>
 </html>

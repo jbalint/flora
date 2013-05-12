@@ -25,10 +25,12 @@
 
 
 <p>
-FLORA-2 is an advanced object-oriented knowledge base language and application
-development environment.  The language of FLORA-2 is a dialect of F-logic with
-numerous extensions, including meta-programming in the style of HiLog and
-logical updates in the style of Transaction Logic.  FLORA-2 was designed with
+FLORA-2 is an advanced object-oriented knowledge base management system
+and application
+development environment.  It is a dialect of F-logic with
+numerous extensions, including meta-programming in the style of HiLog,
+logical updates in the style of Transaction Logic, and defeasible reasoning.
+FLORA-2 was designed with
 extensibility and flexibility in mind, and it provides strong support for
 modular software design through its unique feature of dynamic modules.
 </p>
@@ -39,36 +41,20 @@ and more.
 </p>
 <p>
   FLORA-2 relies on the <a href="http://xsb.sourceforge.net" target="new_window">XSB inference
-  engine</a>, so XSB must be installed in order to
+  engine</a>, which must be installed in order to
   use FLORA-2. This release of FLORA-2 requires the latest released version
   of XSB.
 </p>
 
 <p>
 <IMG src="images/new.gif" alt="New">
-September 9, 2007: After more than 2 years of development, FLORA-2 <a href="download.php">version
-0.95 (Androcymbium)</a> has been released.
-This release includes a major makeover of the syntax, which both simplifies it
-and extends it with new features.
-These changes ensure 
-greater compatibility with other F-logic based languages, such as 
- <a href="http://www.ontoprise.de/products/ontobroker_en" target="new_window">OntoBroker</a>
- and <a href="http://dbis.informatik.uni-freiburg.de/index.php?project=Florid" target="new_window">
-    FLORID</a>.
- Details of these changes can be found on the Web site of
- the <a href="http://forum.projects.semwebcentral.org">F-logic Forum working
- group</a>.
- There is a <a href="syntaxconversion.html">utility to help with syntax
- conversion</a> from earlier versions.
+May 14, 2013: After more than 5 years of development under the sponsorship
+of <a href="http://www.vulcan.com">Vulcan Inc.</a>, FLORA-2 <a href="download.php">version
+0.99 (Water Lily)</a> has been released!
+This release includes many enhancements and extensions, including defeasible
+rules, user-defined functions, delay quantifiers, rule Ids, and more.
 </p>
    
-<p>
-  In addition to the syntax,
-a wealth of libraries and packages has been added, including
-a new Java API and
-<a href="visualizer.html">FLORA-2 Visualizer and Editor</a>.
-Please see <a href="release_notes.html">release notes</a> for details.
-</p>
 <p>
 FLORA-2 comes with comprehensive <a
 href="documentation.php">manuals</a> and a
@@ -173,19 +159,23 @@ alt="XSB Logo"></A>
 </td>
 <td>
 <!--Don't touch! The date gets updated when you commit changes to this page-->
-$Date: 2009/07/04 23:11:28 $
+$Date:: 2009/07/04#$
 </td>
 </table>
 </address>
 
 
+<!--
 </pre>
-<P>
+<p>
 <?php //include "counter.php";    ?>
+-->
 <!-- update counter -->
+<!--
 <?php //$number = CounterImage(); ?>
 </p>
 <pre>
+-->
 
 </body>
 </html>
