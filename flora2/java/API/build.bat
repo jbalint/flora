@@ -42,12 +42,10 @@ echo ------------------------------
 echo Compiling files ...
 echo ------------------------------
 
-set SILKLIB = ..\..\..\lib
-set LOG4J = %SILKLIB%\jena\log4j-1.2.12.jar
-set INTERPROLOG = %SILKLIB%\interprolog.jar
-set LOG4J=""
+REM Change the location of interprolog, if needed
+set INTERPROLOG = ..\..\..\interprolog.jar
 
-%JAVA_BIN%\javac -Xlint  -classpath %LOG4J%;..;%INTERPROLOG% javaAPI\util\net\sf\flora2\API\util\*.java javaAPI\src\net\sf\flora2\API\*.java 
+%JAVA_BIN%\javac -Xlint  -classpath ..;%INTERPROLOG% javaAPI\util\net\sf\flora2\API\util\*.java javaAPI\src\net\sf\flora2\API\*.java 
 echo *** If you saw a warning "The system cannot find the path specified",
 echo *** change the variable JAVA_BIN in flora2\java\windowsVariables.bat
 echo *** appropriately for your system.
