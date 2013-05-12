@@ -26,14 +26,14 @@
 . ../unixVariables.sh
 . ../flora_settings.sh
 
-rm -f javaAPI/util/org/semwebcentral/flora2/API/util/*.class
-rm -f javaAPI/src/org/semwebcentral/flora2/API/*.class
-rm -f javaAPI/classes/org/semwebcentral/flora2/API/util/*.class
-rm -f javaAPI/classes/org/semwebcentral/flora2/API/*.class
+rm -f javaAPI/util/net/sf/flora2/API/util/*.class
+rm -f javaAPI/src/net/sf/flora2/API/*.class
+rm -f javaAPI/classes/net/sf/flora2/API/util/*.class
+rm -f javaAPI/classes/net/sf/flora2/API/*.class
 
 SILKLIB=../../../lib
 LOG4J=${SILKLIB}/jena/log4j-1.2.12.jar
 INTERPROLOG=${SILKLIB}/interprolog.jar
 
-${JAVA_BIN}/javac -source 1.6 -deprecation -Xlint:unchecked -Xlint -classpath ${LOG4J}:..:${INTERPROLOG} javaAPI/util/org/semwebcentral/flora2/API/util/*.java javaAPI/src/org/semwebcentral/flora2/API/*.java  
+${JAVA_BIN}/javac -source 1.6 -deprecation -Xlint:unchecked -Xlint -classpath ${LOG4J}:..:${INTERPROLOG} javaAPI/util/net/sf/flora2/API/util/*.java javaAPI/src/net/sf/flora2/API/*.java  
 

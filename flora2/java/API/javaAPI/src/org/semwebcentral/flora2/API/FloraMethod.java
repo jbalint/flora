@@ -21,7 +21,7 @@
 **
 ** 
 */
-package org.semwebcentral.flora2.API;
+package net.sf.flora2.API;
  
 import java.util.Vector;
 

@@ -21,13 +21,13 @@
 ** 
 */
 
-package org.semwebcentral.flora2.API;
+package net.sf.flora2.API;
  
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Vector;
 
-import org.semwebcentral.flora2.API.util.FlrException;
+import net.sf.flora2.API.util.FlrException;
 
 import com.declarativa.interprolog.TermModel;
 

@@ -21,10 +21,10 @@
 **
 ** 
 */
-// TODO:  move to org.semwebcentral.flora2.API package
+
 // TODO:  make this a real Exception
 
-package org.semwebcentral.flora2.API.util;
+package net.sf.flora2.API.util;
 
 /** 
  * An Exception related to Flora processing in general.

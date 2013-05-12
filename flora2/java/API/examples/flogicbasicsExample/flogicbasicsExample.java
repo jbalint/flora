@@ -31,8 +31,8 @@
 ***********************************************************************/
 
 import java.util.*;
-import org.semwebcentral.flora2.API.*;
-import org.semwebcentral.flora2.API.util.*;
+import net.sf.flora2.API.*;
+import net.sf.flora2.API.util.*;
 
 public class flogicbasicsExample{
 	

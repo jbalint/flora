@@ -21,14 +21,14 @@
 ** 
 */
 
-package org.semwebcentral.flora2.API;
+package net.sf.flora2.API;
 
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Vector;
 import java.io.File;
 
-import org.semwebcentral.flora2.API.util.FlrException;
+import net.sf.flora2.API.util.FlrException;
 
 import com.declarativa.interprolog.PrologEngine;
 import com.declarativa.interprolog.TermModel;
@@ -169,13 +169,13 @@ public class FloraSession extends FloraConstants
     }
     
     /** Delegates to same method in PrologFlora. 
-    @see org.semwebcentral.flora2.API.PrologFlora#setLoadProgressHandler(String) */
+    @see net.sf.flora2.API.PrologFlora#setLoadProgressHandler(String) */
     public void setLoadProgressHandler(String handler){
     	flora.setLoadProgressHandler(handler);
     }
     
     /** Delegates to same method in PrologFlora. 
-    @see org.semwebcentral.flora2.API.PrologFlora#setLoadProgressHandler(String,double) */
+    @see net.sf.flora2.API.PrologFlora#setLoadProgressHandler(String,double) */
     public void setLoadProgressHandler(String handler,double period){
     	flora.setLoadProgressHandler(handler,period);
     }

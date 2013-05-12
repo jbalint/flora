@@ -22,7 +22,7 @@
 */
 
 
-package org.semwebcentral.flora2.API;
+package net.sf.flora2.API;
 
 import java.io.File;
 import java.util.HashMap;
@@ -33,7 +33,7 @@ import java.util.Vector;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-import org.semwebcentral.flora2.API.util.FlrException;
+import net.sf.flora2.API.util.FlrException;
 
 import com.declarativa.interprolog.PrologEngine;
 import com.declarativa.interprolog.PrologOutputListener;
