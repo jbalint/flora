@@ -34,18 +34,20 @@ import java.util.*;
 import net.sf.flora2.API.*;
 import net.sf.flora2.API.util.*;
 
-public class flogicbasicsExample{
+public class flogicbasicsExample {
 	
     public static void main(String[] args) {
-		
+        /* Initializing the session */
     	FloraSession session = new FloraSession();
 	System.out.println("FLORA-2 session started");	
 		
+        // Assume that Java was called with -DFLORA_FILE=the-file-name
 	String fileName = System.getProperty("FLORA_FILE");
 	if(fileName == null || fileName.trim().length() == 0) {
 	    System.out.println("Invalid path to example file!");
 	    System.exit(0);
 	}
+        /* Loading the flora file */
 	if (session.loadFile(fileName,"example"))
 	    System.out.println("Example loaded successfully!");
 	else
