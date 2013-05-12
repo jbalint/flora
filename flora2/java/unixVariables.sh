@@ -23,9 +23,8 @@
 
 
 
-# Change PROTEGE_DIR and ENGINE if necessary
+# Change ENGINE, JAVA_BIN if necessary
 
-PROTEGE_DIR="$HOME/Protege"
 # Valid values: Native or Subprocess
 # Native engine doesn't work well with Linux
 ENGINE=Subprocess
@@ -44,9 +43,7 @@ if [ -z "$JAVA_BIN" ]; then
 	JAVA_BIN=`dirname "$JAVA_PROG"`
 	echo "** Using Java executable in $JAVA_BIN"
 	$JAVA_BIN/java -version
-	echo "** Please make sure that your Java version is 1.5 or newer"
+	echo "** Please make sure that your Java version is 1.6 or newer"
     fi
 fi
 
-# Don't change this!
-JARS=$PROTEGE_DIR/protege.jar:$PROTEGE_DIR/looks.jar:$PROTEGE_DIR/unicode_panel.jar:$PROTEGE_DIR/driver.jar:$PROTEGE_DIR/driver1.jar:$PROTEGE_DIR/driver2.jar

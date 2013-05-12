@@ -22,13 +22,10 @@ REM limitations under the License.
 REM
 REM
 
-REM Change JAVA_BIN, ENGINE, and PROTEGE_DIR, if necessary
+REM Change JAVA_BIN, ENGINE if necessary
 set JAVA_BIN="C:\Program Files\Java\jdk1.6.0\bin"
 REM Valid values: Native or Subprocess
 set ENGINE=Subprocess
 REM set ENGINE=Native
-set PROTEGE_DIR="C:\Program Files\Protege_3.1"
 
 
-REM Don't change this!
-set JARS="%PROTEGE_DIR%\protege.jar";"%PROTEGE_DIR%\looks.jar";"%PROTEGE_DIR%\unicode_panel.jar";"%PROTEGE_DIR%\driver.jar";"%PROTEGE_DIR%\driver1.jar";"%PROTEGE_DIR%\driver2.jar"

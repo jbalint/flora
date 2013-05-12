@@ -183,7 +183,7 @@ public class FloraObject extends FloraConstants
     ** inherit     : whether the method is inheritable or not 
     ** parameters  : the parameters for the method
     */
-    public Iterator<HashMap<String, FloraObject>> getbooleanAll(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
+    public Iterator<HashMap<String,FloraObject>> getbooleanAll(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String floraQuery = "";
 	String paramList = makeParameterListString(parameters);
@@ -339,7 +339,7 @@ public class FloraObject extends FloraConstants
     ** inherit     : whether the method is inheritable or not 
     ** parameters  : the parameters for the method
     */
-    public Iterator<HashMap<String, FloraObject>> getproceduralAll(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
+    public Iterator<HashMap<String,FloraObject>> getproceduralAll(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String floraQuery = "";
 	String paramList = makeParameterListString(parameters);
@@ -490,7 +490,7 @@ public class FloraObject extends FloraConstants
     ** inherit     : whether the method is inheritable or not 
     ** parameters  : the parameters for the method
     */
-    public Iterator<HashMap<String, FloraObject>> getvalueAll(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
+    public Iterator<HashMap<String,FloraObject>> getvalueAll(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String floraQuery = "";
 	String paramList = makeParameterListString(parameters);

@@ -57,7 +57,7 @@ public class flogicbasicsExample{
 	// Querying persons
 	String command = "?X:person@example.";
 	System.out.println("Query:"+command);
-	Iterator personObjs = session.ExecuteQuery(command);
+	Iterator<FloraObject> personObjs = session.ExecuteQuery(command);
 	/* Printing out persons  */
     	while (personObjs.hasNext()) {
 	    Object personObj = personObjs.next();
@@ -80,55 +80,55 @@ public class flogicbasicsExample{
 	vars.add("?X");
 	vars.add("?Y");
 		
-	Iterator allmatches =
+	Iterator<HashMap<String,FloraObject>> allmatches =
 	    session.ExecuteQuery("?X[believes_in -> ?Y]@example.",vars);
 	System.out.println("Query:?X[believes_in -> ?Y]@example.");
 
-	HashMap firstmatch;
+	HashMap<String,FloraObject> firstmatch;
 	while (allmatches.hasNext()) {	
-	    firstmatch = (HashMap)allmatches.next();
-	    FloraObject Xobj = (FloraObject)firstmatch.get("?X");
-	    FloraObject Yobj = (FloraObject)firstmatch.get("?Y");	
+	    firstmatch = allmatches.next();
+	    FloraObject Xobj = firstmatch.get("?X");
+	    FloraObject Yobj = firstmatch.get("?Y");	
 	    System.out.println(Xobj+" believes in: "+Yobj);	
 	}
 
 	FloraObject personObj = new FloraObject("person",session);
-	Iterator methIter = personObj.getMethods("example");
+	Iterator<FloraMethod> methIter = personObj.getMethods("example");
 	while (methIter.hasNext()) {
-	    System.out.println(((FloraMethod)methIter.next()).methodDetails());
+	    System.out.println((methIter.next()).methodDetails());
 	}
 
 	// instances of the person class
-	Iterator instanceIter = personObj.getInstances("example");
+	Iterator<FloraObject> instanceIter = personObj.getInstances("example");
 	System.out.println("Person instances:");
 	while (instanceIter.hasNext())
-	    System.out.println("    " + (FloraObject)instanceIter.next());
+	    System.out.println("    " + instanceIter.next());
 
 
 	instanceIter = personObj.getDirectInstances("example");
 	System.out.println("Person direct instances:");
 	while (instanceIter.hasNext())
-	    System.out.println("    " + (FloraObject)instanceIter.next());
+	    System.out.println("    " + instanceIter.next());
 
-	Iterator subIter = personObj.getSubClasses("example");
+	Iterator<FloraObject> subIter = personObj.getSubClasses("example");
 	System.out.println("Person subclasses:");
 	while (subIter.hasNext())
-	    System.out.println("    " + (FloraObject)subIter.next());
+	    System.out.println("    " + subIter.next());
 
 	subIter = personObj.getDirectSubClasses("example");
 	System.out.println("Person direct subclasses:");
 	while (subIter.hasNext())
-	    System.out.println("    " + (FloraObject)subIter.next());
+	    System.out.println("    " + subIter.next());
 
-	Iterator supIter = personObj.getSuperClasses("example");
+	Iterator<FloraObject> supIter = personObj.getSuperClasses("example");
 	System.out.println("Person superclasses:");
 	while (supIter.hasNext())
-	    System.out.println("    " + (FloraObject)supIter.next());
+	    System.out.println("    " + supIter.next());
 
 	supIter = personObj.getDirectSuperClasses("example");
 	System.out.println("Person direct superclasses:");
 	while (supIter.hasNext())
-	    System.out.println("    " + (FloraObject)supIter.next());
+	    System.out.println("    " + supIter.next());
 
 	/*****************************************************************
 	 ******** Examples of uses of the high-level Java-FLORA-2 API
@@ -140,25 +140,25 @@ public class flogicbasicsExample{
 	*/
 	person currPerson = null;
     	while (personObjs.hasNext()) {
-	    personObj = (FloraObject)(personObjs.next());
+	    personObj = (personObjs.next());
 	    System.out.println("Person name:"+personObj);
 
 	    currPerson =new person(personObj,"example");
-	    Iterator kidsItr = currPerson.getVDN_kids();
+	    Iterator<FloraObject> kidsItr = currPerson.getVDN_kids();
 
 	    while(kidsItr.hasNext()) {
-		FloraObject kidObj = (FloraObject)(kidsItr.next());
+		FloraObject kidObj = (kidsItr.next());
 		System.out.println("Person Name: " + personObj
 				   + " has kid: " + kidObj);
 		    
 		person kidPerson = null;
 		kidPerson = new person(kidObj,"example");
 		
-		Iterator hobbiesItr = kidPerson.getVDN_hobbies();
+		Iterator<FloraObject> hobbiesItr = kidPerson.getVDN_hobbies();
 
 		while(hobbiesItr.hasNext()) {
 		    FloraObject hobbyObj = null;
-		    hobbyObj = (FloraObject)(hobbiesItr.next());
+		    hobbyObj = (hobbiesItr.next());
 		    System.out.println("Kid:"+kidObj
 				       + " has hobby: " + hobbyObj);
 		}
@@ -168,13 +168,13 @@ public class flogicbasicsExample{
 
 	FloraObject age;
 	currPerson = new person("father(mary)", "example", session);
-	Iterator maryfatherItr = currPerson.getVDN_age();
-	age = (FloraObject)maryfatherItr.next();
+	Iterator<FloraObject> maryfatherItr = currPerson.getVDN_age();
+	age = maryfatherItr.next();
 	System.out.println("Mary's father is " + age + " years old");
 
 	currPerson = new person("mary", "example", session);
-	Iterator maryItr = currPerson.getVDN_age();
-	age = (FloraObject)maryItr.next();
+	Iterator<FloraObject> maryItr = currPerson.getVDN_age();
+	age = maryItr.next();
 	System.out.println("Mary is " + age + " years old");
 
 	// person instances using high-level interface
@@ -182,13 +182,13 @@ public class flogicbasicsExample{
 	instanceIter = personClass.getInstances();
 	System.out.println("Person instances using high-level API:");
 	while (instanceIter.hasNext())
-	    System.out.println("    " + (FloraObject)instanceIter.next());
+	    System.out.println("    " + instanceIter.next());
 
 
-	Iterator subclassIter = personClass.getSubClasses();
+	Iterator<FloraObject> subclassIter = personClass.getSubClasses();
 	System.out.println("Person subclasses using high-level API:");
 	while (subclassIter.hasNext())
-	    System.out.println("    " + (FloraObject)subclassIter.next());
+	    System.out.println("    " + subclassIter.next());
 
 
 	// Close session and good bye

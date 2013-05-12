@@ -34,5 +34,5 @@ rm -f javaAPI/classes/net/sf/flora2/API/*.class
 # Change the location of interprolog, if needed
 INTERPROLOG=../../../interprolog.jar
 
-${JAVA_BIN}/javac -source 1.6 -deprecation -Xlint:unchecked -Xlint -classpath ..:${INTERPROLOG} javaAPI/util/net/sf/flora2/API/util/*.java javaAPI/src/net/sf/flora2/API/*.java  
+${JAVA_BIN}/javac -deprecation -Xlint:unchecked -Xlint -classpath ..:${INTERPROLOG} javaAPI/util/net/sf/flora2/API/util/*.java javaAPI/src/net/sf/flora2/API/*.java  
 

@@ -38,27 +38,27 @@ public class person extends FloraConstants {
 
 
     // Sub/Superclass methods
-    public Iterator getDirectInstances() {
+    public Iterator<FloraObject> getDirectInstances() {
 	return sourceFloraObject.getDirectInstances(moduleName);
     }
 
-    public Iterator getInstances() {
+    public Iterator<FloraObject> getInstances() {
 	return sourceFloraObject.getInstances(moduleName);
     }
 
-    public Iterator getDirectSubClasses() {
+    public Iterator<FloraObject> getDirectSubClasses() {
 	return sourceFloraObject.getDirectSubClasses(moduleName);
     }
 
-    public Iterator getSubClasses() {
+    public Iterator<FloraObject> getSubClasses() {
 	return sourceFloraObject.getSubClasses(moduleName);
     }
 
-    public Iterator getDirectSuperClasses() {
+    public Iterator<FloraObject> getDirectSuperClasses() {
 	return sourceFloraObject.getDirectSuperClasses(moduleName);
     }
 
-    public Iterator getSuperClasses() {
+    public Iterator<FloraObject> getSuperClasses() {
 	return sourceFloraObject.getSuperClasses(moduleName);
     }
 
@@ -71,7 +71,7 @@ public class person extends FloraConstants {
       return sourceFloraObject.getboolean(moduleName,"married",INHERITABLE,DATA,pars);
     }
 
-    public Iterator getBDIall_married(Object year)
+    public Iterator<HashMap<String,FloraObject>> getBDIall_married(Object year)
     {
       Vector<Object> pars = new Vector<Object>();
       pars.add(year);
@@ -99,7 +99,7 @@ public class person extends FloraConstants {
       return sourceFloraObject.getboolean(moduleName,"married",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getBDNall_married(Object year)
+    public Iterator<HashMap<String,FloraObject>> getBDNall_married(Object year)
     {
       Vector<Object> pars = new Vector<Object>();
       pars.add(year);
@@ -127,7 +127,7 @@ public class person extends FloraConstants {
       return sourceFloraObject.getboolean(moduleName,"married",INHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getBSIall_married(Object year)
+    public Iterator<HashMap<String,FloraObject>> getBSIall_married(Object year)
     {
       Vector<Object> pars = new Vector<Object>();
       pars.add(year);
@@ -155,7 +155,7 @@ public class person extends FloraConstants {
       return sourceFloraObject.getboolean(moduleName,"married",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getBSNall_married(Object year)
+    public Iterator<HashMap<String,FloraObject>> getBSNall_married(Object year)
     {
       Vector<Object> pars = new Vector<Object>();
       pars.add(year);
@@ -182,7 +182,7 @@ public class person extends FloraConstants {
       return sourceFloraObject.getprocedural(moduleName,"testmethod",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getallPDN_testmethod()
+    public Iterator<HashMap<String,FloraObject>> getallPDN_testmethod()
     {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getproceduralAll(moduleName,"testmethod",NONINHERITABLE,DATA,pars);
@@ -206,7 +206,7 @@ public class person extends FloraConstants {
       return sourceFloraObject.getprocedural(moduleName,"testmethod",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getallPSN_testmethod()
+    public Iterator<HashMap<String,FloraObject>> getallPSN_testmethod()
     {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getproceduralAll(moduleName,"testmethod",NONINHERITABLE,SIGNATURE,pars);
@@ -224,12 +224,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deleteprocedural(moduleName,"testmethod",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getVDI_age()    {
+    public Iterator<FloraObject> getVDI_age()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"age",INHERITABLE,DATA,pars);
     }
 
-    public Iterator getallVDI_age()    {
+    public Iterator<HashMap<String,FloraObject>> getallVDI_age()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"age",INHERITABLE,DATA,pars);
     }
@@ -263,12 +263,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"age",INHERITABLE,DATA,pars);
     }
 
-    public Iterator getVDI_believes_in()    {
+    public Iterator<FloraObject> getVDI_believes_in()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"believes_in",INHERITABLE,DATA,pars);
     }
 
-    public Iterator getallVDI_believes_in()    {
+    public Iterator<HashMap<String,FloraObject>> getallVDI_believes_in()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"believes_in",INHERITABLE,DATA,pars);
     }
@@ -302,12 +302,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"believes_in",INHERITABLE,DATA,pars);
     }
 
-    public Iterator getVDI_hobbies()    {
+    public Iterator<FloraObject> getVDI_hobbies()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"hobbies",INHERITABLE,DATA,pars);
     }
 
-    public Iterator getallVDI_hobbies()    {
+    public Iterator<HashMap<String,FloraObject>> getallVDI_hobbies()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"hobbies",INHERITABLE,DATA,pars);
     }
@@ -341,12 +341,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"hobbies",INHERITABLE,DATA,pars);
     }
 
-    public Iterator getVDI_kids()    {
+    public Iterator<FloraObject> getVDI_kids()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"kids",INHERITABLE,DATA,pars);
     }
 
-    public Iterator getallVDI_kids()    {
+    public Iterator<HashMap<String,FloraObject>> getallVDI_kids()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"kids",INHERITABLE,DATA,pars);
     }
@@ -380,13 +380,13 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"kids",INHERITABLE,DATA,pars);
     }
 
-    public Iterator getVDI_salary(Object year)    {
+    public Iterator<FloraObject> getVDI_salary(Object year)    {
       Vector<Object> pars = new Vector<Object>();
       pars.add(year);
       return sourceFloraObject.getvalue(moduleName,"salary",INHERITABLE,DATA,pars);
     }
 
-    public Iterator getallVDI_salary(Object year)    {
+    public Iterator<HashMap<String,FloraObject>> getallVDI_salary(Object year)    {
       Vector<Object> pars = new Vector<Object>();
       pars.add(year);
       return sourceFloraObject.getvalueAll(moduleName,"salary",INHERITABLE,DATA,pars);
@@ -426,12 +426,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"salary",INHERITABLE,DATA,pars);
     }
 
-    public Iterator getVDN_age()    {
+    public Iterator<FloraObject> getVDN_age()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"age",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getallVDN_age()    {
+    public Iterator<HashMap<String,FloraObject>> getallVDN_age()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"age",NONINHERITABLE,DATA,pars);
     }
@@ -465,12 +465,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"age",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getVDN_believes_in()    {
+    public Iterator<FloraObject> getVDN_believes_in()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"believes_in",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getallVDN_believes_in()    {
+    public Iterator<HashMap<String,FloraObject>> getallVDN_believes_in()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"believes_in",NONINHERITABLE,DATA,pars);
     }
@@ -504,12 +504,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"believes_in",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getVDN_hobbies()    {
+    public Iterator<FloraObject> getVDN_hobbies()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"hobbies",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getallVDN_hobbies()    {
+    public Iterator<HashMap<String,FloraObject>> getallVDN_hobbies()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"hobbies",NONINHERITABLE,DATA,pars);
     }
@@ -543,12 +543,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"hobbies",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getVDN_instances()    {
+    public Iterator<FloraObject> getVDN_instances()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"instances",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getallVDN_instances()    {
+    public Iterator<HashMap<String,FloraObject>> getallVDN_instances()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"instances",NONINHERITABLE,DATA,pars);
     }
@@ -582,12 +582,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"instances",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getVDN_kids()    {
+    public Iterator<FloraObject> getVDN_kids()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"kids",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getallVDN_kids()    {
+    public Iterator<HashMap<String,FloraObject>> getallVDN_kids()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"kids",NONINHERITABLE,DATA,pars);
     }
@@ -621,13 +621,13 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"kids",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getVDN_salary(Object year)    {
+    public Iterator<FloraObject> getVDN_salary(Object year)    {
       Vector<Object> pars = new Vector<Object>();
       pars.add(year);
       return sourceFloraObject.getvalue(moduleName,"salary",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getallVDN_salary(Object year)    {
+    public Iterator<HashMap<String,FloraObject>> getallVDN_salary(Object year)    {
       Vector<Object> pars = new Vector<Object>();
       pars.add(year);
       return sourceFloraObject.getvalueAll(moduleName,"salary",NONINHERITABLE,DATA,pars);
@@ -667,12 +667,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"salary",NONINHERITABLE,DATA,pars);
     }
 
-    public Iterator getVSI_age()    {
+    public Iterator<FloraObject> getVSI_age()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"age",INHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getallVSI_age()    {
+    public Iterator<HashMap<String,FloraObject>> getallVSI_age()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"age",INHERITABLE,SIGNATURE,pars);
     }
@@ -706,12 +706,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"age",INHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getVSI_believes_in()    {
+    public Iterator<FloraObject> getVSI_believes_in()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"believes_in",INHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getallVSI_believes_in()    {
+    public Iterator<HashMap<String,FloraObject>> getallVSI_believes_in()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"believes_in",INHERITABLE,SIGNATURE,pars);
     }
@@ -745,12 +745,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"believes_in",INHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getVSI_hobbies()    {
+    public Iterator<FloraObject> getVSI_hobbies()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"hobbies",INHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getallVSI_hobbies()    {
+    public Iterator<HashMap<String,FloraObject>> getallVSI_hobbies()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"hobbies",INHERITABLE,SIGNATURE,pars);
     }
@@ -784,12 +784,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"hobbies",INHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getVSI_kids()    {
+    public Iterator<FloraObject> getVSI_kids()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"kids",INHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getallVSI_kids()    {
+    public Iterator<HashMap<String,FloraObject>> getallVSI_kids()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"kids",INHERITABLE,SIGNATURE,pars);
     }
@@ -823,13 +823,13 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"kids",INHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getVSI_salary(Object year)    {
+    public Iterator<FloraObject> getVSI_salary(Object year)    {
       Vector<Object> pars = new Vector<Object>();
       pars.add(year);
       return sourceFloraObject.getvalue(moduleName,"salary",INHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getallVSI_salary(Object year)    {
+    public Iterator<HashMap<String,FloraObject>> getallVSI_salary(Object year)    {
       Vector<Object> pars = new Vector<Object>();
       pars.add(year);
       return sourceFloraObject.getvalueAll(moduleName,"salary",INHERITABLE,SIGNATURE,pars);
@@ -869,12 +869,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"salary",INHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getVSN_age()    {
+    public Iterator<FloraObject> getVSN_age()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"age",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getallVSN_age()    {
+    public Iterator<HashMap<String,FloraObject>> getallVSN_age()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"age",NONINHERITABLE,SIGNATURE,pars);
     }
@@ -908,12 +908,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"age",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getVSN_believes_in()    {
+    public Iterator<FloraObject> getVSN_believes_in()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"believes_in",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getallVSN_believes_in()    {
+    public Iterator<HashMap<String,FloraObject>> getallVSN_believes_in()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"believes_in",NONINHERITABLE,SIGNATURE,pars);
     }
@@ -947,12 +947,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"believes_in",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getVSN_hobbies()    {
+    public Iterator<FloraObject> getVSN_hobbies()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"hobbies",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getallVSN_hobbies()    {
+    public Iterator<HashMap<String,FloraObject>> getallVSN_hobbies()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"hobbies",NONINHERITABLE,SIGNATURE,pars);
     }
@@ -986,12 +986,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"hobbies",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getVSN_instances()    {
+    public Iterator<FloraObject> getVSN_instances()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"instances",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getallVSN_instances()    {
+    public Iterator<HashMap<String,FloraObject>> getallVSN_instances()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"instances",NONINHERITABLE,SIGNATURE,pars);
     }
@@ -1025,12 +1025,12 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"instances",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getVSN_kids()    {
+    public Iterator<FloraObject> getVSN_kids()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalue(moduleName,"kids",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getallVSN_kids()    {
+    public Iterator<HashMap<String,FloraObject>> getallVSN_kids()    {
       Vector<Object> pars = new Vector<Object>();
       return sourceFloraObject.getvalueAll(moduleName,"kids",NONINHERITABLE,SIGNATURE,pars);
     }
@@ -1064,13 +1064,13 @@ public class person extends FloraConstants {
       return sourceFloraObject.deletevalue(moduleName,"kids",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getVSN_salary(Object year)    {
+    public Iterator<FloraObject> getVSN_salary(Object year)    {
       Vector<Object> pars = new Vector<Object>();
       pars.add(year);
       return sourceFloraObject.getvalue(moduleName,"salary",NONINHERITABLE,SIGNATURE,pars);
     }
 
-    public Iterator getallVSN_salary(Object year)    {
+    public Iterator<HashMap<String,FloraObject>> getallVSN_salary(Object year)    {
       Vector<Object> pars = new Vector<Object>();
       pars.add(year);
       return sourceFloraObject.getvalueAll(moduleName,"salary",NONINHERITABLE,SIGNATURE,pars);

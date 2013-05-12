@@ -185,7 +185,7 @@ public class FloraSession extends FloraConstants
     ** query : query to be executed
     ** vars : variables in the query
     */
-    public Iterator<HashMap<String, FloraObject>> ExecuteQuery(String query,Vector<String> vars)
+    public Iterator<HashMap<String,FloraObject>> ExecuteQuery(String query,Vector<String> vars)
     {
 	return FindAllMatches(query,vars);
     }

@@ -30,8 +30,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.Vector;
 
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
+//import org.apache.log4j.Level;
+//import org.apache.log4j.Logger;
 
 import net.sf.flora2.API.util.FlrException;
 
@@ -52,7 +52,7 @@ public class PrologFlora extends FloraConstants
     boolean isNative = false;
     String commands[];
 
-    private static Logger logger = Logger.getLogger(PrologFlora.class);
+    //private static Logger logger = Logger.getLogger(PrologFlora.class);
 
     
     HashMap<Integer,Exception> exceptionStore = new HashMap<Integer,Exception>();
@@ -182,10 +182,10 @@ public class PrologFlora extends FloraConstants
 	private String wrapAsTimedCall(String G) {
 		if (loadProgressHandlerPredicate==null) return G;
 		else {
-			logger.info("preparing timed_call to "+G);
-			return "timed_call(( "+
-				loadProgressHandlerPredicate+"(("+G+"),"+HEARTBEAT_STAGE_BEGIN+"),("+G+ ")), repeating("+loadProgressPeriod+"), "+
-				loadProgressHandlerPredicate+"(("+G+"),"+HEARTBEAT_STAGE_RUN+"), nesting)";
+		    //logger.info("preparing timed_call to "+G);
+		    return "timed_call(( "+
+			loadProgressHandlerPredicate+"(("+G+"),"+HEARTBEAT_STAGE_BEGIN+"),("+G+ ")), repeating("+loadProgressPeriod+"), "+
+			loadProgressHandlerPredicate+"(("+G+"),"+HEARTBEAT_STAGE_RUN+"), nesting)";
 		}
 	}
 	
@@ -323,44 +323,44 @@ public class PrologFlora extends FloraConstants
     	//An exception will look like error(type-of-error(message,...) ...)
     	TermModel objName = null;
     	if (solutions != null && solutions.length != 0) {
-    		TermModel tm = (TermModel)solutions[0];
-    		objName = PrologFlora.findValue(tm,"?Ex");
-		logger.info("findException:  " + objName);
-    		if (objName == null)
-    			throw new FlrException("Flora returned no exception info - probably a bug");
-    		else if (objName.node instanceof String) {
-    			if (objName.toString().equals("normal"))
-    			    {}  //no exception
-    			else if (objName.node != null && objName.node.toString().equals("builtin_exception")) {
-    				Integer id = (Integer) ((TermModel) objName.getChild(0)).node;
-    				Exception ex = exceptionStore.remove(id);
-    				throw (FlrException) ex;
-    			} 
-    			else {
-			    if (objName.children == null) {
-				// message from XSB throw(message)
-				throw new FlrException(objName.node.toString());
-			    } else {
-				switch (objName.children.length) {
-				case 2:
-				    // Flora exception
-				    throw new FlrException(objName.node,
-							   ((TermModel) objName.getChild(0)).node,
-							   ((TermModel) objName.getChild(1)).node);
-				case 3:
-				    // XSB exception - objName.node.equals("error")
-				    throw new FlrException(((TermModel) objName.getChild(0)).toString(),
-							   // ((TermModel) objName.getChild(1)),
-							   toStringNoCommas((TermModel) objName.getChild(1)),
-							   ((TermModel) objName.getChild(2)));
-				default:
-				    throw new FlrException("Flora returned non-standard exception with " + objName.children.length + " children - " + objName);
-				}
-			    }
+	    TermModel tm = (TermModel)solutions[0];
+	    objName = PrologFlora.findValue(tm,"?Ex");
+	    //logger.info("findException:  " + objName);
+	    if (objName == null)
+		throw new FlrException("Flora returned no exception info - probably a bug");
+	    else if (objName.node instanceof String) {
+		if (objName.toString().equals("normal"))
+		    {}  //no exception
+		else if (objName.node != null && objName.node.toString().equals("builtin_exception")) {
+		    Integer id = (Integer) ((TermModel) objName.getChild(0)).node;
+		    Exception ex = exceptionStore.remove(id);
+		    throw (FlrException) ex;
+		} 
+		else {
+		    if (objName.children == null) {
+			// message from XSB throw(message)
+			throw new FlrException(objName.node.toString());
+		    } else {
+			switch (objName.children.length) {
+			case 2:
+			    // Flora exception
+			    throw new FlrException(objName.node,
+						   ((TermModel) objName.getChild(0)).node,
+						   ((TermModel) objName.getChild(1)).node);
+			case 3:
+			    // XSB exception - objName.node.equals("error")
+			    throw new FlrException(((TermModel) objName.getChild(0)).toString(),
+						   // ((TermModel) objName.getChild(1)),
+						   toStringNoCommas((TermModel) objName.getChild(1)),
+						   ((TermModel) objName.getChild(2)));
+			default:
+			    throw new FlrException("Flora returned non-standard exception with " + objName.children.length + " children - " + objName);
 			}
-    		}
-    		else
-    			throw new FlrException("Flora returned non-standard exception info - probably a bug - " + objName.toString());
+		    }
+		}
+	    }
+	    else
+		throw new FlrException("Flora returned non-standard exception info - probably a bug - " + objName.toString());
     	}
     }
     
@@ -424,11 +424,12 @@ public class PrologFlora extends FloraConstants
 	if (engineType.equals("NATIVE")) {
 	    try {
 		String args[] = new String[0]; 
-		if (! logger.isInfoEnabled())
-		    {
-			args = new String[1];
-			args[0] = "--quietload";
-		    }
+		/*
+		if (! logger.isInfoEnabled()) {
+		    args = new String[1];
+		    args[0] = "--quietload";
+		}
+		*/
 		engine = new NativeEngine(systemSpecificFilePath(PrologRootDir), args, false, true);
 		isNative = true;
 	    }
@@ -438,42 +439,40 @@ public class PrologFlora extends FloraConstants
 	} else {
 	    try {
 		String args = "";
+		/*
 		if (! logger.isInfoEnabled())
 		    args += " --quietload";
+		*/
 
 		engine = new XSBSubprocessEngine(systemSpecificFilePath(PrologBinDir) + args, debug);
 
-		if (logger.isEnabledFor(Level.WARN)) // no logger.isWarnEnabled
-		    {
-			if (logger.isDebugEnabled())
+		/*
+		if (logger.isEnabledFor(Level.WARN)) {// no logger.isWarnEnabled
+		    if (logger.isDebugEnabled()) {
+			// forward all output
+			((XSBSubprocessEngine) engine).addPrologOutputListener(new PrologOutputListener()
 			    {
-				// forward all output
-				((XSBSubprocessEngine) engine).addPrologOutputListener(new PrologOutputListener()
-				    {
-					public void print(String s)
-					{
-					    System.err.print(s);
-					    System.err.flush();
-					}
-				    });
-			    }
-			else
-			    {
-				// forward stderr
-				((XSBSubprocessEngine) engine).addPrologStderrListener(new OutputListener()
-				    {
-					public void analyseBytes(byte[] buffer, int nbytes)
-					{
-					    System.err.write(buffer, 0, nbytes);
-					    System.err.flush();
-					}
-					
-					public void streamEnded()
-					{
-					}
-				    });
-			    }
+				public void print(String s) {
+				    System.err.print(s);
+				    System.err.flush();
+				}
+			    });
 		    }
+		    else {
+			// forward stderr
+			((XSBSubprocessEngine) engine).addPrologStderrListener(new OutputListener()
+			    {
+				public void analyseBytes(byte[] buffer, int nbytes) {
+				    System.err.write(buffer, 0, nbytes);
+				    System.err.flush();
+				}
+				
+				public void streamEnded() {
+				}
+			    });
+		    }
+		}
+		*/
 	    }
 	    catch(Exception e2) {
 		throw new FlrException("InterProlog failed to start its SubProcess Engine", e2);

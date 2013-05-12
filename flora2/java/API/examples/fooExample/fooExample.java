@@ -31,12 +31,12 @@ public class fooExample{
 	***********************************************************/
 
 	String command = "?Y : foo @ example.";
-	Iterator fooObjs = session.ExecuteQuery(command);
+	Iterator<FloraObject> fooObjs = session.ExecuteQuery(command);
 		
 	System.out.println("Query: ?Y : foo @ example.");
 	FloraObject johnSuper = null; 
     	while (fooObjs.hasNext()) {
-	    johnSuper = (FloraObject)fooObjs.next();
+	    johnSuper = fooObjs.next();
 	    if (johnSuper != null) {
 		System.out.println("FOO obj Id:"+johnSuper);
 	    } else
@@ -49,11 +49,11 @@ public class fooExample{
 	vars.add("?Y");
 
 	// Use of ExecuteQuery/2
-	Iterator allmatches = session.ExecuteQuery("?X : ?Y @ example.",vars);
-	HashMap firstmatch;
+	Iterator<HashMap<String,FloraObject>> allmatches = session.ExecuteQuery("?X : ?Y @ example.",vars);
+	HashMap<String,FloraObject> firstmatch;
 	System.out.println("Query: ?X : ?Y @ example.");
 	while (allmatches.hasNext()) {	
-	    firstmatch = (HashMap)allmatches.next();
+	    firstmatch = allmatches.next();
 	    Object Xobj = firstmatch.get("?X");
 	    Object Yobj = firstmatch.get("?Y");	
 	    System.out.println("    " + Xobj + " : " + Yobj);	
@@ -62,11 +62,11 @@ public class fooExample{
 	// Another use of ExecuteQuery/2: with data types
 	Vector<String> vars2 = new Vector<String>();
 	vars2.add("?X");
-	Iterator allmatches2 = session.ExecuteQuery("p(?X) @ example.",vars2);
-	HashMap firstmatch2;
+	Iterator<HashMap<String,FloraObject>> allmatches2 = session.ExecuteQuery("p(?X) @ example.",vars2);
+	HashMap<String,FloraObject> firstmatch2;
 	System.out.println("Query: p(?X) @ example.");
 	while (allmatches2.hasNext()) {	
-	    firstmatch2 = (HashMap)allmatches2.next();
+	    firstmatch2 = allmatches2.next();
 	    Object Xobj = firstmatch2.get("?X");
 	    System.out.println("?X = " + Xobj);	
 	}
@@ -105,7 +105,7 @@ public class fooExample{
 	System.out.println("Set John's bonus");
 	objJohn.setVDN_age("2004","50");
 	System.out.println("Set John's age");
-	Iterator ageValues = objJohn.getVDN_age("2004");
+	Iterator<FloraObject> ageValues = objJohn.getVDN_age("2004");
 	while (ageValues.hasNext()) {
 	    System.out.println("John's age: "+ageValues.next());
 	}
@@ -117,7 +117,7 @@ public class fooExample{
 	objJohn.setVDN_ancestors(ancestors);
 	System.out.println("John obj: "+objJohn);
 
-	Iterator ancestorVals = objJohn.getVDN_ancestors();
+	Iterator<FloraObject> ancestorVals = objJohn.getVDN_ancestors();
 	while (ancestorVals.hasNext()) {
 	    System.out.println("John's ancestors: " + ancestorVals.next());
 	}
