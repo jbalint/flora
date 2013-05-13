@@ -125,7 +125,7 @@ libs:
 misc:
 	cd pkgs && $(MAKE) PROLOG=$(PROLOG)
 	cd demos && $(MAKE) PROLOG=$(PROLOG)
-	-cd docs && $(MAKE) PROLOG=$(PROLOG)
+	-test -f docs/Makefile && cd docs && $(MAKE) PROLOG=$(PROLOG) || echo "" > /dev/null
 
 
 ${FLORA_TABLING_METHODS} : ${FLORA_DEFAULT_TABLING}
@@ -191,7 +191,7 @@ clean: cleantemp
 	/bin/rm -f .*.tmp .flora_path* .prolog_path*
 	cd closure && $(MAKE) clean
 	cd datatypes && $(MAKE) clean
-	cd docs && $(MAKE) clean
+	-test -f docs/Makefile && cd docs && $(MAKE) clean || echo "" > /dev/null
 	cd genincludes && $(MAKE) clean
 	cd includes && $(MAKE) clean
 	cd syslib && $(MAKE) clean
@@ -211,7 +211,7 @@ cleantemp:
 	/bin/rm -f "$(HOME)"/.xsb/flora*/*${PROLOGEXT} "$(HOME)"/.xsb/flora*/*${OBJEXT}
 
 veryclean: clean
-	cd docs && $(MAKE)  veryclean
+	-test -f docs/Makefile && cd docs && $(MAKE)  veryclean || echo "" > /dev/null
 	cd emacs && $(MAKE) veryclean
 
 

@@ -4,10 +4,13 @@
 
     # RUN this in the ./admin/ directory!
 
-files="./flora2/INSTALLATION \
+files="./flora2/INSTALLATION ./flora2/LICENSE \
         ./flora2/Makefile ./flora2/NMakefile.mak \
     	./flora2/makeflora ./flora2/makeflora.bat \
         ./flora2/*.sh ./flora2/*.P ./flora2/*.H ./flora2/*.flh\
+        ./flora2/AT/*.flr ./flora2/AT/Makefile ./flora2/AT/NMakefile.mak \
+        ./flora2/AT/prolog/*.P  ./flora2/AT/include/*.flh  \
+        ./flora2/ATinc/*.flh  \
     	./flora2/closure/Makefile ./flora2/closure/NMakefile.mak \
     	./flora2/closure/*.fli \
     	./flora2/closure/*.inc \
@@ -20,7 +23,7 @@ files="./flora2/INSTALLATION \
     	./flora2/demos/xpath/*.flr ./flora2/demos/xpath/expectedoutput \
     	./flora2/demos/Makefile ./flora2/demos/NMakefile.mak \
     	./flora2/docs/*.pdf \
-    	./flora2/docs/Makefile ./flora2/docs/NMakefile.mak \
+    	./flora2/docs/NMakefile.mak \
     	./flora2/emacs/flora.el \
     	./flora2/emacs/README \
     	./flora2/emacs/Makefile \
@@ -51,7 +54,6 @@ files="./flora2/INSTALLATION \
     	./flora2/syslib/*.P ./flora2/syslib/*.H ./flora2/syslib/*.sh \
     	./flora2/syslib/Makefile ./flora2/syslib/NMakefile.mak \
     	./flora2/syslibinc/*.flh  \
-	./flora2/Misc/*.pl ./flora2/Misc/README \
     	./flora2/platforms/unix \
     	./flora2/platforms/windows \
     	./flora2/platforms/cygwin \

@@ -8,6 +8,7 @@ files=" \
         ./flora2/Makefile ./flora2/NMakefile.mak \
     	./flora2/makeflora ./flora2/makeflora.bat \
         ./flora2/*.sh ./flora2/*.xwam ./flora2/*.flh\
+        ./flora2/AT/*.flr ./flora2/AT/Makefile ./flora2/AT/NMakefile.mak
     	./flora2/closure/Makefile ./flora2/closure/NMakefile.mak \
     	./flora2/closure/*.flh \
     	./flora2/datatypes/*.xwam ./flora2/datatypes/*.sh \
@@ -20,7 +21,7 @@ files=" \
     	./flora2/demos/xpath/*.flr ./flora2/demos/xpath/expectedoutput \
     	./flora2/demos/Makefile ./flora2/demos/NMakefile.mak \
     	./flora2/docs/*.pdf \
-    	./flora2/docs/Makefile ./flora2/docs/NMakefile.mak \
+    	./flora2/docs/NMakefile.mak \
     	./flora2/emacs/flora.el \
     	./flora2/emacs/README \
     	./flora2/emacs/Makefile \
@@ -50,7 +51,6 @@ files=" \
     	./flora2/syslib/*.xwam ./flora2/syslib/*.sh \
     	./flora2/syslib/Makefile ./flora2/syslib/NMakefile.mak \
     	./flora2/syslibinc/*.flh  \
-	./flora2/Misc/*.pl ./flora2/Misc/README \
     	./flora2/platforms/unix \
     	./flora2/platforms/windows \
     	./flora2/platforms/cygwin \
