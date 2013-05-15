@@ -4,7 +4,7 @@
 #
 # Author(s): Daniel Winkler
 #
-# Contact:   kifer@cs.stonybrook.edu
+# Contact:   flora-users@lists.sourceforge.net
 #
 # Copyright (C) by
 #      The Research Foundation of the State University of New York, 1999-2013.

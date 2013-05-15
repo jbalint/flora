@@ -3,7 +3,7 @@
 ;; Authors:
 ;; Heinz Uphoff (uphoff@informatik.uni-freiburg.de)
 ;; Christian Schlepphorst (schlepph@informatik.uni-freiburg.de)
-;; Michael Kifer (kifer@cs.sunysb.edu)
+;; Michael Kifer (kifer@cs.stonybrook.edu)
 
 ;;; Commentary:
 

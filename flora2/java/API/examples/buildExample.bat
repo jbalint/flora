@@ -3,7 +3,7 @@ REM File:      buildExample.bat
 REM
 REM Author(s): Aditi Pandit
 REM
-REM Contact:   kifer@cs.stonybrook.edu
+REM Contact:   flora-users@lists.sourceforge.net
 REM
 REM Copyright (C) by
 REM      The Research Foundation of the State University of New York, 1999-2013.
