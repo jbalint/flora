@@ -57,6 +57,11 @@
 
 :- import flora_list2conjunct/2 from flrutils.
 
+:- import
+	flora_match_substring/5,
+	flora_get_substring/4
+    from flrporting.
+
 
 /******************************************************************************
  utilities for dealing with FLLIBMODOBJ
@@ -445,17 +450,47 @@ FLLIBMETAUNIV(X,Y) :-
 	flora_decode_predicate(X,PredType,WS,FullWrapper,_Prefix,BaseWrap,Args),
 	( PredType == (prolog)
 	-> (FullWrapper==WRAP_HILOG %% HiLog term
-	   -> Args = [HiLogFunctor|FunctorArgs], Y = [WRAP_HILOG(hilog,HiLogFunctor)|FunctorArgs]
+	   -> Args = [HiLogFunctor|FunctorArgs],
+	       extract_builtin_operator_name(HiLogFunctor,HiLogFunctorName),
+	       strip_operator_encoding(FunctorArgs,FunctorArgsStripped),
+	       Y = [WRAP_HILOG(hilog,HiLogFunctorName)|FunctorArgsStripped]
 	   ; logical_operator(FullWrapper,FL_HYPOTHETICAL) ->
-	       Args = [HypoOp|Goal], Y = [WRAP_HILOG(FL_HYPOTHETICAL,HypoOp)|Goal]
+	       Args = [HypoOp|Goal],
+	       Y = [WRAP_HILOG(FL_HYPOTHETICAL,HypoOp)|Goal]
 	   ; logical_operator(FullWrapper,OpWrap,Op) ->
 	       Y = [WRAP_HILOG(OpWrap,Op)|Args]
 	   %% libraries like insert
-	   ; fllib_wrapper(FullWrapper) -> fail
+	   ; update_wrapper(FullWrapper)
+	   ->
+	       Args = [_Mod|UpdateArgs] ->
+	       Y = [WRAP_HILOG(update,FullWrapper)|UpdateArgs]
+	   ; clause_wrapper(FullWrapper)
+	   ->
+	       Args = [Id,_,FL_TAG_DESCRIPTOR_META_PREDICATE(Id,_,Tag,_),
+		       _,
+		       Head,Body],
+	       Y = [WRAP_HILOG(clause,FullWrapper),Id,Tag,Head,Body]
 	   %% Aggregates look like (fllibavg(...), ...)
-	   ; Args=[Head|_], nonvar(Head), Head=..[Library|_],
-	       fllib_wrapper(Library)
-	   -> fail
+	   ; Args=[Head|_], nonvar(Head), Head=..[Library|LibArgs],
+	       aggregate_wrapper(Library)
+	   -> Y = [WRAP_HILOG(aggregate,Library)|LibArgs]
+	   %% newmodule, erasemodule
+	   ; moduleop_wrapper(FullWrapper)
+	   ->
+	       Args = [_Mod|RestArgs],
+	       Y = [WRAP_HILOG(moduleop,FullWrapper)|RestArgs]
+	   %% if-then-else and friends
+	   ; control_wrapper(FullWrapper)
+	   ->
+	       %% if-then-else
+	       (Args = [_Mod,A1,A2,A3,_,_] ->
+		   Y = [WRAP_HILOG(control,FullWrapper),A1,A2,A3]
+	       %% while-do, do-until, etc.
+	       ; Args = [_Mod,A1,A2,_,_] ->
+		   Y = [WRAP_HILOG(control,FullWrapper),A1,A2]
+	       %% catch, throw, newoid
+	       ; Y = [WRAP_HILOG(control,FullWrapper)|Args]
+	       )
 	   ; Y = [BaseWrap|Args]
 	   )
 	;
@@ -607,45 +642,48 @@ flogic_wrapper(WRAP_EXISTS, '[]', 1).
 
 %% used to skip internal libraries in decomposition of prolog terms
 %% =.. simply fails on such libraries
-fllib_wrapper(FLLIBINSERT).
-fllib_wrapper(FLLIBINSERTALL).
-fllib_wrapper(FLLIBDELETE).
-fllib_wrapper(FLLIBDELETEALL).
-fllib_wrapper(FLLIBERASE).
-fllib_wrapper(FLLIBERASEALL).
-fllib_wrapper(FLLIBBTINSERT).
-fllib_wrapper(FLLIBBTDELETEALL).
-fllib_wrapper(FLLIBBTDELETEALL).
-fllib_wrapper(FLLIBBTERASE).
-fllib_wrapper(FLLIBBTERASEALL).
+update_wrapper(FLLIBINSERT).
+update_wrapper(FLLIBINSERTALL).
+update_wrapper(FLLIBDELETE).
+update_wrapper(FLLIBDELETEALL).
+update_wrapper(FLLIBERASE).
+update_wrapper(FLLIBERASEALL).
+update_wrapper(FLLIBBTINSERT).
+update_wrapper(FLLIBBTDELETEALL).
+update_wrapper(FLLIBBTDELETEALL).
+update_wrapper(FLLIBBTERASE).
+update_wrapper(FLLIBBTERASEALL).
 
-fllib_wrapper(FLLIBREFRESH).
-fllib_wrapper(FLLIBINSERTRULE_A).
-fllib_wrapper(FLLIBINSERTRULE_Z).
-fllib_wrapper(FLLIBDELETERULE_A).
-fllib_wrapper(FLLIBDELETERULE_Z).
-fllib_wrapper(FLLIBDELETERULE).
+update_wrapper(FLLIBINSERTRULE_A).
+update_wrapper(FLLIBINSERTRULE_Z).
+update_wrapper(FLLIBDELETERULE_A).
+update_wrapper(FLLIBDELETERULE_Z).
+update_wrapper(FLLIBDELETERULE).
+update_wrapper(FLLIBREFRESH).
 
-fllib_wrapper(FLLIBNEWMODULE).
-fllib_wrapper(FLLIBERASEMODULE).
-fllib_wrapper(FLLIBCLAUSE).
-fllib_wrapper(FLLIBNEWOID).
-fllib_wrapper(FLLIBCATCH).
-fllib_wrapper(FLLIBTHROW).
+moduleop_wrapper(FLLIBNEWMODULE).
+moduleop_wrapper(FLLIBERASEMODULE).
 
-fllib_wrapper(FLLIBIFTHENELSE).
-fllib_wrapper(FLLIBIFTHEN).
-fllib_wrapper(FLLIBUNLESSDO).
-fllib_wrapper(FLLIBWHILEDO).
-fllib_wrapper(FLLIBDOUNTIL).
-fllib_wrapper(FLLIBWHILELOOP).
-fllib_wrapper(FLLIBLOOPUNTIL).
+clause_wrapper(FLLIBCLAUSE).
 
-fllib_wrapper(FLLIBAVG).
-fllib_wrapper(FLLIBSUM).
-fllib_wrapper(FLLIBMAX).
-fllib_wrapper(FLLIBMIN).
-fllib_wrapper(FLLIBCOUNT).
+aggregate_wrapper(FLLIBAVG).
+aggregate_wrapper(FLLIBSUM).
+aggregate_wrapper(FLLIBMAX).
+aggregate_wrapper(FLLIBMIN).
+aggregate_wrapper(FLLIBCOUNT).
+
+control_wrapper(FLLIBIFTHENELSE).
+control_wrapper(FLLIBIFTHEN).
+control_wrapper(FLLIBUNLESSDO).
+control_wrapper(FLLIBWHILEDO).
+control_wrapper(FLLIBDOUNTIL).
+control_wrapper(FLLIBWHILELOOP).
+control_wrapper(FLLIBLOOPUNTIL).
+
+control_wrapper(FLLIBCATCH).
+control_wrapper(FLLIBTHROW).
+control_wrapper(FLLIBNEWOID).
+
 
 logical_operator(FLORA_NAF_PREDICATE, FL_NEGATION, FL_SILKNAF).
 logical_operator(FL_PLGNAF, FL_NEGATION, FL_PLGNAF).
@@ -668,3 +706,33 @@ compare_wrappers(Wrap1,Wrap2) :-
 negate_predicate_type(FL_TABLED,FL_TABLED_NEG).
 negate_predicate_type(FL_TABLED_NEG,FL_TABLED).
 negate_predicate_type(FL_NOTTABLED,FL_NOTTABLED).
+
+%% extracts operator name from things like '_$_$_flora''then_operator'
+%% '_$_$_flora''if_operator', '_$_$_flora''export_operator', etc.
+%% ***if*** applicable. Otherwise, just returns its argument.
+extract_builtin_operator_name(Op,OpName) :-
+	flora_match_substring(FLORA_PREFIX'',Op,forward,_,Start),
+	flora_match_substring('_operator',Op,reverse,End,_),
+	flora_get_substring(Op,Start,End,OpName),
+	!.
+extract_builtin_operator_name(Op,Op).
+
+%% changes things like
+%% '_$_$_flora''then_operator'(a,'_$_$_flora''else_operator'(b,c))
+%% into then(a,else(b,c))
+strip_operator_encoding(Term,Term) :-
+	(var(Term) ; number(Term)),
+	!.
+strip_operator_encoding(Atom,Name) :-
+	atom(Atom),
+	extract_builtin_operator_name(Atom,Name),
+	!.
+strip_operator_encoding(Term,Stripped) :-
+	Term =.. [Fun|Args],
+	strip_operator_encoding_args(Args,ArgsStripped),
+	Stripped =.. [Fun|ArgsStripped].
+
+strip_operator_encoding_args([],[]) :- !.
+strip_operator_encoding_args([Term|Rest],[Stripped|StrippedRest]) :-
+	strip_operator_encoding(Term,Stripped),
+	strip_operator_encoding_args(Rest,StrippedRest).
