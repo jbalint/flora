@@ -1,6 +1,6 @@
 #!/bin/sh 
 
-    # Create a FLORA-2 tarball 
+    # Create a binary FLORA-2 tarball 
 
     # RUN this in the ./admin/ directory!
 
