@@ -153,20 +153,22 @@ FLLIBUNIVEQFORM(X,Y) :-
 	var(X),
 	!,
         flora_check_dynmod_type_consistency(Y),
-        X = Y.
+        X = Y,
+	is_acyclic(X).
 
 FLLIBUNIVEQFORM(X,Y) :-
 	var(Y),
 	!,
         flora_check_dynmod_type_consistency(X),
-        X = Y.
+        X = Y,
+	is_acyclic(X).
 
 %% speed up the case where X unifies with Y
 FLLIBUNIVEQFORM(X,Y) :-
         atomic(X),
         atomic(Y),
         !,
-        X=Y.
+        X = Y.
 
 %% We ignore pre-and-post body and rule Ids and meta info in such unification
 FLLIBUNIVEQFORM(FLSYSRULEUPDATE(_Id,_DescrVarTerm,_DescrMetaFacts,H1,B1,HV,BV,_PreBody,_PostBody,_DefeatCond),
@@ -180,7 +182,8 @@ FLLIBUNIVEQFORM(FLSYSRULEUPDATE(_Id,_DescrVarTerm,_DescrMetaFacts,H1,B1,HV,BV,_P
 FLLIBUNIVEQFORM(X,Y) :-
         X \= FLLIBMODLIT(_,_,_,_), X \= (FLLIBMODLIT(_,_,_,_), _),
         Y \= FLLIBMODLIT(_,_,_,_), Y \= (FLLIBMODLIT(_,_,_,_), _),
-        X=Y,
+        X = Y,
+	is_acyclic(X),
         !.
 
 FLLIBUNIVEQFORM(FLLIBMODLIT(WrapX,X,M,_Caller1),FLLIBMODLIT(WrapY,Y,M,_Caller2)) :-
@@ -188,7 +191,8 @@ FLLIBUNIVEQFORM(FLLIBMODLIT(WrapX,X,M,_Caller1),FLLIBMODLIT(WrapY,Y,M,_Caller2))
         var(X),
         var(Y),
         !,
-        X=Y.
+        X = Y,
+	is_acyclic(X).
 
 %% ?X ~ %?Y@Mod fails if both variables are unbound
 %% Also %?X@Mod ~ ?Y and the same with neg.
@@ -209,10 +213,13 @@ FLLIBUNIVEQFORM(FLLIBMODLIT(WrapX,X,M,C1),FLLIBMODLIT(W,A,M2,C2)) :-
         (var(M2) -> M2 = M ; true),
         (nonvar(P) -> X = P
         ; var(Wrap) -> X = A
-        ; WrapX == FL_LIBMOD -> X = FLLIBMODLIT(Wrap,Args,M,C1)
+        ; WrapX == FL_LIBMOD ->
+	    X = FLLIBMODLIT(Wrap,Args,M,C1),
+	    is_acyclic(X)
 	; WrapX == FL_NEGLIBMOD ->
 	    negate_wrapper(Wrap,NWrap),
-	    X = FLLIBMODLIT(NWrap,Args,M,C1)
+	    X = FLLIBMODLIT(NWrap,Args,M,C1),
+	    is_acyclic(X)
 	).
 
 FLLIBUNIVEQFORM(FLLIBMODLIT(FL_TRANSLIBMOD,X,M,C1),FLLIBMODLIT(W,A,M2,C2)) :-
@@ -223,7 +230,8 @@ FLLIBUNIVEQFORM(FLLIBMODLIT(FL_TRANSLIBMOD,X,M,C1),FLLIBMODLIT(W,A,M2,C2)) :-
         (var(M2) -> M2 = M ; true),
         (nonvar(P) -> X = P
         ; var(Wrap) -> X = A
-        ; X = FLLIBMODLIT(Wrap,Args,M,C1)
+        ; X = FLLIBMODLIT(Wrap,Args,M,C1),
+	    is_acyclic(X)
 	).
 
 FLLIBUNIVEQFORM(FLLIBMODLIT(W,A,M2,C2),FLLIBMODLIT(WrapY,Y,M,C1)) :-
@@ -236,10 +244,13 @@ FLLIBUNIVEQFORM(FLLIBMODLIT(W,A,M2,C2),FLLIBMODLIT(WrapY,Y,M,C1)) :-
         (var(M2) -> M2 = M; true),
         (nonvar(P) -> Y = P
         ; var(Wrap) -> Y = A
-        ; WrapY == FL_LIBMOD -> Y = FLLIBMODLIT(Wrap,Args,M,C1)
+        ; WrapY == FL_LIBMOD ->
+	    Y = FLLIBMODLIT(Wrap,Args,M,C1),
+	    is_acyclic(Y)
 	; WrapY == FL_NEGLIBMOD ->
 	    negate_wrapper(Wrap,NWrap),
-	    Y = FLLIBMODLIT(NWrap,Args,M,C1)
+	    Y = FLLIBMODLIT(NWrap,Args,M,C1),
+	    is_acyclic(Y)
 	).
 
 FLLIBUNIVEQFORM(FLLIBMODLIT(W,A,M2,C2),FLLIBMODLIT(FL_TRANSLIBMOD,Y,M,C1)) :-
@@ -250,7 +261,8 @@ FLLIBUNIVEQFORM(FLLIBMODLIT(W,A,M2,C2),FLLIBMODLIT(FL_TRANSLIBMOD,Y,M,C1)) :-
         (var(M2) -> M2 = M; true),
         (nonvar(P) -> Y = P
         ; var(Wrap) -> Y = A
-        ; Y=FLLIBMODLIT(Wrap,Args,M,C1)
+        ; Y=FLLIBMODLIT(Wrap,Args,M,C1),
+	    is_acyclic(Y)
 	).
 
 %% Now neither X nor Y are variables
@@ -361,6 +373,14 @@ FLLIBUNIVEQFORM([H1|T1],[H2|T2]) :-
 	FLLIBUNIVEQFORM(H1,H2),
 	FLLIBUNIVEQFORM(T1,T2).
 
+FLLIBUNIVEQFORM(X,Y) :-
+	nonvar(X), nonvar(Y),
+	flrdelaysupport:strip_delay(X,X_nodelay),
+	flrdelaysupport:strip_delay(Y,Y_nodelay),
+	is_naf_literal(X_nodelay,XPosLit),
+	is_naf_literal(Y_nodelay,YPosLit),
+	!,
+	FLLIBUNIVEQFORM(XPosLit,YPosLit).
 
 %% Speed up the case of nonvar1@nonvarmod1 ~ nonvar2@nonvarmod2
 FLLIBUNIVEQFORM(X,Y) :-
@@ -447,16 +467,20 @@ univeqform_list([H1|L1], [H2|L2]) :-
 FLLIBMETAUNIV(X,Y) :-
 	nonvar(X),
 	!,
-	flora_decode_predicate(X,PredType,WS,FullWrapper,_Prefix,BaseWrap,Args),
+	flrdelaysupport:strip_delay(X,X_nodelay),
+	flora_decode_predicate(X_nodelay,PredType,WS,FullWrapper,_Prefix,BaseWrap,Args),
 	( PredType == (prolog)
 	-> (FullWrapper==WRAP_HILOG %% HiLog term
 	   -> Args = [HiLogFunctor|FunctorArgs],
 	       extract_builtin_operator_name(HiLogFunctor,HiLogFunctorName),
 	       strip_operator_encoding(FunctorArgs,FunctorArgsStripped),
 	       Y = [WRAP_HILOG(hilog,HiLogFunctorName)|FunctorArgsStripped]
+	   ; is_naf_literal(X_nodelay,PosLit) ->
+	       Y = [WRAP_HILOG(FL_NEGATION,FL_SILKNAF),PosLit]
 	   ; logical_operator(FullWrapper,FL_HYPOTHETICAL) ->
 	       Args = [HypoOp|Goal],
 	       Y = [WRAP_HILOG(FL_HYPOTHETICAL,HypoOp)|Goal]
+	   %% \+(literal) 
 	   ; logical_operator(FullWrapper,OpWrap,Op) ->
 	       Y = [WRAP_HILOG(OpWrap,Op)|Args]
 	   %% libraries like insert
@@ -491,6 +515,11 @@ FLLIBMETAUNIV(X,Y) :-
 	       %% catch, throw, newoid
 	       ; Y = [WRAP_HILOG(control,FullWrapper)|Args]
 	       )
+	   ; 
+	       logical_operator(X_nodelay,FL_NEGATION,FL_NEG)
+	   ->
+	       flrwrapper:negate_predicate(X_nodelay,PosLit),
+	       Y = [WRAP_HILOG(FL_NEGATION,FL_NEG),PosLit] 
 	   ; Y = [BaseWrap|Args]
 	   )
 	;
@@ -505,19 +534,6 @@ FLLIBMETAUNIV(X,Y) :-
 	    )
 
 	;
-	    PredType == (neg_hilog)
-	->
-	    flrtrim_last(Args,ArgsTrimmed),
-	    ArgsTrimmed = [HiLogPredName|PredArgs],
-	    (BaseWrap==WRAP_TABLED_HILOG
-	    %% The two WRAP_HILOG's here are used to create HiLog terms
-	    -> Y = [WRAP_HILOG(neg_hilog,HiLogPredName,WS)|PredArgs]
-	    %% Currently we do not negate transactional HiLog, so the case
-	    %% below is impossible
-	    ;  Y = [WRAP_HILOG('%hilog',HiLogPredName,WS)|PredArgs]
-	    )
-
-	;
 	    PredType == (flogic)
 	->
 	    flrtrim_last(Args,ArgsTrimmed),
@@ -526,12 +542,11 @@ FLLIBMETAUNIV(X,Y) :-
 	    Y = [WRAP_HILOG(flogic,FlogicSymbol,WS)|ArgsTrimmed] 
 
 	;
-	    PredType == (neg_flogic)
+	    %% neg-Negated F-logic or HiLog
+	    logical_operator(PredType,FL_NEGATION,FL_NEG)
 	->
-	    flrtrim_last(Args,ArgsTrimmed),
-	    %% convert wrapper names to arrows
-	    flogic_wrapper(BaseWrap,FlogicSymbol,_),
-	    Y = [WRAP_HILOG(neg_flogic,FlogicSymbol,WS)|ArgsTrimmed] 
+	    flrwrapper:negate_predicate(X_nodelay,PosLit),
+	    Y = [WRAP_HILOG(FL_NEGATION,FL_NEG),PosLit] 
 	),
 	!.
 
@@ -549,11 +564,6 @@ FLLIBMETAUNIV(X,Y) :-
 	->
 	    flora_add_last(Args,AugmentedArgs,[WS,_]),
 	    flora_module_predicate(FLBodyPREFIX(WRAP_TABLED_HILOG),[BaseWrap|AugmentedArgs],WS,X)
-	;   %% Tabled neg_hilog pred (note: neghilog -- not hilog)
-	    Head = WRAP_HILOG(FLNEGPREFIX(hilog),BaseWrap,WS)
-	->
-	    flora_add_last(Args,AugmentedArgs,[WS,_]),
-	    flora_module_predicate(FLNEGBodyPREFIX(WRAP_TABLED_HILOG),[BaseWrap|AugmentedArgs],WS,X)
 	;   %% Nontabled hilog pred (note: %hilog -- not hilog)
 	    Head = WRAP_HILOG('%hilog',BaseWrap,WS)
 	->
@@ -579,26 +589,17 @@ FLLIBMETAUNIV(X,Y) :-
 	    ),
 	    flora_add_last(Args,AugmentedArgs,[WS,_]),
 	    flora_module_predicate(FullWrapper,AugmentedArgs,WS,X)
-	;
-	    Head = WRAP_HILOG(FLNEGPREFIX(flogic),FlogicSymbol,WS)
+	; %% tabled neg hilog or neg flogic op.
+	    Head = WRAP_HILOG(FL_NEGATION,FL_NEG)
 	->
-	    flogic_wrapper(FullWrapper,FlogicSymbol,ArgNo),
-	    (length(Args,ArgNo) -> true
-	    ;
-		flora_decode_goal_as_atom(X,Xdecoded),
-		flora_decode_goal_as_atom(Y,Ydecoded),
-		flora_abort([Xdecoded,'=..',Ydecoded,
-			     ' :  wrong number of components on the right side of =..'])
-	    ),
-	    flora_add_last(Args,AugmentedArgs,[WS,_]),
-	    negate_wrapper(FullWrapper,FullWrapperNeg),
-	    flora_module_predicate(FullWrapperNeg,AugmentedArgs,WS,X)
+	    Args = [Literal],
+	    flrwrapper:negate_predicate(Literal,X)
 	;
 	    Head = WRAP_HILOG(FL_HYPOTHETICAL,Op)
 	->
 	    logical_operator(Library,FL_HYPOTHETICAL),
 	    X =.. [Library,Op|Args]
-	;
+	; %% \+ something
 	    Head = WRAP_HILOG(FL_NEGATION,Op)
 	->
 	    logical_operator(Predicate,FL_NEGATION,Op),
@@ -687,7 +688,17 @@ control_wrapper(FLLIBNEWOID).
 
 logical_operator(FLORA_NAF_PREDICATE, FL_NEGATION, FL_SILKNAF).
 logical_operator(FL_PLGNAF, FL_NEGATION, FL_PLGNAF).
+logical_operator(neg_flogic, FL_NEGATION, FL_NEG).
+logical_operator(neg_hilog, FL_NEGATION, FL_NEG).
+logical_operator(FLLIBMODLIT(FL_NEGLIBMOD,_,_,_), FL_NEGATION, FL_NEG).
 logical_operator(FLLIBHYPOTHETICAL, FL_HYPOTHETICAL).
+
+%% expects flora_naf(...)
+is_naf_literal(NegLit,PosLit) :-
+	functor(NegLit,FLORA_NAF_PREDICATE,_),
+	arg(1,NegLit,PrePosLit),
+	flrnegation:flora_unwrap_negation(PrePosLit,PosLit).
+
 
 compare_wrappers(Wrap1,Wrap2) :- Wrap1 = Wrap2, !.
 compare_wrappers(Wrap1,Wrap2) :-

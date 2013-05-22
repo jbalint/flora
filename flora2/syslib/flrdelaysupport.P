@@ -85,27 +85,7 @@
 	enable_experiment/1,
 	disable_experiment/1.
 
-/*
-:- export
-	flora_unequal_builtin/4,
-	flora_greaterthan_builtin/4,
-	flora_greaterequal_builtin/4,
-	flora_lessthan_builtin/4,
-	flora_lessequal_builtin/4,
-	
-	flora_mathequal_builtin/4,
-	flora_mathnotequal_builtin/4,
-	flora_arith_IS_builtin/4,
-
-	flora_number_builtin/3,
-	flora_integer_builtin/3,
-	flora_float_builtin/3,
-	flora_atom_builtin/3,
-	flora_compound_builtin/3,
-	flora_atomic_builtin/3,
-	flora_delay_quantifier/3.
-*/
-
+:- export strip_delay/2.
 
 
 %% MK: test_mode/1: support for testing. Need something more general, like
@@ -340,6 +320,7 @@ FLORA_DELAY_CHECKER(InstantiatedBodyVars,HeadVars) :-
 %% scan all vars repeatedly, eliminating attributed vars,
 %% until no more attributed vars left. Execute attached triggers on the way.
 extract_triggers_and_execute_all(AllVars,HeadVars) :-
+	is_acyclic(AllVars),
 	flrterm_vars_split(AllVars, RegVars, AttrVars,0), %% 1: ignore vars in negation
 	(AttrVars == [] -> true
 	; extract_triggers_and_execute(AttrVars,HeadVars),
@@ -604,30 +585,6 @@ delayed_builtin(FL_MATHEQ,2)       :- !.
 delayed_builtin(FL_MATHNOTEQ,2)    :- !.
 delayed_builtin(FL_IS_INTERNAL,2)  :- !.
 
-/*
-%% From here to the next %%%%% to be commented out once
-%% we switch to the new _name schema
-%% we used to delay these, but it is pointless. better use them as guards
-delayed_builtin('_isnumber',1)     :- !.
-delayed_builtin('_isinteger',1)    :- !.
-delayed_builtin('_isdecimal',1)    :- !.
-delayed_builtin('_isfloat',1)      :- !.
-delayed_builtin('_isatom',1)       :- !.
-delayed_builtin('_iscompound',1)   :- !.
-delayed_builtin('_isatomic',1)     :- !.
-delayed_builtin('_islist',1)       :- !.
-delayed_builtin('_ischarlist',1)   :- !.
-
-%% these should be deleted once we switch to the _name schema
-delayed_builtin(number,1)       :- !.
-delayed_builtin(integer,1)      :- !.
-delayed_builtin(float,1)        :- !.
-delayed_builtin(atom,1)         :- !.
-delayed_builtin(compound,1)     :- !.
-delayed_builtin(atomic,1)       :- !.
-%% the above be deleted once we switch to the _name schema
-%%%%%
-*/
 
 flora_delayed_literal(X,Y,_) :- delayed_builtin(X,Y), !.
 flora_delayed_literal(X,Y,FlMod) :- delayed_sensor(X,Y,FlMod).
@@ -662,6 +619,21 @@ FLLIBRECORDSENSORS(FloraMod,[Sensor|SensorList]) :-
 strip_usermod(SensorSymbol,Stripped) :-
 	SensorSymbol = usermod:Stripped -> true
 	; Stripped = SensorSymbol.
+
+%% strip the delaying machinery.
+%% identity if not delayed
+%% Only strips FLLIBDELAYEDLITERAL and FLLIBNAFDELAY.
+%% Others (FLLIBDEFEATDELAY) do not occur in user code
+strip_delay(':'(FLDELAYSUPPORTMOD,PreStripped),Stripped) :-
+	strip_delay(PreStripped,Stripped),
+	PreStripped \= Stripped,
+	!.
+strip_delay(PreStripped,Stripped) :-
+	(functor(PreStripped,FLLIBNAFDELAY,_) -> arg(1,PreStripped,Stripped)
+	; functor(PreStripped,FLLIBDELAYEDLITERAL,_) -> arg(4,PreStripped,Stripped)
+	),
+	!.
+strip_delay(Stripped,Stripped).
 
 
 /*

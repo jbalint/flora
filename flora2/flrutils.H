@@ -331,5 +331,12 @@
 
 	flora_token_index_to_line/2,
 
+	merge_status_lists/3,
+
+	reset_modules_for_shell/1,
+	reset_modules_for_file/1,
+	reset_modules_for_load/1,
+	reset_modules_for_add/1,
+
 	flora_warnings_level/1,
         flora_coder_error/1.
