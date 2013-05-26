@@ -1049,6 +1049,9 @@ flmodule_struct(Literal,WSName,FLORARULEWORKSPACE,FLRULEWORKSPACE(Literal,WSName
 flmodule_struct(Goal,Name,PROLOGMODULE,FLPLIB(Goal,Name)). :- !.
 flmodule_struct(Goal,Name,PROLOGALLMODULE,FLPLIBALL(Goal,Name)). :- !.
 
+%% code for _@ workspace
+%%thismodule_struct(FLORAUSERMOD(FLTOKEN(FL_THISMODULE,NO_INDEX))).
+
 %% Encoding module specs of the form @_prolog() and @_prologall()
 %% Takes a goal and protects it against hilog conversion
 flplib_struct(Goal,FLPLIB(Goal)) :- !.
@@ -1149,8 +1152,6 @@ flcallermodule_struct(Op,Var,FLCALLERMODULE(Op,Var)).
 flupdaterule_struct(Op,RuleList,FLUPDATERULE(Op,RuleList)).
 
 flsimpleprimitive_struct(Primitive,Args,FLSIMPLEPRIMITIVE(Primitive,Args)).
-%% Use _@! instead of thisruleid{?X}
-%%flthisruleid_struct(Arg,FLTHISRULEID(Arg)).
 
 flclause_struct(Head,Body,FLCLAUSE(Head,Body)).
 flclause_struct(Mode,Head,Body,FLCLAUSE(Mode,Head,Body)).
@@ -2562,7 +2563,7 @@ parse_body_symbol(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Code,Status) :-
 	!,
         workspace_template(R,RCode,S),
         ( S == [] ->
-            parse_body_symbol_literal(L,RCode,DISALLOW_TERM_DESCRIPTOR,LCode,Status),
+            parse_body_symbol_literal(L,DISALLOW_TERM_DESCRIPTOR,LCode,Status),
 	    (Status == [] -> 
                 flora_get_module_from_spec(RCode,ModuleType,Module),
                 flmodule_struct(LCode,Module,ModuleType,Code)
@@ -2578,7 +2579,7 @@ parse_body_symbol(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),Code,Status) :
 	!,
 	check_context_spec(Term,S1),
 	(S1 == [] ->
-	    parse_body_symbol_literal(Term,NULL,DISALLOW_TERM_DESCRIPTOR,TermCode,Status),
+	    parse_body_symbol_literal(Term,DISALLOW_TERM_DESCRIPTOR,TermCode,Status),
 	    fludfsymbol_struct(TermCode,Code)
 	; Status = S1
 	).
@@ -2588,7 +2589,7 @@ parse_body_symbol(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),Code,Status) :
 	!,
 	check_context_spec(Term,S1),
 	(S1 == [] ->
-	    parse_body_symbol_literal(Term,NULL,DISALLOW_TERM_DESCRIPTOR,TermCode,Status),
+	    parse_body_symbol_literal(Term,DISALLOW_TERM_DESCRIPTOR,TermCode,Status),
 	    flsensorsymbol_struct(TermCode,Code)
 	; Status = S1
 	).
@@ -2598,7 +2599,7 @@ parse_body_symbol(CANOTERM(Funct,1,FL_PARENTHESIS,[Term],_If,_Ip),Code,Status) :
 	!,
 	check_context_spec(Term,S1),
 	(S1 == [] ->
-	    parse_body_symbol_literal(Term,NULL,DISALLOW_TERM_DESCRIPTOR,TermCode,Status),
+	    parse_body_symbol_literal(Term,DISALLOW_TERM_DESCRIPTOR,TermCode,Status),
 	    flprlgsymbol_struct(TermCode,Code)
 	; Status = S1
 	).
@@ -2614,11 +2615,11 @@ check_context_spec(_,[]).
 
 
 /****************************************************************************
-  parse_body_symbol_literal(+CanoniTerm,+WS,+AllowTermDescr,-Code,-Status)
+  parse_body_symbol_literal(+CanoniTerm,+AllowTermDescr,-Code,-Status)
 ****************************************************************************/
 
 %% transactional vars as literals can appear only with module specifications
-parse_body_symbol_literal(CanoniTerm,_AllowTermDescr,_WS,Code,Status) :-
+parse_body_symbol_literal(CanoniTerm,_AllowTermDescr,Code,Status) :-
 	fltransactionalobject_struct(CanoniTerm,Code),
 	!,
 	(is_fltransactionalvar_struct(Code),
@@ -2628,17 +2629,6 @@ parse_body_symbol_literal(CanoniTerm,_AllowTermDescr,_WS,Code,Status) :-
 	;
 	    Status = []
 	).
-
-parse_body_symbol_literal(CanoniTerm,_WS,_AllowTermDescr,Code,Status) :-
-        parse_body_symbol_literal(CanoniTerm,_AllowTermDescr,Code,Status).
-        
-/*%% standalone %_ is not allowed
-parse_body_symbol_literal(CanoniTerm,_AllowTermDescr,_Code,Status) :-
-	fltransactionalobject_struct(CanoniTerm,_C),
-	is_fltransactionalvar_struct(_C),
-        !,
-	parsing_error(CanoniTerm,ERROR_TRANSACTIONALVARLIT,Status).
-*/
 
 %% term descriptor: TermName/ArgsNum
 parse_body_symbol_literal(CanoniTerm,ALLOW_TERM_DESCRIPTOR,Code,Status) :-
@@ -3458,7 +3448,9 @@ parse_rule_body(CanoniTerm,WS,DWS,Goal,Status) :-
 %% (like while-loops or meta operators)
 parse_rule_body(CanoniTerm,NULL,NULL,Code,Status) :-
 	!,
-	%% no module name
+	%% no explicit module name
+	%%thismodule_struct(ThisModuleCode),
+	%%parse_body_literal(CanoniTerm,ThisModuleCode,Code,Status).
 	parse_body_literal(CanoniTerm,NULL,Code,Status).
 
 /****************************************************************************
@@ -4119,17 +4111,8 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,Code,Status) :-
 	    parsing_error(Ip,ERROR_WSNAME,Status)
 	).
 
-/*
-%% Use _@! instead of thisruleid{?X}
-%% thisruleid{Var}
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,_Ip),DWS,Code,Status) :-
-	get_name(Funct,FL_THISRULEID),
-	!,
-	parse_body_pathexp(Arg,DISALLOW_TRANS,DWS,ArgCode,Status),
-	flthisruleid_struct(ArgCode,Code).
-*/
 
-%% simple primitive liek primName{Args}
+%% simple generic primitive like primName{Args}
 parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,_Ip),DWS,Code,Status) :-
 	get_name(Funct,PrimitiveName),
 	flora_simple_primitive(PrimitiveName,N,_,_),
@@ -4407,6 +4390,9 @@ parse_body_template(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Code,Status) 
         ).
 
 parse_body_template(CanoniTerm,Code,Status) :-
+        %%parse_body_literal_template(CanoniTerm,LitCode,Status),
+	%%thismodule_struct(ThisModuleCode),
+	%%flmodule_struct(LitCode,ThisModuleCode,FLORAUSERMOD,Code).
         parse_body_literal_template(CanoniTerm,Code,Status).
 
 /****************************************************************************
