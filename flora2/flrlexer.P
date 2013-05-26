@@ -250,11 +250,11 @@ lexer_transactional_identifier_struct(TextStr,LN1,CN1,LN2,CN2,TRANSACTIONAL_IDEN
 	atom_codes(A,TextStr).
 
 lexer_variable_struct(TextStr,LN1,CN1,LN2,CN2,VARIABLE(A,Text)) :-
-	text_info(LN1,CN1,LN2,CN2,TextStr,Text),
+	text_info(LN1,CN1,LN2,CN2,[CH_QUESTION|TextStr],Text),
 	atom_codes(A,TextStr).
 
 lexer_transactional_variable_struct(TextStr,LN1,CN1,LN2,CN2,TRANSACTIONAL_VARIABLE(A,Text)) :-
-	text_info(LN1,CN1,LN2,CN2,TextStr,Text),
+	text_info(LN1,CN1,LN2,CN2,[CH_QUESTION|TextStr],Text),
 	atom_codes(A,TextStr).
 
 lexer_number_struct(Num,TextStr,LN1,CN1,LN2,CN2,NUMBER(Num,Text)) :-
@@ -572,7 +572,6 @@ read_tokens(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
 		)
 	    )
 
-
 	; Char == CH_UNDERSCORE ->
 	    read_underscore(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status)
 	    
@@ -609,7 +608,7 @@ read_tokens(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
 ****************************************************************************/
 read_transactional_token(C1,LN1,CN1,LN,CN,TokenList,Status) :-
         get_char(LN,CN,Ch,NextLN,NextCN), 
-	( is_alpha(Ch) -> % %identifier = %predicates or %methods 
+	( is_alpha(Ch) -> %% i.e.,  %identifier = %predicates or %methods 
 	    read_transactional_identifier(Ch,LN1,CN1,LN,CN,NextLN,NextCN,TokenList,Status)
 
 	; Ch == CH_QUESTION ->
@@ -620,13 +619,13 @@ read_transactional_token(C1,LN1,CN1,LN,CN,TokenList,Status) :-
 		 read_transactional_variable(NChar,LN1,CN1,NextLN,NextCN,NNLN,NNCN,TokenList,Status)
 
 	    ; NChar == CH_UNDERSCORE ->
-		 %% the case '?_[alphabet]' is an anonymous variable
+		 %% the case '?_[alphanum]' is an anonymous variable
 		 read_transactional_underscore_variable(NChar,LN1,CN1,NextLN,NextCN,NNLN,NNCN,TokenList,Status)
 
 	    ; %% the case '?' itself is an anonymous variable, and can
 	      %% be treated as '?_' since the cursor cannot be set
 	      %% backward, we construct a token here to avoid losing it.
-	      lexer_transactional_variable_struct([CH_UNDERSCORE],LN1,CN1,LN,CN,Tk),
+	      lexer_transactional_variable_struct([],LN1,CN1,LN,CN,Tk),
 	      TokenList=[Tk|NTokenList],
 	      !,
 	      read_tokens(NChar,NextLN,NextCN,NNLN,NNCN,NTokenList,Status) 
@@ -868,6 +867,7 @@ read_transactional_underscore_identifier(Char,LineNo,CharNo,NextLN,NextCN,TokenL
 	    read_transactional_builtin(Char,LineNo,CharNo,NextLN,NextCN, TokenList,Status)
 	; 
 	    (flora_current_compile_filename(FileN), ! ; true),
+	    TokenList = [],
 	    Status=[FLORA_NOT_EOF,error(FileN,ALPHA_EXPECTED)]
 	).
 
@@ -910,7 +910,7 @@ read_anonyoid(C1,LN1,CN1,LN,CN,TokenList,Status) :-
 		get_char(NLN,NCN,NCh,NNLN,NNCN),
 		flora_special_token_struct([C1,Ch],LN1,CN1,LN,CN,Tk)
 	    )
-	;   Ch == CH_QUESTION,  % _?Char, Char = digit|letter
+	;   Ch == CH_QUESTION,  % ?_Char, Char = digit|letter
 	    peek_char(TryChAtm),
 	    flratom_char_code(TryChAtm,0,TryChar),
 	    is_alphanum_int(TryChar),
