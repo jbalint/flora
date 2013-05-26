@@ -95,6 +95,7 @@
 
 :- export
 	flora_get_flatomvar_name/2,
+	flora_get_flatom_name/2,
 	flora_get_module_from_spec/3,
 	flora_parse_term_external/3,
 	parsing_error/3,

@@ -133,6 +133,7 @@
 
 :- import
 	flora_get_flatomvar_name/2,
+	flora_get_flatom_name/2,
 	flatom_struct/3,
 	flterm_struct/4,
 	flconjunct_struct/3
