@@ -189,6 +189,7 @@ finish:
 clean: cleantemp
 	/bin/rm -f core *~ .*~ *${OBJEXT} *.O *.bak ../flora2${OBJEXT} .#*
 	/bin/rm -f .*.tmp .flora_path* .prolog_path*
+	/bin/rm -f .flora_aux_files/*
 	cd closure && $(MAKE) clean
 	cd datatypes && $(MAKE) clean
 	-test -f docs/Makefile && cd docs && $(MAKE) clean || echo "" > /dev/null

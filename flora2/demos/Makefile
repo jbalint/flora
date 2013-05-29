@@ -89,3 +89,4 @@ finish:
 
 clean:
 	/bin/rm -f *${PROLOGEXT} *${PROLOGEXT}_gpp *${OBJEXT} *.O *.bak *.fdb *.fld *.flt *.fls *.fls *.flm *.con *~ .*~ .#* cmd*
+	/bin/rm -f .flora_aux_files/*

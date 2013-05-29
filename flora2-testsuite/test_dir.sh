@@ -74,20 +74,21 @@ member ()
 
 OBJEXT=.xwam
 
-# Remove the Prolog and object files to make sure we are using the 
-# latest compiled sources
-rm -f *.P *${OBJEXT} *.fld *.fdb *.con *.flt *.fls* *.flm*
-rm -f programs/*.P programs/*${OBJEXT} programs/*.fld programs/*.fdb programs/*.fls* programs/*.flt programs/*.flm*
-rm -f gpmanager/*.P gpmanager/*${OBJEXT} gpmanager/*.fld gpmanager/*.fdb *.flm*
-rm -f $basedir/datafiles/*.P    $basedir/datafiles/*${OBJEXT}  $basedir/datafiles/*.fld  $basedir/datafiles/*.fdb $basedir/datafiles/*.fls* $basedir/datafiles/*.flt $basedir/datafiles/*.flm*
-rm -f $basedir/exporttest/*.P $basedir/exporttest/*${OBJEXT}  $basedir/exporttest/*.fld  $basedir/exporttest/*.fdb $basedir/exporttest/*.fls* $basedir/exporttest/*.flt $basedir/exporttest/*.flm*
+# Remove Prolog, object, and other auxiliary files to make sure we are using
+# the latest compiled sources
+rm -f $basedir/apptests/.flora_aux_files/*
+rm -f $basedir/apptests/gpmanager/.flora_aux_files/*
+rm -f $basedir/apptests/programs/.flora_aux_files/*
+rm -f $basedir/datafiles/.flora_aux_files/*
+rm -f $basedir/defeasible/*/.flora_aux_files/*
+rm -f $basedir/delaytests/.flora_aux_files/*
+rm -f $basedir/exporttest/.flora_aux_files/*
+rm -f $basedir/functions/.flora_aux_files/*
+rm -f $basedir/functions/*/.flora_aux_files/*
+rm -f $basedir/general_tests/.flora_aux_files/*
 rm -f $basedir/general_tests/prolog/*${OBJEXT}
-rm -f $basedir/functions/*${OBJEXT} $basedir/functions/*.P $basedir/functions/*.flm*
-rm -f $basedir/functions/equality/*${OBJEXT} $basedir/functions/equality/*.P $basedir/functions/equality/*.fls* $basedir/functions/equality/*.flt $basedir/functions/equality/*.fld $basedir/functions/equality/*.fdb $basedir/functions/equality/*.flm*
-rm -f $basedir/functions/errors_warnings_tests/*${OBJEXT} $basedir/functions/errors_warnings_tests/*.P $basedir/functions/errors_warnings_tests/*.flt $basedir/functions/errors_warnings_tests/*.fls* $basedir/functions/errors_warnings_tests/*.fdb $basedir/functions/errors_warnings_tests/*.fld $basedir/functions/errors_warnings_tests/*.flm*
-rm -f $basedir/symbols/*${OBJEXT} $basedir/symbols/*.P $basedir/symbols/*.flm*
-rm -f $basedir/symbols/tests/*${OBJEXT} $basedir/symbols/tests/*.P $basedir/symbols/tests/*.fdb $basedir/symbols/tests/*.fls* $basedir/symbols/tests/*.flt $basedir/symbols/tests/*.fld $basedir/symbols/tests/*.flm*
-rm -f $basedir/symbols/test_load/*${OBJEXT} $basedir/symbols/test_load/*.P $basedir/symbols/test_load/*.fdb $basedir/symbols/test_load/*.fld $basedir/symbols/test_load/*.fls* $basedir/symbols/test_load/*.flt $basedir/symbols/test_load/*.flm*
+rm -f $basedir/symbols/.flora_aux_files/*
+rm -f $basedir/symbols/*/.flora_aux_files/*
 
 
 # run the tests

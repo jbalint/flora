@@ -84,6 +84,7 @@ ALL:: CLEANTEMP $(ALLOBJS)
 CLEAN : CLEANTEMP
 	-@if exist *~ erase *~
 	-@if exist *$(OBJEXT) erase *$(OBJEXT)
+	-@if exist .flora_aux_files\* erase .flora_aux_files\*
 	-@if exist *.bak erase *.bak
 	-@if exist .#* erase .#*
 	-@if exist ..\flora2$(OBJEXT) erase ..\flora2$(OBJEXT)
