@@ -267,6 +267,7 @@
 	flora_compile_system_module/1,
 	flora_load_module_util/1,
 	flora_load_module_util/2,
+	flora_load_module_util/5,
         flora_save_module_util/1,
         flora_save_module_util/2,
 	FL_DUMP/1,
@@ -312,6 +313,7 @@
 	
 	flora_add_module_dyn/1,
 	flora_add_module_dyn/2, 
+	flora_add_module_dyn/5,
 	flora_compile_add/2, 
 	flora_compile_add/1,
 
