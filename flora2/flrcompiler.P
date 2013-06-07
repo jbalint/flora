@@ -609,7 +609,7 @@ naf_struct_prolog(Goal,PRPLGNAF(Goal)).
 %% naf
 pure_naf_struct_flora(Goal,FreeVars,PRSILKNAF(WrappedGoal,FreeVars,Line,CurrFileName)) :-
 	code_line_and_file_by_prterm(Goal,Line,CurrFileName),
-	modularized_atom_struct(FL_TABLED_UNNUMBER_CALL,NO_INDEX,FunCode),
+	modularized_pratom_struct(FL_TABLED_UNNUMBER_CALL,NO_INDEX,FunCode),
 	prologterm_struct(FunCode,1,[Goal],WrappedGoal).
 %% We can optimize this by passing free variables list. If the list is empty,
 %% we won't delay
@@ -678,23 +678,23 @@ neg_struct(Goal,Idx,_,[Err]) :-
 neg_struct(Goal,_Idx,Code,[]) :-
 	(  workspace_struct(L,WS,Goal),
 	    is_prologterm(L,Struct,Arity,Args),
-	    is_modularized_atom(Struct,Atom,Idx),
+	    is_modularized_pratom(Struct,Atom,Idx),
 	    (is_pratom(WS,Mod,_) ; is_prbuiltin_identifier(WS,Mod,_))
 	->
 	    %% to check if this is a negatable prolog, reduce arity by 1:
 	    %% modularized prolog has one extra caller argument
 	    Arity1 is Arity-1,
 	    flora_negatable_prlgdef(Atom,Arity1,NegAtm),
-	    modularized_atom_struct(NegAtm,Mod,Idx,FCode),
+	    modularized_pratom_struct(NegAtm,Mod,Idx,FCode),
 	    prologterm_struct(FCode,Arity,Args,Code)
 	; is_prologterm(Goal,Struct,Arity,Args),
-	    is_modularized_atom(Struct,Atom,Idx)
+	    is_modularized_pratom(Struct,Atom,Idx)
 	->
 	    %% to check if this is a negatable prolog, reduce arity by 1:
 	    %% modularized prolog has one extra caller argument
 	    Arity1 is Arity-1,
 	    flora_negatable_prlgdef(Atom,Arity1,NegAtm),
-	    modularized_atom_struct(NegAtm,Idx,FCode),
+	    modularized_pratom_struct(NegAtm,Idx,FCode),
 	    prologterm_struct(FCode,Arity,Args,Code)
 	).
 
@@ -745,12 +745,12 @@ head_neg_struct(Goal,Idx,Code,Status) :-
 
 head_neg_struct(Goal,_Idx,NegGoal,[]) :-
 	is_prologterm(Goal,Struct,Arity,Args),
-	is_modularized_atom(Struct,Atom,Idx),
+	is_modularized_pratom(Struct,Atom,Idx),
 	%% to check if this is a negatable prolog, reduce arity by 1:
 	%% modularized prolog has one extra caller argument
 	Arity1 is Arity-1,
 	flora_negatable_prlgdef(Atom,Arity1,NegAtm),
-	modularized_atom_struct(NegAtm,Idx,FCode),
+	modularized_pratom_struct(NegAtm,Idx,FCode),
 	prologterm_struct(FCode,Arity,Args,NegGoal),
 	!.
 head_neg_struct(Goal,_Idx,PRNEG(Goal),[]) :-
@@ -822,18 +822,24 @@ conjunct_code([Goal|GList],ConjGoal) :-
 ****************************************************************************/
 %% atomobj_struct/2
 atomobj_struct(FLATOM(Atm,I),PRATOM(Atm,I)) :- !.
+atomobj_struct(FLMODULARIZEDATOM(Atm,I),PRMODULARIZEDATOM(Atm,I)) :- !.
 atomobj_struct(Atm,PRATOM(Atm,NO_INDEX)) :- atomic(Atm).
 %% atomobj_struct/3
 atomobj_struct(Atm,Index,PRATOM(Atm,Index)).
 
 %% A prolog atom that has FLORA-2 prefix and workspace in it.
 %% This one is for THIS_WORKSPACE
-modularized_atom_struct(Atom,Idx,PRMODULARIZEDATOM(Atom,Idx)).
+modularized_pratom_struct(Atom,Idx,PRMODULARIZEDATOM(Atom,Idx)).
 %%  Mod is expected to be an atom
-modularized_atom_struct(Atom,Mod,Idx,PRMODULARIZEDATOM(Atom,Mod,Idx)).
+modularized_pratom_struct(Atom,Mod,Idx,PRMODULARIZEDATOM(Atom,Mod,Idx)).
 
-is_modularized_atom(PRMODULARIZEDATOM(Atom,Idx),Atom,Idx) :- !.
-is_modularized_atom(PRMODULARIZEDATOM(Atom,_Mod,Idx),Atom,Idx) :- !.
+%%modularized_flatom_struct(Atom,Idx,FLMODULARIZEDATOM(Atom,Idx)).
+
+is_modularized_pratom(PRMODULARIZEDATOM(Atom,Idx),Atom,Idx) :- !.
+is_modularized_pratom(PRMODULARIZEDATOM(Atom,_Mod,Idx),Atom,Idx) :- !.
+
+is_modularized_flatom(FLMODULARIZEDATOM(Atom,Idx),Atom,Idx).
+
 scrambled_atom_struct(Atom,Idx,Struct) :-
 	flora_scramble_atom(Atom,ScrambledA),
 	atomobj_struct(ScrambledA,Idx,Struct).
@@ -850,7 +856,7 @@ atomlit_struct(Context,FLATOM(Atom,I),Code) :-
 	flora_modular_prlgdef(Atom,0),
 	!,
 	splice_in_caller_argument(Context,[],Args),
-	modularized_atom_struct(Atom,I,FunCode),
+	modularized_pratom_struct(Atom,I,FunCode),
 	prologterm_struct(FunCode,1,Args,Code).
 atomlit_struct(_Context,FLATOM(Atom,I),Code) :-
 	flora_prlgdef(Atom,0,Mod),
@@ -871,7 +877,7 @@ atomlit_struct(Context,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
 	flora_modular_prlgdef(Atom,0),
 	!,
 	splice_in_caller_argument(Context,[],Args),
-	modularized_atom_struct(Atom,I,FunCode),
+	modularized_pratom_struct(Atom,I,FunCode),
 	prologterm_struct(FunCode,1,Args,Code).
 atomlit_struct(_Context,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
 	flora_prlgdef(Atom,0,Mod),
@@ -1104,7 +1110,7 @@ termlit_struct(Context,FObj,N,ObjList,Code) :-
 	!,
 	splice_in_caller_argument(Context,ObjList,Args),
 	N1 is N+1,
-	modularized_atom_struct(AtomName,Idx,FunCode),
+	modularized_pratom_struct(AtomName,Idx,FunCode),
 	prologterm_struct(FunCode,N1,Args,Code).
 
 %% for things that have prolog name replacement
@@ -1318,11 +1324,11 @@ is_prologterm(Term)    :- is_prologterm(Term,_,_,_,_).
 
 is_modularizedprologterm(Term) :-
 	is_prologterm(Term,Fun,_N,_Args),
-	is_modularized_atom(Fun,_,_).
+	is_modularized_pratom(Fun,_,_).
 
 prologterm_atom_arity(Term,Atom,Arity) :-
 	is_prologterm(Term,Struct,Arity,_),
-	is_modularized_atom(Struct,Atom,_).
+	is_modularized_pratom(Struct,Atom,_).
 prologterm_atom_arity(Term,Atom,Arity) :- is_prologterm(Term,Atom,Arity,_), !.
 prologterm_atom_arity(Term,Atom,Arity) :- is_prologterm(Term,Atom,Arity,_,_).
 
@@ -1386,7 +1392,7 @@ throw_struct(Error,Code) :-
 
 %% true{...}, false{...}, unknown{...}. Opname is FL_TRUE, FL_FALSE, FL_UNKNOWN
 truthvalue_struct(Formula,Opname,Code) :-
-	modularized_atom_struct(FL_TRUTHVALUE_TABLED_CALL,NO_INDEX,FunCode),
+	modularized_pratom_struct(FL_TRUTHVALUE_TABLED_CALL,NO_INDEX,FunCode),
 	prologterm_struct(FunCode,1,[Formula],WrappedFormula),
 	florasyslib_struct(FLLIBTRUTHVALUE,2,[WrappedFormula,Opname],Code).
 
@@ -2927,7 +2933,7 @@ table_option(P/N/_Idx,PMod/N2) :-
 	scrambled_atom_struct(P,NO_INDEX,PMod).
 table_option(P/N/_Idx,PMod/N1) :-
 	N1 is N+1, %% because of the caller argument
-	modularized_atom_struct(P,NO_INDEX,PMod).
+	modularized_pratom_struct(P,NO_INDEX,PMod).
 skip_sensor_spec(P/N/_Idx,_) :-
 	has_permaoption(defsensor(P,N)),
 	!,
@@ -3746,7 +3752,7 @@ construct_rule_enabling_fact(DescrIdCode,Mode,RuleEnablerMetaFact) :-
 	).
 
 construct_rule_enabling_test(DescrIdCode,RuleEnablerMetaTerm) :-
-	modularized_atom_struct(FL_RULE_ENABLER,NO_INDEX,PredCode),
+	modularized_pratom_struct(FL_RULE_ENABLER,NO_INDEX,PredCode),
 	generate_prolog_liblit(PredCode,1,[DescrIdCode],RuleEnablerMetaTerm).
 
 construct_tag_descriptor_fact_from_id(DescrIdCode,Mode,DescrVarsTerm,TagIdMetaFact) :-
@@ -3885,8 +3891,25 @@ construct_export_struct(TermCode,WSCode,IsUpdatableCode,ModuleListCode,Code) :-
 %%  To avoid this error-prone situation, in this case we issue an error.
 %% When overriding a module, we abolish new_udf_predicates_FUN and
 %% retractall flora_defined_udf_registry/6.
+%% Structure of flora_defined_udf_registry/6 args:
+%%
+%%    Module,                 eg,     foobar
+%%    UDF name,               eg,     fib          (say, for Fibonacci numbers)
+%%    Arity of this UDF,              1
+%%    UDF-term (user view)            fib(?_h2819)
+%%    Name of the UDF predicate that defines this UDF,
+%%                            eg,     FLORA_WORKSPACE(new_udf_predicate_fib)
+%%    UDF Literal used to implement this UDF
+%%       eg,    FLORA_WORKSPACE(new_udf_predicate_fib)(_h0,flapply(fib,_h1),_h2)
+%%         
 %% If overriding module FLORA_DEFAULT_WORKSPACE, we also
 %% retractall flora_used_udf_registry/4.
+%% Structure of flora_used_udf_registry/4 args:
+%%
+%%    UDF name,
+%%    Arity of this UDF,
+%%    UDF-term (user view)
+%%    UDF Literal used to implement this UDF
 
 /*
     compile_user_defined_function_definition(Function,Body,ReturnValue,CodeList-ListTail,FactDiffList,UDFPreds-UDFPredsTail,Status)
@@ -4019,7 +4042,7 @@ new_udf_predicate_funct(Funct,FunctCompiled,Arity,NewPredicateFunct,NPFunctCompi
 	encode_prterm(FunctCompiled,EncodedFunct),
 	flora_concat_atoms([NEWUDFPREDICATENAME,EncodedFunct],NewName),
 	flatom_struct(NewName,NO_INDEX,NewPredicateFunct),
-	modularized_atom_struct(NewName,NO_INDEX,NPFunctCompiled),
+	modularized_pratom_struct(NewName,NO_INDEX,NPFunctCompiled),
 	NPArity is Arity+1.
 
 /****************************************************************************
@@ -4265,7 +4288,7 @@ construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVa
 	    %% create FL_UNDEFEATED(DescrIdCode,DescrVarsTerm,NewVar,ThisModule)
 	    %% this code makes FL_UNDEFEATED into Prolog predicate
 	    %% It is faster, saves table space
-	    modularized_atom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
+	    modularized_pratom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
 	    var_caller_info_structure(ThisModule,CallerInfo),
 	    prologterm_struct(UnDefeatFunCode,5,
 			      [DescrIdCode,DescrVarsTerm,DummyVarObj4Head,ThisModule,CallerInfo],
@@ -4297,7 +4320,7 @@ construct_static_defeasible_condition(HeadCode,DescrIdCode,DescrVarsTerm,Delayed
 	    %% create FL_UNDEFEATED(DescrIdCode,NewVar,ThisModule)
 	    %% this code makes FL_UNDEFEATED into modularized Prolog predicate
 	    %% It is faster, saves table space
-	    modularized_atom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
+	    modularized_pratom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
 	    var_caller_info_structure(ThisModule,CallerInfo),
 	    prologterm_struct(UnDefeatFunCode,5,
 			      [DescrIdCode,DescrVarsTerm,HeadCode,ThisModule,CallerInfo],
@@ -5084,6 +5107,11 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	( is_flatom(ParserTerm,_A) ->
 	    compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status)
 
+	; is_modularized_flatom(ParserTerm,Atm,Idx) ->
+	    modularized_pratom_struct(Atm,Idx,Object),
+	    BodyHeadList = [],
+	    Status = NO_ERRORS
+
 	; is_fltransactionalatom(ParserTerm,_A) ->
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  TRANSACTIONAL_SYMBOL,Status),
@@ -5774,11 +5802,11 @@ compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status):-
 	var(BodyHeadList),
 	%% NO cut here!
 	\+ has_context(compiling_arithmetics),
-	has_user_defined_function(ParserTerm,0,[],Predicate,ReturnValue,_,_,_),
+	has_user_defined_function(ParserTerm,0,[],Predicate,Object /* return value */,_,_,_),
 	!,
 	verify_symbol_context(ParserTerm,0,UDF_SYMBOL,
 			      NONTRANSACTIONAL_SYMBOL,SymStatus),
-	compile_udf_body_literal(ParserTerm,Predicate,ReturnValue,Nesting,Object,PCode,PBodyHeadList,S),
+	compile_udf_body_literal(ParserTerm,Predicate,Nesting,PCode,PBodyHeadList,S),
 	( no_errors_found(S) -> 
 	    append(PBodyHeadList,[PCode],BodyHeadList),
 	    append(S,SymStatus,Status)
@@ -5811,12 +5839,12 @@ compile_fltermobj(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,CompileS
 	var(BodyHeadList),
 	!,
 	( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,FunctUdf,FunctBodyHeadList,S1)
+	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctUdf,FunctBodyHeadList,S1)
 	-> 
 	    ( no_errors_found(S1) -> 
 		OidCode=NULL,
 		Code=NULL,
-		compile_udf_body_literal(FunctUdf,Predicate,ReturnValue,Nesting,Object,PCode,PBodyHeadList,S),
+		compile_udf_body_literal(FunctUdf,Predicate,Nesting,PCode,PBodyHeadList,S),
 		SymbolContext = UDF_SYMBOL,
 		( no_errors_found(S) -> 
 		    append(FunctBodyHeadList,PBodyHeadList,BodyHeadList1),
@@ -5866,11 +5894,11 @@ compile_fltermobj(Funct,N,Args,_Nesting,Object,OidCode,Code,[],CompileStatus) :-
 
 
 /****************************************************************************
-  compile_udf_body_literal(+Funct,+Args,+FArgs,+Predicate,+ReturnValue,+Nesting,-Object,-PCode,-PBodyHeadList,-Status)
+  compile_udf_body_literal(+Funct,+Predicate,+Nesting,-PCode,-PBodyHeadList,-Status)
 
   Compile a UDF literal in the body.
 ****************************************************************************/
-compile_udf_body_literal(Funct,Predicate,ReturnValue,Nesting,ReturnValue,PCode,PBodyHeadList,Status) :-
+compile_udf_body_literal(Funct,Predicate,Nesting,PCode,PBodyHeadList,Status) :-
 	%% If we set no_symbol_check here then clear it out at the end.
 	%% If inherited no_symbol_check from the caller - do not do
 	%% clear out the context
@@ -5898,7 +5926,7 @@ find_user_defined_function(BaseName,N,UDFCode,Predicate) :-
 	!.
 
 /****************************************************************************
-  has_user_defined_function(+Funct,+N,Predicate,-ReturnValue,-FunctUdf,-BodyHeadList,-Status) 
+  has_user_defined_function(+Funct,+N,+Predicate,-ReturnValue,-FunctUdf,-BodyHeadList,-Status) 
 
   Tell if there is an active UDF with this Funct/N
   *******Explain the meaning of all arguments.
@@ -5967,8 +5995,9 @@ form_udf_hilog_predicate(Funct,N,Args,ReturnOrigPred,NewHeadCode,NewReturnValueO
 	new_flvariable(NO_INDEX,NewReturnValue,NewReturnValueObj),
 	flterm_struct(Funct,N,Args,OrigPredicateCode),
 	flnumber_struct(ReturnOrigPred,NO_INDEX,ReturnOrigPredCode),
-	flterm_struct(NPFunct,4,[OrigPredicateCode,N,NewReturnValue,ReturnOrigPredCode],NewHeadCode),
-	flora_define_modular_prolog(UDFHILOGPREDICATENAME,4).
+	flthismodule_struct(Module),
+	flterm_struct(NPFunct,5,[ReturnOrigPredCode,OrigPredicateCode,N,Module,NewReturnValue],NewHeadCodePre),
+	is_flplib(NewHeadCode,NewHeadCodePre).
 
 /****************************************************************************
   get_udf_hilog_predicate_funct(-Funct) 
@@ -6792,13 +6821,13 @@ compile_flobjeql(Obj1,Obj2,OidCode,Code,BodyHeadList,Status) :-
 ****************************************************************************/
 compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
 	( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,FunctUdf,FunctBodyHeadList,S1)
+	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctUdf,FunctBodyHeadList,S1)
 	->
 	    ( no_errors_found(S1) -> 
 	    	Code=NULL,
 	    	H2BCodeTail=NULL,
 	    	SymbolContext = UDF_SYMBOL,
-	    	compile_udf_body_literal(FunctUdf,Predicate,ReturnValue,0,Object,PCode,PH2BCodeHead,S),
+	    	compile_udf_body_literal(FunctUdf,Predicate,0,PCode,PH2BCodeHead,S),
 	    	( no_errors_found(S) -> 
 			append(FunctBodyHeadList,PH2BCodeHead,List1),
 			append(List1,[PCode],List),
@@ -7791,12 +7820,12 @@ compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,BodyHeadList,Tra
 	var(BodyHeadList),
 	!,
         ( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,FunctUdf,FunctBodyHeadList,S1)
+	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctUdf,FunctBodyHeadList,S1)
 	->
 	    ( no_errors_found(S1) -> 
 		    OidCode=NULL,
 		    Code=NULL,
-		    compile_udf_body_literal(FunctUdf,Predicate,ReturnValue,Nesting,Object,PCode,PBodyHeadList,S),
+		    compile_udf_body_literal(FunctUdf,Predicate,Nesting,PCode,PBodyHeadList,S),
 		    SymbolContext = UDF_SYMBOL,
 		    ( no_errors_found(S) -> 
 			append(FunctBodyHeadList,PBodyHeadList,BodyHeadList1),
@@ -9114,12 +9143,12 @@ compile_head_wstransactionaltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BC
 ****************************************************************************/
 compile_head_wsfltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
         ( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,FunctUdf,FunctBodyHeadList,S1)
+	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctUdf,FunctBodyHeadList,S1)
 	->
 	    ( no_errors_found(S1) -> 
 	    	H2BCodeTail=NULL,
 	    	Code=NULL,
-	    	compile_udf_body_literal(FunctUdf,Predicate,ReturnValue,0,Object,PCode,PH2BCodeHead,S),
+	    	compile_udf_body_literal(FunctUdf,Predicate,0,PCode,PH2BCodeHead,S),
 	    	SymbolContext = UDF_SYMBOL,
 	    	( no_errors_found(S) -> 
 			append(FunctBodyHeadList,PH2BCodeHead,List1),
@@ -10368,7 +10397,7 @@ is_head_neg_negatable_literal(PRIMVDSIGDEF(_,_,_)) :- !.
 
 is_head_neg_negatable_literal(X) :-
 	is_prologterm(X,Struct,Arity,_Args),
-	is_modularized_atom(Struct,Atom,_),
+	is_modularized_pratom(Struct,Atom,_),
 	Arity1 is Arity-1,
 	flora_negatable_prlgdef(Atom,Arity1,_),
 	!.
@@ -10403,8 +10432,8 @@ is_body_neg_negatable_literal(X) :-
 %% this one is used to make neg(UDFHILOGPREDICATENAME(....),Goal) into
 %% UDFHILOGPREDICATENAME(....), neg(Goal)
 is_body_neg_passthrough_literal(X) :-
-	is_prologterm(X,Struct,4,_Args),
-	is_modularized_atom(Struct,UDFHILOGPREDICATENAME,_),
+	is_prologterm(X,Struct,5,_Args),
+	is_pratom(Struct,UDFHILOGPREDICATENAME,_),
 	!.
 /*
 is_unimplemented_neg_negatable_literal(X) :-
@@ -10492,7 +10521,7 @@ generate_prolog_liblit(Atom,Arity,Args,Code) :-
         prologterm_struct(AtomCode,Arity,Args,Code1),
         prologliblit_struct(Code1,Code).
 generate_prolog_liblit(AtomCode,Arity,Args,Code) :-
-	is_modularized_atom(AtomCode,_,_),
+	is_modularized_pratom(AtomCode,_,_),
 	!,
         prologterm_struct(AtomCode,Arity,Args,Code1),
         prologliblit_struct(Code1,Code).

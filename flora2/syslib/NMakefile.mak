@@ -71,6 +71,7 @@ ALLOBJS =  flranswer$(OBJEXT) \
 	   flrdelaysupport$(OBJEXT) \
 	   flrhypothetical$(OBJEXT) \
 	   flrcheckcard$(OBJEXT) \
+	   flrudf$(OBJEXT) \
 	   flrunify_handlers$(OBJEXT) \
 	   flrtesting$(OBJEXT) \
 	   flrprefixdef$(OBJEXT)

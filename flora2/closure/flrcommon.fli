@@ -259,31 +259,3 @@ FL_SILENT_EQUAL(X,X).
 
 
 
-/****************************************************************************
-   rule for user defined functions and HiLog 
-****************************************************************************/
-UDFHILOGPREDICATENAME(Predicate,Arity,ReturnValue,_ReturnOrigPred,_CallerInfo) :-
-	udf_hilog_aux(Predicate,Arity,CallCode),
-	arg(1,CallCode,ReturnValue),
-	%% No cut: flora_op_synonym/2 can have many matches if Name is a var!
-	%% !,
-	machine:call0(CallCode).
-
-%% These should be in a library in syslib. No need to relativise them
-%% to modules.
-UDFHILOGPREDICATENAME(Predicate,_Arity,Predicate,UDFHILOG_RETURN_ORIG_PRED,_CallerInfo).
-
-udf_hilog_aux(Predicate,Arity,CallCode) :-
-	functor(Predicate,Functor,_),
-	(Functor \== WRAP_HILOG
-	-> OpName = Functor
-	; arg(1,Predicate,OpName)
-	),
-	!,
-	( flrsynonym:flora_op_synonym(OpName,BaseName),
-	    Predicate =.. [_Functor,_Name|Args],
-	    PredicateBase =.. [_Functor,BaseName|Args]
-	;
-	    BaseName = OpName, PredicateBase = Predicate
-	),
-	flrregistry:flora_defined_udf_registry(FLORA_THIS_MODULE_NAME,BaseName,Arity,PredicateBase,_,CallCode).

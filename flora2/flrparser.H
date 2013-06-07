@@ -104,4 +104,5 @@
 	flatom_struct/3,
 	flterm_struct/4,
 	flconjunct_struct/3,
+	flthismodule_struct/1,
 	flnumber_struct/3.
