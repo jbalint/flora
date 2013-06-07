@@ -29,23 +29,41 @@
 #include "flora_tabling_methods.flh"
 
 /****************************************************************************
-   rule for user defined functions 
+   rule for HiLog UDFs 
 ****************************************************************************/
 :- import call0/1 from machine.
 UDFHILOGPREDICATENAME(_ReturnOrigPred,Predicate,Arity,Module,ReturnValue) :-
-	get_base_pred(Predicate,Arity,BaseName,BasePredicate),
+	%%get_base_pred(Predicate,Arity,BaseName,BasePredicate),
+	get_base_pred(Predicate,BaseName,BasePredicate),
 	flrregistry:flora_defined_udf_registry(Module,BaseName,Arity,BasePredicate,_,CallCode),
 	arg(1,CallCode,ReturnValue),
 	%% No cut: flora_op_synonym/2 can have many matches if Name is a var!
 	%% !,
 	call0(CallCode).
 
-%% These should be in a library in syslib. No need to relativise them
-%% to modules.
 UDFHILOGPREDICATENAME(UDFHILOG_RETURN_ORIG_PRED,Predicate,_Arity,_Module,Predicate).
 
+
+%% working version
+get_base_pred(Predicate,BaseName,BasePredicate) :-
+	functor(Predicate,Functor,_),
+	(Functor == WRAP_HILOG
+	-> Predicate =.. [WRAP_HILOG,OpName|Args]
+	; Predicate =.. [OpName|Args]
+	),
+	( flrsynonym:flora_op_synonym(OpName,BaseName)
+	; BaseName = OpName
+	),
+	(Functor == WRAP_HILOG -> BasePredicate =.. [WRAP_HILOG,BaseName|Args]
+	; BasePredicate =.. [BaseName|Args]
+	).
+
+
+/*
 %% This caches conversion from Predicate to BasePredicate, which uses
 %% flora_op_synonym inside.
+%% But such caching does not work because there can be several predicates 
+%% matching the same UDF.
 :- dynamic flora_udf_base_pred_cache/4.
 get_base_pred(Predicate,Arity,BaseName,BasePredicate) :-
 	flora_udf_base_pred_cache(Predicate,Arity,BaseName,BasePredicate),
@@ -65,3 +83,4 @@ get_base_pred(Predicate,Arity,BaseName,BasePredicate) :-
 	),
 	assert(flora_udf_base_pred_cache(CachedPredicate,Arity,BaseName,BasePredicate)),
 	CachedPredicate = Predicate.
+*/
