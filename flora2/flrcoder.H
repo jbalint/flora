@@ -77,6 +77,10 @@
 	flora_canonical_type_name/2
    from flrdatatype.
 
+:- import
+	no_errors_found/1
+   from flrcompiler.
+
 :- export
 	flora_divide_program/3,
 	flora_extern_code/2,

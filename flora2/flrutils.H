@@ -169,8 +169,8 @@
 	flora_configuration/2,
 	flora_storage_registry/1,
 	flora_trailer_registry/2,
-	flora_used_udf_registry/5,
-	flora_defined_udf_registry/4,
+	flora_used_udf_registry/4,
+	flora_defined_udf_registry/6,
 	flora_modular_prolog_registry/3,
 	flora_module_registry/1
    from flrregistry.
@@ -267,7 +267,6 @@
 	flora_compile_system_module/1,
 	flora_load_module_util/1,
 	flora_load_module_util/2,
-	flora_load_module_util/5,
         flora_save_module_util/1,
         flora_save_module_util/2,
 	FL_DUMP/1,
@@ -313,7 +312,6 @@
 	
 	flora_add_module_dyn/1,
 	flora_add_module_dyn/2, 
-	flora_add_module_dyn/5,
 	flora_compile_add/2, 
 	flora_compile_add/1,
 
