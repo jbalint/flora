@@ -29,10 +29,14 @@
 %% must define it here because at this point the include path of gpp is not set
 #define FLORA_COMPILATION_COUNTER flora_compile_id
 
+:- ensure_loaded(packaging).
+
 :- import
 	bootstrap_package/2,
 	unload_package/1
    from packaging.
+
+:- import package_configuration/2 from usermod.
 
 :- import
 	flora_import_predicate/4
@@ -117,19 +121,11 @@
        atom_concat(Dir1,flora2,FloraDir),
        asserta(library_directory(FloraDir))
    ),
-   (flora_running_under(windows)
-   -> flora_concat_atoms([FloraDir,platforms,S,windows],PlatformSpecificDir)
-   ; flora_running_under(cygwin)
-   -> flora_concat_atoms([FloraDir,platforms,S,cygwin],PlatformSpecificDir)
-   ; flora_concat_atoms([FloraDir,platforms,S,unix],PlatformSpecificDir)
-   ),
-   assert(library_directory(PlatformSpecificDir)),
-   load_dyn(floraInstallMode).
-
-?- current_predicate(flrregistry:flora_configuration/2),
-   flora_configuration(standalone,no),
-   flora_configuration(standalone,yes),
-   abort('FLORA-2 cannot be loaded both as an XSB package and as a standalone application').
+   asserta(flora_configuration(installdir,FloraDir)),
+   flora_concat_atoms([FloraDir,S,'.flora_buildinfo.P'],FloraBuildInfoFile),
+   load_dyn(FloraBuildInfoFile),
+   %% must be after load_dyn(FloraBuildInfoFile)!
+   asserta(flora_configuration(installdir,FloraDir)).
 
 bootstrap_flora :-
 	\+ flora_configuration(loaded,yes),
@@ -137,23 +133,11 @@ bootstrap_flora :-
 	flora_slash(S),
 	flora_concat_atoms([pkgs,S,prolog],PkgsProlog),
 	flora_concat_atoms(['AT',S,prolog],ATsProlog),
-	(flora_running_under(windows)
-	-> flora_concat_atoms([platforms,S,windows],PlatformSpecificDir)
-	; flora_concat_atoms([platforms,S,unix],PlatformSpecificDir)
+	(\+ library_directory(FloraDir) -> asserta(library_directory(FloraDir))
+	; true
 	),
-	( flora_configuration(standalone,yes) ->
-	    %% running FLORA as a standalone version
-	    (\+ library_directory(FloraDir) -> asserta(library_directory(FloraDir))
-	    ; true
-	    ),
-	    [flrversion],
-	    flora_assert_directories([syslib,datatypes,lib,debugger,pkgs,'AT',PkgsProlog,ATsProlog,p2h,PlatformSpecificDir])
-	;
-	    %% running FLORA as an XSB package
-	    bootstrap_package([flora2,syslib,datatypes,lib,debugger,pkgs,'AT',PkgsProlog,p2h,PlatformSpecificDir],
-			      flora),
-	    [flrversion]
-	),
+	[flrversion],
+	flora_assert_directories([syslib,datatypes,lib,debugger,pkgs,'AT',PkgsProlog,ATsProlog,p2h]),
 	!,
 	assert(flora_configuration(loaded,yes)),
 	flora_concat_atoms([FloraDir,S,closure],Closure),
@@ -201,7 +185,6 @@ flora_set_star_indexing_depth(X) :-
 unstrap_flora :-
 	flora_configuration(includedirs,IncludeDirs),
 	remove_include_dirs(IncludeDirs),
-	(flora_configuration(standalone,yes), ! ; unload_package(flora)),
 	retractall(flora_configuration(loaded,_)),
 	flora_set_counter(flora_shell_loaded,0).
 
