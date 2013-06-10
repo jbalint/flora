@@ -5834,7 +5834,7 @@ compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status):-
 	var(BodyHeadList),
 	%% NO cut here!
 	\+ has_context(compiling_arithmetics),
-	has_user_defined_function(ParserTerm,0,[],Predicate,Object /* return value */,_,_,_),
+	has_user_defined_function(ParserTerm,0,[],Predicate,Object /* return value */,_,_),
 	!,
 	verify_symbol_context(ParserTerm,0,UDF_SYMBOL,
 			      NONTRANSACTIONAL_SYMBOL,SymStatus),
@@ -5871,12 +5871,12 @@ compile_fltermobj(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,CompileS
 	var(BodyHeadList),
 	!,
 	( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctUdf,FunctBodyHeadList,S1)
+	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
 	-> 
 	    ( no_errors_found(S1) -> 
 		OidCode=NULL,
 		Code=NULL,
-		compile_udf_body_literal(FunctUdf,Predicate,Nesting,PCode,PBodyHeadList,S),
+		compile_udf_body_literal(Funct,Predicate,Nesting,PCode,PBodyHeadList,S),
 		SymbolContext = UDF_SYMBOL,
 		( no_errors_found(S) -> 
 		    append(FunctBodyHeadList,PBodyHeadList,BodyHeadList1),
@@ -5958,7 +5958,7 @@ find_user_defined_function(BaseName,N,UDFCode,Predicate) :-
 	!.
 
 /****************************************************************************
-  has_user_defined_function(+Funct,+N,-Predicate,-ReturnValue,-FunctUdf,-BodyHeadList,-Status) 
+  has_user_defined_function(+Funct,+N,-Predicate,-ReturnValue,-BodyHeadList,-Status) 
 
   Tells if there is an active UDF with this Funct/N
 
@@ -5967,7 +5967,6 @@ find_user_defined_function(BaseName,N,UDFCode,Predicate) :-
   Predicate - the new_udf_predicate_XXX that computes this UDF
   ReturnValue - the variable representing the return value of this UDF;
                 it appears in Predicate as Arg 1.
-  FunctUdf - Functor of UDF passed to udf_hilog_predicate
   BodyHeadList - a list of literals to be added to rule body where udf appears
                  (again for cases when udf functor is a term)
   Example:
@@ -5976,7 +5975,7 @@ find_user_defined_function(BaseName,N,UDFCode,Predicate) :-
 	     udf_hilog_predicate(?var2(?x)),?var1),
              q(?var1) 
 ****************************************************************************/
-has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,Funct,[],[]) :-
+has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	\+ has_context(block_udf_expansion),
 	\+ has_context(compiling_udf_hilog(Funct)),
 	\+ get_flatom_name(Funct,UDFHILOGPREDICATENAME),
@@ -5991,10 +5990,10 @@ has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,Funct,[],[]) :-
 	%% The original term itself will not be returned, as we pass
 	%% UDFHILOG_NO_ORIG_PRED as a parameter to UDFHILOGPREDICATENAME.
 	find_user_defined_function(BaseName,N,_UDFCode,_PredicateCode),
-	form_udf_hilog_predicate(Funct,N,Args,UDFHILOG_NO_ORIG_PRED,Predicate,ReturnValue),
+	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue),
 	!.
 
-has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,Funct,[],[]) :-
+has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	\+ has_context(block_udf_expansion),
 	N\=0,
 	Args\=[],
@@ -6003,30 +6002,28 @@ has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,Funct,[],[]) :-
 	!,
 	\+ has_context(compiling_udf_hilog(Funct)),
 	find_user_defined_function(_BaseName,N,_UDFCode,_PredicateCode),
-	form_udf_hilog_predicate(Funct,N,Args,UDFHILOG_RETURN_ORIG_PRED,Predicate,ReturnValue).
+	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
 
 
-has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,FunctUdf,BodyHeadList,CompileStatus) :-
+has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	\+ has_context(block_udf_expansion),
 	N\=0,
 	Args\=[],
 	Args\=null,
-	is_flterm(Funct,FFunct,FunctN,FunctArgs),
+	is_flterm(Funct,_FFunct,_FunctN,_FunctArgs),
 	!,
 	\+ has_context(compiling_udf_hilog(Funct)),
 	find_user_defined_function(_BaseName,N,_UDFCode,_Predicate),
-	compile_fltermobj(FFunct,FunctN,FunctArgs,0,Object,_OidCode,_Code,BodyHeadList,CompileStatus),
-	prvar_to_flvar_struct(Object,FunctUdf),
-	form_udf_hilog_predicate(FunctUdf,N,Args,UDFHILOG_RETURN_ORIG_PRED,Predicate,ReturnValue).
+	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
 
-has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,Funct,[],[]) :-
+has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	\+ has_context(block_udf_expansion),
 	\+ has_context(compiling_udf_hilog(Funct)),
 	N\=0,
 	Args\=[],
 	Args\=null,
 	find_user_defined_function(HILOG_SYMBOL_NAME,N,_UDFCode,_PredicateCode),
-	form_udf_hilog_predicate(Funct,N,Args,UDFHILOG_RETURN_ORIG_PRED,Predicate,ReturnValue).
+	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
 
 /****************************************************************************
   form_udf_hilog_predicate(+Funct,+N,+Args,+ReturnOrigPred,-Predicate,-ReturnValue) 
@@ -6036,24 +6033,18 @@ has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,Funct,[],[]) :-
   Funct - udf functor
   N - udf arity
   Args - udf arguments
-  ReturnOrigPred - a flag passed to udf_hilog_predicate allowing it
-                   to return the original udf term in addition to the
-		   value to which this udf rewrites.
-                   Example: if f(a) rewrites to b and p(b) is true then
-		            the issue is whether p(?x) should return ?x=f(a).
   Predicate - UDFHILOGPREDICATENAME code
   ReturnValue - code for the return variable which represents the return value
                 of udf_hilog_predicate. This variable appears as argument 5 in
 		UDFHILOGPREDICATENAME.
 ****************************************************************************/
-form_udf_hilog_predicate(Funct,N,Args,ReturnOrigPred,NewHeadCode,NewReturnValueObj):-
+form_udf_hilog_predicate(Funct,N,Args,NewHeadCode,NewReturnValueObj):-
 	get_udf_hilog_predicate_funct(NPFunct),
 	%%set_context(compiling_udf_hilog(NPFunct)),
 	new_flvariable(NO_INDEX,NewReturnValue,NewReturnValueObj),
 	flterm_struct(Funct,N,Args,OrigPredicateCode),
-	flnumber_struct(ReturnOrigPred,NO_INDEX,ReturnOrigPredCode),
 	flthismodule_struct(Module),
-	flterm_struct(NPFunct,5,[ReturnOrigPredCode,OrigPredicateCode,N,Module,NewReturnValue],NewHeadCodePre),
+	flterm_struct(NPFunct,5,[OrigPredicateCode,N,Module,NewReturnValue],NewHeadCodePre),
 	flplib_struct(NewHeadCodePre,NewHeadCode).
 
 /****************************************************************************
@@ -6878,13 +6869,13 @@ compile_flobjeql(Obj1,Obj2,OidCode,Code,BodyHeadList,Status) :-
 ****************************************************************************/
 compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
 	( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctUdf,FunctBodyHeadList,S1)
+	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
 	->
 	    ( no_errors_found(S1) -> 
 	    	Code=NULL,
 	    	H2BCodeTail=NULL,
 	    	SymbolContext = UDF_SYMBOL,
-	    	compile_udf_body_literal(FunctUdf,Predicate,0,PCode,PH2BCodeHead,S),
+	    	compile_udf_body_literal(Funct,Predicate,0,PCode,PH2BCodeHead,S),
 	    	( no_errors_found(S) -> 
 			append(FunctBodyHeadList,PH2BCodeHead,List1),
 			append(List1,[PCode],List),
@@ -7877,12 +7868,12 @@ compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,BodyHeadList,Tra
 	var(BodyHeadList),
 	!,
         ( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctUdf,FunctBodyHeadList,S1)
+	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
 	->
 	    ( no_errors_found(S1) -> 
 		    OidCode=NULL,
 		    Code=NULL,
-		    compile_udf_body_literal(FunctUdf,Predicate,Nesting,PCode,PBodyHeadList,S),
+		    compile_udf_body_literal(Funct,Predicate,Nesting,PCode,PBodyHeadList,S),
 		    SymbolContext = UDF_SYMBOL,
 		    ( no_errors_found(S) -> 
 			append(FunctBodyHeadList,PBodyHeadList,BodyHeadList1),
@@ -9204,12 +9195,12 @@ compile_head_wstransactionaltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BC
 ****************************************************************************/
 compile_head_wsfltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
         ( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctUdf,FunctBodyHeadList,S1)
+	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
 	->
 	    ( no_errors_found(S1) -> 
 	    	H2BCodeTail=NULL,
 	    	Code=NULL,
-	    	compile_udf_body_literal(FunctUdf,Predicate,0,PCode,PH2BCodeHead,S),
+	    	compile_udf_body_literal(Funct,Predicate,0,PCode,PH2BCodeHead,S),
 	    	SymbolContext = UDF_SYMBOL,
 	    	( no_errors_found(S) -> 
 			append(FunctBodyHeadList,PH2BCodeHead,List1),
