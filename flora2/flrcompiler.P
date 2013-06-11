@@ -37,6 +37,7 @@
 #define NEWDONTCAREVAR	       	 newdontcarevar
 #define NEWEXISTENTIALVAR      	 newexistentialvar
 #define NEWCALLERVAR	       	 newcallervar
+#define SKOLEMSYMVAR	       	 skolemsymvar
 #define NEWUDFPREDVAR	         newudfpredvar
 #define NEWPREDICATE_COUNTER   	 '_$$''''global_newpredicate_counter'
 #define NEWPREDICATE_SYM       	 '_$$''''newpredicate'
@@ -823,6 +824,7 @@ conjunct_code([Goal|GList],ConjGoal) :-
 ****************************************************************************/
 %% atomobj_struct/2
 atomobj_struct(FLATOM(Atm,I),PRATOM(Atm,I)) :- !.
+atomobj_struct(FLBUILTIN_IDENTIFIER(Atm,I),PRATOM(Atm,I)) :- !.
 %%atomobj_struct(FLMODULARIZEDATOM(Atm,I),PRMODULARIZEDATOM(Atm,I)) :- !.
 atomobj_struct(Atm,PRATOM(Atm,NO_INDEX)) :- atomic(Atm).
 %% atomobj_struct/3
@@ -1855,10 +1857,13 @@ new_caller_prvariable(Index,VarObj) :-
 	flora_new_varobj(NEWCALLERVAR,Index,VarObj).
 new_existential_prvariable(Index,VarObj) :-
 	flora_new_varobj(NEWEXISTENTIALVAR,Index,VarObj).
-
 %% creates new transactional variable
 new_dontcare_prtransactionalvar(Index,VarObj) :-
 	flora_new_transactionalvarobj(NEWDONTCAREVAR,Index,VarObj).
+
+prvariable_for_numbered_skolem(Index,SkolemNumber,VarObj) :-
+	flora_concat_items([SKOLEMSYMVAR,SkolemNumber],Name),
+	varobj_struct(Name,Index,VarObj).
 
 
 new_prvarlist(0,[]) :- !.
@@ -1885,7 +1890,7 @@ new_oidobj(Index,OidObject) :-
 	newoid_struct(Name,Index,OidObject).
 
 /*************************************************************************
-  new_oidobj(+RuleNum,+OidNumStr,+Index,-OidObject) :-
+  new_oidobj(+RuleNum,+OidNumStr,+Index,-OidObject)
 *************************************************************************/
 new_oidobj(RuleNum,OidNumStr,Index,OidObject) :-
 	( ruleoid(OidNumStr,_,Count)
@@ -1899,6 +1904,19 @@ new_oidobj(RuleNum,OidNumStr,Index,OidObject) :-
 	flora_term_to_atom(RuleNum,RuleNumAtm),
         flora_concat_atoms([NEWOID,RuleNumAtm,'|',OidNumStr],Name),
 	newoid_struct(Name,Index,OidObject).
+
+/*************************************************************************
+  new_dynoidobj(+Index,-OidObject)
+  new_dynoidobj(+OidNumStr,+Index,-OidObject)
+  These generate dynamic new oids for use in the shell
+*************************************************************************/
+new_dynoidobj(Index,OidObject) :-
+	gensym:gensym(FL_NEWOID_DYNSYM,Name),
+	newoid_struct(Name,Index,OidObject).
+new_dynoidobj(OidNumStr,Index,OidObject) :-
+	flora_concat_atoms([FL_NEWOID_DYNSYM,'|',OidNumStr],Name),
+	newoid_struct(Name,Index,OidObject).
+	
 
 
 clear_ruleoid :- flora_retractall_substitute(ruleoid(_,_,_)).
@@ -3508,7 +3526,6 @@ compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,FactDiffL
      compile_descriptor_list1, so MetaFacts will have unbound variable as arg 2.
      This is what we need for clause{....}
 */
-%% TODO: do not add symbols mentioned in annotations to FLS
 compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFacts-MetaFactsTail,Status) :-
 	flatten(DescriptorList,FlatDescrList),
 	%% First, extract the code for the rule id
@@ -3517,6 +3534,7 @@ compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFac
 		IdParserTermList),
 	!,
 	set_context(no_symbol_check),
+	set_context(compiling_descriptors),
 	(length(IdParserTermList,Len), Len > 1
 	-> IdParserTermList = [_,_-Idx|_],
 	    compiling_error(Idx,MULTIPLE_RULE_IDS,Err),
@@ -3566,6 +3584,7 @@ compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFac
 	; Status = IdStatus,
 	    MetaFacts = []
 	),
+	clear_context(compiling_descriptors),
 	clear_context(no_symbol_check).
 
 
@@ -5115,11 +5134,28 @@ compile_flcontrolconstruct(Cond,Action,Wrapper,Code,Status) :-
   vars, strings
 
   Nesting - needed for nested user defined functions
+  Object  - the term that goes in place of this path expression.
   OidCode - conjunction of the code for computing the arguments of
             the pathexp such as a.b[c.d->e.f]
-	    Eg, AND(a[b->?X],c[d-?Y],e[f->?Z])
+	    Eg, AND(a[b->?X],c[d-?Y],e[f->?Z]) - the code for computing the
+	        objects that go in place of a.b, c.d, e.f. These objects are
+		?X, ?Y, ?Z, respectively.
+            OidCode comes before the code for the molecule or predicate
+	    where the path expression occurs. For instance, in the above,
+	    we'll have:
+	      AND(a[b->?X],c[d-?Y],e[f->?Z]), <<--- OidCode for path expressions
+		?X[?Y->?Z],                   <<--- the actual molecule.
+                                                    ?X,?Y,?Z are Object(s)
+						    for path expressions
+		   Code(for a.b,c.d,e.f)      <<--- Code for path expressions
   Code    - code for the actual Boolean expression that corresponds to
-            a.b[c.d->e.f], ie, ?X[?Y->?Z]
+            a.b[c.d->e.f], ie, ?X[?Y->?Z].
+            Note: Code is conjoined from the right. For instance,
+	          in aaa[bbb->c.d], the Code for c.d appears after the code
+		  for aaa[bbb->...]. Namely, the overall code will be:
+		    OidCode(for_c.d,Object(for_c.d)),
+		      aaa[bbb->Object(for_c.d)],
+		        Code(for_c.d)
   BodyHeadList - code to add at the beginning of the body
                  (mostly for user defined fnctions),
 		 it is output argument, but if it is initialized to empty ([])
@@ -5132,20 +5168,26 @@ compile_pathexp(ParserTerm,Object,OidCode,Code,BodyHeadList,Status) :-
 	compile_pathexp(ParserTerm,0,Object,OidCode,Code,BodyHeadList,Status).
 
 %% ParserTerm is a primitive object -- no oid code and no spec code results
-compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
+compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	set_context(compiling_body_pathexp),
 	( is_flatom(ParserTerm,_A) ->
+	    Code = NULL,
+	    OidCode = NULL,
 	    compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status)
 
 	; is_modularized_pratom(ParserTerm,Atm,Idx) ->
 	    modularized_pratom_struct(Atm,Idx,Object),
 	    BodyHeadList = [],
+	    Code = NULL,
+	    OidCode = NULL,
 	    Status = NO_ERRORS
 
 	; is_fltransactionalatom(ParserTerm,_A) ->
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  TRANSACTIONAL_SYMBOL,Status),
 	    BodyHeadList=[],
+	    Code = NULL,
+	    OidCode = NULL,
 	    transactionalatomobj_struct(ParserTerm,Object)
 
 	; is_fltoken(ParserTerm,FL_THISMODULE,_Index) ->
@@ -5155,6 +5197,8 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    */
 	    Status = NO_ERRORS,
 	    BodyHeadList=[],
+	    Code = NULL,
+	    OidCode = NULL,
 	    thismodule_struct(Object)
 
 	%% Anonymous OIDs can appear in the "body": they can appear
@@ -5165,9 +5209,25 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
+	    ((has_context(goal_reification);has_context(compiling_descriptors))
+	    ->
+		Code = NULL,
+		(compiling_flrshell_command ->
+		    %% In the shell we do:
+		    %% ?- ?X = ${p(_#)} ==>> p(shell-skolem)
+		    OidCode = NULL,
+		    new_dynoidobj(Index,Object)
+		;   %% If not in the shell, generate a new Skolem constant
+		    OidCode = NULL,
+		    new_oidobj(Index,Object)
+		)
+	    ;   %% Otherwise, p(_#) ==>> p(?N), _skolem(?N)
+		OidCode = NULL,
+		new_prvariable(Index,Object),
+		prologterm_struct(FL_SKOLEM,1,[Object],flrnewoid,Code)
+	    ),
 	    Status = NO_ERRORS,
-	    BodyHeadList=[],
-	    new_oidobj(Index,Object)
+	    BodyHeadList=[]
 
 	%% A numbered OID, which appears in a reified formula in rule body
 	; is_fltoken(ParserTerm,FL_NEWOID,Num,Index) ->
@@ -5176,14 +5236,29 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
+	    ((has_context(goal_reification);has_context(compiling_descriptors))
+	    ->
+		Code = NULL,
+		(compiling_flrshell_command ->
+		    OidCode = NULL,
+		    new_dynoidobj(Num,Index,Object)
+		;   %% If not in the shell, generate a new Skolem constant
+		    OidCode = NULL,
+		    flora_get_counter(RULE_NUM, Rule_num), 
+		    new_oidobj(Rule_num,Num,Index,Object)
+		)
+	    ;
+		OidCode = NULL,
+		prvariable_for_numbered_skolem(Index,Num,Object),
+		prologterm_struct(FL_SKOLEM,1,[Object],flrnewoid,Code)
+	    ),
 	    Status = NO_ERRORS,
-	    BodyHeadList=[],
-	    flora_get_counter(RULE_NUM, Rule_num), 
-	    new_oidobj(Rule_num,Num,Index,Object)
+	    BodyHeadList=[]
 
 	%% _@! - rule id token
 	; is_fltoken(ParserTerm,FL_RULEID_TOKEN_PREFIX,FL_RULEID_SYM,Index) ->
 	    BodyHeadList=[],
+	    Code = NULL,
 	    ((has_context(compiling_dynrule(DescrIdCode)) ; has_context(compiling_rule(DescrIdCode)))
 	    ->
 		Object = DescrIdCode,
@@ -5194,6 +5269,7 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    )
 
 	; is_fltoken(ParserTerm,FL_SPECIAL_VAR_TOKEN,Suffix,Index) ->
+	    Code = NULL,
 	    (memberchk(Suffix, [FL_SPECIAL_FILE_TOKEN,FL_SPECIAL_LINE_TOKEN])
 	    ->
 		Status = NO_ERRORS,
@@ -5206,21 +5282,25 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 
 	; (is_flnumber(ParserTerm,_N) ; number(ParserTerm)) ->
 	    BodyHeadList=[],
+	    Code = NULL,
 	    numobj_struct(ParserTerm,Object),
 	    Status = NO_ERRORS
 
 	; is_flvariable(ParserTerm,Name,Index) ->
 	    BodyHeadList=[],
+	    Code = NULL,
 	    compile_flvar(Name,Index,Object),
 	    Status = NO_ERRORS
 
 	; is_fltransactionalvariable(ParserTerm,Name,Index) ->
 	    BodyHeadList=[],
+	    Code = NULL,
 	    compile_fltransactionalvar_without_trans(Name,Index,Object),
 	    Status = NO_ERRORS
 
 	; is_flstring(ParserTerm,_S) ->
 	    BodyHeadList=[],
+	    Code = NULL,
 	    strobj_struct(ParserTerm,Object),
 	    Status = NO_ERRORS
 
@@ -5228,14 +5308,17 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    BodyHeadList=[],
+	    Code = NULL,
 	    builtin_identifier_struct(ParserTerm,Object)
 
 	; is_fldatatype(ParserTerm,_Sort,_Lit,_Index) ->
 	    BodyHeadList=[],
+	    Code = NULL,
 	    datatypeobj_struct(ParserTerm,Object,Status)
 
 	; is_fltransactionalstring(ParserTerm,_S) ->
 	    BodyHeadList=[],
+	    Code = NULL,
 	    transactionalstrobj_struct(ParserTerm,Object),
 	    Status = NO_ERRORS
 	),
@@ -8728,10 +8811,10 @@ compile_prologliblit(ParserTerm,Nesting,OidCode,Code,BodyHeadList,Status) :-
 ****************************************************************************/
 compile_prologliblit(ParserTerm,Module,Nesting,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    is_flatom(Funct,FAtom),
+	    %%is_flatom(Funct,FAtom), %% this prevents _p(a)@_plg(aaa) from getting compiled
 	    compile_prlgterm(Funct,N,Args,Module,Nesting,TCode,OidCode,ACode,BodyHeadList,Status)
 	;
-	    is_flatom(ParserTerm,FAtom),
+	    %%is_flatom(ParserTerm,FAtom),  %% %% this prevents _p@_plg(aaa) from getting compiled
 	    atomobj_struct(ParserTerm,FObj),
 	    N=0,
 	    prologterm_struct(FObj,0,[],Module,TCode),
@@ -8826,10 +8909,10 @@ compile_prologlibobj(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 ****************************************************************************/
 compile_prologlibobj(ParserTerm,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    is_flatom(Funct,FAtom),
+	    %%is_flatom(Funct,FAtom), %% this prevents f(_p(a))@_plg(aaa) from getting compiled
 	    compile_prlgterm(Funct,N,Args,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 	;
-	    is_flatom(ParserTerm,FAtom),
+	    %%is_flatom(ParserTerm,FAtom), %% this prevents f(_p)@_plg(aaa) from getting compiled
 	    atomobj_struct(ParserTerm,FObj),
 	    N=0,
 	    prologterm_struct(FObj,0,[],Module,Object),
