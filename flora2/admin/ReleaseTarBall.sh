@@ -54,9 +54,6 @@ files="./flora2/INSTALLATION ./flora2/LICENSE \
     	./flora2/syslib/*.P ./flora2/syslib/*.H ./flora2/syslib/*.sh \
     	./flora2/syslib/Makefile ./flora2/syslib/NMakefile.mak \
     	./flora2/syslibinc/*.flh  \
-    	./flora2/platforms/unix \
-    	./flora2/platforms/windows \
-    	./flora2/platforms/cygwin \
         ./flora2/java "
 
 curdir=`pwd`
@@ -87,9 +84,6 @@ CVS
 *.bak
 *-sv
 *-old
-platforms/unix/*
-platforms/windows/*
-platforms/cygwin/*
 EOF
 
 tar cvf flora2/flora2.tar --exclude-from=$EXCLUDEFILE $files

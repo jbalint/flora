@@ -108,14 +108,17 @@
         is_pratom/2,
         is_pratom/3,
         is_prnumber/1,
+        is_prnumber/3,
 	is_prbuiltin_identifier/2,
 	is_prbuiltin_identifier/3,
         is_prdatatype/4,
 	is_prdatatypelist/2,
         is_prtransactionalnumber/3,
         is_prstring/1,
+        is_prstring/3,
         is_prfact/2,
-	is_prfloralib/3
+	is_prfloralib/3,
+	is_prterm/4
    from flrcoder.
 
 :- import
@@ -136,12 +139,12 @@
 	flora_get_flatom_name/2,
 	flatom_struct/3,
 	flterm_struct/4,
-	flconjunct_struct/3
+	flconjunct_struct/3,
+	flthismodule_struct/1
    from flrparser.
 
 :- import
-	%%flora_modular_prolog_registry/2,
-	flora_used_udf_registry/5
+	flora_used_udf_registry/4
    from flrregistry.
 
 :- import flora_nodefp/2 from flrnodefp.
@@ -178,4 +181,5 @@
 	compiling_error/3,
 	set_production_mode/1,
 	is_fltoken/3,
-	is_flvariable/3.
+	is_flvariable/3,
+	no_errors_found/1.

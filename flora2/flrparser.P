@@ -580,7 +580,7 @@ get_name(OBJECT(QUOTED_ATOM(Name),I),Name,I) :- !.
 get_name(OBJECT(BUILTIN_IDENTIFIER(Name),I),Name,I) :- !.
 
 is_variable(OBJECT(VARIABLE(Name),I),Name,I).
-%%is_anonymous_variable(Obj,I) :- is_variable(Obj,FL_UNDERSCORE,I).
+%%is_anonymous_variable(Obj,I) :- is_variable(Obj,FL_ANON_VAR,I).
 
 get_flname_struct(OBJECT(IDENTIFIER(Name),I),FLATOM(Name,I))  :- !.
 get_flname_struct(OBJECT(QUOTED_ATOM(Name),I),FLATOM(Name,I)) :- !.
@@ -914,10 +914,10 @@ get_fltransactionalvar_struct(OBJECT(TRANSACTIONAL_VARIABLE(Name),I),FLTRANSACTI
 is_flvar_struct(FLVAR(_Name,_I)).
 is_flvar_struct(FLVAR(Name,I),Name,I).
 is_fltransactionalvar_struct(FLTRANSACTIONALVAR(_Name,_I)).
-is_anonymous_flvar_struct(FLVAR(FL_UNDERSCORE,_I)).
-is_anonymous_flvar_struct(FLVAR(FL_UNDERSCORE,I),I).
-is_anonymous_fltransactionalvar_struct(FLTRANSACTIONALVAR(FL_UNDERSCORE,_I)).
-is_anonymous_fltransactionalvar_struct(FLTRANSACTIONALVAR(FL_UNDERSCORE,I),I).
+is_anonymous_flvar_struct(FLVAR(FL_ANON_VAR,_I)).
+is_anonymous_flvar_struct(FLVAR(FL_ANON_VAR,I),I).
+is_anonymous_fltransactionalvar_struct(FLTRANSACTIONALVAR(FL_ANON_VAR,_I)).
+is_anonymous_fltransactionalvar_struct(FLTRANSACTIONALVAR(FL_ANON_VAR,I),I).
 
 %% In a list, Front is the part before | and Tail the part after |
 %% For instance, in [a,b|[c,d]], front=[flatom(a,9),flatom(b,11)]
@@ -1060,12 +1060,12 @@ flmodule_struct(Goal,Name,PROLOGMODULE,FLPLIB(Goal,Name)). :- !.
 flmodule_struct(Goal,Name,PROLOGALLMODULE,FLPLIBALL(Goal,Name)). :- !.
 
 %% code for _@ workspace
-%%thismodule_struct(FLORAUSERMOD(FLTOKEN(FL_THISMODULE,NO_INDEX))).
+flthismodule_struct(FLTOKEN(FL_THISMODULE,NO_INDEX)).
 
 %% Encoding module specs of the form @_prolog() and @_prologall()
 %% Takes a goal and protects it against hilog conversion
-flplib_struct(Goal,FLPLIB(Goal)) :- !.
-flpliball_struct(Goal,FLPLIBALL(Goal)) :- !.
+flplib_struct(Goal,FLPLIB(Goal)).
+flpliball_struct(Goal,FLPLIBALL(Goal)).
 
 fldelayedliteral_struct(Op,Args,FLDELAYEDLITERAL(Op,Args)).
 %%fldelayedliteral_struct(Op,Args,Mod,FLDELAYEDLITERAL(Op,Args,Mod)).
@@ -4555,7 +4555,7 @@ parse_body_literal_template(CANOLIST([Term],[],_N,I,_Ib),Code,Status) :-
             )
         ).
 
-%% standalone %? is not allowed
+%% a stand-alone %? is not allowed
 parse_body_literal_template(CanoniTerm,_Code,Status) :-
 	fltransactionalobject_struct(CanoniTerm,C),
 	is_fltransactionalvar_struct(C),
@@ -5083,6 +5083,10 @@ parse_prlgterm(CanoniTerm,_DWS,Code,[]) :-
 	get_flname_struct(CanoniTerm,Code),
 	!.
 
+parse_prlgterm(CanoniTerm,_DWS,Code,[]) :-
+	get_flbuiltin_identifier_struct(CanoniTerm,Code),
+	!.
+
 parse_prlgterm(CanoniTerm,_DWS,_Code,Status) :-
 	parsing_error(CanoniTerm,ERROR_PRLGLIT,Status).
 
@@ -5437,8 +5441,7 @@ parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_TransFlag,DWS,
 	!,
 	parse_body_pathexplist(Args,DWS,[LCode,RCode],Status),
 	( Status == NO_ERRORS ->
-	    ( is_birelop(F) ->
-		flbirelate_struct(LCode,F,RCode,Code)
+	    ( is_birelop(F) -> flbirelate_struct(LCode,F,RCode,Code)
 	    ; 
 	      flobjref_struct(LCode,F,RCode,Code)
 	    )
@@ -5543,12 +5546,15 @@ parse_body_pathexp(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code,Sta
 	!,
 	parse_aggregt(Funct,N,Args,If,Ip,DWS,Code,Status).
 
+/*
+%% We now allow _# in the body: it is a test if the arg matches a Skolem
 parse_body_pathexp(ObjectTerm,_TransFlag,_DWS,_Code,Status) :-
-	%% New oid directive is only allowed in rule heads or reified formulas.
+	%% New oid symbol is only allowed in rule heads or reified formulas.
 	get_spectoken(ObjectTerm,FL_NEWOID),
 	\+ has_context(reifying),
 	!,
 	parsing_error(ObjectTerm,ERROR_NEWOID,Status).
+*/
 
 parse_body_pathexp(ObjectTerm,_TransFlag,_DWS,Code,[]) :-
 	flobject_struct(ObjectTerm,Code),
@@ -6118,8 +6124,7 @@ parse_head_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
 
 parse_head_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
 	parse_head_pathexp(Funct,TransFlag,DWS,F,S),
-	( S == NO_ERRORS ->
-	    parse_head_pathexplist(Args,DWS,AList,Status),
+	( S == NO_ERRORS -> parse_head_pathexplist(Args,DWS,AList,Status),
 	    (Status == NO_ERRORS -> 
                 ( is_fltransactionalterm_struct(F) ->
                     fltransactionalterm_struct(F,N,AList,Code)
@@ -6180,6 +6185,15 @@ parse_head_argpathexplist([T|L],[FL_BODYFORMULA|Arguments],DWS,[RTCode|LCode],St
 	  Status = S
         ).
 
+%% treat arithmetics in rule head as a normal term
+parse_head_argpathexplist([T|L],[FL_ARITH|Arguments],DWS,[TCode|LCode],Status) :-
+	parse_head_pathexp(T,DISALLOW_TRANS,DWS,TCode,S),
+	( S == NO_ERRORS ->
+	    parse_head_argpathexplist(L,Arguments,DWS,LCode,Status)
+	;
+	  Status = S
+        ).
+
 
 /****************************************************************************
   parse_head_pathexplist(+ListOfCanoniTerms,+DWS,-ListOfPathExpressions,-Status)
@@ -6203,16 +6217,14 @@ parse_head_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),TransFlag,DWS,Co
 	!,
 	( is_birelop(F) ->
 	    parse_head_pathexplist(Args,DWS,[LCode,RCode],Status),
-	    ( Status == NO_ERRORS ->
-		    flbirelate_struct(LCode,F,RCode,Code)
+	    ( Status == NO_ERRORS -> flbirelate_struct(LCode,F,RCode,Code)
 	    ;
 	      true
 	    )
 
 	; is_objrefop(F) -> 
 	    parse_head_pathexplist(Args,DWS,[LCode,RCode],Status),
-	    ( Status == NO_ERRORS ->
-		    flobjref_struct(LCode,F,RCode,Code)
+	    ( Status == NO_ERRORS -> flobjref_struct(LCode,F,RCode,Code)
 	    ;
 	      true
 	    )
@@ -6223,13 +6235,12 @@ parse_head_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),TransFlag,DWS,Co
 	    %%parse_reify(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,Ip),DWS,Code,Status)
 	    parsing_error(If,NO_WSINRULEHEAD,Status)
 
-	; is_curi_op(F) ->
-	    parse_curi(Args,TransFlag,DWS,Code,Status)
+	; is_curi_op(F) -> parse_curi(Args,TransFlag,DWS,Code,Status)
 
-	; is_datatypeop(F) ->
-	    parse_composer_datatype(Args,If,DWS,Code,Status)
+	; is_datatypeop(F) -> parse_composer_datatype(Args,If,DWS,Code,Status)
 	    
-	; parse_head_term(Funct,2,Args,TransFlag,DWS,Code,Status)
+	;
+	    parse_head_term(Funct,2,Args,TransFlag,DWS,Code,Status)
         ).
 
 parse_head_pathexp(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,Code,Status) :-
@@ -6371,7 +6382,8 @@ parse_head_attmethspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),DWS,Code,St
 		        get_index(R,Ind),
 			emptyterm_struct(Ind,RCode),
 			Status = NO_ERRORS
-		    ;  parse_head_pathexp(R,DISALLOW_TRANS,DWS,RCode,Status)
+		    ; 
+			parse_head_pathexp(R,DISALLOW_TRANS,DWS,RCode,Status)
 		    )
 		 ; Status = S1
 		 ),

@@ -51,9 +51,6 @@ files=" \
     	./flora2/syslib/*.xwam ./flora2/syslib/*.sh \
     	./flora2/syslib/Makefile ./flora2/syslib/NMakefile.mak \
     	./flora2/syslibinc/*.flh  \
-    	./flora2/platforms/unix \
-    	./flora2/platforms/windows \
-    	./flora2/platforms/cygwin \
     	./flora2/binary-distribution.txt \
         ./flora2/java "
 
@@ -85,9 +82,6 @@ CVS
 *.bak
 *-sv
 *-old
-platforms/unix/*
-platforms/windows/*
-platforms/cygwin/*
 EOF
 
 touch flora2/binary-distribution.txt

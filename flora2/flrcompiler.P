@@ -37,6 +37,8 @@
 #define NEWDONTCAREVAR	       	 newdontcarevar
 #define NEWEXISTENTIALVAR      	 newexistentialvar
 #define NEWCALLERVAR	       	 newcallervar
+#define SKOLEMSYMVAR	       	 skolemsymvar
+#define NEWUDFPREDVAR	         newudfpredvar
 #define NEWPREDICATE_COUNTER   	 '_$$''''global_newpredicate_counter'
 #define NEWPREDICATE_SYM       	 '_$$''''newpredicate'
 #define NEWOID                   FL_NEWOID_SYM
@@ -66,8 +68,6 @@
 :- dynamic COMPILATION_CONTEXT(_).
 :- index(COMPILATION_CONTEXT/1,trie).
 :- dynamic DYNRULE_VARLIST(_,_).
-:- dynamic user_defined_function_var_substitute(_,_,_,_,_).
-:- index(user_defined_function_var_substitute/5,2+1).
 :- dynamic symbol(_,_,_,_,_,_,_).
 :- dynamic nowarn_symbol(_,_,_,_,_).
 :- dynamic BODYVARS_PREDICATE/1.
@@ -90,7 +90,7 @@ is_fludfunctionfact(FLUDFFACT(Function,Value),Function,Value).
 %% udfunction_struct causes flrcoder.P to record UDF definitions in the registry
 %% so that we could abolish all new_udf_predicate_XXX on reloading modules. This
 %% is done in flora_cleanup_udf/1, which is called from flrutils:flora_flload/2
-udfunction_struct(Name,N,Args,PredName,PredStruct,ReturnValue,PRUDFDEFINITION(Name,N,Args,PredName,PredStruct,ReturnValue)).
+udfunction_struct(Name,N,UDFCode,PredName,PredCode,PRUDFDEFINITION(Name,N,UDFCode,PredName,PredCode)).
 
 is_fludfsymbol(FLUDFSYM(ParserTerm),ParserTerm).
 is_flsensorsymbol(FLSENSORSYM(ParserTerm),ParserTerm).
@@ -168,6 +168,7 @@ is_flfloralib(FLFLORALIB(Mod), Mod).
 %% @_prolog(M) and @_prolog
 is_flplib(FLPLIB(P,M),P,M).
 is_flplib(FLPLIB(P),P).
+flplib_struct(Goal,FLPLIB(Goal)).       %% from the parser
 %% @_prologall and @_prologall(module)
 %% Make sure the coder writes P2H_PREDICATE/4 as prolog
 is_flpliball(FLPLIBALL(P),P) :-
@@ -333,7 +334,7 @@ is_flbuiltin_identifier(FLBUILTIN_IDENTIFIER(Builtin,_I),Builtin).
 is_flbuiltin_identifier(FLBUILTIN_IDENTIFIER(Builtin,I),Builtin,I).
 
 is_flvariable(FLVAR(Name,Index),Name,Index).
-is_anonymous_flvariable(FLVAR(FL_UNDERSCORE,I),I).
+is_anonymous_flvariable(FLVAR(FL_ANON_VAR,I),I).
 is_fltransactionalvariable(FLTRANSACTIONALVAR(Name,Index),Name,Index).
 is_fllist(FLLIST(L,T,I),L,T,I).
 
@@ -610,7 +611,7 @@ naf_struct_prolog(Goal,PRPLGNAF(Goal)).
 %% naf
 pure_naf_struct_flora(Goal,FreeVars,PRSILKNAF(WrappedGoal,FreeVars,Line,CurrFileName)) :-
 	code_line_and_file_by_prterm(Goal,Line,CurrFileName),
-	modularized_atom_struct(FL_TABLED_UNNUMBER_CALL,NO_INDEX,FunCode),
+	modularized_pratom_struct(FL_TABLED_UNNUMBER_CALL,NO_INDEX,FunCode),
 	prologterm_struct(FunCode,1,[Goal],WrappedGoal).
 %% We can optimize this by passing free variables list. If the list is empty,
 %% we won't delay
@@ -679,23 +680,23 @@ neg_struct(Goal,Idx,_,[Err]) :-
 neg_struct(Goal,_Idx,Code,[]) :-
 	(  workspace_struct(L,WS,Goal),
 	    is_prologterm(L,Struct,Arity,Args),
-	    is_modularized_atom(Struct,Atom,Idx),
+	    is_modularized_pratom(Struct,Atom,Idx),
 	    (is_pratom(WS,Mod,_) ; is_prbuiltin_identifier(WS,Mod,_))
 	->
 	    %% to check if this is a negatable prolog, reduce arity by 1:
 	    %% modularized prolog has one extra caller argument
 	    Arity1 is Arity-1,
 	    flora_negatable_prlgdef(Atom,Arity1,NegAtm),
-	    modularized_atom_struct(NegAtm,Mod,Idx,FCode),
+	    modularized_pratom_struct(NegAtm,Mod,Idx,FCode),
 	    prologterm_struct(FCode,Arity,Args,Code)
 	; is_prologterm(Goal,Struct,Arity,Args),
-	    is_modularized_atom(Struct,Atom,Idx)
+	    is_modularized_pratom(Struct,Atom,Idx)
 	->
 	    %% to check if this is a negatable prolog, reduce arity by 1:
 	    %% modularized prolog has one extra caller argument
 	    Arity1 is Arity-1,
 	    flora_negatable_prlgdef(Atom,Arity1,NegAtm),
-	    modularized_atom_struct(NegAtm,Idx,FCode),
+	    modularized_pratom_struct(NegAtm,Idx,FCode),
 	    prologterm_struct(FCode,Arity,Args,Code)
 	).
 
@@ -746,12 +747,12 @@ head_neg_struct(Goal,Idx,Code,Status) :-
 
 head_neg_struct(Goal,_Idx,NegGoal,[]) :-
 	is_prologterm(Goal,Struct,Arity,Args),
-	is_modularized_atom(Struct,Atom,Idx),
+	is_modularized_pratom(Struct,Atom,Idx),
 	%% to check if this is a negatable prolog, reduce arity by 1:
 	%% modularized prolog has one extra caller argument
 	Arity1 is Arity-1,
 	flora_negatable_prlgdef(Atom,Arity1,NegAtm),
-	modularized_atom_struct(NegAtm,Idx,FCode),
+	modularized_pratom_struct(NegAtm,Idx,FCode),
 	prologterm_struct(FCode,Arity,Args,NegGoal),
 	!.
 head_neg_struct(Goal,_Idx,PRNEG(Goal),[]) :-
@@ -823,18 +824,25 @@ conjunct_code([Goal|GList],ConjGoal) :-
 ****************************************************************************/
 %% atomobj_struct/2
 atomobj_struct(FLATOM(Atm,I),PRATOM(Atm,I)) :- !.
+atomobj_struct(FLBUILTIN_IDENTIFIER(Atm,I),PRATOM(Atm,I)) :- !.
+%%atomobj_struct(FLMODULARIZEDATOM(Atm,I),PRMODULARIZEDATOM(Atm,I)) :- !.
 atomobj_struct(Atm,PRATOM(Atm,NO_INDEX)) :- atomic(Atm).
 %% atomobj_struct/3
 atomobj_struct(Atm,Index,PRATOM(Atm,Index)).
 
 %% A prolog atom that has FLORA-2 prefix and workspace in it.
 %% This one is for THIS_WORKSPACE
-modularized_atom_struct(Atom,Idx,PRMODULARIZEDATOM(Atom,Idx)).
+modularized_pratom_struct(Atom,Idx,PRMODULARIZEDATOM(Atom,Idx)).
 %%  Mod is expected to be an atom
-modularized_atom_struct(Atom,Mod,Idx,PRMODULARIZEDATOM(Atom,Mod,Idx)).
+modularized_pratom_struct(Atom,Mod,Idx,PRMODULARIZEDATOM(Atom,Mod,Idx)).
 
-is_modularized_atom(PRMODULARIZEDATOM(Atom,Idx),Atom,Idx) :- !.
-is_modularized_atom(PRMODULARIZEDATOM(Atom,_Mod,Idx),Atom,Idx) :- !.
+%%modularized_flatom_struct(Atom,Idx,FLMODULARIZEDATOM(Atom,Idx)).
+
+is_modularized_pratom(PRMODULARIZEDATOM(Atom,Idx),Atom,Idx) :- !.
+is_modularized_pratom(PRMODULARIZEDATOM(Atom,_Mod,Idx),Atom,Idx) :- !.
+
+%%is_modularized_flatom(FLMODULARIZEDATOM(Atom,Idx),Atom,Idx).
+
 scrambled_atom_struct(Atom,Idx,Struct) :-
 	flora_scramble_atom(Atom,ScrambledA),
 	atomobj_struct(ScrambledA,Idx,Struct).
@@ -851,7 +859,7 @@ atomlit_struct(Context,FLATOM(Atom,I),Code) :-
 	flora_modular_prlgdef(Atom,0),
 	!,
 	splice_in_caller_argument(Context,[],Args),
-	modularized_atom_struct(Atom,I,FunCode),
+	modularized_pratom_struct(Atom,I,FunCode),
 	prologterm_struct(FunCode,1,Args,Code).
 atomlit_struct(_Context,FLATOM(Atom,I),Code) :-
 	flora_prlgdef(Atom,0,Mod),
@@ -872,7 +880,7 @@ atomlit_struct(Context,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
 	flora_modular_prlgdef(Atom,0),
 	!,
 	splice_in_caller_argument(Context,[],Args),
-	modularized_atom_struct(Atom,I,FunCode),
+	modularized_pratom_struct(Atom,I,FunCode),
 	prologterm_struct(FunCode,1,Args,Code).
 atomlit_struct(_Context,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
 	flora_prlgdef(Atom,0,Mod),
@@ -929,13 +937,13 @@ datatypeobj_struct(FLDATATYPE(Type,Lit,Idx),
 	(is_flvariable(Lit,VarName,VarIdx)
 	->  add_underscore(VarName,InDataTypeVarName),
 	    varobj_struct(InDataTypeVarName,VarIdx,LitCode),
-	    OutIdx = VarIdx, Status = []
+	    OutIdx = VarIdx, Status = NO_ERRORS
 	; is_fldatatypelist(Lit,ListOfLits)
 	-> compile_datatype_list(ListOfLits,LitCode0,Status),
 	    datatypelistobj_struct(LitCode0,LitCode),
 	    OutIdx=Idx
 	;
-	    LitCode = Lit, OutIdx=Idx, Status = []
+	    LitCode = Lit, OutIdx=Idx, Status = NO_ERRORS
 	).
 datatypeobj_struct(FLTRANSACTIONALPREDSPEC(DTspec),Code,Status) :-
 	!,
@@ -1105,7 +1113,7 @@ termlit_struct(Context,FObj,N,ObjList,Code) :-
 	!,
 	splice_in_caller_argument(Context,ObjList,Args),
 	N1 is N+1,
-	modularized_atom_struct(AtomName,Idx,FunCode),
+	modularized_pratom_struct(AtomName,Idx,FunCode),
 	prologterm_struct(FunCode,N1,Args,Code).
 
 %% for things that have prolog name replacement
@@ -1218,16 +1226,16 @@ attach_workspace(WS,Generator,GeneratorCode,WSCode,Status) :-
 		Status = [Err]
 	    ;
 		workspacelit_struct(GeneratorCode,WS,WSCode),
-		Status = []
+		Status = NO_ERRORS
 	    )
 	;   is_prologterm(GeneratorCode) ->
 	    %% If prolog term occurs under the scope of a FLORA-2 module, 
 	    %% ignore the module
 	    WSCode = GeneratorCode,
-	    Status = []
+	    Status = NO_ERRORS
 	;
 	    workspacelit_struct(GeneratorCode,WS,WSCode),
-	    Status = []
+	    Status = NO_ERRORS
 	),
 	!.
 
@@ -1319,11 +1327,11 @@ is_prologterm(Term)    :- is_prologterm(Term,_,_,_,_).
 
 is_modularizedprologterm(Term) :-
 	is_prologterm(Term,Fun,_N,_Args),
-	is_modularized_atom(Fun,_,_).
+	is_modularized_pratom(Fun,_,_).
 
 prologterm_atom_arity(Term,Atom,Arity) :-
 	is_prologterm(Term,Struct,Arity,_),
-	is_modularized_atom(Struct,Atom,_).
+	is_modularized_pratom(Struct,Atom,_).
 prologterm_atom_arity(Term,Atom,Arity) :- is_prologterm(Term,Atom,Arity,_), !.
 prologterm_atom_arity(Term,Atom,Arity) :- is_prologterm(Term,Atom,Arity,_,_).
 
@@ -1387,7 +1395,7 @@ throw_struct(Error,Code) :-
 
 %% true{...}, false{...}, unknown{...}. Opname is FL_TRUE, FL_FALSE, FL_UNKNOWN
 truthvalue_struct(Formula,Opname,Code) :-
-	modularized_atom_struct(FL_TRUTHVALUE_TABLED_CALL,NO_INDEX,FunCode),
+	modularized_pratom_struct(FL_TRUTHVALUE_TABLED_CALL,NO_INDEX,FunCode),
 	prologterm_struct(FunCode,1,[Formula],WrappedFormula),
 	florasyslib_struct(FLLIBTRUTHVALUE,2,[WrappedFormula,Opname],Code).
 
@@ -1812,6 +1820,16 @@ is_default_ruleid(LabObj) :-
 
 
 /****************************************************************************
+  flora_reset_newudfpredvar/0
+  flora_newudfpredvar_obj(+VarPrefix,+Index,-CompiledVarObj)
+****************************************************************************/
+flora_reset_newudfpredvar :- flora_set_counter(NEWUDFPREDVAR,1).
+
+flora_newudfpredvar_obj(Index,VarObj) :-
+	flora_increment_counter(NEWUDFPREDVAR,1,OldVal,_NewVal),
+	varobj_struct(OldVal,Index,VarObj).
+
+/****************************************************************************
   flora_reset_newvar/0
   flora_new_varobj(+VarPrefix,+Index,-CompiledVarObj)
   new_prvariable(+Index,-CompiledVarObj)
@@ -1839,10 +1857,13 @@ new_caller_prvariable(Index,VarObj) :-
 	flora_new_varobj(NEWCALLERVAR,Index,VarObj).
 new_existential_prvariable(Index,VarObj) :-
 	flora_new_varobj(NEWEXISTENTIALVAR,Index,VarObj).
-
 %% creates new transactional variable
 new_dontcare_prtransactionalvar(Index,VarObj) :-
 	flora_new_transactionalvarobj(NEWDONTCAREVAR,Index,VarObj).
+
+prvariable_for_numbered_skolem(Index,SkolemNumber,VarObj) :-
+	flora_concat_items([SKOLEMSYMVAR,SkolemNumber],Name),
+	varobj_struct(Name,Index,VarObj).
 
 
 new_prvarlist(0,[]) :- !.
@@ -1852,7 +1873,7 @@ new_prvarlist(N,[VarObj|L]) :-
 	M is N-1,
 	new_prvarlist(M,L).
 
-new_flvariable(Index,FlVar) :-
+new_flvariable(Index,FlVar,NewPrvar) :-
 	new_prvariable(Index,NewPrvar),
 	prvar_to_flvar_struct(NewPrvar,FlVar).
 
@@ -1869,7 +1890,7 @@ new_oidobj(Index,OidObject) :-
 	newoid_struct(Name,Index,OidObject).
 
 /*************************************************************************
-  new_oidobj(+RuleNum,+OidNumStr,+Index,-OidObject) :-
+  new_oidobj(+RuleNum,+OidNumStr,+Index,-OidObject)
 *************************************************************************/
 new_oidobj(RuleNum,OidNumStr,Index,OidObject) :-
 	( ruleoid(OidNumStr,_,Count)
@@ -1883,6 +1904,19 @@ new_oidobj(RuleNum,OidNumStr,Index,OidObject) :-
 	flora_term_to_atom(RuleNum,RuleNumAtm),
         flora_concat_atoms([NEWOID,RuleNumAtm,'|',OidNumStr],Name),
 	newoid_struct(Name,Index,OidObject).
+
+/*************************************************************************
+  new_dynoidobj(+Index,-OidObject)
+  new_dynoidobj(+OidNumStr,+Index,-OidObject)
+  These generate dynamic new oids for use in the shell
+*************************************************************************/
+new_dynoidobj(Index,OidObject) :-
+	gensym:gensym(FL_NEWOID_DYNSYM,Name),
+	newoid_struct(Name,Index,OidObject).
+new_dynoidobj(OidNumStr,Index,OidObject) :-
+	flora_concat_atoms([FL_NEWOID_DYNSYM,'|',OidNumStr],Name),
+	newoid_struct(Name,Index,OidObject).
+	
 
 
 clear_ruleoid :- flora_retractall_substitute(ruleoid(_,_,_)).
@@ -2107,7 +2141,7 @@ subtract_vars([H|T],L,Res) :-
 	!,
 	subtract_vars(T,L,V),
 	!,
-	(N \== FL_UNDERSCORE, memberchk(X,L) -> Res = V
+	(N \== FL_ANON_VAR, memberchk(X,L) -> Res = V
 	; Res = [H|V]
 	),
 	!.
@@ -2126,7 +2160,7 @@ subtract_varnames_from_vars([H|T],L,Res) :-
 	(var(T) -> V = T
 	; subtract_varnames_from_vars(T,L,V)
 	),
-	(N \== FL_UNDERSCORE, memberchk(N,L) -> Res = V
+	(N \== FL_ANON_VAR, memberchk(N,L) -> Res = V
 	; Res = [H|V]
 	),
 	!.
@@ -2145,7 +2179,7 @@ vars_contains([H1|T1],[H2|T2]) :-
 	; is_prtransactionalvariable(H1,N,_), is_prtransactionalvariable(H2,N,_)
 	),
 	!,
-	N \== FL_UNDERSCORE,
+	N \== FL_ANON_VAR,
 	vars_contains(T1,T2).
 
 
@@ -2158,8 +2192,8 @@ vars_contains([H1|T1],[H2|T2]) :-
 /*
 remove_fldontcare_vars([],[]) :- !.
 remove_fldontcare_vars([H|T1],T2) :-
-	( is_flvariable(H,FL_UNDERSCORE,_I)
-	; is_fltransactionalvariable(H,FL_UNDERSCORE,_I)
+	( is_flvariable(H,FL_ANON_VAR,_I)
+	; is_fltransactionalvariable(H,FL_ANON_VAR,_I)
 	),
 	!,
 	remove_fldontcare_vars(T1,T2).
@@ -2220,8 +2254,8 @@ indexvars([],[]) :- !.
 indexvars([T|L],Vars) :-
 	(is_flvariable(T,Name,I) ; is_fltransactionalvariable(T,Name,I)),
 	!,
-	( %%flora_match_substring(FL_UNDERSCORE,Name,0)
-	  flratom_char_code(Name,0,CH_UNDERSCORE)
+	( %%flora_match_substring(FL_ANON_VAR,Name,0)
+	    flratom_char_code(Name,0,CH_ANON_VAR)
 	-> indexvars(L,Vars)
 	;
           Vars=[I-Name|Vs],
@@ -2259,8 +2293,8 @@ namevars([Index-Name|L],[NV|NVs]) :-
 singleton_flvars([],[]) :- !.
 
 singleton_flvars([V|L],[V|Vs]) :-
-	( is_flvariable(V,FL_UNDERSCORE,_I)
-	; is_fltransactionalvariable(V,FL_UNDERSCORE,_I)
+	( is_flvariable(V,FL_ANON_VAR,_I)
+	; is_fltransactionalvariable(V,FL_ANON_VAR,_I)
 	),
 	!,
 	singleton_flvars(L,Vs).
@@ -2310,8 +2344,8 @@ singleton_warning([],WarnList,WarnList).
 singleton_warning([V|L],WarnList,WarnTail) :-
 	(is_flvariable(V,Name,I) ; is_fltransactionalvariable(V,Name,I)),
 	!,
-	( %%flora_match_substring(FL_UNDERSCORE,Name,0)
-	  flratom_char_code(Name,0,CH_UNDERSCORE)
+	( %%flora_match_substring(FL_ANON_VAR,Name,0)
+	  flratom_char_code(Name,0,CH_ANON_VAR)
 	->
 	    singleton_warning(L,WarnList,WarnTail)
 	;
@@ -2334,8 +2368,8 @@ unbound_warning([],WarnList,WarnList,_).
 unbound_warning([V|L],WarnList,WarnTail,WarningMessage) :-
 	(is_flvariable(V,Name,I) ; is_fltransactionalvariable(V,Name,I)),
 	!,
-	( %%flora_match_substring(FL_UNDERSCORE,Name,0)
-	  flratom_char_code(Name,0,CH_UNDERSCORE)
+	( %%flora_match_substring(FL_ANON_VAR,Name,0)
+	  flratom_char_code(Name,0,CH_ANON_VAR)
 	->
 	  unbound_warning(L,WarnList,WarnTail,WarningMessage)
 	;
@@ -2359,7 +2393,7 @@ check_head_vars_for_safety(HeadTermList,BodyTerm,Status) :-
 	subtract_vars(HeadVars,BodyVars,UnboundVars),
 	%% Don't issue the unboundedness var warning for facts
 	(BodyTerm \== [] -> unbound_warning(UnboundVars,WarnTail,[])
-	; var(Status) -> Status=[]
+	; var(Status) -> Status = NO_ERRORS
 	; true
 	),
 	!.
@@ -2378,7 +2412,7 @@ check_udf_vars_for_safety(Function,Predicate,ReturnValue,Status) :-
         subtract_vars(FuncVars,PredVars,UnboundVars),
         %% Don't issue the unboundedness var warning for facts (facts can be defined using function definition)
         (Predicate == NULL
-	-> ( var(Status) -> Status=[] ; true )
+	-> ( var(Status) -> Status = NO_ERRORS ; true )
         ;
             unbound_warning(UnboundVars,WarnTail,[],UNBOUND_UDF_VAR)
         ),
@@ -2918,7 +2952,7 @@ table_option(P/N/_Idx,PMod/N2) :-
 	scrambled_atom_struct(P,NO_INDEX,PMod).
 table_option(P/N/_Idx,PMod/N1) :-
 	N1 is N+1, %% because of the caller argument
-	modularized_atom_struct(P,NO_INDEX,PMod).
+	modularized_pratom_struct(P,NO_INDEX,PMod).
 skip_sensor_spec(P/N/_Idx,_) :-
 	has_permaoption(defsensor(P,N)),
 	!,
@@ -2958,17 +2992,21 @@ compile_direct(DirectTerm,_,[],Status) :-
 	set_permaoptions(PermaOptions).
 
 usefunction_option(FunName/Arity/_Idx,PermaOption) :-
-	new_udf_predicate(FunName,Arity,[],NewArgs,NewPredicate,_NewPredicateOrigArgs,NewPredName,NewPredArity,NewReturnValue),
-	flora_modularize_atom(NewPredName,FLORA_DEFAULT_WORKSPACE,
-			      NewPredNameMod),
-	NewPredArity1 is NewPredArity+1,
-	(\+current_predicate(NewPredNameMod/NewPredArity1),
+	flatom_struct(FunName,NO_INDEX,Funct),
+	new_udf_predicate(Funct,_FunCompiled,FunNameCode,UDFCode,Arity,_,_NewHead,NewHeadPredName,NewHeadPredArity,_NewReturnValue,NewHeadCode,Status),
+	( \+no_errors_found(Status) ->
+	    flora_abort([ERROR_UDF,', ',FunName,'/',Arity],FLORA_ABORT_NOTRACE)
+	; true),
+	flora_modularize_atom(NewHeadPredName,FLORA_DEFAULT_WORKSPACE,
+			      NewHeadPredNameModularized),
+	NewHeadPredArity1 is NewHeadPredArity+1,
+	(\+current_predicate(NewHeadPredNameModularized/NewHeadPredArity1),
 	    compiling_flrshell_command
 	->
 	    %% TODO: convert this to use Status argument rather than abort
 	    flora_abort([ERROR_UDF_WITHOUT_DEFINITION,', ',FunName,'/',Arity],FLORA_ABORT_NOTRACE)
-	; PermaOption = user_defined_function(FunName,Arity,NewArgs,NewPredicate,NewReturnValue),
-	    asserta(flora_used_udf_registry(FunName,Arity,NewArgs,NewPredicate,NewReturnValue))
+	; PermaOption = user_defined_function(FunNameCode,Arity,UDFCode,NewHeadCode),
+	    asserta(flora_used_udf_registry(FunNameCode,Arity,UDFCode,NewHeadCode))
 	).
 	
 
@@ -3064,7 +3102,7 @@ compile_ignoredep_list([H|L],[HCode|LCode],Status) :-
 compile_compiler_options([],[],[]) :- !.
 compile_compiler_options([Opt|Rest],Code,Status) :-
 	compile_compiler_option(Opt,OptCode,S1),
-	(S1 == [] ->
+	(S1 == NO_ERRORS ->
 	    compile_compiler_options(Rest,RestCode,Status),
 	    (OptCode == [] -> Code = RestCode
 	    ; Code = [OptCode|RestCode]
@@ -3076,11 +3114,11 @@ compile_compiler_option(Opt,OptCode,Status) :-
 	( %% suppress trace info due to performance reasons
 	    is_flatom(Opt,FL_PRODUCTION) -> set_production_mode(on),
 	    OptCode = [],
-	    Status = []
+	    Status = NO_ERRORS
 	%% turn devel mode on
 	; is_flatom(Opt,FL_DEVELOPMENT) -> set_production_mode(off),
 	    OptCode = [],
-	    Status = []
+	    Status = NO_ERRORS
 	;  %% Prolog compiler options of the form prolog(opt,opt,...)
 	    is_flplib(Opt,FltermOpt),
 	    is_flterm(FltermOpt,Funct,_N,PrologOptList),
@@ -3182,7 +3220,7 @@ compile_symbol_term(Funct,N,Args,WS,Context,Transactional,Status) :-
 	(symbol_star_argument(Args) ->
 		(N==1 ->
 			add_nowarn_symbol(Name,FL_STAR,WS,Context,Transactional),
-			Status = []
+			Status = NO_ERRORS
 		;
 			approx_flindex(Funct,Index),
 			compiling_error(Index,ERROR_SYMBOL_CONTEXT_STAR_ARG,Err),
@@ -3190,7 +3228,7 @@ compile_symbol_term(Funct,N,Args,WS,Context,Transactional,Status) :-
 		)
 	;
 		add_nowarn_symbol(Name,N,WS,Context,Transactional),
-		Status = []
+		Status = NO_ERRORS
 	).
 
 /****************************************************************************
@@ -3295,7 +3333,7 @@ compile_flfact(Head,RuleDiffList,FactDiffList,MetaFactDiffList,Status) :-
 					    DescrIdCode,DescrVarsTerm,
 					    RuleDiffList,[]),
 		FactDiffList = _F-_F, %% empty fact diff list
-		(has_context(compiling_udf_definition) -> S2 = []
+		(has_context(compiling_udf_definition) -> S2 = NO_ERRORS
 		%% for UDFs, variables are checked separately
 		; check_head_vars_for_safety(Head,[],S2)
 		)
@@ -3346,7 +3384,7 @@ compile_flfact_add(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList
 compile_factlist(FactList,FactListCode,RuleDifferenceList,FactDifferenceList,Status) :-
 	compile_factlist1(FactListCode,RuleDifferenceList,FactDifferenceList),
 	( %% UDF vars are checked elsewhere
-	    has_context(compiling_udf_definition) -> Status = []
+	    has_context(compiling_udf_definition) -> Status = NO_ERRORS
 	; %% check fact vars for safety
 	    collect_flvars(FactList,HeadVars), HeadVars \== []
 	-> %% for facts we can do a fast check for var safety
@@ -3354,7 +3392,7 @@ compile_factlist(FactList,FactListCode,RuleDifferenceList,FactDifferenceList,Sta
 	    singleton_flvars(HeadVars,SingletonVars),
 	    singleton_warning(SingletonVars,S2,[]),
 	    append(S1,S2,Status)
-	;  Status = []
+	;  Status = NO_ERRORS
 	).
 compile_factlist1(NULL,RuleList-RuleList,FactList-FactList) :- !.
 
@@ -3488,7 +3526,6 @@ compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,FactDiffL
      compile_descriptor_list1, so MetaFacts will have unbound variable as arg 2.
      This is what we need for clause{....}
 */
-%% TODO: do not add symbols mentioned in annotations to FLS
 compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFacts-MetaFactsTail,Status) :-
 	flatten(DescriptorList,FlatDescrList),
 	%% First, extract the code for the rule id
@@ -3497,13 +3534,14 @@ compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFac
 		IdParserTermList),
 	!,
 	set_context(no_symbol_check),
+	set_context(compiling_descriptors),
 	(length(IdParserTermList,Len), Len > 1
 	-> IdParserTermList = [_,_-Idx|_],
 	    compiling_error(Idx,MULTIPLE_RULE_IDS,Err),
 	    IdStatus = [Err]
 	; IdParserTermList == [] % no explicit rule id
 	-> construct_default_ruleid_descriptor(Mode,DescrIdCode),
-	    IdStatus = []
+	    IdStatus = NO_ERRORS
 	; IdParserTermList = [[IdParserTerm|_] - Idx],
 	    %% compile Id descriptor here
 	    compile_ruleid_descriptor(IdParserTerm,DescrIdCode,IdStatus)
@@ -3519,10 +3557,10 @@ compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFac
 	%% Generate a var in this case
 	;   new_prvariable(NO_INDEX,DescrVarsTermOut)
 	),
-	(IdStatus == [], Mode \== udfrule
+	(IdStatus == NO_ERRORS, Mode \== udfrule
 	->
 	    determine_defeasibility(FlatDescrList,Mode,DescrIdCode,DescrVarsTermOut,DefeatMetaFact,StatDefeat),
-	    (StatDefeat = [] ->
+	    (StatDefeat = NO_ERRORS ->
 		compile_descriptor_list1(FlatDescrList,Mode,DescrIdCode,DescrVarsTermOut,MetaFacts1-MetaFactsTail,Status),
 		construct_rule_enabling_fact(DescrIdCode,Mode,RuleEnablerFact),
 		%% make the rule id into its tag as well, if no explicit tag
@@ -3546,6 +3584,7 @@ compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFac
 	; Status = IdStatus,
 	    MetaFacts = []
 	),
+	clear_context(compiling_descriptors),
 	clear_context(no_symbol_check).
 
 
@@ -3585,7 +3624,7 @@ determine_defeasibility(FlatDescrList,Mode,DescrIdCode,DescrVarsTerm,DefeatMetaF
 	    compiling_error(Idx,DEFEASIBLE_RULE_BUT_NO_ARGUMENTATION_THEORY,Err),
 	    Status = [Err]
 	; DescrList = [_] -> DefeatMetaFact = NULL, %% already specified
-	    Status = []
+	    Status = NO_ERRORS
 	; memberchk(FLDESCRIPTOR(_,FLTAG,_),FlatDescrList) ->
 	    %% If TAG is given, assume rule is defeasible by default
 	    construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DefeasibleDescr,[DefeatMetaFact|Tail]-Tail,Status)
@@ -3632,7 +3671,7 @@ compile_descriptor(Descriptor,Mode,DescrIdCode,DescrVarsTerm,MetaFactDiffList,St
 	-> construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,MetaFactDiffList,Status)
 	; Type == FLRULEID %% for now we only use the Id part here
 	-> MetaFactDiffList = Meta-Meta, %% we already compiled the Id (= DescrIdCode)
-	    Status = []
+	    Status = NO_ERRORS
 	),
 	!.
 %% already compiled
@@ -3733,7 +3772,7 @@ construct_rule_enabling_fact(DescrIdCode,Mode,RuleEnablerMetaFact) :-
 	).
 
 construct_rule_enabling_test(DescrIdCode,RuleEnablerMetaTerm) :-
-	modularized_atom_struct(FL_RULE_ENABLER,NO_INDEX,PredCode),
+	modularized_pratom_struct(FL_RULE_ENABLER,NO_INDEX,PredCode),
 	generate_prolog_liblit(PredCode,1,[DescrIdCode],RuleEnablerMetaTerm).
 
 construct_tag_descriptor_fact_from_id(DescrIdCode,Mode,DescrVarsTerm,TagIdMetaFact) :-
@@ -3798,7 +3837,7 @@ compile_export_predicate(ExportTerm,Code,Status) :-
 	compile_flfact([ParseBodyTerm],_,ListBodyTermCode,_M-_M,StatusFact),
 	compile_pathexp(ModuleList,ModuleListCode,_,_,_StatusModule),
 	compile_pathexp(IsUpdatable,IsUpdatableCode,_,_,_StatusUpd),
-	( var(WS) -> StatusWS = []
+	( var(WS) -> StatusWS = NO_ERRORS
 	;
 	  compile_pathexp(WS,WSCode,_,_,StatusWS)
 	),
@@ -3854,77 +3893,101 @@ construct_export_struct(TermCode,WSCode,IsUpdatableCode,ModuleListCode,Code) :-
 	).
 
 
-/****************************************************************************
-  compile_user_defined_function_definition(+Function,+Body,+ReturnValue,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-Status)
-
-  Compile a UDF definition. Create a predicate representing the UDF, its rule.
-
-  RuleDiffList is a difference list in the form of [...|T]-T. It is for
-  the optimization of append.
-  FactDiffList is the same for facts
-  MetaFactDiffList empty diff list of meta facts
-  UDFPredsDiffList is the same for the list of tabled predicates
-****************************************************************************/
 %% UDFs are always compiled as STATIC rules, even the facts.
 %% If a file is added to a module and the file has a definition for
 %% the same function, the added UDFs are
 %% represented by the same predicate, so the new definition overrides the old.
 %%  To avoid this error-prone situation, in this case we issue an error.
 %% When overriding a module, we abolish new_udf_predicates_FUN and
-%% retractall flora_defined_udf_registry/4.
+%% retractall flora_defined_udf_registry/6.
+%% Structure of flora_defined_udf_registry/6 args:
+%%
+%%    Module,                 eg,     foobar
+%%    UDF name,               eg,     fib          (say, for Fibonacci numbers)
+%%    Arity of this UDF,              1
+%%    UDF-term (user view)            fib(?_h2819)
+%%    Name of the UDF predicate that defines this UDF,
+%%                            eg,     FLORA_WORKSPACE(new_udf_predicate_fib)
+%%    UDF Literal used to implement this UDF
+%%       eg,    FLORA_WORKSPACE(new_udf_predicate_fib)(_h0,flapply(fib,_h1),_h2)
+%%         
 %% If overriding module FLORA_DEFAULT_WORKSPACE, we also
-%% retractall flora_used_udf_registry/5.
+%% retractall flora_used_udf_registry/4.
+%% Structure of flora_used_udf_registry/4 args:
+%%
+%%    UDF name,
+%%    Arity of this UDF,
+%%    UDF-term (user view)
+%%    UDF Literal used to implement this UDF
 
+/****************************************************************************
+  compile_user_defined_function_definition(+Function,+Body,+ReturnValue,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-Status)
+
+  Compile a UDF definition:
+  function Function := if Body.
+  Creates a predicate representing the UDF and a rule for that predicate.
+
+  Function - udf term
+  Body - body of udf definition
+  ReturnValue - return expression
+  RuleDiffList - a difference list in the form of [...|T]-T. It is for
+                  the optimization of append.
+  FactDiffList - the same for facts
+  UDFPredsDiffList -  the same for the list of tabled predicates
+****************************************************************************/
 compile_user_defined_function_definition(Function,Body,ReturnValue,CodeList-ListTail,FactDiffList,UDFPreds-UDFPredsTail,Status) :-
 	set_context(compiling_udf_definition),
-	( is_flterm_or_flatom(Function,Funct,N,Args),
-	    flora_get_flatom_name(Funct,Name) ->
-	    new_udf_predicate(Name,N,Args,NewArgs,NewPredicate,NewPredicateOrigArgs,NewPredName,NewPredArity,NewReturnValue),
-	    ( \+ has_permaoption(user_defined_function(Name,N,_,_,_)) ->
-		%% +1 for the caller argument
-		NewPredArity1 is NewPredArity+1,
-		UDFPreds = [(NewPredName,NewPredArity1),UDFPredsTail],
-		set_permaoption(user_defined_function(Name,N,NewArgs,NewPredicate,NewReturnValue))
+	( is_flterm_or_flatom(Function,Funct,N,Args)->
+	    new_udf_predicate(Funct,FunctCompiled,FunctName,UDFCode,N,Args,NewHead,NewHeadPredName,NewHeadPredArity,NewReturnValue,NewHeadCode,FStatus),
+	    ( no_errors_found(FStatus) -> 
+		( \+ has_permaoption(user_defined_function(FunctName,N,UDFCode,NewHeadPredName,NewHeadCode)) ->
+		    %% +1 for the caller argument
+		    NewHeadPredArity1 is NewHeadPredArity+1,
+		    UDFPreds = [(NewHeadPredName,NewHeadPredArity1),UDFPredsTail],
+		    set_permaoption(user_defined_function(FunctName,N,UDFCode,NewHeadPredName,NewHeadCode))
+		;
+		    UDFPreds = UDFPredsTail
+		),
+		compile_descriptor_list([],udfrule,DescrIdCode,DescrVarsTerm,_,_),
+		( Body=NULL ->
+		    %% UDFs are always compiled as rules: add a dummy body
+		    flatom_struct(FL_TRUE,NO_INDEX,RealBody),
+		    new_udfrule_body(RealBody,FunctIndex,
+				     ReturnValue,NewReturnValue,NewBody),
+		    %% empty descr list - just generate new rule id
+		    compile_rule([NewHead],NewBody,
+				 DescrIdCode, DescrVarsTerm,
+				 RuleList-ListTail,FactDiffList,S)
+		;
+		    approx_flindex(Funct,FunctIndex),
+		    new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody),
+		    %% empty descr list - just generate new rule id
+		    compile_rule([NewHead],NewBody,
+				 DescrIdCode, DescrVarsTerm,
+				 RuleList-ListTail,FactDiffList,S)
+		),
+		CodeList=[UDFCodeList|RuleList],
+		( no_errors_found(S) -> 
+		    %% udfunction_struct causes flrcoder.P to record UDF
+		    %% definitions in the registry so that we could abolish all
+		    %% new_udf_predicate_XXX on reloading modules.
+		    %% This is done in flora_cleanup_udf/1, which is called
+		    %% from flrutils:flora_flload/2
+		    udfunction_struct(FunctCompiled,N,UDFCode,NewHeadPredName,NewHeadCode,UDFCodeList),
+		    %% is_flterm_or_flatom rather than is_flterm is important:
+		    %% Otherwise, "function foo := moo." won't work.
+		    is_flterm_or_flatom(Function,FuncSym,FuncSymArity,_),
+		    verify_symbol_context(FuncSym,FuncSymArity,UDF_SYMBOL,
+					  NONTRANSACTIONAL_SYMBOL,
+					  SymbolStatus),
+		    check_udf_vars_for_safety(Function,Body,ReturnValue,VarStatus),
+		    append(SymbolStatus,VarStatus,Status)
+		;
+		    Status=S
+		)
 	    ;
-		UDFPreds = UDFPredsTail
-	    ),
-	    compile_descriptor_list([],udfrule,DescrIdCode,DescrVarsTerm,_,_),
-	    ( Body=NULL ->
-		%% UDFs are always compiled as rules: add a dummy body
-		flatom_struct(FL_TRUE,NO_INDEX,RealBody),
-		new_udfrule_body(RealBody,FunctIndex,
-				 ReturnValue,NewReturnValue,NewBody),
-		%% empty descr list - just generate new rule id
-		compile_rule([NewPredicateOrigArgs],NewBody,
-			     DescrIdCode, DescrVarsTerm,
-			     RuleList-ListTail,FactDiffList,S)
-	    ;
-		approx_flindex(Funct,FunctIndex),
-		new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody),
-		%% empty descr list - just generate new rule id
-		compile_rule([NewPredicateOrigArgs],NewBody,
-			     DescrIdCode, DescrVarsTerm,
-			     RuleList-ListTail,FactDiffList,S)
-	    ),
-	    CodeList=[UDFCodeList|RuleList],
-	    ( no_errors_found(S) -> 
-		%% udfunction_struct causes flrcoder.P to record UDF definitions
-		%% in the registry so that we could abolish all
-		%% new_udf_predicate_XXX on reloading modules.
-		%% This is done in flora_cleanup_udf/1, which is called
-		%% from flrutils:flora_flload/2
-		udfunction_struct(Name,N,NewArgs,NewPredName,NewPredicate,NewReturnValue,UDFCodeList),
-		%% is_flterm_or_flatom rather than is_flterm is important:
-		%% Otherwise, "function foo := moo." won't work.
-		is_flterm_or_flatom(Function,FuncSym,FuncSymArity,_),
-		verify_symbol_context(FuncSym,FuncSymArity,UDF_SYMBOL,
-					      NONTRANSACTIONAL_SYMBOL,
-					      SymbolStatus),
-		check_udf_vars_for_safety(Function,Body,ReturnValue,VarStatus),
-		append(SymbolStatus,VarStatus,Status)
-	    ;
-		Status=S
-	    )
+		Status = FStatus
+	   )
 	;
 	    %%CodeList=ListTail,
 	    approx_flindex(Function,Index),
@@ -3934,24 +3997,70 @@ compile_user_defined_function_definition(Function,Body,ReturnValue,CodeList-List
 	!,
 	clear_context(compiling_udf_definition).
 
-new_udf_args(0,[]):-!.
-new_udf_args(N,[Var|NewArgs]):-
-	N>0,
-	new_flvariable(NO_INDEX,Var),
-	N1 is N-1,
-	new_udf_args(N1,NewArgs).
 
-new_udf_predicate(Name,N,OrigArgs,Args,NewPredicateCode,NewPredicateOrigArgs,NPName,NPN,NewReturnValue):-
-	new_udf_predicate_funct(Name,N,NPFunct,NPName,NPN),
-	new_flvariable(NO_INDEX,NewReturnValue),
-	new_udf_args(N,Args),
-	append(Args,[NewReturnValue],NPArgs),
-	append(OrigArgs,[NewReturnValue],NPOrigArgs),
-	flterm_struct(NPFunct,NPN,NPArgs,NewPredicateCode),
-	flterm_struct(NPFunct,NPN,NPOrigArgs,NewPredicateOrigArgs),
-	flora_define_modular_prolog(NPName,NPN).
+/*
+       new_udf_predicate(+Funct,-FunctCompiled,-FunctName,-UDFCode,
+                         +N,+FunctionArgs,-New_udf_predicate_FUNC,
+			 -New_udf_predicate_name,-New_udf_predicate_arity,
+			 -NewReturnValue,-New_udf_predicate_FUNC_code,-Status)
+   Funct - UDF functor
+   FunctCompiled - UDF functor compiled (pr-object)
+   FunctName - the functor name (atom). Used only for symbol-context checks.
+               If the UDF is hilog, then FunctName is set to HILOG_SYMBOL_NAME.
+               This is a simplifying assumption for symbol context checking.
+   UDFCode - the udf term compiled (pr-object)
+   N - UDF arity
+   FunctionArgs - the UDF arguments (fl-object, not compiled)
+   New_udf_predicate_FUNC - new_udf_predicate_XXX term
+                          (fl-obj, not compiled)
+   New_udf_predicate_name - new_udf_predicate_XXX name
+   New_udf_predicate_arity - new_udf_predicate_XXX arity
+   NewReturnValue - a new variable generated for the return expression of udf
+   New_udf_predicate_FUNC_code - new_udf_predicate_XXX term compiled
+*/
+new_udf_predicate(Funct,FunctCompiled,FunctName,UDFCode,N,FunctionArgs,New_udf_predicate_FUNC,New_udf_predicate_name,New_udf_predicate_arity,NewReturnValue,New_udf_predicate_FUNC_code,Status) :-
+	new_udf_predicate_funct(Funct,FunctCompiled,N,NPFunct,NPFunctCompiled,New_udf_predicate_name,New_udf_predicate_arity,Status1),
+	( no_errors_found(Status1) -> 
+	    new_flvariable(NO_INDEX,NewReturnValue,NewReturnValueObj),
+	    varobj_struct(FL_ANON_VAR,AnonVar),
+	    (flora_get_flatom_name(Funct,FunctName) -> true
+	    ;
+		(  atomic(Funct) -> FunctName=Funct
+		%% for HiLog UDF, the function name is HILOG_SYMBOL_NAME.
+		%% This is used only for symbol context checking.
+		; FunctName = HILOG_SYMBOL_NAME
+		)
+	    ),
+	    flterm_struct(Funct,N,FunctionArgs,UDFTerm),
+	    New_udf_pred_args_compiled = [NewReturnValueObj,UDFCode,AnonVar],
+	    prologterm_struct(NPFunctCompiled,New_udf_predicate_arity,New_udf_pred_args_compiled,New_udf_predicate_FUNC_code),
+	    New_udf_pred_flargs = [NewReturnValue,UDFTerm],
+	    flterm_struct(NPFunct,New_udf_predicate_arity,New_udf_pred_flargs,New_udf_predicate_FUNC),
+	    flora_define_modular_prolog(New_udf_predicate_name,New_udf_predicate_arity),
+	    compile_pathexplist(FunctionArgs,0,FunctionArgsCompiled,_,_,[],Status3),
+	    ( no_errors_found(Status3) -> 
+		termobj_struct(FunctCompiled,N,FunctionArgsCompiled,UDFCode),
+		Status = NO_ERRORS
+	    ;
+		Status = Status3
+	    )
+	;
+	    Status = Status1
+	).
+	
 
-new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody):-
+
+/*
+    new_udfrule_body(+Body,+FunctIndex,+ReturnValue,+NewReturnValue,-NewBody)
+
+    Body - body of udf definition
+    FunctIndex - lexer's index of udf functor
+    ReturnValue - return expression of udf definition
+    NewReturnValue - new variable generated for new_udf_predicate_XXX
+                     which gets bound to return expression of udf
+    NewBody - the actual body of the rule for new_udf_predicate_XXX
+*/
+new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody) :-
 	%% Form body for the new rule.
 	%% To avoid singleton variable warning variable in the head
 	%%    and variable in the body of new rule must have different indexes
@@ -3960,10 +4069,115 @@ new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody):-
 	flterm_struct(ExprFunct,2,[NewReturnValueInBody,ReturnValue],ExprCode),
 	flconjunct_struct(Body,ExprCode,NewBody).
 
-new_udf_predicate_funct(Name,Arity,NewPredicateFunct,NewName,NPArity):-
-	flora_concat_atoms([NEWUDFPREDICATENAME,Name],NewName),
+
+/*
+    new_udf_predicate_funct(+Funct,-FunctCompiled,+Arity,
+                            -NewPredicateFunct,-NPFunctCompiled,-NewName,
+			    -NPArity,-Status)
+    Funct - UDF functor
+    FunctCompiled - UDF functor compiled
+    Arity - UDF arity 
+    NewPredicateFunct - functor of new_udf_predicate_XXX
+    NPFunctCompiled  - compiled functor of new_udf_predicate_XXX
+    NewName - name (atom) of new_udf_predicate_XXX
+    NPArity - new_udf_predicate_XXX arity
+*/
+new_udf_predicate_funct(Funct,FunctCompiled,Arity,
+			NewPredicateFunct,NPFunctCompiled,NewName,NPArity,
+			Status) :-
+	set_context(compiling_term_name),
+	compile_pathexp(Funct,FunctCompiled,_,_,Status), 
+	clear_context(compiling_term_name),
+	encode_prterm(FunctCompiled,EncodedFunct),
+	flora_concat_atoms([NEWUDFPREDICATENAME,EncodedFunct],NewName),
 	flatom_struct(NewName,NO_INDEX,NewPredicateFunct),
+	modularized_pratom_struct(NewName,NO_INDEX,NPFunctCompiled),
 	NPArity is Arity+1.
+
+/****************************************************************************
+    encode_prterm(+Term,-EncodedBuildTerm)
+
+    Encode a Term into a String to create a UDF Predicate Name
+****************************************************************************/
+encode_prterm(Term,EncodedBuildTerm):-
+	collect_prvars(Term,VarList),
+	flora_reset_newudfpredvar,
+	encode_prvariables(VarList,Term,EncodedTerm,_NewVarList),
+	encode_term_build(EncodedTerm,EncodedBuildTerm).
+
+/***************************************************************************
+    encode_prvariables(+VarNameList,+VarType,+OldFormula,-NewFormula,-NewVarList)
+       Replaces each occurrence of each variable in VarNameList with
+       a counter value
+    rename_one_prvariable(+VarName,+NewVarObj,+Body,-NewBody),
+       Replaces each occurrence of a a var object having VarName
+       as the variable name with NewVarObj. Returns the newly created formula.
+***************************************************************************/
+encode_prvariables([],Body,Body,[]) :- !.
+
+encode_prvariables([Var|VarNameList],Body,NewBody,[NewVarObj|NewVarList]) :-
+        flora_newudfpredvar_obj(NO_INDEX,NewVarObj),
+	(is_prvariable(Var,VarName,_VarIndex) ; VarName = Var),
+        encode_one_prvariable(VarName,NewVarObj,Body,NewBody1),
+        encode_prvariables(VarNameList,NewBody1,NewBody,NewVarList).
+
+encode_one_prvariable(VarName,NewVarObj,Body,NewBody) :-
+        (
+          atomic(Body) -> NewBody = Body
+        ; var(Body) -> NewBody  = Body
+        ; is_list(Body)
+        -> encode_one_prvariable_in_list(VarName,NewVarObj,Body,NewBody)
+        ; is_prvariable(Body,VarName,_Idx) -> NewBody = NewVarObj
+        ; is_pratom(Body,_) ->  NewBody = Body
+        ; is_prnumber(Body) ->  NewBody = Body
+        ; is_prstring(Body) ->  NewBody = Body
+        ; is_prbuiltin_identifier(Body,_) ->  NewBody = Body
+        ; is_prdatatype(Body,_,_,_) ->  NewBody = Body
+        ; is_prdatatypelist(Body,_) ->  NewBody = Body
+        ),
+        !.
+
+encode_one_prvariable(VarName,NewVarObj,Body,NewBody) :-
+        Body =.. [Wrapper|Args],
+        encode_one_prvariable_in_list(VarName,NewVarObj,Args,NewArgs),
+        NewBody =.. [Wrapper|NewArgs].
+
+encode_one_prvariable_in_list(_,_,[],[]) :- !.
+encode_one_prvariable_in_list(VarName,NewVarObj,[T|Terms],[NewT|NewTerms]) :-
+        encode_one_prvariable(VarName,NewVarObj,T,NewT),
+        encode_one_prvariable_in_list(VarName,NewVarObj,Terms,NewTerms).
+
+
+/***************************************************************************
+    encode_term_build(Term,BuildTerm)
+    encode_term_build_list(Term,BuildTerm)
+****************************************************************************/
+encode_term_build(Term,BuildTerm):-
+        is_prterm(Term,Funct,_Arity,Args),
+	encode_term_build(Funct,BuildFunct),
+	encode_term_build_list([Funct|Args],[_Comma,BuildFunct,_Comma|BuildArgs]),
+	flora_concat_atoms([BuildFunct,'(',BuildArgs,')'],BuildTerm),
+	!.	
+
+encode_term_build(Term,BuildTerm):-
+        (
+          atomic(Term) ->  BuildTerm = Term
+        ; is_list(Term) -> encode_term_build_list(Term,BuildTerm)
+        ; is_prvariable(Term,VarName,_Idx) -> flora_concat_atoms(['?',VarName],BuildTerm)
+        ; is_pratom(Term,AtomName) ->  BuildTerm = AtomName
+        ; is_prnumber(Body,Number,_Idx) ->  BuildTerm = Number
+        ; is_prstring(Body,String,_Idx) ->  BuildTerm = String
+        ; is_prbuiltin_identifier(Body,Iden) ->  BuildTerm = Iden
+        ),
+        !.
+
+encode_term_build_list([],[]):-!.
+
+encode_term_build_list([Term|TermList],[',',BuildTerm|BuildTermList]):-
+	encode_term_build(Term,BuildTerm),
+	encode_term_build_list(TermList,BuildTermList).
+
+
 
 
 /****************************************************************************
@@ -3977,7 +4191,24 @@ new_udf_predicate_funct(Name,Arity,NewPredicateFunct,NewName,NPArity):-
 ****************************************************************************/
 compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,Facts-Facts,Status) :-
 	set_context(compiling_rule(DescriptorIdCode)),
+	(has_context(compiling_udf_definition) ->
+	    /* When compiling headlits of UDF rules, we should turn
+	       off UDF conversion. For instance, for
+		   udf c(?x):=?y if pred(?x,?y).
+	       we create the rule:
+	         new_udf_predicate_c(RetVal,flapply(c,x)) :- pred(X,Y),RetVal=Y.
+	    */
+	    set_context(block_udf_expansion),
+	    set_context(no_symbol_check)
+	; true
+	),
 	compile_head_top(Head,HeadCode,H2BCodeHead,H2BCodeTail,HeadStatusPre),
+	(has_context(compiling_udf_definition) ->
+	    %% done compiling UDF definition head
+	    clear_context(block_udf_expansion),
+	    clear_context(no_symbol_check)
+	; true
+	),
 	compile_conjunct2list(HeadCode,HeadCodeList),
 	no_mixed_sensor_nonsensor_heads(HeadCodeList,Head,DelayStatus),
 	append(HeadStatusPre,DelayStatus,HeadStatus),
@@ -4106,7 +4337,7 @@ construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVa
 	    %% create FL_UNDEFEATED(DescrIdCode,DescrVarsTerm,NewVar,ThisModule)
 	    %% this code makes FL_UNDEFEATED into Prolog predicate
 	    %% It is faster, saves table space
-	    modularized_atom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
+	    modularized_pratom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
 	    var_caller_info_structure(ThisModule,CallerInfo),
 	    prologterm_struct(UnDefeatFunCode,5,
 			      [DescrIdCode,DescrVarsTerm,DummyVarObj4Head,ThisModule,CallerInfo],
@@ -4138,7 +4369,7 @@ construct_static_defeasible_condition(HeadCode,DescrIdCode,DescrVarsTerm,Delayed
 	    %% create FL_UNDEFEATED(DescrIdCode,NewVar,ThisModule)
 	    %% this code makes FL_UNDEFEATED into modularized Prolog predicate
 	    %% It is faster, saves table space
-	    modularized_atom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
+	    modularized_pratom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
 	    var_caller_info_structure(ThisModule,CallerInfo),
 	    prologterm_struct(UnDefeatFunCode,5,
 			      [DescrIdCode,DescrVarsTerm,HeadCode,ThisModule,CallerInfo],
@@ -4233,7 +4464,7 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
             compile_flvar(VName,VIndex,Code),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL,
-            Status=[]
+            Status = NO_ERRORS
 
         ; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
             compile_head_fltransactionaltermlit(Funct,N,Args,Code,H2BCodeHead,H2BCodeTail,Status)
@@ -4277,7 +4508,6 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    atomlit_struct(HEADLITERAL,ParserTerm,Code),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL
-	    %%Status=[]
 
 	
 	; is_flbuiltin_identifier(ParserTerm,_) ->
@@ -4286,7 +4516,6 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    atomlit_struct(HEADLITERAL,ParserTerm,Code) ->
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL
-	    %%Status=[]
 
         ;
 	    verify_symbol_context(ParserTerm,0, PREDICATE_SYMBOL,
@@ -4294,7 +4523,6 @@ compile_head_literal(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    transactionalatomlit_struct(HEADLITERAL,ParserTerm,Code),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL
-            %%Status=[]
 	),
 	!,
         clear_context(compiling_headliteral).
@@ -4383,19 +4611,19 @@ compile_body(ParserTerm,Code,Status) :-
 	has_context(compiling_default_negation),
 	!,
 	%% no quantified don't care vars (?,?_) allowed
-	(memberchk(FL_UNDERSCORE,QuantVarNames) ->
+	(memberchk(FL_ANON_VAR,QuantVarNames) ->
 	    compiling_error(Idx,NO_QUANTIFIED_ANONVARS,Err1),
 	    S1 = [Err1]
-	; S1 = []
+	; S1 = NO_ERRORS
 	),
 
 	compile_body(Formula,FormCode,S2),
 	%% We use prvars so that newly introduced vars will be accounted for
 	collect_prvars(FormCode,FormVarList),
 	vars_to_var_names(FormVarList,FormVarNames),
-	(QuantVarNames == FL_STAR -> S3 = [] %% all vars are existential
+	(QuantVarNames == FL_STAR -> S3 = NO_ERRORS %% all vars are existential
 	%% quantified vars must occur in Formula
-	; subset(QuantVarNames,FormVarNames) -> S3 = []
+	; subset(QuantVarNames,FormVarNames) -> S3 = NO_ERRORS
 	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
 	    S3 = [Err3]
 	),
@@ -4470,7 +4698,7 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
                 florasyslib_struct(VIndex,FLLIBMODLIT,3,[V,Module,CallerInfo],SpecCode)
             ),
             OidCode=NULL,
-            Status=[]
+            Status = NO_ERRORS
 
 	/*
 	%% This is not used for now. Transactional variables by
@@ -4479,7 +4707,7 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    has_context(compile_with_var_module),
 	    compile_fltransactionalvar(VName,VIndex,SpecCode),
 	    OidCode=NULL,
-	    Status=[]
+	    Status = NO_ERRORS
 	*/
 
         ; is_fldelayquant(ParserTerm,Quant,Condition,Goal,Idx) ->
@@ -4629,7 +4857,7 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    is_flvariable(VarTerm,Name,Index),
 	    compile_flvar(Name,Index,VarCode),
 	    newoidop_struct(VarCode,SpecCode),
-	    Status = [],
+	    Status = NO_ERRORS,
 	    OidCode=NULL
 
 	; is_flnewmodule(ParserTerm,Op,Module) ->
@@ -4639,7 +4867,7 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    thismodule_struct(ThisModuleName),
 	    florasyslib_struct(Index,FLLIBNEWMODULE,2,[ThisModuleName,ModCode],
 			       SpecCode),
-	    Status=[],
+	    Status = NO_ERRORS,
 	    OidCode=NULL
 
 	; is_flerasemodule(ParserTerm,Op,Module) ->
@@ -4649,7 +4877,7 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    thismodule_struct(ThisModuleName),
 	    florasyslib_struct(Index,FLLIBERASEMODULE,2,
 			       [ThisModuleName,ModCode],SpecCode),
-	    Status=[],
+	    Status = NO_ERRORS,
 	    OidCode=NULL
 
 	; is_flcallermodule(ParserTerm,Op,Module) ->
@@ -4657,7 +4885,7 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    is_flatom(Op,_OpAtom,Index),
 	    compile_flatomvar(Module,ModCode),
 	    caller_binding_code(ModCode,SpecCode),
-	    Status=[],
+	    Status = NO_ERRORS,
 	    OidCode=NULL
 
 	; is_flsimpleprimitive(ParserTerm,PrimName,Args) ->
@@ -4732,7 +4960,7 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    BodyHeadList = [],
 	    cut_struct(I,SpecCode),
 	    OidCode=NULL,
-	    Status=[]
+	    Status = NO_ERRORS
 
 	; is_flatom(ParserTerm,_A) ->
 	    verify_symbol_context(ParserTerm,0,PREDICATE_SYMBOL,
@@ -4906,11 +5134,28 @@ compile_flcontrolconstruct(Cond,Action,Wrapper,Code,Status) :-
   vars, strings
 
   Nesting - needed for nested user defined functions
+  Object  - the term that goes in place of this path expression.
   OidCode - conjunction of the code for computing the arguments of
             the pathexp such as a.b[c.d->e.f]
-	    Eg, AND(a[b->?X],c[d-?Y],e[f->?Z])
+	    Eg, AND(a[b->?X],c[d-?Y],e[f->?Z]) - the code for computing the
+	        objects that go in place of a.b, c.d, e.f. These objects are
+		?X, ?Y, ?Z, respectively.
+            OidCode comes before the code for the molecule or predicate
+	    where the path expression occurs. For instance, in the above,
+	    we'll have:
+	      AND(a[b->?X],c[d-?Y],e[f->?Z]), <<--- OidCode for path expressions
+		?X[?Y->?Z],                   <<--- the actual molecule.
+                                                    ?X,?Y,?Z are Object(s)
+						    for path expressions
+		   Code(for a.b,c.d,e.f)      <<--- Code for path expressions
   Code    - code for the actual Boolean expression that corresponds to
-            a.b[c.d->e.f], ie, ?X[?Y->?Z]
+            a.b[c.d->e.f], ie, ?X[?Y->?Z].
+            Note: Code is conjoined from the right. For instance,
+	          in aaa[bbb->c.d], the Code for c.d appears after the code
+		  for aaa[bbb->...]. Namely, the overall code will be:
+		    OidCode(for_c.d,Object(for_c.d)),
+		      aaa[bbb->Object(for_c.d)],
+		        Code(for_c.d)
   BodyHeadList - code to add at the beginning of the body
                  (mostly for user defined fnctions),
 		 it is output argument, but if it is initialized to empty ([])
@@ -4923,15 +5168,26 @@ compile_pathexp(ParserTerm,Object,OidCode,Code,BodyHeadList,Status) :-
 	compile_pathexp(ParserTerm,0,Object,OidCode,Code,BodyHeadList,Status).
 
 %% ParserTerm is a primitive object -- no oid code and no spec code results
-compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
+compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	set_context(compiling_body_pathexp),
 	( is_flatom(ParserTerm,_A) ->
+	    Code = NULL,
+	    OidCode = NULL,
 	    compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status)
+
+	; is_modularized_pratom(ParserTerm,Atm,Idx) ->
+	    modularized_pratom_struct(Atm,Idx,Object),
+	    BodyHeadList = [],
+	    Code = NULL,
+	    OidCode = NULL,
+	    Status = NO_ERRORS
 
 	; is_fltransactionalatom(ParserTerm,_A) ->
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  TRANSACTIONAL_SYMBOL,Status),
 	    BodyHeadList=[],
+	    Code = NULL,
+	    OidCode = NULL,
 	    transactionalatomobj_struct(ParserTerm,Object)
 
 	; is_fltoken(ParserTerm,FL_THISMODULE,_Index) ->
@@ -4939,8 +5195,10 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
-	    Status = [],
+	    Status = NO_ERRORS,
 	    BodyHeadList=[],
+	    Code = NULL,
+	    OidCode = NULL,
 	    thismodule_struct(Object)
 
 	%% Anonymous OIDs can appear in the "body": they can appear
@@ -4951,9 +5209,25 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
-	    Status = [],
-	    BodyHeadList=[],
-	    new_oidobj(Index,Object)
+	    ((has_context(goal_reification);has_context(compiling_descriptors))
+	    ->
+		Code = NULL,
+		(compiling_flrshell_command ->
+		    %% In the shell we do:
+		    %% ?- ?X = ${p(_#)} ==>> p(shell-skolem)
+		    OidCode = NULL,
+		    new_dynoidobj(Index,Object)
+		;   %% If not in the shell, generate a new Skolem constant
+		    OidCode = NULL,
+		    new_oidobj(Index,Object)
+		)
+	    ;   %% Otherwise, p(_#) ==>> p(?N), _skolem(?N)
+		OidCode = NULL,
+		new_prvariable(Index,Object),
+		prologterm_struct(FL_SKOLEM,1,[Object],flrnewoid,Code)
+	    ),
+	    Status = NO_ERRORS,
+	    BodyHeadList=[]
 
 	%% A numbered OID, which appears in a reified formula in rule body
 	; is_fltoken(ParserTerm,FL_NEWOID,Num,Index) ->
@@ -4962,27 +5236,43 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
-	    Status = [],
-	    BodyHeadList=[],
-	    flora_get_counter(RULE_NUM, Rule_num), 
-	    new_oidobj(Rule_num,Num,Index,Object)
+	    ((has_context(goal_reification);has_context(compiling_descriptors))
+	    ->
+		Code = NULL,
+		(compiling_flrshell_command ->
+		    OidCode = NULL,
+		    new_dynoidobj(Num,Index,Object)
+		;   %% If not in the shell, generate a new Skolem constant
+		    OidCode = NULL,
+		    flora_get_counter(RULE_NUM, Rule_num), 
+		    new_oidobj(Rule_num,Num,Index,Object)
+		)
+	    ;
+		OidCode = NULL,
+		prvariable_for_numbered_skolem(Index,Num,Object),
+		prologterm_struct(FL_SKOLEM,1,[Object],flrnewoid,Code)
+	    ),
+	    Status = NO_ERRORS,
+	    BodyHeadList=[]
 
 	%% _@! - rule id token
 	; is_fltoken(ParserTerm,FL_RULEID_TOKEN_PREFIX,FL_RULEID_SYM,Index) ->
 	    BodyHeadList=[],
+	    Code = NULL,
 	    ((has_context(compiling_dynrule(DescrIdCode)) ; has_context(compiling_rule(DescrIdCode)))
 	    ->
 		Object = DescrIdCode,
 		%%thisruleid_var_structure(Object),
-		Status = []
+		Status = NO_ERRORS
 	    ; compiling_error(Index,RULEID_TOKEN_NOT_IN_RULE,Err),
 		Status = [Err]
 	    )
 
 	; is_fltoken(ParserTerm,FL_SPECIAL_VAR_TOKEN,Suffix,Index) ->
+	    Code = NULL,
 	    (memberchk(Suffix, [FL_SPECIAL_FILE_TOKEN,FL_SPECIAL_LINE_TOKEN])
 	    ->
-		Status = [],
+		Status = NO_ERRORS,
 		BodyHeadList=[],
 		special_variable_struct(Suffix,Object)
 	    ; 
@@ -4992,44 +5282,45 @@ compile_pathexp(ParserTerm,Nesting,Object,NULL,NULL,BodyHeadList,Status) :-
 
 	; (is_flnumber(ParserTerm,_N) ; number(ParserTerm)) ->
 	    BodyHeadList=[],
+	    Code = NULL,
 	    numobj_struct(ParserTerm,Object),
-	    Status=[]
+	    Status = NO_ERRORS
 
 	; is_flvariable(ParserTerm,Name,Index) ->
-	    flora_get_flatomvar_name(ParserTerm,VName),
-	    ( user_defined_function_var_substitute(Nesting,VName,_,Sub,_SIndex) ->
-		SNesting is Nesting + 1, 
-		compile_pathexp(Sub,SNesting,Object,_SOidCode,_SCode,BodyHeadList,Status)
-	    ;
-	    	BodyHeadList=[],
-	    	compile_flvar(Name,Index,Object),
-		Status = []
-	    )
+	    BodyHeadList=[],
+	    Code = NULL,
+	    compile_flvar(Name,Index,Object),
+	    Status = NO_ERRORS
 
 	; is_fltransactionalvariable(ParserTerm,Name,Index) ->
 	    BodyHeadList=[],
+	    Code = NULL,
 	    compile_fltransactionalvar_without_trans(Name,Index,Object),
-	    Status=[]
+	    Status = NO_ERRORS
 
 	; is_flstring(ParserTerm,_S) ->
 	    BodyHeadList=[],
+	    Code = NULL,
 	    strobj_struct(ParserTerm,Object),
-	    Status=[]
+	    Status = NO_ERRORS
 
 	; is_flbuiltin_identifier(ParserTerm,_Ident) ->
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    BodyHeadList=[],
+	    Code = NULL,
 	    builtin_identifier_struct(ParserTerm,Object)
 
 	; is_fldatatype(ParserTerm,_Sort,_Lit,_Index) ->
 	    BodyHeadList=[],
+	    Code = NULL,
 	    datatypeobj_struct(ParserTerm,Object,Status)
 
 	; is_fltransactionalstring(ParserTerm,_S) ->
 	    BodyHeadList=[],
+	    Code = NULL,
 	    transactionalstrobj_struct(ParserTerm,Object),
-	    Status=[]
+	    Status = NO_ERRORS
 	),
 	!,
 	clear_context(compiling_body_pathexp).
@@ -5121,7 +5412,8 @@ verify_symbol_context(Funct,_Arity,_WS,_SymbolContext,_Transactional,[]):-
 %% If this is a HiLog term (Funct is a var or a complex term),
 %% record the symbol context
 verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,Status):-
-	is_flvariable(Funct,_Name,Index),
+	(is_flvariable(Funct,_Name,Index) ; is_flterm(Funct,_FFunct,_FArity,_FArgs)),
+	%% for hilog udfs, we record only a generic name, HILOG_SYMBOL_NAME.
 	flatom_struct(HILOG_SYMBOL_NAME,Index,VarFunct),
 	verify_symbol_context(VarFunct,Arity,WS,SymbolContext,Transactional,Status),
 	!.
@@ -5175,7 +5467,8 @@ verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextSt
 	!,
   	approx_flindex(Funct,Index),
         %% Check if symbol was used before in a different context
-	( has_symbol(Name,SArity,_,_SIndex,SLine,SContext,STransactional), Name\=HILOG_SYMBOL_NAME,
+	( has_symbol(Name,SArity,_,_SIndex,SLine,SContext,STransactional),
+	    Name \= HILOG_SYMBOL_NAME,
 	    %% Index > 0 ensures that symbols introduced by the compiler
 	    %% are not checked
 	    integer(Index),
@@ -5185,12 +5478,12 @@ verify_symbol_context(Funct,Arity,WS,SymbolContext,Transactional,SymbolContextSt
 				       SArity,Name,Arity,WS,
 				       Index,SymbolContext,Transactional,
 				       SymbolContextStatus),
-	    SymbolContextStatus \== [],
+	    SymbolContextStatus \== NO_ERRORS,
 	    %% note: we need to backtrack through enough of symbols to
 	    %% get a warning
 	    !
 	 ;
-               	SymbolContextStatus=[]
+               	SymbolContextStatus = NO_ERRORS
          ),
 	!,
 	get_index_line(Index,Line),
@@ -5212,7 +5505,7 @@ suppress_symbol_warning(Name,Arity,_WS,SymbolContext,Transactional):-
 	has_nowarn_any_symbol(Name,FL_STAR,StoredWS,SymbolContext,Transactional)),
 	%% If StoredWS is an anonymous variable - then ignore warnings
 	is_flvariable(StoredWS,VarName,_VarIndex),
-	VarName == FL_UNDERSCORE,
+	VarName == FL_ANON_VAR,
 	!.
 
 suppress_symbol_warning(Name,Arity,NULL,SymbolContext,Transactional):-
@@ -5315,7 +5608,7 @@ make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,U
 	    )
 */
 	;
-		ContextStatus=[]
+		ContextStatus = NO_ERRORS
         ),
 	!.
 
@@ -5355,7 +5648,7 @@ make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,U
 			      UsedLine,UsedFileMsg],
 			      ContextStatus)
 	;
-	    ContextStatus=[]
+	    ContextStatus = NO_ERRORS
 	),
 	!.
 
@@ -5399,7 +5692,7 @@ make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,U
 	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, ContextStatus)
 	    )
 	;
-	    ContextStatus=[]
+	    ContextStatus = NO_ERRORS
 	),
 	!.
 
@@ -5457,7 +5750,7 @@ make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,U
 	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, ContextStatus)
 	    )
 	;
-	    ContextStatus=[]
+	    ContextStatus = NO_ERRORS
 	),
 	!.
 
@@ -5499,7 +5792,7 @@ make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,U
 	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PROLOG_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, ContextStatus)
 	    )
 	;
-	    ContextStatus=[]
+	    ContextStatus = NO_ERRORS
 	),
 	!.
 
@@ -5584,21 +5877,21 @@ compile_flload(LoadList,Code,Status) :-
   compile_flvar(+Name,+Index,-VarObject)
 ****************************************************************************/
 compile_flvar(Name,Index,VarObject) :-
-	( Name == FL_UNDERSCORE -> new_dontcare_prvariable(Index,VarObject)
+	( Name == FL_ANON_VAR -> new_dontcare_prvariable(Index,VarObject)
 	;
 	  varobj_struct(Name,Index,VarObject)
         ),
 	!.
 
 compile_fltransactionalvar_without_trans(Name,Index,VarObject) :-
-	( Name == FL_UNDERSCORE -> new_dontcare_prvariable(Index,VarObject)
+	( Name == FL_ANON_VAR -> new_dontcare_prvariable(Index,VarObject)
 	;
 	  varobj_struct(Name,Index,VarObject)
         ),
 	!.
 
 compile_fltransactionalvar(Name,Index,VarObject) :-
-	( Name == FL_UNDERSCORE -> new_dontcare_prtransactionalvar(Index,VarObject)
+	( Name == FL_ANON_VAR -> new_dontcare_prtransactionalvar(Index,VarObject)
 	;
 	  transactionalvar_struct(Name,Index,VarObject)
         ),
@@ -5624,11 +5917,11 @@ compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status):-
 	var(BodyHeadList),
 	%% NO cut here!
 	\+ has_context(compiling_arithmetics),
-	has_user_defined_function(ParserTerm,0,[],[],Predicate,ReturnValue),
+	has_user_defined_function(ParserTerm,0,[],Predicate,Object /* return value */,_,_),
 	!,
 	verify_symbol_context(ParserTerm,0,UDF_SYMBOL,
 			      NONTRANSACTIONAL_SYMBOL,SymStatus),
-	compile_udf_body_literal(ParserTerm,[],[],Predicate,ReturnValue,Nesting,Object,PCode,PBodyHeadList,S),
+	compile_udf_body_literal(ParserTerm,Predicate,Nesting,PCode,PBodyHeadList,S),
 	( no_errors_found(S) -> 
 	    append(PBodyHeadList,[PCode],BodyHeadList),
 	    append(S,SymStatus,Status)
@@ -5661,19 +5954,26 @@ compile_fltermobj(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,CompileS
 	var(BodyHeadList),
 	!,
 	( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,FArgs,Predicate,ReturnValue)
+	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
 	-> 
-	    OidCode=NULL,
-	    Code=NULL,
-	    compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,Nesting,Object,PCode,PBodyHeadList,S),
-	    SymbolContext = UDF_SYMBOL,
-	    ( no_errors_found(S) -> 
-		append(PBodyHeadList,[PCode],BodyHeadList),
-		Status = []
+	    ( no_errors_found(S1) -> 
+		OidCode=NULL,
+		Code=NULL,
+		compile_udf_body_literal(Funct,Predicate,Nesting,PCode,PBodyHeadList,S),
+		SymbolContext = UDF_SYMBOL,
+		( no_errors_found(S) -> 
+		    append(FunctBodyHeadList,PBodyHeadList,BodyHeadList1),
+		    append(BodyHeadList1,[PCode],BodyHeadList),
+		    Status = NO_ERRORS
+		;
+		    approx_flindex(Funct,Index),
+		    compiling_error(Index,ERROR_UDF_COMPILE,Err),
+		    Status = [Err|S]
+		)
 	    ;
 		approx_flindex(Funct,Index),
 		compiling_error(Index,ERROR_UDF_COMPILE,Err),
-		Status = [Err|S]
+		Status = [Err|S1]
 	    )
 	;
 	    set_context(compiling_term_name),
@@ -5709,97 +6009,128 @@ compile_fltermobj(Funct,N,Args,_Nesting,Object,OidCode,Code,[],CompileStatus) :-
 
 
 /****************************************************************************
-  compile_udf_body_literal(+Funct,+Args,+FArgs,+Predicate,+ReturnValue,+Nesting,-Object,-PCode,-PBodyHeadList,-Status)
+  compile_udf_body_literal(+Funct,+Predicate,+Nesting,-PCode,-PBodyHeadList,-Status)
 
   Compile a UDF literal in the body.
-  Has two cases: (1) UDF symbol is a constant & (2) it is a variable
 ****************************************************************************/
-compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,Nesting,Object,PCode,PBodyHeadList,Status) :-
-	approx_flindex(Funct,Index),
-	(is_flvariable(Funct,VarName,Idx) ->
-	    varobj_struct(ReturnValue,Object),
-	    set_context(compiling_udf_varname(VarName,Idx)),
-	    compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,Status),
-	    clear_context(compiling_udf_varname(VarName,Idx))
-	;
-	    new_prvariable(NO_INDEX,Object),
-	    prvar_to_flvar_struct(Object,Var),
-	    formUDFVarSubstitute([Var|Args],[ReturnValue|FArgs],Nesting,Index),
-	    compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,Status),
-	    clearUDFVarSubstitute(Nesting)
+compile_udf_body_literal(Funct,Predicate,Nesting,PCode,PBodyHeadList,Status) :-
+	%% If we set no_symbol_check here then clear it out at the end.
+	%% If inherited no_symbol_check from the caller - do not do
+	%% clear out the context
+	(has_context(no_symbol_check) -> Clear = no
+	; set_context(no_symbol_check), Clear = yes
+	),
+	set_context(compiling_udf_hilog(Funct)),
+	compile_body_literal(Predicate,Nesting,PCode,PBodyHeadList,Status),
+	clear_context(compiling_udf_hilog(Funct)),
+	(Clear == yes -> clear_context(no_symbol_check)
+	; true
 	).
 
 
 /****************************************************************************
-  find_user_defined_function(+BaseName,+N,+Args,-FArgs,-Predicate,-ReturnValue) 
+  find_user_defined_function(+BaseName,+N,-UDFCode,-Predicate) 
 
   Indicate if there is an active UDF
 ****************************************************************************/
-find_user_defined_function(BaseName,N,_Args,FArgs,Predicate,ReturnValue) :-
-	has_permaoption(user_defined_function(BaseName,N,FArgs,Predicate,ReturnValue)),
+find_user_defined_function(BaseName,N,UDFCode,Predicate) :-
+	has_permaoption(user_defined_function(BaseName,N,UDFCode,_PredName,Predicate)),
 	!.
-find_user_defined_function(BaseName,N,_Args,FArgs,Predicate,ReturnValue) :-
-	flora_used_udf_registry(BaseName,N,FArgs,Predicate,ReturnValue),
+find_user_defined_function(BaseName,N,UDFCode,Predicate) :-
+	flora_used_udf_registry(BaseName,N,UDFCode,Predicate),
 	!.
 
 /****************************************************************************
-  has_user_defined_function(+Funct,+N,+Args,-FArgs,-Predicate,-ReturnValue) 
+  has_user_defined_function(+Funct,+N,-Predicate,-ReturnValue,-BodyHeadList,-Status) 
 
-  Tell if there is an active UDF with this Funct/N
+  Tells if there is an active UDF with this Funct/N
+
+  Funct - Functor of UDF
+  N - Arity of UDF
+  Predicate - the new_udf_predicate_XXX that computes this UDF
+  ReturnValue - the variable representing the return value of this UDF;
+                it appears in Predicate as Arg 1.
+  BodyHeadList - a list of literals to be added to rule body where udf appears
+                 (again for cases when udf functor is a term)
+  Example:
+     head :- q(?x(a,b)(?x))
+     head :- udf_hilog_predicate(?x(a,b),?var2),
+	     udf_hilog_predicate(?var2(?x)),?var1),
+             q(?var1) 
 ****************************************************************************/
-has_user_defined_function(Funct,N,_Args,FArgs,Predicate,ReturnValue) :-
-	flora_get_flatomvar_name(Funct,Name),
+has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
+	\+ has_context(block_udf_expansion),
+	\+ has_context(compiling_udf_hilog(Funct)),
+	\+ get_flatom_name(Funct,UDFHILOGPREDICATENAME),
+	flora_get_flatom_name(Funct,Name),
 	(flrsynonym:flora_op_synonym(Name,BaseName)
 	; BaseName = Name
 	),
-	find_user_defined_function(BaseName,N,_Args,FArgs,Predicate,ReturnValue),
+	find_user_defined_function(BaseName,N,_UDFCode,_PredicateCode),
+	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue),
 	!.
 
-has_user_defined_function(Funct,N,Args,Args,Predicate,ReturnValue) :-
+has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
+	\+ has_context(block_udf_expansion),
 	N\=0,
 	Args\=[],
 	Args\=null,
-	is_flvariable(Funct,VarName,Idx),
-	\+ has_context(compiling_udf_varname(VarName,Idx)),
-	find_user_defined_function(_BaseName,N,_PArgs,_FArgs,_FPredicate,_FReturnValue),
+	is_flvariable(Funct,_VarName,_Idx),
+	!,
+	\+ has_context(compiling_udf_hilog(Funct)),
+	find_user_defined_function(_BaseName,N,_UDFCode,_PredicateCode),
 	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
 
 
-/****************************************************************************
-  form_udf_hilog_predicate(+Funct,+N,+Args,-Predicate,-ReturnValue) 
+has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
+	\+ has_context(block_udf_expansion),
+	N\=0,
+	Args\=[],
+	Args\=null,
+	is_flterm(Funct,_FFunct,_FunctN,_FunctArgs),
+	!,
+	\+ has_context(compiling_udf_hilog(Funct)),
+	find_user_defined_function(_BaseName,N,_UDFCode,_Predicate),
+	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
 
-  form predicate for UDF with term names (hilog).
+has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
+	\+ has_context(block_udf_expansion),
+	\+ has_context(compiling_udf_hilog(Funct)),
+	N\=0,
+	Args\=[],
+	Args\=null,
+	find_user_defined_function(HILOG_SYMBOL_NAME,N,_UDFCode,_PredicateCode),
+	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
+
+/****************************************************************************
+  form_udf_hilog_predicate(+Funct,+N,+Args,+ReturnOrigPred,-Predicate,-ReturnValue) 
+
+  forms the predicate for UDF with term names (hilog).
+
+  Funct - udf functor
+  N - udf arity
+  Args - udf arguments
+  Predicate - UDFHILOGPREDICATENAME code
+  ReturnValue - code for the return variable which represents the return value
+                of udf_hilog_predicate. This variable appears as argument 5 in
+		UDFHILOGPREDICATENAME.
 ****************************************************************************/
-form_udf_hilog_predicate(Funct,N,Args,NewPredicateCode,NewReturnValue):-
+form_udf_hilog_predicate(Funct,N,Args,NewHeadCode,NewReturnValueObj):-
 	get_udf_hilog_predicate_funct(NPFunct),
-	new_flvariable(NO_INDEX,NewReturnValue),
+	%%set_context(compiling_udf_hilog(NPFunct)),
+	new_flvariable(NO_INDEX,NewReturnValue,NewReturnValueObj),
 	flterm_struct(Funct,N,Args,OrigPredicateCode),
-	flterm_struct(NPFunct,3,[OrigPredicateCode,N,NewReturnValue],NewPredicateCode),
-	flora_define_modular_prolog(UDFHILOGPREDICATENAME,3).
+	flthismodule_struct(Module),
+	flterm_struct(NPFunct,5,[OrigPredicateCode,N,Module,NewReturnValue],NewHeadCodePre),
+	flplib_struct(NewHeadCodePre,NewHeadCode).
 
 /****************************************************************************
-  get_udf_hilog_predicate_funct(-Funct,-Name) 
+  get_udf_hilog_predicate_funct(-Funct) 
 
   form predicate functor for UDF with term names (hilog).
 ****************************************************************************/
 get_udf_hilog_predicate_funct(Funct):-
 	flatom_struct(UDFHILOGPREDICATENAME,NO_INDEX,Funct).
-
-/****************************************************************************
-  FormUDFVarSubstitute(+Args,+FArgs,+Nesting)
-	form correspondence between variables in definition of UDF
-	and variables in usage of the function
-  +Args - arguments in usage of the function
-  +FArgs - arguments in definition of the function
-****************************************************************************/
-formUDFVarSubstitute([],_,_,_):-!.
-formUDFVarSubstitute(_,[],_,_):-!.
-formUDFVarSubstitute([A|Args],[FA|FArgs],Nesting,Index):-
-	flora_get_flatomvar_name(FA,Name),
-	asserta(user_defined_function_var_substitute(Nesting,Name,FA,A,Index)),
-	formUDFVarSubstitute(Args,FArgs,Nesting,Index).
-clearUDFVarSubstitute(Nesting) :-
-	flora_retractall_substitute(user_defined_function_var_substitute(Nesting,_,_,_,_)).
 
 
 /****************************************************************************
@@ -5933,7 +6264,7 @@ compile_fllist(ObjTermList,ObjTerm,Index,Nesting,Object,OidCode,Code,BodyHeadLis
 		Obj=[],
 		OidCodeObj=NULL,
 		ObjCode=NULL,
-		Status=[]
+		Status = NO_ERRORS
 	    ;
 		compile_pathexp(ObjTerm,Nesting,Obj,OidCodeObj,ObjCode,BodyHeadList2,Status),
 		( var(BodyHeadList) ->
@@ -6129,19 +6460,19 @@ compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
 	has_context(compiling_default_negation),
 	!,
 	%% no quantified don't care vars (?,?_) 
-	(memberchk(FL_UNDERSCORE,QuantVarNames) ->
+	(memberchk(FL_ANON_VAR,QuantVarNames) ->
 	    compiling_error(Idx,NO_QUANTIFIED_ANONVARS,Err1),
 	    S1 = [Err1]
-	; S1 = []
+	; S1 = NO_ERRORS
 	),
 
 	compile_flspecbody(Object,Formula,OidCode,FormCode,BodyHeadList,S2),
 	%% We use prvars so that newly introduced vars will be accounted for
 	collect_prvars([Object,OidCode,FormCode],AllVarList),
 	vars_to_var_names(AllVarList,AllVarList_names),
-	(QuantVarNames == FL_STAR -> S3 = [] %% all vars are existential
+	(QuantVarNames == FL_STAR -> S3 = NO_ERRORS %% all vars are existential
 	%% quantified vars must occur in Formula
-	; subset(QuantVarNames,AllVarList_names) -> S3 = []
+	; subset(QuantVarNames,AllVarList_names) -> S3 = NO_ERRORS
 	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
 	    S3 = [Err3]
 	),
@@ -6186,7 +6517,7 @@ compile_flspecbody(Object,SpecTerm,NULL,Code,BodyHeadList,Status) :-
 		mvdattdef_struct(BODYLITERAL,Object,AttObj,RefType,SCode),
 		conjunct_code([AOidCode,ACode,SCode],Code),
 		BodyHeadList = BodyHeadList1,
-		Status=[]
+		Status = NO_ERRORS
 	    ;
 		%% An mvd spec can have several terms in the value set
 		%% (represented by ValTermList). This compiles such
@@ -6219,7 +6550,7 @@ compile_flspecbody(Object,SpecTerm,NULL,Code,BodyHeadList,Status) :-
 		sigattdef_struct(BODYLITERAL,Object,AttObj,RefType,SCode),
 		conjunct_code([AOidCode,ACode,SCode],Code),
 		BodyHeadList = BodyHeadList1,
-		Status=[]
+		Status = NO_ERRORS
 	    ;
 		compile_pathexp(ValTerm,ValObj,VOidCode,VCode,BodyHeadList2,Status),
 		( no_errors_found(Status) -> 
@@ -6253,7 +6584,7 @@ compile_flspecbody(Object,SpecTerm,NULL,Code,BodyHeadList,Status) :-
 		sigattdef_struct(BODYLITERAL,Object,AttObj,RefType,SCode),
 		conjunct_code([AOidCode,ACode,SCode],Code),
 		BodyHeadList = BodyHeadList1,
-		Status=[]
+		Status = NO_ERRORS
 	    ;
 		is_flsigconstr(ConstrTerm,Lower,Upper),
 		compile_pathexplist([Lower,Upper],[OLower,OUpper],COidCode,CCode,BodyHeadList2,S_C),
@@ -6366,7 +6697,7 @@ compile_flspecbody(_Object,SpecTerm,NULL,Code,[],Status) :-
 	-> cut_struct(I,Code)
 	; atomobj_struct(P,Code)
 	),
-	Status=[].
+	Status = NO_ERRORS.
 
 %% Obj[X>Y], Obj[X=Y], etc.
 compile_flspecbody(_Object,SpecTerm,NULL,Code,BodyHeadList,Status) :-
@@ -6474,7 +6805,7 @@ compile_flaggregate(Op,Var,GVars,SortSpec,BodyTerm,Object,Code,Status) :-
 	    /*
 	      has_context(compile_with_var_module),
 		\+ has_context(goal_reification) ->
-                S1 =[]
+                S1 = NO_ERRORS
             ;
 	    */
 	        check_aggregate(Var,GVars,BodyTerm,S1)
@@ -6484,7 +6815,7 @@ compile_flaggregate(Op,Var,GVars,SortSpec,BodyTerm,Object,Code,Status) :-
 		list_struct(GVarsCode,[],GVarsListCode),
 		(SortSpec==NULL
 		-> aggregate_struct(Op,VarCode,GVarsListCode,BCode,Object,Code),
-		    Status = []
+		    Status = NO_ERRORS
 		;
 		    is_flterm(SortSpec,Funct,N,Args),
 		    compile_fltermobj(Funct,N,Args,SpecCode,_,_,Status),
@@ -6511,7 +6842,7 @@ compile_flaggregate(Op,Var,GVars,SortSpec,BodyTerm,Object,Code,Status) :-
 check_aggregate(Var,GVars,BodyTerm,Status) :-
 	is_flvariable(Var,VarName,VarIndex),
 	%% Check if the aggregate variable is anonymous.
-	( VarName == FL_UNDERSCORE ->
+	( VarName == FL_ANON_VAR ->
 	    compiling_error(VarIndex,ERROR_AVAR,M1),
 	    Status=[M1|S1]
 	;
@@ -6520,7 +6851,7 @@ check_aggregate(Var,GVars,BodyTerm,Status) :-
 	%% Check if any grouping variable is anonymous.
 	check_gvar(GVars,S1,S2),
 	%% Check if the aggregate variable is also used for grouping.
-	( VarName \= FL_UNDERSCORE, is_flvariable(U,VarName,_Iu), memberchk(U,GVars) ->
+	( VarName \= FL_ANON_VAR, is_flvariable(U,VarName,_Iu), memberchk(U,GVars) ->
 	    compiling_error(VarIndex,AVAR_ASGVAR,M2),
 	    S2=[M2|S3]
 	;
@@ -6531,7 +6862,7 @@ check_aggregate(Var,GVars,BodyTerm,Status) :-
 	check_repeatedvar(SVars,S3,S4),
 	collect_flvars(BodyTerm,BVars),
 	%% Check if aggregate variable is used in the aggregate body.
-	( (VarName == FL_UNDERSCORE; is_flvariable(W,VarName,_Iw), memberchk(W,BVars)) ->
+	( (VarName == FL_ANON_VAR; is_flvariable(W,VarName,_Iw), memberchk(W,BVars)) ->
 	    S5=S4
         ;
 	  compiling_error(VarIndex,AVAR_NOTIN,M5),
@@ -6542,7 +6873,7 @@ check_aggregate(Var,GVars,BodyTerm,Status) :-
 	    sort(L,SL),
 	    allgvar_notin(SL,S5,[])
 	;
-	  S5=[]
+	  S5 = NO_ERRORS
         ),
 	!.
 
@@ -6550,7 +6881,7 @@ check_aggregate(Var,GVars,BodyTerm,Status) :-
 check_gvar([],S,S) :- !.
 
 check_gvar([H|L],Status,TS) :-
-	( is_flvariable(H,FL_UNDERSCORE,HIndex) ->
+	( is_flvariable(H,FL_ANON_VAR,HIndex) ->
 	    compiling_error(HIndex,ERROR_GVAR,M),
 	    Status=[M|S],
 	    check_gvar(L,S,TS)
@@ -6562,7 +6893,7 @@ check_gvar([H|L],Status,TS) :-
 check_repeatedvar([],S,S) :- !.
 
 check_repeatedvar([H|L],Status,TS) :-
-	is_flvariable(H,FL_UNDERSCORE,_I),
+	is_flvariable(H,FL_ANON_VAR,_I),
 	!,
 	check_repeatedvar(L,Status,TS).
 
@@ -6581,7 +6912,7 @@ check_repeatedvar([H1,H2|T],Status,TS) :-
 allgvar_notin([],S,S) :- !.
 
 allgvar_notin([H|L],Status,TS) :-
-	is_flvariable(H,FL_UNDERSCORE,_I),
+	is_flvariable(H,FL_ANON_VAR,_I),
 	!,
 	allgvar_notin(L,Status,TS).
 
@@ -6615,20 +6946,27 @@ compile_flobjeql(Obj1,Obj2,OidCode,Code,BodyHeadList,Status) :-
 ****************************************************************************/
 compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
 	( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,FArgs,Predicate,ReturnValue)
+	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
 	->
-	    Code=NULL,
-	    H2BCodeTail=NULL,
-	    compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,0,Object,PCode,PH2BCodeHead,S),
-	    SymbolContext = UDF_SYMBOL,
-	    ( no_errors_found(S) -> 
-		append(PH2BCodeHead,[PCode],List),
-		conjunct_code(List,H2BCodeHead),
-		Status = []
+	    ( no_errors_found(S1) -> 
+	    	Code=NULL,
+	    	H2BCodeTail=NULL,
+	    	SymbolContext = UDF_SYMBOL,
+	    	compile_udf_body_literal(Funct,Predicate,0,PCode,PH2BCodeHead,S),
+	    	( no_errors_found(S) -> 
+			append(FunctBodyHeadList,PH2BCodeHead,List1),
+			append(List1,[PCode],List),
+			conjunct_code(List,H2BCodeHead),
+			Status = NO_ERRORS
+	    	;
+			approx_flindex(Funct,Index),
+			compiling_error(Index,ERROR_UDF_COMPILE,Err),
+			Status = [Err|S]
+	    	)
 	    ;
 		approx_flindex(Funct,Index),
 		compiling_error(Index,ERROR_UDF_COMPILE,Err),
-		Status = [Err|S]
+		Status = [Err|S1]
 	    )
 	;
 	    set_context(compiling_term_name),
@@ -6708,7 +7046,7 @@ compile_head_fllist(ObjTermList,ObjTerm,Index,Object,Code,H2BCodeHead,H2BCodeTai
 		ObjCode=NULL,
 		ObjH2BCodeHead=NULL,
 		ObjH2BCodeTail=NULL,
-		Status=[]
+		Status = NO_ERRORS
 	    ;
 	      compile_head_pathexp(ObjTerm,Obj,ObjCode,ObjH2BCodeHead,ObjH2BCodeTail,Status)
 	    ),
@@ -6762,15 +7100,15 @@ compile_head_pathexp(ParserTerm,Object,NULL,NULL,NULL,Status) :-
 
 	; is_flnumber(ParserTerm,_N) ->
 	    numobj_struct(ParserTerm,Object),
-	    Status=[]
+	    Status = NO_ERRORS
 
 	; is_flvariable(ParserTerm,Name,Index) ->
 	    compile_flvar(Name,Index,Object),
-	    Status=[]
+	    Status = NO_ERRORS
 
         ; is_fltransactionalvariable(ParserTerm,Name,Index) ->
             compile_fltransactionalvar_without_trans(Name,Index,Object),
-	    Status=[]
+	    Status = NO_ERRORS
 
 	; is_flbuiltin_identifier(ParserTerm,_Ident) ->
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
@@ -6782,11 +7120,11 @@ compile_head_pathexp(ParserTerm,Object,NULL,NULL,NULL,Status) :-
 
 	; is_flstring(ParserTerm,_S) ->
 	    strobj_struct(ParserTerm,Object),
-	    Status=[]
+	    Status = NO_ERRORS
 
 	; is_fltransactionalstring(ParserTerm,_S) ->
 	    transactionalstrobj_struct(ParserTerm,Object),
-	    Status=[]
+	    Status = NO_ERRORS
 
 	; is_fltoken(ParserTerm,Token,Index) ->
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
@@ -6880,19 +7218,19 @@ compile_head_fltoken(Token,Suffix,Index,Object,Status) :-
         ( Token == FL_NEWOID ->
             flora_get_counter(RULE_NUM, Rule_num), 
 	    new_oidobj(Rule_num,Suffix,Index,Object),
-	    Status = []
+	    Status = NO_ERRORS
 	; Token == FL_RULEID_TOKEN_PREFIX, Suffix == FL_RULEID_SYM ->
 	    ((has_context(compiling_dynrule(DescrIdCode)) ; has_context(compiling_rule(DescrIdCode)))
 	    -> 
 		Object = DescrIdCode,
 		%%thisruleid_var_structure(Object),
-		Status = []
+		Status = NO_ERRORS
 	    ; compiling_error(Index,RULEID_TOKEN_NOT_IN_RULE,Err),
 		Status = [Err]
 	    )
         ;
 	    atomobj_struct(Token,Index,Object),
-	    Status = []
+	    Status = NO_ERRORS
         ),
 	!.
 
@@ -7017,7 +7355,7 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 		conjunct_struct(ACode,SCode,Code),
 		H2BCodeHead = AH2BCodeHead,
 		H2BCodeTail = AH2BCodeTail,
-		Status=[]
+		Status = NO_ERRORS
 	    ;
 	      compile_head_mvdattspec(Object,AObj,RefType,VL,VCode,
 				      VH2BCodeHead,VH2BCodeTail,Status),
@@ -7045,7 +7383,7 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 		conjunct_struct(ACode,SCode,Code),
 		H2BCodeHead = AH2BCodeHead,
 		H2BCodeTail = AH2BCodeTail,
-		Status=[]
+		Status = NO_ERRORS
 	    ;
 		compile_head_pathexp(ValTerm,ValObj,VCode,
 				     VH2BCodeHead,VH2BCodeTail,Status),
@@ -7075,7 +7413,7 @@ compile_head_flspecbody(Object,SpecTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 		conjunct_struct(ACode,SCode,Code),
 		H2BCodeHead = AH2BCodeHead,
 		H2BCodeTail = AH2BCodeTail,
-		Status=[]
+		Status = NO_ERRORS
 	    ;
 		is_flsigconstr(ConstrTerm,Lower,Upper),
 		compile_head_pathexplist([Lower,Upper],[OLower,OUpper],CCode,
@@ -7350,7 +7688,7 @@ compile_wsliteral(ParserTerm,WS,Nesting,OidCode,WSCode,BodyHeadList,Status) :-
 			     Code,WSCode,WSStatus),
 	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,SymbolStatus),
-	    (WSStatus == [] -> Status = SymbolStatus
+	    (WSStatus == NO_ERRORS -> Status = SymbolStatus
 	    ; Status = WSStatus
 	    ),
 	    OidCode=NULL
@@ -7362,7 +7700,7 @@ compile_wsliteral(ParserTerm,WS,Nesting,OidCode,WSCode,BodyHeadList,Status) :-
 			     Code,WSCode,WSStatus),
 	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
 				  TRANSACTIONAL_SYMBOL,SymbolStatus),
-	    (WSStatus == [] -> Status = SymbolStatus
+	    (WSStatus == NO_ERRORS -> Status = SymbolStatus
 	    ; Status = WSStatus
 	    ),
 	    OidCode=NULL
@@ -7424,7 +7762,7 @@ compile_wspathexp(ParserTerm,WS,Object,OidCode,Code,BodyHeadList,Status) :-
 	    compile_flvar(VarName,VarIndex,VarCode),
 	    workspaceobj_struct(VarCode,WS,Object,OidCode),
 	    Code=NULL,
-	    Status = []
+	    Status = NO_ERRORS
 	;
 	  is_flobjref(ParserTerm,ObjTerm,RefType,AttTerm) ->
 	  BodyHeadList = [],
@@ -7440,13 +7778,13 @@ compile_wspathexp(ParserTerm,WS,Object,OidCode,Code,BodyHeadList,Status) :-
 	  workspaceobj_struct(A,WS,Object,OidCode),
 	  Code=NULL,
 	  BodyHeadList = [],
-	  Status=[]
+	  Status = NO_ERRORS
 
 	; transactionalatomlit_struct(BODYLITERAL,ParserTerm,A) ->
 	    BodyHeadList = [],
 	    workspaceobj_struct(A,WS,Object,OidCode),
 	    Code=NULL,
-	    Status=[]
+	    Status = NO_ERRORS
 	*/
 	),
 	!.
@@ -7607,19 +7945,26 @@ compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,BodyHeadList,Tra
 	var(BodyHeadList),
 	!,
         ( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,FArgs,Predicate,ReturnValue)
+	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
 	->
-	    OidCode=NULL,
-	    Code=NULL,
-	    compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,Nesting,Object,PCode,PBodyHeadList,S),
-	    SymbolContext = UDF_SYMBOL,
-	    ( no_errors_found(S) -> 
-		append(PBodyHeadList,[PCode],BodyHeadList),
-		Status=[]
+	    ( no_errors_found(S1) -> 
+		    OidCode=NULL,
+		    Code=NULL,
+		    compile_udf_body_literal(Funct,Predicate,Nesting,PCode,PBodyHeadList,S),
+		    SymbolContext = UDF_SYMBOL,
+		    ( no_errors_found(S) -> 
+			append(FunctBodyHeadList,PBodyHeadList,BodyHeadList1),
+			append(BodyHeadList1,[PCode],BodyHeadList),
+			Status = NO_ERRORS
+		    ;
+			approx_flindex(Funct,Index),
+			compiling_error(Index,ERROR_UDF_COMPILE,Err),
+			Status = [Err|S]
+		    )
 	    ;
 		approx_flindex(Funct,Index),
 		compiling_error(Index,ERROR_UDF_COMPILE,Err),
-		Status = [Err|S]
+		Status = [Err|S1]
 	    )
         ;
 	    set_context(compiling_term_name),
@@ -7678,10 +8023,10 @@ compile_wstermlit(Funct,N,Args,WS,Nesting,OidCode,Code,BodyHeadList,CompileStatu
 			     TCode,WSCode,WSStatus),
 	    conjunct_code([WSCode,ObjCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
         ),
 	!,
-	(WSStatus == [] -> append(SymbolStatus,PathexpStatus,CompileStatus)
+	(WSStatus == NO_ERRORS -> append(SymbolStatus,PathexpStatus,CompileStatus)
 	; CompileStatus = WSStatus
 	).
 
@@ -7696,10 +8041,10 @@ compile_wstransactionaltermlit(Funct,N,Args,WS,Nesting,OidCode,Code,BodyHeadList
 			     TCode,WSCode,WSStatus),
 	    conjunct_code([WSCode,ObjCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
         ),
 	!,
-	(WSStatus == [] -> append(SymbolStatus,PathexpStatus,CompileStatus)
+	(WSStatus == NO_ERRORS -> append(SymbolStatus,PathexpStatus,CompileStatus)
 	; CompileStatus = WSStatus
 	).
 
@@ -7721,7 +8066,7 @@ compile_wsfllist(ObjTermList,ObjTerm,Index,WS,Nesting,Object,OidCode,Code,BodyHe
 		BodyHeadList=BodyHeadList1,
 		Obj=[],
 		ObjCode=NULL,
-		Status=[]
+		Status = NO_ERRORS
 	    ;
 	      compile_wsflpathexp(ObjTerm,WS,Nesting,Obj,OidCodeObj,ObjCode,BodyHeadList2,Status),
 	      ( var(BodyHeadList) ->
@@ -7761,9 +8106,9 @@ compile_wsflobjref(ObjTerm,RefType,AttTerm,WS,Object,OidCode,Code,Status) :-
 	    Code = OACode,
 	    conjunct_code([OidCodeList,WTCode],OidCode)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
         ),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	).
 
@@ -7780,9 +8125,9 @@ compile_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,Obj1,OidCode,Code,Status) :-
 			     TCode,WTCode,WSStatus),
 	    conjunct_code([WTCode,OCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
         ),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	).
 
@@ -7812,9 +8157,9 @@ compile_wsflobjspec(ObjTerm,SpecBody,WS,Object,OidCode,Code,BodyHeadList,Status)
 				     TCode,WTCode,WSStatus),
 		    conjunct_code([WTCode,ObjCode],Code)
 		;
-		    WSStatus = []
+		    WSStatus = NO_ERRORS
 	        ),
-		(WSStatus == [] -> Status = PathexpStatus
+		(WSStatus == NO_ERRORS -> Status = PathexpStatus
 		; Status = WSStatus
 		)
 	    ;
@@ -7826,9 +8171,9 @@ compile_wsflobjspec(ObjTerm,SpecBody,WS,Object,OidCode,Code,BodyHeadList,Status)
 				     ECode,WSECode,WSStatus),
 		    conjunct_code([WSECode,ObjCode],Code)
 		;
-		    WSStatus = []
+		    WSStatus = NO_ERRORS
 		),
-		(WSStatus == [] -> Status = PathexpStatus
+		(WSStatus == NO_ERRORS -> Status = PathexpStatus
 		; Status = WSStatus
 		)
 	    )
@@ -7935,10 +8280,10 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	has_context(compiling_default_negation),
 	!,
 	%% no quantified don't care vars (?,?_) 
-	(memberchk(FL_UNDERSCORE,QuantVarNames) ->
+	(memberchk(FL_ANON_VAR,QuantVarNames) ->
 	    compiling_error(Idx,NO_QUANTIFIED_ANONVARS,Err1),
 	    S1 = [Err1]
-	; S1 = []
+	; S1 = NO_ERRORS
 	),
 
 	compile_wsflspecbody(Object,Formula,WS,OidCode,FormCode,BodyHeadList,S2),
@@ -7946,7 +8291,7 @@ compile_wsflspecbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	collect_prvars([Object,OidCode,FormCode],AllVarList),
 	vars_to_var_names(AllVarList,AllVarList_names),
 	%% quantified vars must occur in Formula
-	(subset(QuantVarNames,AllVarList_names) -> S3 = []
+	(subset(QuantVarNames,AllVarList_names) -> S3 = NO_ERRORS
 	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
 	    S3 = [Err3]
 	),
@@ -8024,9 +8369,9 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 				     SCode,WSCode,WSStatus),
 		    conjunct_code([AOidCode,VOidCode,ACode,VCode,WSCode],Code)
 		;
-		    WSStatus = []
+		    WSStatus = NO_ERRORS
 		),
-		(WSStatus == [] -> Status = PathexpStatus
+		(WSStatus == NO_ERRORS -> Status = PathexpStatus
 		; Status = WSStatus
 		),
 		append(BodyHeadList1,BodyHeadList2,BodyHeadList)
@@ -8063,9 +8408,9 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 					 CSCode,CWSCode,WSStatus2),
 			conjunct_code([AOidCode,VOidCode,ACode,VCode,WSCode,COidCode,CCode,CWSCode],Code)
 		    ;
-			WSStatus1 = [], WSStatus2 = []
+			WSStatus1 = NO_ERRORS, WSStatus2 = NO_ERRORS
 		    ),
-		    (WSStatus1 == [], WSStatus2 == [] -> Status = PathexpStatus
+		    (WSStatus1 == NO_ERRORS, WSStatus2 == NO_ERRORS -> Status = PathexpStatus
 		    ; append(WSStatus1,WSStatus2,Status)
 		    )
 		;
@@ -8091,9 +8436,9 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 			     SCode,WSCode,WSStatus),
 	    conjunct_code([AOidCode,ACode,WSCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -8109,9 +8454,9 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 			     SCode,WSCode,WSStatus),
 	    conjunct_code([AOidCode,ACode,WSCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -8127,9 +8472,9 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 			     SCode,WSCode,WSStatus),
 	    conjunct_code([AOidCode,ACode,WSCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -8145,9 +8490,9 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 			     SCode,WSCode,WSStatus),
 	    conjunct_code([AOidCode,ACode,WSCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -8165,9 +8510,9 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	    %% Fold OidCode in front of molecule
 	    conjunct_code([OidCode,WSCode,OCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -8184,9 +8529,9 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 			     SCode,WSCode,WSStatus),
 	    conjunct_code([OidCode,WSCode,OCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -8199,7 +8544,7 @@ compile_wsflspecbody(_Object,SpecTerm,_WS,NULL,Code,[],Status) :-
 	(Atom==FL_CUT -> cut_struct(I,Code)
 	; atomobj_struct(P,Code)
 	),
-	Status=[].
+	Status = NO_ERRORS.
 
 %% Obj[X>Y], Obj[X=Y], etc.
 compile_wsflspecbody(_Object,SpecTerm,_WS,NULL,Code,BodyHeadList,Status) :-
@@ -8224,9 +8569,9 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 			     SCode,WSCode,WSStatus),
 	    conjunct_code([OidCode,MCode,WSCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -8245,9 +8590,9 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	    %% Fold OidCode in front of molecule
 	    conjunct_code([OidCode,IMCode,WSCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -8264,9 +8609,9 @@ compile_wsflspecbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 			     SCode,WSCode,WSStatus),
 	    conjunct_code([OidCode,TCode,WSCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -8286,9 +8631,9 @@ compile_wsmvdattspec(Object,AttObj,RefType,[T],WS,OidCode,Code,Status) :-
 			     SCode,WSCode,WSStatus),
 	    conjunct_code([WSCode,TCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -8320,9 +8665,9 @@ compile_wsflobjeql(Obj1,Obj2,WS,OidCode,Code,Status) :-
 			     OECode,WSCode,WSStatus),
 	    conjunct_code([OCode,WSCode],Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -8454,7 +8799,7 @@ compile_prologliblit(ParserTerm,Nesting,OidCode,Code,BodyHeadList,Status) :-
 	    N=0,
 	    prologterm_struct(FObj,0,[],Code),
 	    OidCode=NULL,
-	    Status=[]
+	    Status = NO_ERRORS
 	),
 	!.
 
@@ -8466,17 +8811,17 @@ compile_prologliblit(ParserTerm,Nesting,OidCode,Code,BodyHeadList,Status) :-
 ****************************************************************************/
 compile_prologliblit(ParserTerm,Module,Nesting,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    is_flatom(Funct,FAtom),
+	    %%is_flatom(Funct,FAtom), %% this prevents _p(a)@_plg(aaa) from getting compiled
 	    compile_prlgterm(Funct,N,Args,Module,Nesting,TCode,OidCode,ACode,BodyHeadList,Status)
 	;
-	    is_flatom(ParserTerm,FAtom),
+	    %%is_flatom(ParserTerm,FAtom),  %% %% this prevents _p@_plg(aaa) from getting compiled
 	    atomobj_struct(ParserTerm,FObj),
 	    N=0,
 	    prologterm_struct(FObj,0,[],Module,TCode),
 	    ACode=NULL,
 	    OidCode=NULL,
 	    BodyHeadList = [],
-	    Status=[]
+	    Status = NO_ERRORS
 	),
 	( no_errors_found(Status) -> 
 	    %% build a special structure for the coder
@@ -8552,7 +8897,7 @@ compile_prologlibobj(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 	    Code=NULL,
 	    OidCode=NULL,
 	    BodyHeadList=[],
-	    Status=[]
+	    Status = NO_ERRORS
 	),
 	!.
 
@@ -8564,17 +8909,17 @@ compile_prologlibobj(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 ****************************************************************************/
 compile_prologlibobj(ParserTerm,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    is_flatom(Funct,FAtom),
+	    %%is_flatom(Funct,FAtom), %% this prevents f(_p(a))@_plg(aaa) from getting compiled
 	    compile_prlgterm(Funct,N,Args,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 	;
-	    is_flatom(ParserTerm,FAtom),
+	    %%is_flatom(ParserTerm,FAtom), %% this prevents f(_p)@_plg(aaa) from getting compiled
 	    atomobj_struct(ParserTerm,FObj),
 	    N=0,
 	    prologterm_struct(FObj,0,[],Module,Object),
 	    Code=NULL,
 	    OidCode=NULL,
 	    BodyHeadList=[],
-	    Status=[]
+	    Status = NO_ERRORS
 	),
 	!.
 
@@ -8630,9 +8975,13 @@ compile_prlgterm(Funct,N,Args,Object,OidCode,Code,Status) :-
 compile_prlgterm(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	atomobj_struct(Funct,FObj),
 	prologterm_struct(FObj,N,AObj,Object),
-	set_context(no_symbol_check),
+	(has_context(no_symbol_check) -> Clear = no
+	; set_context(no_symbol_check), Clear = yes
+	),
 	compile_pathexplist(Args,Nesting,AObj,OidCode,Code,BodyHeadList,Status),
-	clear_context(no_symbol_check),
+	(Clear == yes -> clear_context(no_symbol_check)
+	; true
+	),
 	!.
 
 /*
@@ -8712,13 +9061,13 @@ compile_head_wspathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
 	    workspaceobj_struct(A,WS,Object,Code),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL,
-	    Status=[]
+	    Status = NO_ERRORS
 
 	; transactionalatomlit_struct(HEADLITERAL,ParserTerm,A) ->
 	    workspaceobj_struct(A,WS,Object,Code),
 	    H2BCodeHead=NULL,
 	    H2BCodeTail=NULL,
-	    Status=[]
+	    Status = NO_ERRORS
 	),
 	!.
 
@@ -8787,7 +9136,7 @@ compile_head_wsliteral(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 			     ACode,Code,WSStatus),
 	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,SymbolStatus),
-	    (WSStatus == [] -> Status = SymbolStatus
+	    (WSStatus == NO_ERRORS -> Status = SymbolStatus
 	    ; append(SymbolStatus,WSStatus,Status)
 	    ),
 	    H2BCodeHead=NULL,
@@ -8798,7 +9147,7 @@ compile_head_wsliteral(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 			     ACode,Code,WSStatus),
 	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
 				  TRANSACTIONAL_SYMBOL,SymbolStatus),
-	    (WSStatus == [] -> Status = SymbolStatus
+	    (WSStatus == NO_ERRORS -> Status = SymbolStatus
 	    ; append(SymbolStatus,WSStatus,Status)
 	    ),
 	    H2BCodeHead=NULL,
@@ -8923,20 +9272,27 @@ compile_head_wstransactionaltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BC
 ****************************************************************************/
 compile_head_wsfltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
         ( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,FArgs,Predicate,ReturnValue)
+	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
 	->
-	    H2BCodeTail=NULL,
-	    Code=NULL,
-	    compile_udf_body_literal(Funct,Args,FArgs,Predicate,ReturnValue,0,Object,PCode,PH2BCodeHead,S),
-	    SymbolContext = UDF_SYMBOL,
-	    ( no_errors_found(S) -> 
-		append(PH2BCodeHead,[PCode],List),
-		conjunct_code(List,H2BCodeHead),
-		Status = []
+	    ( no_errors_found(S1) -> 
+	    	H2BCodeTail=NULL,
+	    	Code=NULL,
+	    	compile_udf_body_literal(Funct,Predicate,0,PCode,PH2BCodeHead,S),
+	    	SymbolContext = UDF_SYMBOL,
+	    	( no_errors_found(S) -> 
+			append(FunctBodyHeadList,PH2BCodeHead,List1),
+			append(List1,[PCode],List),
+			conjunct_code(List,H2BCodeHead),
+			Status = NO_ERRORS
+	    	;
+			approx_flindex(Funct,Index),
+			compiling_error(Index,ERROR_UDF_COMPILE,Err),
+			Status = [Err|S]
+	    	)
 	    ;
 		approx_flindex(Funct,Index),
 		compiling_error(Index,ERROR_UDF_COMPILE,Err),
-		Status = [Err|S]
+		Status = [Err|S1]
 	    )
         ;
 	    set_context(compiling_term_name),
@@ -8973,10 +9329,10 @@ compile_head_wstermlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatu
 			     TObj,WSTObj,WSStatus),
 	    conjunct_struct(ObjCode,WSTObj,Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
         ),
 	!,
-	(WSStatus == [] -> append(SymbolStatus,PathexpStatus,CompileStatus)
+	(WSStatus == NO_ERRORS -> append(SymbolStatus,PathexpStatus,CompileStatus)
 	; CompileStatus = WSStatus
 	).
 
@@ -8990,10 +9346,10 @@ compile_head_wstransactionaltermlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail
 			     TObj,WSTObj,WSStatus),
 	    conjunct_struct(ObjCode,WSTObj,Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
         ),
 	!,
-	(WSStatus == [] -> append(SymbolStatus,PathexpStatus,CompileStatus)
+	(WSStatus == NO_ERRORS -> append(SymbolStatus,PathexpStatus,CompileStatus)
 	; CompileStatus = WSStatus
 	).
 
@@ -9010,7 +9366,7 @@ compile_head_wsfllist(ObjTermList,ObjTerm,Index,WS,Object,Code,H2BCodeHead,H2BCo
 		ObjCode=NULL,
 		ObjH2BCodeHead=NULL,
 		ObjH2BCodeTail=NULL,
-		Status=[]
+		Status = NO_ERRORS
 	    ;
 	      compile_head_wsflpathexp(ObjTerm,WS,Obj,ObjCode,ObjH2BCodeHead,ObjH2BCodeTail,Status)
 	    ),
@@ -9044,9 +9400,9 @@ compile_head_wsflobjref(ObjTerm,RefType,AttTerm,WS,Object,Code,H2BCodeHead,H2BCo
 	    conjunct_code([OAH2BCodeTail,WTCode],H2BCodeTail),
 	    Code = OACode
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
         ),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	;  Status = WSStatus
 	).
 
@@ -9063,9 +9419,9 @@ compile_head_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,Obj1,Code,H2BCodeHead,H2B
 			     TCode,WTCode,WSStatus),
 	    conjunct_struct(OCode,WTCode,Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
         ),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	;  Status = WSStatus
 	).
 
@@ -9074,7 +9430,7 @@ compile_head_wsflbirelate(ObjTerm1,RelType,ObjTerm2,WS,Obj1,Code,H2BCodeHead,H2B
   compile_head_wsflobjspec(+ObjTerm,+SpecBody,+WS,-Object,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
 ****************************************************************************/
 compile_head_wsflobjspec(ObjTerm,SpecBody,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	( SpecBody == [] ->
+	( SpecBody == NO_ERRORS ->
 	    ( is_flobjref(ObjTerm,OTerm,RefType,ATerm) ->
 		compile_head_wsflobjref(OTerm,RefType,ATerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
 	    ;
@@ -9085,9 +9441,9 @@ compile_head_wsflobjspec(ObjTerm,SpecBody,WS,Object,Code,H2BCodeHead,H2BCodeTail
 				     ECode,WSECode,WSStatus),
 		    conjunct_struct(ObjCode,WSECode,Code)
 		;
-		    WSStatus = []
+		    WSStatus = NO_ERRORS
 		),
-		(WSStatus == [] -> Status = PathexpStatus
+		(WSStatus == NO_ERRORS -> Status = PathexpStatus
 		; Status = WSStatus
 		)
 	    )
@@ -9166,9 +9522,9 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 			     SCode,WSSCode,WSStatus),
 	    conjunct_struct(MCode,WSSCode,Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
         ),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -9183,9 +9539,9 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 			     SCode,WSSCode,WSStatus),
 	    conjunct_struct(IMCode,WSSCode,Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
         ),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -9200,9 +9556,9 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 			     SCode,WSSCode,WSStatus),
 	    conjunct_struct(TCode,WSSCode,Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
         ),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -9232,9 +9588,9 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 		    conjunct_code([AH2BCodeHead,VH2BCodeHead],H2BCodeHead),
 		    conjunct_code([AH2BCodeTail,VH2BCodeTail],H2BCodeTail)
 		;
-		    WSStatus = []
+		    WSStatus = NO_ERRORS
 		),
-		(WSStatus == [] -> Status = PathexpStatus
+		(WSStatus == NO_ERRORS -> Status = PathexpStatus
 		; Status = WSStatus
 		)
 	    )
@@ -9268,7 +9624,7 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 			attach_workspace(WS,
 					 sigattcondef_struct(HEADLITERAL,Object,AttObj,OLower,OUpper,RefType,ValObj,CSCode),
 					 CSCode,CWSSCode,WSStatus2),
-			(WSStatus1==[], WSStatus2==[] -> Status = PathexpStatus
+			(WSStatus1 == NO_ERRORS, WSStatus2 == NO_ERRORS -> Status = PathexpStatus
 			; append(WSStatus1,WSStatus2,Status)
 			),
 			conjunct_code([ACode,CCode,VCode,WSSCode,CWSSCode],Code),
@@ -9298,9 +9654,9 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 			     SCode,WSCode,WSStatus),
 	    conjunct_struct(ACode,WSCode,Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -9316,9 +9672,9 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 			     SCode,WSCode,WSStatus),
 	    conjunct_struct(ACode,WSCode,Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -9334,9 +9690,9 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 			     SCode,WSCode,WSStatus),
 	    conjunct_struct(ACode,WSCode,Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -9352,9 +9708,9 @@ compile_head_wsflspecbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status
 			     SCode,WSCode,WSStatus),
 	    conjunct_struct(ACode,WSCode,Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -9399,9 +9755,9 @@ compile_head_wsflobjeql(Obj1,Obj2,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 			     OECode,WSCode,WSStatus),
 	    conjunct_struct(OCode,WSCode,Code)
 	;
-	    WSStatus = []
+	    WSStatus = NO_ERRORS
 	),
-	(WSStatus == [] -> Status = PathexpStatus
+	(WSStatus == NO_ERRORS -> Status = PathexpStatus
 	; Status = WSStatus
 	),
 	!.
@@ -9420,7 +9776,7 @@ compile_head_wsflneg(PosPart,WS,Idx,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    attach_workspace(WS,
 			     head_neg_struct(PosCode,Idx,NegCode,Status1),
 			     NegCode,Code,WSStatus),
-	    (WSStatus == [] -> append(S,Status1,Status)
+	    (WSStatus == NO_ERRORS -> append(S,Status1,Status)
 	    ; append(Status1,WSStatus,Status)
 	    )
 	; Status = S
@@ -9757,7 +10113,7 @@ compile_fldynrule(Op,R,RCode,Status) :-
 compile_fldynrule(_Op,R,RCode,Status) :-
 	is_flvariable(R,Name,Index),
 	varobj_struct(Name,Index,RCode),
-	Status=[].
+	Status = NO_ERRORS.
 
 %% Note: prolog-headed rules (declared as :- prolog), including sensors,
 %%       are not allowed to be dynamic in FLORA-2.
@@ -9784,7 +10140,7 @@ compile_fldynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,R
 	(has_prologlit(HeadCode,IdxH)
 	-> compiling_error(IdxH,NO_PROLOG_IN_DYNRULE_HEAD,DelayStatus1),
 	    DelayStatus = [DelayStatus1]
-	; DelayStatus = []
+	; DelayStatus = NO_ERRORS
 	),
 	append(HeadStatusPre,DelayStatus,HeadStatus),
 	( no_errors_found(HeadStatus) -> 
@@ -10010,7 +10366,7 @@ compile_execdirect(DirectTerm,WS,Code,Status) :-
 	),
 	( is_flopdef(DirectTerm,Precedence,Associativity,Op) ->
 	    florasyslib_struct(FLLIBSHDIRECT,5,[FL_OP,Mod,Precedence,Associativity,Op],Code),
-	    Status = []
+	    Status = NO_ERRORS
 
 	; is_flsemantics(DirectTerm,OptionsList) ->
 	    is_fllist(OptionsList,L,T,I),
@@ -10038,7 +10394,7 @@ compile_execdirect(DirectTerm,WS,Code,Status) :-
 	    ; is_flvariable(P,PN,PI), varobj_struct(PN,PI,PCode)
 	    ),
             florasyslib_struct(FLLIBSHDIRECT,4,[FL_INDEX,Mod,ACode,PCode],Code),
-	    Status = []
+	    Status = NO_ERRORS
 
 	; is_flsensordirect(DirectTerm,SensCall,DelayCond) ->
 	    compile_defsensor_direct(SensCall,DelayCond,Direct,Status),
@@ -10086,7 +10442,7 @@ compile_execdirect(DirectTerm,WS,Code,Status) :-
 	    %% reference to prefix#local@module
 	    is_flprefixdef(DirectTerm,PrefixName,PrefixExpansion) ->
 	    florasyslib_struct(FLLIBPREFIXDEF,3,[Mod,PrefixName,PrefixExpansion],Code),
-	    Status = []
+	    Status = NO_ERRORS
 
 	),
 	!.
@@ -10135,7 +10491,7 @@ flora_compile_pathexp(ParserTerm,Code,Status) :-
 %% list of data type literals
 compile_datatype_list([],[],[]) :- !.
 compile_datatype_list([H|Tail],[HCode|TailCode],Status) :-
-	(integer(H) -> HCode = H, S1=[] %% list of characters inside DATATYPE
+	(integer(H) -> HCode = H, S1 = NO_ERRORS %% list of characters inside DATATYPE
 	;
 	    compile_pathexp(H,HCode,_,_,S1)
 	),
@@ -10170,7 +10526,7 @@ is_head_neg_negatable_literal(PRIMVDSIGDEF(_,_,_)) :- !.
 
 is_head_neg_negatable_literal(X) :-
 	is_prologterm(X,Struct,Arity,_Args),
-	is_modularized_atom(Struct,Atom,_),
+	is_modularized_pratom(Struct,Atom,_),
 	Arity1 is Arity-1,
 	flora_negatable_prlgdef(Atom,Arity1,_),
 	!.
@@ -10205,8 +10561,8 @@ is_body_neg_negatable_literal(X) :-
 %% this one is used to make neg(UDFHILOGPREDICATENAME(....),Goal) into
 %% UDFHILOGPREDICATENAME(....), neg(Goal)
 is_body_neg_passthrough_literal(X) :-
-	is_prologterm(X,Struct,4,_Args),
-	is_modularized_atom(Struct,UDFHILOGPREDICATENAME,_),
+	is_prologterm(X,Struct,5,_Args),
+	is_pratom(Struct,UDFHILOGPREDICATENAME,_),
 	!.
 /*
 is_unimplemented_neg_negatable_literal(X) :-
@@ -10222,8 +10578,8 @@ delay_literals_checking_code(Head,Body,Code) :-
 	(has_context(rule_reification),
 	    has_context(compiling_body_pathexp)
 	-> %% use new flvariables
-	    is_flvariable(ParserHeadVars,FL_UNDERSCORE,NO_INDEX),
-	    is_flvariable(ParserBodyVars,FL_UNDERSCORE,NO_INDEX)
+	    is_flvariable(ParserHeadVars,FL_ANON_VAR,NO_INDEX),
+	    is_flvariable(ParserBodyVars,FL_ANON_VAR,NO_INDEX)
 	;
 	    is_fllist(ParserHeadVars,HeadVars,[],NO_INDEX),
 	    is_fllist(ParserBodyVars,BodyVars,[],NO_INDEX)
@@ -10246,7 +10602,7 @@ delay_literals_checking_code(Head,Body,Code) :-
 
 
 no_mixed_sensor_nonsensor_heads(CompiledHead,ParsedHead,Status) :-
-	(no_mixed_sensor_nonsensor_heads(CompiledHead) -> Status = []
+	(no_mixed_sensor_nonsensor_heads(CompiledHead) -> Status = NO_ERRORS
 	;  
 	    approx_flindex(ParsedHead,I),
 	    compiling_error(I,MIXED_HEAD_SENSORS,MixStatus),
@@ -10294,7 +10650,7 @@ generate_prolog_liblit(Atom,Arity,Args,Code) :-
         prologterm_struct(AtomCode,Arity,Args,Code1),
         prologliblit_struct(Code1,Code).
 generate_prolog_liblit(AtomCode,Arity,Args,Code) :-
-	is_modularized_atom(AtomCode,_,_),
+	is_modularized_pratom(AtomCode,_,_),
 	!,
         prologterm_struct(AtomCode,Arity,Args,Code1),
         prologliblit_struct(Code1,Code).
@@ -10328,7 +10684,7 @@ compiling_flrshell_command :- \+ flora_current_compile_filename(_).
 %% on the outcome of the status codes in the Arg 1 list
 merge_status([],[]) :- !.
 merge_status([S|Rest],T) :-
-	(S == [] -> merge_status(Rest,T)
+	(S == NO_ERRORS -> merge_status(Rest,T)
 	; T = S
 	).
 */

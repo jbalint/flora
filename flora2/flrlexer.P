@@ -537,14 +537,14 @@ read_tokens(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
 		    %% the case '?alphanum' is a variable
 		    read_variable(NChar,NextLN,NextCN,NNLN,NNCN,TokenList,Status)
 		
-		; NChar == CH_UNDERSCORE ->
+		; NChar == CH_ANON_VAR ->
 		    %% the case of '?_[alphanum]' is an anonymous variable
 		    read_underscore_variable(NChar,NextLN,NextCN,NNLN,NNCN,TokenList,Status)
 
 		;   %% The case when '?' is an anonymous variable by itself
 		    %% Since the cursor cannot be set backward, we construct
 		    %% a token here to avoid losing it.
-		    lexer_variable_struct([CH_UNDERSCORE],LineNo,CharNo,LineNo,CharNo,Tk),
+		    lexer_variable_struct([CH_ANON_VAR],LineNo,CharNo,LineNo,CharNo,Tk),
 		    TokenList=[Tk|NTokenList],
 		    !,
 		    read_tokens(NChar,NextLN,NextCN,NNLN,NNCN,NTokenList,Status) % status should include this operation
@@ -556,7 +556,7 @@ read_tokens(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
 		    %% ? is an anonymous variable
 		    %% Since the cursor cannot be set backward, we
 		    %% construct a token here to avoid losing it
-		    lexer_variable_struct([CH_UNDERSCORE],LineNo,CharNo,LineNo,CharNo,Tk),
+		    lexer_variable_struct([CH_ANON_VAR],LineNo,CharNo,LineNo,CharNo,Tk),
 		    TokenList=[Tk|NTokenList],
 		    !,
 		    read_special(NChar,NextLN,NextCN,NNLN,NNCN,NTokenList,Status) 
@@ -618,7 +618,7 @@ read_transactional_token(C1,LN1,CN1,LN,CN,TokenList,Status) :-
 		 %% the case '?alphabet' is a variable
 		 read_transactional_variable(NChar,LN1,CN1,NextLN,NextCN,NNLN,NNCN,TokenList,Status)
 
-	    ; NChar == CH_UNDERSCORE ->
+	    ; NChar == CH_ANON_VAR ->
 		 %% the case '?_[alphanum]' is an anonymous variable
 		 read_transactional_underscore_variable(NChar,LN1,CN1,NextLN,NextCN,NNLN,NNCN,TokenList,Status)
 
@@ -631,7 +631,7 @@ read_transactional_token(C1,LN1,CN1,LN,CN,TokenList,Status) :-
 	      read_tokens(NChar,NextLN,NextCN,NNLN,NNCN,NTokenList,Status) 
 	    )
 
-	; Ch == CH_UNDERSCORE ->
+	; Ch == CH_SPECIAL_SYM ->
 	    read_transactional_underscore_identifier(Ch,LN,CN,NextLN,NextCN,TokenList,Status)
 
 	; is_digit(Ch) -> %% Case of %N
@@ -827,12 +827,12 @@ read_underscore(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
 
 	; (is_alphanum_or_underscore(NextChar) ; NextChar == FL_DOUBLEQUOTE)
 	->
-	    %% starts with the current char (CH_UNDERSCORE) and reads
+	    %% starts with the current char (CH_SPECIAL_SYM) and reads
 	    %% alphanum+underscore.
 	    read_datatype_or_builtin_id(Char,LineNo,CharNo,NextLN,NextCN,
 					TokenList,Status)
 	
-	%% Single CH_UNDERSCORE
+	%% Single CH_SPECIAL_SYM
 	; %%atom_codes(NextChar,[NextCharCode]),
 	    flratom_char_code(NextChar,0,NextCharCode),
 	    (is_whitespace(NextCharCode)
@@ -843,7 +843,7 @@ read_underscore(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
 			CH_GREATER, CH_LESS, CH_PLUS, CH_MINUS])
 	    )
 	->
-	    lexer_builtin_identifier_struct([Char], %% [CH_UNDERSCORE]
+	    lexer_builtin_identifier_struct([Char], %% [CH_SPECIAL_SYM]
 					    LineNo,CharNo,
 					    NextLN,NextCN,Tk),
 	    get_char(NextLN,NextCN,Ch,NNextLN,NNextCN),
@@ -857,12 +857,12 @@ read_underscore(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
 	).
 
 %% Like read_underscore, but is used for transactional methods and
-%% reads in only identifiers that start with CH_UNDERSCORE
+%% reads in only identifiers that start with CH_SPECIAL_SYM
 read_transactional_underscore_identifier(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
 	peek_char(NextChar),
 	(is_alphanum_or_underscore(NextChar)
 	->
-	    %% starts with the current char (CH_UNDERSCORE) and reads
+	    %% starts with the current char (CH_SPECIAL_SYM) and reads
 	    %% alphanum+underscore.
 	    read_transactional_builtin(Char,LineNo,CharNo,NextLN,NextCN, TokenList,Status)
 	; 
@@ -975,8 +975,8 @@ read_transactional_underscore_variable(C2,LN1,CN1,LN2,CN2,LN,CN,TokenList,Status
 /****************************************************************************
   read_datatype_or_builtin_id(+Char,+LineNo,+CharNo,+NextLN,+NextCN,
                               -TokenList,-Status)
-  Reads alphanumeric+underscore thing, which is known to start with a
-  CH_UNDERSCORE then alphanumeric+underscore. If, having read that,
+  Reads an alphanumeric+underscore thing, which is known to start with a
+  CH_SPECIAL_SYM then alphanumeric+underscore. If, having read that,
   the next symbol is CH_DOUBLEQUOTE, assume that this is a data type
   specification and read that in also. Otherwise, just use what has been
   read (alphanumeric+underscore) and create a token for a builtin identifier.
@@ -1033,7 +1033,7 @@ read_datatype_or_builtin_id(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :
 		TokenList=[Tk]
 	    )
 
-	; %% Just a builtin identifier that starts with CH_UNDERSCORE
+	; %% Just a builtin identifier that starts with CH_SPECIAL_SYM
 	    lexer_builtin_identifier_struct(Chars,  %% builtin identifier chars
 					    LineNo,CharNo,
 					    LastLN,LastCN,Tk),

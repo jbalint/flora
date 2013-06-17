@@ -58,7 +58,7 @@ is_prrule(PRRULE(Head,Body),Head,Body).
 is_prfact(PRFACT(Head),Head).
 is_prquery(PRQUERY(Goal),Goal).
 is_prdirective(PRDIRECTIVE(Direct),Direct).
-is_prudf_definition(PRUDFDEFINITION(Name,N,Args,PredName,PredStruct,ReturnValue),Name,N,Args,PredName,PredStruct,ReturnValue).
+is_prudf_definition(PRUDFDEFINITION(Name,N,UDFCode,PredName,PredCode),Name,N,UDFCode,PredName,PredCode).
 
 %% DescrInfo is a tuple: (IdCode,DescrVarTermCode,DescrMetafactCode,DefeatCondCode)
 is_prdynrule(PRDYNRULE(Head,Body,HVars,BVars,PreBody,PostBody,DescrInfo),Head,Body,HVars,BVars,PreBody,PostBody,DescrInfo).
@@ -522,44 +522,75 @@ coder_write_code(Term,Status) :-
 	; is_prdirective(Term,Direct) 
 	-> coder_write_direct(Direct,Status)
 
-	; is_prudf_definition(Term,Name,N,Args,PredName,PredStruct,ReturnValue) 
-	-> coder_write_udf_definition(Name,N,PredName,Status),
-	   coder_write_udf_used(Name,N,Args,PredStruct,ReturnValue,Status)
+	; is_prudf_definition(Term,Name,N,UDFCode,PredName,PredCode) 
+	-> coder_write_udf_definition(Name,N,UDFCode,PredName,PredCode,Status),
+	   coder_write_udf_used(Name,N,UDFCode,PredCode,Status)
 	).
 
 
 
 /****************************************************************************
-  coder_write_udf_definition(+PredNameSansModule,+Arity,+PredName,-Status=[])
+  coder_write_udf_definition(+PredNameSansModulei,+Arity,+UDFCode,+PredName,+PredCode,-Status=[])
 ****************************************************************************/
-coder_write_udf_definition(PredNameSansModule,N,PredName,[]) :-
+coder_write_udf_definition(PredNameSansModule,N,UDFCode,PredName,PredCode,Status) :-
 	flora_write_atom('?-(assert(:(flrregistry,flora_defined_udf_registry(FLORA_THIS_MODULE_NAME,'),
-	flora_write_quoted_atom(PredNameSansModule),
-	flora_write_atom(','),
-	write_canonical(N),
-	flora_write_atom(',FLORA_THIS_WORKSPACE('),
-	flora_double_quotes(PredName,PredName2),
-	flora_write_atom(PredName2),
-	flora_write_atom('))))).'),
-	nl.
-
+	coder_write_udf_info(PredNameSansModule,N,UDFCode,PredName,PredCode,Status).
 
 /****************************************************************************
-  coder_write_udf_used(+PredNameSansModule,+Arity,+Args,+Pred,+RetValue,-Status=[])
+  coder_write_udf_used(+PredNameSansModule,+Arity,+UDFCode,+PredCode,-Status=[])
 ****************************************************************************/
-coder_write_udf_used(Name,N,Args,Pred,ReturnValue,[]) :-
+coder_write_udf_used(Name,N,UDFCode,PredCode,Status) :-
 	flora_write_atom('?-(assert(:(flrregistry,flora_used_udf_registry('),
-	flora_write_quoted_atom(Name),
-	flora_write_atom(','),
-	write_canonical(N),
-	flora_write_atom(','),
-	write_canonical(Args),
-	flora_write_atom(','),
-	write_canonical(Pred),
-	flora_write_atom(','),
-	write_canonical(ReturnValue),
-	flora_write_atom(')))).'),
-	nl.
+	coder_write_udf_info(Name,N,UDFCode,NULL,PredCode,Status).
+
+/****************************************************************************
+  coder_write_udf_info(+Name,+Arity,+UDFCode,+PredName,+PredCode,-Status=[])
+  Writes to flora_defined_udf_registry/6:
+      Module,    <--- before calling coder_write_udf_info/6.
+      UDF name,                                  eg, foobar
+      Arity of this UDF,                             fib
+      UDF-term (user view)                           1
+      Name of the UDF predicate that defines this UDF,
+                  eg,                     FLORA_WORKSPACE(new_udf_predicate_fib)
+      UDF Literal used to implement this UDF
+          eg,   FLORA_WORKSPACE(new_udf_predicate_fib)(_h0,flapply(fib,_h1),_h2)
+  And to flora_defined_udf_registry/4:
+      UDF name,
+      Arity of this UDF,
+      UDF-term (user view)
+      UDF Literal used to implement this UDF
+****************************************************************************/
+coder_write_udf_info(Name,N,UDFCode,PredName,PredCode,Status) :-
+	flora_write_struct(Name,_Context,S1),
+	(no_errors_found(S1) ->
+		flora_write_atom(','),
+		write_canonical(N),
+		flora_write_atom(','),
+		flora_write_struct(UDFCode,_,S2),
+		(no_errors_found(S2) ->
+			flora_write_atom(','),
+			(PredName\=NULL ->
+				flora_write_atom('FLORA_THIS_WORKSPACE('),
+				flora_double_quotes(PredName,PredName2),
+				flora_write_atom(PredName2),
+				flora_write_atom('),')
+			; true
+			),
+			flora_write_struct(PredCode,_,S3),
+			(no_errors_found(S3) ->
+				flora_write_atom(')))).'),
+				nl,
+				Status = []
+			;
+				Status = S3
+			)
+		;
+			Status = S2
+		)
+	;
+		Status = S1
+	).
+
 
 /****************************************************************************
   coder_write_direct(+Term,-Status)

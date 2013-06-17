@@ -7,7 +7,7 @@
 # Contact:   flora-users@lists.sourceforge.net
 #
 # Copyright (C) by
-#      The Research Foundation of the State University of New York, 1999-2013.
+#      The Research Foundation of the State University of New York, 2007-2013.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,4 +25,4 @@
 
 . ./build.sh
 
-${JAVA_BIN}/jar -cvf ../flora2java.jar javaAPI/src/*.class javaAPI/util/*.class
+${JAVA_BIN}/jar -cvf ../flora2java.jar javaAPI/src/ javaAPI/util/

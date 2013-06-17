@@ -2145,29 +2145,37 @@ For instance,
 %% 
 
 
-\section{Skolem Constants and Terms}\label{sec-anon-gen-oids}
+\section{Skolem Symbols}\label{sec-anon-gen-oids}
 
 
 \index{Skolem!constant}
+\index{Skolem!symbol}
 \index{Skolem!function}
 \index{Skolem!term}
 \index{Skolem constant}
 \index{constant!Skolem}
 %
-For applications where oids are not important, \FLORA provides the
-compiler directive \verb|_#| to automatically generate a new
-\emph{Skolem constant}. \verb|_#| can be used wherever an Id-term is allowed, \emph{except in the
-rule body}, where Skolem constants make no sense.\footnote{
-  Because of the uniqueness, a Skolem constant is unlikely to match
-  anything that appears elsewhere in the knowledge base, so a subgoal that
-  contains such a constant is likely to always be false.
-}
+For applications where oids are not important, \FLORA provides the special
+symbols \verb|_#| and \verb|_#1|, \verb|_#2|, etc.,
+to automatically generate a new
+\emph{Skolem constant} or to test for such automatically generated
+constants. We call such symbols \emph{Skolem symbols}.   Skolem symbols are
+interpreted \emph{differently}
+in the rule heads and bodies.
+
 %%
-Each occurrence of \verb|_#| represents
-a new constant, which is unique throughout
+\paragraph{Skolems in rule heads and descriptors outside of the reification
+  operator.}
+Outside of reification (see
+Section~\ref{sec-reification} for the details of reification), the
+head-occurrences of Skolem symbols are interpreted as described below.
+
+Each occurrence of \verb|_#| in the rule head or a rule descriptor (see
+Section~\ref{sec-rule-id} to learn about rule descriptors)
+represents a \emph{new} Skolem constant, which is unique throughout
 the source program.
 
-Of course, uniqueness is achieved through the use of special ``weird'' naming
+Uniqueness is achieved through the use of a special ``weird'' naming
 schema for such oids, which internally prefixes them with several {\tt
   ``\_\$''}s. However, as long as the user does not use a similar
 naming convention (who, on earth, would give names that begin with lots of
@@ -2232,6 +2240,98 @@ flora2 ?- newoid{?X}.
 Yes
 \end{verbatim}
 %%
+
+\paragraph{Skolems in subgoals of rule bodies outside of the reification operator.}
+In a body subgoal outside of the reification operator, a Skolem
+symbol (numbered or not) is interpreted differently that in the head: not
+as a new  Skolem constant,
+but as a \emph{test} of whether or not the
+corresponding argument is bound to a Skolem constant. One can think of it
+as a variable that is tested for being bound to a Skolem constant.
+Numbered Skolems within the same rule are interpreted as the same variable,
+so the occurrences of the same numbered Skolem are expected to be bound to
+the same constant. For instance, in
+%% 
+\begin{verbatim}
+  ?- insert{abc[prop1->_#, prop2->_#3, prop3->_#3],
+            cde[prop1->_#, prop2->_#3, prop3->_#]}.
+  test1 :- abc[prop1->_#, prop2->_#5, prop3->_#5].
+  test2 :- cde[prop1->_#, prop2->_#5, prop3->_#5].
+\end{verbatim}
+%% 
+Here the query \texttt{test1} will return \texttt{true} because in the
+object \texttt{abc} the properties \texttt{prop1} and \texttt{prop2} are
+bound to the same Skolem constant. In contrast, in \texttt{cde}, these
+properties are \emph{not} bound to the same Skolem (since \texttt{\_\#3} and
+\texttt{\_\#} are different Skolems), so the query \texttt{test2} fails. 
+
+Note that, as a test, both \texttt{\_\#} and \texttt{\_\#}$N$, where
+\emph{N} is an positive integer, match not only Skolem constants, but also
+Skolem functions. For instance, the query
+%% 
+\begin{verbatim}
+    ?- insert{p(_#(a,b))}, p(_#).
+\end{verbatim}
+%% 
+succeeds because \verb|_#(a,b)| is a term obtained from an application of a
+Skolem function, \verb|_#|, to its arguments.
+
+\paragraph{Skolems in reified rules.}
+If a reified rule, $R$,
+occurs somewhere in the body or a head of another, normal rule (or fact),
+the Skolem symbols that occur in $R$ are interpreted the same way as if the
+rule were outside of reification. That is, the head occurrences in $R$ are
+interpreted as Skolem constants and the body occurrences are interpreted as
+tests for Skolems. For instance, in
+%% 
+\begin{verbatim}
+   head1(${head11(?X,_#) :- body11(_#1,_#1)}).
+   head2 :- body2(${head22(?X,_#) :- body22(_#1,_#1)}).
+\end{verbatim}
+%% 
+the symbol \verb|_#| in the fact \texttt{head11(...)} is a Skolem constant, while the
+two occurrences of the symbol \verb|_#1| in \texttt{body11} test if
+\texttt{body11(?X,?Y)} can succeed with \texttt{?X} and \texttt{?Y} bound
+to the same Skolem constant. The interpretation of \verb|_#| and \verb|_#1|
+in the second rule above is similar.    
+
+\paragraph{Skolems in reified subgoals.}
+If a reified subgoal (not rule), $G$, contains a Skolem symbol, that symbol is
+interpreted as a Skolem constant. This is true both if $G$ occurs in the head
+of a rule or in the body.
+Note that this implies that if one later uses $G$ as a \emph{query} then
+this query is likely to fail. For instance, in
+%% 
+\begin{verbatim}
+   ?- insert{p(a), p(_#)}.
+   ?- ?X = ${p(_#)}, ?X.
+\end{verbatim}
+%% 
+the second query will fail because the occurrence of \verb|_#| there is a
+Skolem constant that differs from the Skolem constant in the first rule.
+However,
+%% 
+\begin{verbatim}
+   ?- ?X = ${p(_#)}, insert{?X}, p(_#).
+\end{verbatim}
+%% 
+succeeds because when the reified subgoal \verb|${p(_#)}| is inserted into the
+database, the Skolem symbol is interpreted as a constant and the subsequent
+check \verb|p(_#)| tests that the argument of \texttt{p} is bound to a
+Skolem constant. 
+
+Numbered Skolems are interpreted the same way as non-numbered ones except
+that different occurrences of the same numbered Skolem symbol are treated
+as identical within the same rule or query.
+For instance, below,
+%% 
+\begin{verbatim}
+   ?- ?X = ${p(_#2,_#2)}, insert{?X}, p(_#7,_#7).
+   ?- erase{p(?,?)}, ?X = ${p(_#2,_#)}, insert{?X}, p(_#7,_#7).
+\end{verbatim}
+%% 
+the first query succeeds, while the second fails.
+
 
 \paragraph{More on Skolems.}
 A Skolem constant can also be used as a function symbol and even a
@@ -5950,6 +6050,28 @@ Note that the above example also illustrates that a definition of a UDF can
 consist of multiple \texttt{function}-statements---just like a definition
 of a predicate can have multiple rules. 
 
+\subsection{Higher-order UDFs}
+
+UDFs can use arbitrary HiLog terms. These terms can be used both in the
+head of the UDF definition and in its body. For instance,
+%%
+\begin{verbatim}
+function abc(?x):=?x(a,b).
+function ?x(?y,b)(?y):=t(?z) if pred(?x,?y,?z).
+function t(c):=d.
+pred(foo,a,c).
+q(d).
+?- q(abc(?x)(?y)).
+\end{verbatim}
+%%
+Perhaps it is not obvious, but the query succeeds
+with the answers \texttt{?x = foo}, \texttt{?y = a}.    
+Indeed, \texttt{abc(?x)} rewrites to \texttt{?x(a,b)}
+by the first UDF definition, so the query becomes
+\texttt{q(?x(a,b)(?y))}. By the second (higher-order!) UDF, this rewrites to
+\texttt{q(t(c))} with the bindings \texttt{?x=foo} and \texttt{?y=a}.
+Finally, the query rewrites to \texttt{q(d)}, by the third UDF, and succeeds. 
+
 \subsection{User-defined Functions and Multifile Modules}
 
 Recall from Section~\ref{sec-loading-mods} that sets of rules can be added to 
@@ -6070,6 +6192,19 @@ substitutivity of equals by equals cannot be guaranteed.
 For instance, equality of the following kind $\tt ?x=abc, ?x(pqr) :=: cde$
 cannot be simulated because the term \texttt{abc(pqr)} that is equated to
 \texttt{cde} here is not explicitly given at compile time.  
+
+It is important to also keep in mind that UDFs provide only \textbf{unidirectional}
+rewriting. For instance, in
+%% 
+\begin{verbatim}
+  function a := b.
+  function a := c.
+  q(c).
+  ?- q(b).
+\end{verbatim}
+%% 
+the query fails, since \texttt{b} is \textbf{not} rewritten back into \texttt{a}
+(and then into \texttt{c}).   
 
 To illustrate the cases where simulation is possible, suppose we want to
 state that any occurrence of \texttt{foo(?x)} should be equated to (rewritten
