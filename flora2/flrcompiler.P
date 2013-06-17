@@ -2410,7 +2410,8 @@ check_udf_vars_for_safety(Function,Predicate,ReturnValue,Status) :-
         singleton_flvars(SortedVars,SingletonVars),
         singleton_warning(SingletonVars,Status,WarnTail),
         subtract_vars(FuncVars,PredVars,UnboundVars),
-        %% Don't issue the unboundedness var warning for facts (facts can be defined using function definition)
+        %% Don't issue the unboundedness var warning for facts
+	%% (facts can be defined using function definition)
         (Predicate == NULL
 	-> ( var(Status) -> Status = NO_ERRORS ; true )
         ;
@@ -2623,10 +2624,10 @@ compile_add_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,Fact
 	    compile_annotated_construct_add(Descriptor,MainPartOfRule,RuleDiffList,FactDiffList,Status)
 
 	; is_fludfunction(ParserTerm,Function,Body,ReturnValue) ->
-	    compile_user_defined_function_definition(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status)
+	    compile_udf_definition(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status)
 
 	; is_fludfunctionfact(ParserTerm,Function,Value) ->
-	    compile_user_defined_function_definition(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status)
+	    compile_udf_definition(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status)
         ),
 	!,
 	clear_context(compiling_for_addition),
@@ -2798,11 +2799,11 @@ compile_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiff
 	    compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,FactDiffList,MetaFactDiffList,Status)
 
 	; is_fludfunction(ParserTerm,Function,Body,ReturnValue) ->
-	    compile_user_defined_function_definition(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
+	    compile_udf_definition(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
 	    MetaFactDiffList = _M-_M
 
 	; is_fludfunctionfact(ParserTerm,Function,Value) ->
-	    compile_user_defined_function_definition(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
+	    compile_udf_definition(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
 	    MetaFactDiffList = _M-_M
         ),
 	!,
@@ -2981,7 +2982,7 @@ strip_pairlist_index((P,N,_Idx),(P,N)).
 %%sensor_name_replacement(P/N/_Idx,SP/N) :- flora_scramble_atom(P,SP).
 
 
-%% Compile-time :- usefunction directive.
+%% Compile-time :- useudf directive.
 %% Does not generate any code - just sets options for compilation
 compile_direct(DirectTerm,_,[],Status) :-
 	is_flusefunctiondirect(DirectTerm,PairList,Idx),
@@ -3005,7 +3006,7 @@ usefunction_option(FunName/Arity/_Idx,PermaOption) :-
 	->
 	    %% TODO: convert this to use Status argument rather than abort
 	    flora_abort([ERROR_UDF_WITHOUT_DEFINITION,', ',FunName,'/',Arity],FLORA_ABORT_NOTRACE)
-	; PermaOption = user_defined_function(FunNameCode,Arity,UDFCode,NewHeadCode),
+	; PermaOption = udf_option(FunNameCode,Arity,UDFCode,NewHeadCode),
 	    asserta(flora_used_udf_registry(FunNameCode,Arity,UDFCode,NewHeadCode))
 	).
 	
@@ -3921,10 +3922,10 @@ construct_export_struct(TermCode,WSCode,IsUpdatableCode,ModuleListCode,Code) :-
 %%    UDF Literal used to implement this UDF
 
 /****************************************************************************
-  compile_user_defined_function_definition(+Function,+Body,+ReturnValue,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-Status)
+  compile_udf_definition(+Function,+Body,+ReturnValue,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-Status)
 
   Compile a UDF definition:
-  function Function := if Body.
+  udf Function := if Body.
   Creates a predicate representing the UDF and a rule for that predicate.
 
   Function - udf term
@@ -3935,16 +3936,16 @@ construct_export_struct(TermCode,WSCode,IsUpdatableCode,ModuleListCode,Code) :-
   FactDiffList - the same for facts
   UDFPredsDiffList -  the same for the list of tabled predicates
 ****************************************************************************/
-compile_user_defined_function_definition(Function,Body,ReturnValue,CodeList-ListTail,FactDiffList,UDFPreds-UDFPredsTail,Status) :-
+compile_udf_definition(Function,Body,ReturnValue,CodeList-ListTail,FactDiffList,UDFPreds-UDFPredsTail,Status) :-
 	set_context(compiling_udf_definition),
 	( is_flterm_or_flatom(Function,Funct,N,Args)->
 	    new_udf_predicate(Funct,FunctCompiled,FunctName,UDFCode,N,Args,NewHead,NewHeadPredName,NewHeadPredArity,NewReturnValue,NewHeadCode,FStatus),
 	    ( no_errors_found(FStatus) -> 
-		( \+ has_permaoption(user_defined_function(FunctName,N,UDFCode,NewHeadPredName,NewHeadCode)) ->
+		( \+ has_permaoption(udf_option(FunctName,N,UDFCode,NewHeadPredName,NewHeadCode)) ->
 		    %% +1 for the caller argument
 		    NewHeadPredArity1 is NewHeadPredArity+1,
 		    UDFPreds = [(NewHeadPredName,NewHeadPredArity1),UDFPredsTail],
-		    set_permaoption(user_defined_function(FunctName,N,UDFCode,NewHeadPredName,NewHeadCode))
+		    set_permaoption(udf_option(FunctName,N,UDFCode,NewHeadPredName,NewHeadCode))
 		;
 		    UDFPreds = UDFPredsTail
 		),
@@ -3975,7 +3976,7 @@ compile_user_defined_function_definition(Function,Body,ReturnValue,CodeList-List
 		    %% from flrutils:flora_flload/2
 		    udfunction_struct(FunctCompiled,N,UDFCode,NewHeadPredName,NewHeadCode,UDFCodeList),
 		    %% is_flterm_or_flatom rather than is_flterm is important:
-		    %% Otherwise, "function foo := moo." won't work.
+		    %% Otherwise, "udf foo := moo." won't work.
 		    is_flterm_or_flatom(Function,FuncSym,FuncSymArity,_),
 		    verify_symbol_context(FuncSym,FuncSymArity,UDF_SYMBOL,
 					  NONTRANSACTIONAL_SYMBOL,
@@ -5917,7 +5918,7 @@ compile_flatomobj(ParserTerm,Nesting,Object,BodyHeadList,Status):-
 	var(BodyHeadList),
 	%% NO cut here!
 	\+ has_context(compiling_arithmetics),
-	has_user_defined_function(ParserTerm,0,[],Predicate,Object /* return value */,_,_),
+	has_UDF(ParserTerm,0,[],Predicate,Object /* return value */,_,_),
 	!,
 	verify_symbol_context(ParserTerm,0,UDF_SYMBOL,
 			      NONTRANSACTIONAL_SYMBOL,SymStatus),
@@ -5954,7 +5955,7 @@ compile_fltermobj(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,CompileS
 	var(BodyHeadList),
 	!,
 	( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
+	    has_UDF(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
 	-> 
 	    ( no_errors_found(S1) -> 
 		OidCode=NULL,
@@ -6029,19 +6030,19 @@ compile_udf_body_literal(Funct,Predicate,Nesting,PCode,PBodyHeadList,Status) :-
 
 
 /****************************************************************************
-  find_user_defined_function(+BaseName,+N,-UDFCode,-Predicate) 
+  find_UDF(+BaseName,+N,-UDFCode,-Predicate) 
 
   Indicate if there is an active UDF
 ****************************************************************************/
-find_user_defined_function(BaseName,N,UDFCode,Predicate) :-
-	has_permaoption(user_defined_function(BaseName,N,UDFCode,_PredName,Predicate)),
+find_UDF(BaseName,N,UDFCode,Predicate) :-
+	has_permaoption(udf_option(BaseName,N,UDFCode,_PredName,Predicate)),
 	!.
-find_user_defined_function(BaseName,N,UDFCode,Predicate) :-
+find_UDF(BaseName,N,UDFCode,Predicate) :-
 	flora_used_udf_registry(BaseName,N,UDFCode,Predicate),
 	!.
 
 /****************************************************************************
-  has_user_defined_function(+Funct,+N,-Predicate,-ReturnValue,-BodyHeadList,-Status) 
+  has_UDF(+Funct,+N,-Predicate,-ReturnValue,-BodyHeadList,-Status) 
 
   Tells if there is an active UDF with this Funct/N
 
@@ -6058,7 +6059,7 @@ find_user_defined_function(BaseName,N,UDFCode,Predicate) :-
 	     udf_hilog_predicate(?var2(?x)),?var1),
              q(?var1) 
 ****************************************************************************/
-has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
+has_UDF(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	\+ has_context(block_udf_expansion),
 	\+ has_context(compiling_udf_hilog(Funct)),
 	\+ get_flatom_name(Funct,UDFHILOGPREDICATENAME),
@@ -6066,11 +6067,11 @@ has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	(flrsynonym:flora_op_synonym(Name,BaseName)
 	; BaseName = Name
 	),
-	find_user_defined_function(BaseName,N,_UDFCode,_PredicateCode),
+	find_UDF(BaseName,N,_UDFCode,_PredicateCode),
 	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue),
 	!.
 
-has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
+has_UDF(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	\+ has_context(block_udf_expansion),
 	N\=0,
 	Args\=[],
@@ -6078,11 +6079,11 @@ has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	is_flvariable(Funct,_VarName,_Idx),
 	!,
 	\+ has_context(compiling_udf_hilog(Funct)),
-	find_user_defined_function(_BaseName,N,_UDFCode,_PredicateCode),
+	find_UDF(_BaseName,N,_UDFCode,_PredicateCode),
 	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
 
 
-has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
+has_UDF(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	\+ has_context(block_udf_expansion),
 	N\=0,
 	Args\=[],
@@ -6090,16 +6091,16 @@ has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	is_flterm(Funct,_FFunct,_FunctN,_FunctArgs),
 	!,
 	\+ has_context(compiling_udf_hilog(Funct)),
-	find_user_defined_function(_BaseName,N,_UDFCode,_Predicate),
+	find_UDF(_BaseName,N,_UDFCode,_Predicate),
 	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
 
-has_user_defined_function(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
+has_UDF(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	\+ has_context(block_udf_expansion),
 	\+ has_context(compiling_udf_hilog(Funct)),
 	N\=0,
 	Args\=[],
 	Args\=null,
-	find_user_defined_function(HILOG_SYMBOL_NAME,N,_UDFCode,_PredicateCode),
+	find_UDF(HILOG_SYMBOL_NAME,N,_UDFCode,_PredicateCode),
 	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
 
 /****************************************************************************
@@ -6946,7 +6947,7 @@ compile_flobjeql(Obj1,Obj2,OidCode,Code,BodyHeadList,Status) :-
 ****************************************************************************/
 compile_head_fltermobj(Funct,N,Args,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
 	( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
+	    has_UDF(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
 	->
 	    ( no_errors_found(S1) -> 
 	    	Code=NULL,
@@ -7945,7 +7946,7 @@ compile_wsfltermobj(Funct,N,Args,WS,Nesting,Object,OidCode,Code,BodyHeadList,Tra
 	var(BodyHeadList),
 	!,
         ( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
+	    has_UDF(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
 	->
 	    ( no_errors_found(S1) -> 
 		    OidCode=NULL,
@@ -9272,7 +9273,7 @@ compile_head_wstransactionaltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BC
 ****************************************************************************/
 compile_head_wsfltermobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
         ( \+ has_context(compiling_arithmetics),
-	    has_user_defined_function(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
+	    has_UDF(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
 	->
 	    ( no_errors_found(S1) -> 
 	    	H2BCodeTail=NULL,
@@ -10411,7 +10412,7 @@ compile_execdirect(DirectTerm,WS,Code,Status) :-
 	    florasyslib_struct(FLLIBRECORDSENSORS,2,[ThisMod,PairListCode],Code),
 	    report_option(FLSYSLIB(FLLIBRECORDSENSORS),NO_INDEX)
 
-	%% Run-time usefunction directive. It defines the use of a function
+	%% Run-time useudf directive. It defines the use of a function
 	%% **only** in the shell and only for the module main.
 	; is_flusefunctiondirect(DirectTerm,PairList,Idx) ->
 	    verify_symbol_context_pairlist(PairList,Idx, USE_UDF_SYMBOL,
@@ -10773,7 +10774,7 @@ get_index_line(Index,Line) :- flora_token_index_to_line(Index,Line).
 
 Predicates for checking usage of symbols with the same name and arity
 The goal is to generate warnings/errors if the same symbol is used in different
-contexts or user defined function is used before it is declared, etc. 
+contexts or a UDF is used before it is declared, etc. 
 ****************************************************************************/
 add_symbol(_Name,_N,_WS,Index,_LineNumber,_Context,_Transactional) :-
 	%% do not add symbols that are not in the user program
