@@ -112,11 +112,12 @@
 
 :- export
 	flora_set_display_mode/1,
+	flora_set_display_submode/1,
 	flora_escape_atom/2,
 	flora_display_mode/1,
 	flora_display_symbol/2.
 
-:- dynamic display_mode/1.
+:- dynamic display_mode/1, display_submode/1.
 
 
 
@@ -674,9 +675,7 @@ decode_builtin(F,_,Args,[EscF,'(',ArgsCode,')', PlgCode],Depth) :-
 	revert_synonym(F,FF),
         escape(FF,EscF),
 	decode_list_add_separator(Args,ArgsCode,decode_literal_internal(_,_,1,Depth1),FL_COMMA),
-	( flora_display_mode(silk) -> PlgCode = ''
-	; PlgCode = '@_prolog'
-	).
+	PlgCode = '@_prolog'.
 
 standard_plain_prolog_functor(P,A) :- flora_prlgdef(P,A).
 standard_plain_prolog_functor(P,A) :- flora_prlgdef_repl(P,A,_,_).
@@ -927,7 +926,6 @@ decode_commalist_add_separator(G,CodeG,ConversionCall,_Separator) :-
 workspace_code(WS,WSCode) :-
 	%%(((WS==FLORA_DEFAULT_WORKSPACE);(WS==FL_THISMODULE);(WS==FL_INVALIDMODULE))
 	(WS==FL_INVALIDMODULE -> WSCode = []
-	; flora_display_mode(silk) ->  WSCode = []
 	; WSCode = ['@',WS]
 	).
 
@@ -935,8 +933,7 @@ workspace_code(WS,WSCode) :-
 %% WS is the module for modularized Prolog predicates
 workspace_prolog_code(F,Arity,Module,WS,Code) :-
 	(
-	  flora_display_mode(silk) -> Code = ''
-	; standard_modular_prolog_functor(F,Arity) -> Code = ['@',WS]
+	  standard_modular_prolog_functor(F,Arity) -> Code = ['@',WS]
 	; standard_modular_prolog_functor(F,Arity,WS) -> Code = ['@',WS]
 	; standard_plain_prolog_functor(F,Arity) -> Code = ''
 	; var(Module) -> Code = '@_prolog'
@@ -955,8 +952,15 @@ decode_anon_oid(NewOid,Code) :-
 	    ; true
 	    ),
 	    flora_get_substring(NewOid,Pos1,Pos2,OidNumber),
-	    Code = [Symbol,OidNumber]
-	; Code = [Symbol]
+	    (flora_display_submode(answer) ->
+		Code = [NewOid, '  (', Symbol, OidNumber, ')']
+	    ;  Code = [Symbol,OidNumber]
+	    )
+	;
+	    (flora_display_submode(answer) ->
+		Code = [NewOid, '  (', Symbol, ')']
+	    ;  Code = [Symbol]
+	    )
 	).
 
 
@@ -1136,9 +1140,7 @@ decode_literal_internal(FLLIBMODLIT(WRAP_NONTABLED_HILOG,Args,Module,_Caller),
 			 PlgCode],
 			_Level,_Depth) :-
 	!,
-	( flora_display_mode(silk) -> PlgCode = ''
-	; PlgCode = '@_prolog'
-	).
+	PlgCode = '@_prolog'.
 
 decode_literal_internal(FLLIBMODLIT(HlgWrapper,Args,Module,_Caller),Code,Level,Depth) :-
 	(HlgWrapper == WRAP_TABLED_HILOG, !
@@ -1167,9 +1169,7 @@ decode_literal_internal(FLLIBMODLIT(WRAP_TABLED_HILOG,Args,Module,_Caller),
 			 PlgCode],
 			_Level,_Depth) :-
 	!,
-	( flora_display_mode(silk) -> PlgCode = ''
-	; PlgCode = '@_prolog'
-	).
+	PlgCode = '@_prolog'.
 
 
 %% This occurs when you have ?X@..., i.e., the literal part is a variable
@@ -1689,18 +1689,22 @@ escape([CH_BACKSLASH,CH_QUOTE|L],[CH_QUOTE,CH_QUOTE|EL],needs_quoting) :-
 	flora_display_mode(flora),
 	!,
 	escape(L,EL,_).
+/*
 escape([CH_BACKSLASH,CH_QUOTE|L],[CH_BACKSLASH,CH_QUOTE|EL],needs_quoting) :-
 	flora_display_mode(silk),
 	!,
 	escape(L,EL,_).
+*/
 escape([CH_QUOTE|L],[CH_QUOTE,CH_QUOTE|EL],needs_quoting) :-
 	flora_display_mode(flora),
 	!,
 	escape(L,EL,_).
+/*
 escape([CH_QUOTE|L],[CH_BACKSLASH,CH_QUOTE|EL],needs_quoting) :-
 	flora_display_mode(silk),
 	!,
 	escape(L,EL,_).
+*/
 %% Backslash before special character is escaped: '\\n' is internally 
 %% translated as \ n and is printed as '\\n'
 escape([CH_BACKSLASH,H|L],[CH_BACKSLASH,CH_BACKSLASH,H|EL],needs_quoting) :-
@@ -1745,10 +1749,9 @@ is_void(X) :-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Display mode stuff
-%%  silk
-%%  flora~/test/flora/brett12o
-%%  silk
-%%  flora
+%%  Currently the only display mode is: flora
+%%  Other modes are disabled now, but keeping this stuff in case we reuse
+%%  this infrastructure for something else
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 flora_set_display_mode(Mode) :-
 	valid_display_mode(Mode),
@@ -1757,27 +1760,34 @@ flora_set_display_mode(Mode) :-
 	assert(display_mode(Mode)).
 flora_set_display_mode(Mode) :-
 	flora_abort(['Invalid FLORA-2 display mode: ', Mode]).
+flora_set_display_submode(Mode) :-
+	valid_display_submode(Mode),
+	!,
+	(retract(display_submode(_)), ! ; true),
+	assert(display_submode(Mode)).
+flora_set_display_submode(Mode) :-
+	flora_abort(['Invalid FLORA-2 display submode: ', Mode]).
 
-valid_display_mode(silk).
+%%valid_display_mode(silk).
 valid_display_mode(flora).
+
+valid_display_submode(answer).
+valid_display_submode(default).
 
 flora_display_mode(Mode) :- display_mode(Mode), !.
 flora_display_mode(flora) :- \+ display_mode(_).
+flora_display_submode(Mode) :- display_submode(Mode), !.
+flora_display_submode(flora) :- \+ display_submode(_).
 
 flora_display_symbol(SymType,Symbol) :-
 	flora_display_mode(Mode),
 	display_table(SymType,Mode,Symbol).
 
 display_table(isa,flora,':').
-display_table(isa,silk,'#').
 display_table(sub,flora,'::').
-display_table(sub,silk,'##').
 display_table(terminator,flora,'.').
-display_table(terminator,silk,FL_SEMICOLON).
 display_table(skolem,flora,'_#').
-display_table(skolem,silk,'_').
 display_table(cardinality,flora,':').
-display_table(cardinality,silk,'..').
 
 flora_display_type_name(SymType,Typename) :-
 	flora_display_mode(Mode),
@@ -1785,17 +1795,6 @@ flora_display_type_name(SymType,Typename) :-
 
 %% display_datatype_name(Type,Mode,CanonName)
 display_datatype_name(Type,flora,Type) :- !.
-display_datatype_name(FL_TIME,silk,'xsd:time') :- !.
-display_datatype_name(FL_DATETIME,silk,'xsd:datetime') :- !.
-display_datatype_name(FL_DURATION,silk,'xsd:duration') :- !.
-display_datatype_name(FL_DATE,silk,'xsd:date') :- !.
-display_datatype_name(FL_IRI,silk,'rif:iri') :- !.
-display_datatype_name(FL_STRING,silk,'xsd:string') :- !.
-display_datatype_name(FL_LONG,silk,'xsd:long') :- !.
-display_datatype_name(FL_DOUBLE,silk,'xsd:double') :- !.
-display_datatype_name(FL_BOOL,silk,'xsd:bool') :- !.
-display_datatype_name(FL_DECIMAL,silk,'xsd:decimal') :- !.
-display_datatype_name(Type,silk,Type) :- !.
 
 
 %% bind variables to ?A,?B,?C, etc.
