@@ -3542,10 +3542,11 @@ compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFac
 	    IdStatus = [Err]
 	; IdParserTermList == [] % no explicit rule id
 	-> construct_default_ruleid_descriptor(Mode,DescrIdCode),
+	    RuleidFrameCode = _M - _M,
 	    IdStatus = NO_ERRORS
 	; IdParserTermList = [[IdParserTerm|_] - Idx],
 	    %% compile Id descriptor here
-	    compile_ruleid_descriptor(IdParserTerm,DescrIdCode,IdStatus)
+	    compile_ruleid_descriptor(IdParserTerm,DescrIdCode,RuleidFrameCode,IdStatus)
 	),
 	(memberchk(Mode,[rule,addrule,dynrule,udfrule])
 	->
@@ -3562,7 +3563,7 @@ compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFac
 	->
 	    determine_defeasibility(FlatDescrList,Mode,DescrIdCode,DescrVarsTermOut,DefeatMetaFact,StatDefeat),
 	    (StatDefeat = NO_ERRORS ->
-		compile_descriptor_list1(FlatDescrList,Mode,DescrIdCode,DescrVarsTermOut,MetaFacts1-MetaFactsTail,Status),
+		compile_descriptor_list1(FlatDescrList,Mode,DescrIdCode,RuleidFrameCode,DescrVarsTermOut,MetaFacts1-MetaFactsTail,Status),
 		construct_rule_enabling_fact(DescrIdCode,Mode,RuleEnablerFact),
 		%% make the rule id into its tag as well, if no explicit tag
 		(memberchk(FLDESCRIPTOR(_,FLTAG,_),FlatDescrList)
@@ -3643,17 +3644,17 @@ determine_defeasibility(FlatDescrList,Mode,DescrIdCode,DescrVarsTerm,DefeatMetaF
 
 
 /*
-   compile_descriptor_list1(+DescriptorList,+Mode,+DescrIdCode,+DescrVarsTerm,-MetaFactDiffList,-Status)
+   compile_descriptor_list1(+DescriptorList,+Mode,+DescrIdCode,+RuleidFrameCode,+DescrVarsTerm,-MetaFactDiffList,-Status)
    Mode - rule/clause_construct/dynrule/addrule.
         The 'clause_construct' mode is used for the clause{...} construct.
         'dynrule' is for dynamic rules.
 */
-compile_descriptor_list1([],_Mode,_DescrIdCode,_DescrVarsTerm,M-M,[]).
-compile_descriptor_list1([Descriptor|RestDescr],Mode,DescrIdCode,DescrVarsTerm,MetaFacts-MetaTail,Status) :-
-	compile_descriptor(Descriptor,Mode,DescrIdCode,DescrVarsTerm,MetaFacts-Tail,S1),
+compile_descriptor_list1([],_Mode,_DescrIdCode,_RuleidFrameCode,_DescrVarsTerm,M-M,[]).
+compile_descriptor_list1([Descriptor|RestDescr],Mode,DescrIdCode,RuleidFrameCode,DescrVarsTerm,MetaFacts-MetaTail,Status) :-
+	compile_descriptor(Descriptor,Mode,DescrIdCode,RuleidFrameCode,DescrVarsTerm,MetaFacts-Tail,S1),
 	(no_errors_found(S1)
 	->  
-	    compile_descriptor_list1(RestDescr,Mode,DescrIdCode,DescrVarsTerm,Tail-MetaTail,Status)
+	    compile_descriptor_list1(RestDescr,Mode,DescrIdCode,RuleidFrameCode,DescrVarsTerm,Tail-MetaTail,Status)
 	; Status = S1
 	).
 
@@ -3664,22 +3665,24 @@ compile_descriptor_list1([Descriptor|RestDescr],Mode,DescrIdCode,DescrVarsTerm,M
         The 'clause_construct' mode is used for the clause{...} construct.
         'dynrule' is for dynamic rules.
 */
-compile_descriptor(Descriptor,Mode,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Status) :-
+compile_descriptor(Descriptor,Mode,DescrIdCode,RuleidFrameCode,DescrVarsTerm,MetaFactDiffList,Status) :-
 	is_fldescriptor(Descriptor,DescrContents,Type,_Index),
 	(Type == FLTAG
 	-> construct_tag_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,MetaFactDiffList,Status)
 	; Type == FLBOOLDESCRIPTOR
 	-> construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,MetaFactDiffList,Status)
-	; Type == FLRULEID %% for now we only use the Id part here
-	-> MetaFactDiffList = Meta-Meta, %% we already compiled the Id (= DescrIdCode)
+	; Type == FLRULEID 
+	-> MetaFactDiffList = Meta-Meta,
+	     %%writeln(mmmm=RuleidFrameCode),
 	    Status = NO_ERRORS
 	),
 	!.
 %% already compiled
-compile_descriptor(Descriptor,_Mode,_DescrIdCode,_DescrVarsTerm,Descriptor,[]) :- !.
+compile_descriptor(Descriptor,_Mode,_DescrIdCode,_RuleidFrameCode,_DescrVarsTerm,Descriptor,[]) :- !.
 
-compile_ruleid_descriptor(IdDescriptorBundle,DescrIdCode,Status) :-
-	compile_simple_descriptor(IdDescriptorBundle,DescrIdCode,frames_ok,Status).
+compile_ruleid_descriptor(IdDescriptorBundle,DescrIdCode,FrameCode,Status) :-
+	compile_complex_descriptor(IdDescriptorBundle,DescrIdCode,FrameCode,
+				   frames_ok,Status).
 
 
 /*
@@ -3713,7 +3716,7 @@ construct_default_ruleid_descriptor(clause_construct,RuleIdCode) :-
 %% construct_tag_descriptor_facts(+DescrIdCode,+Mode,+DescrVarsTerm,+DescrContent,-MetaFactDiffList,-Stat)
 %% construct_bool_descriptor_facts(+DescrIdCode,+Mode,+DescrVarsTerm,+DescrContent,-MetaFactDiffList,-Stat)
 construct_tag_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[TagIdMetaFact|Tail]-Tail,Status) :-
-	compile_simple_descriptor(DescrContents,DescrCode,no_frames,Status),
+	compile_simple_descriptor(DescrContents,DescrCode,Status),
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
 	(memberchk(Mode,[clause_construct,dynrule]) ->
 	    new_prvariable(NO_INDEX,ModuleVar),
@@ -3729,7 +3732,7 @@ construct_tag_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[Tag
 
 
 construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[BoolIdMetaFact|Tail]-Tail,Status) :-
-	compile_simple_descriptor(DescrContents,DescrCode,no_frames,Status),
+	compile_simple_descriptor(DescrContents,DescrCode,Status),
 	PredCode = FL_BOOL_DESCRIPTOR_META_PREDICATE,
 	(memberchk(Mode,[clause_construct,dynrule]) ->
 	    new_prvariable(NO_INDEX,ModuleVar),
@@ -3744,8 +3747,14 @@ construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[Bo
 	).
 
 
-%% descriptor that is just a term, no frame part
-compile_simple_descriptor(DescrContents,Object,FramesOK,Status) :-
+%% descriptor without attached frames
+compile_simple_descriptor(DescrContents,Object,Status) :-
+	compile_complex_descriptor(DescrContents,Object,_,no_frames,Status).
+
+%% When compiling tags or bool descriptors,
+%% no frames are allowed: FramesOK == no_frames
+%% When compiling rule ids, frames are allowed: FramesOK == frames_ok
+compile_complex_descriptor(DescrContents,Object,FrameCode,FramesOK,Status) :-
 	(FramesOK == frames_ok -> true
 	; FrameCode = NULL
 	),
