@@ -249,7 +249,6 @@ is_flerasemodule(FLERASEMODULE(Op,Module),Op,Module).
 is_flupdaterule(FLUPDATERULE(Op,RuleList),Op,RuleList).
 
 %% Use _@! instead of thisruleid{?X}
-%%is_flthisruleid(FLTHISRULEID(Arg),Arg).
 is_flsimpleprimitive(FLSIMPLEPRIMITIVE(PrimName,Args),PrimName,Args).
 
 is_flaggregate(FLAGGREGATE(Op,V,GV,Sort,Goal),Op,V,GV,Sort,Goal).
@@ -1069,14 +1068,6 @@ caller_tracing_code(Context,TracingCode) :-
 	).
 
 
-/*
-thisruleid_var_structure(Struct) :-
-	(has_context(compiling_dynrule(_)) ->
-	    Struct = PRTHISDYNRULEIDVAR(PRTHISDYNRULEIDVAR)
-	; Struct = PRTHISRULEIDVAR(PRTHISRULEIDVAR)
-	).
-*/
-
 thisstorage_struct(fdb,PRTHISFDBSTORAGE(PRTHISFDBSTORAGE)).
 %% support for checking undefinedness
 thisstorage_struct(fld,PRTHISFLDSTORAGE(PRTHISFLDSTORAGE)).
@@ -1804,13 +1795,15 @@ new_predicate(Name) :-
 
 /****************************************************************************
   reset_default_ruleid/0
-  new_default_ruleid(-Name)
+  current_default_ruleid(-Name)
 ****************************************************************************/
 reset_default_ruleid :- flora_set_counter(DEFAULT_RULE_ID,1).
 
-new_default_ruleid(Name) :-
-	flora_increment_counter(DEFAULT_RULE_ID,1,OldVal,_NewVal),
-	flora_concat_items([DEFAULT_RULE_ID,OldVal],Name).
+increment_default_ruleid :-
+	flora_increment_counter(DEFAULT_RULE_ID,1,_,_).
+current_default_ruleid(Name) :-
+	flora_get_counter(DEFAULT_RULE_ID,RuleId),
+	flora_concat_items([DEFAULT_RULE_ID,RuleId],Name).
 
 /*
 is_default_ruleid(LabObj) :-
@@ -1885,14 +1878,13 @@ reset_newoid :- flora_set_counter(NEWOID_COUNT,1).
 
 new_oidobj(Index,OidObject) :-
 	flora_increment_counter(NEWOID_COUNT,1,OldVal,_NewVal),
-	flora_term_to_atom(OldVal,OldValAtm),
-	flora_concat_atoms([NEWOID,OldValAtm],Name),
+	flora_concat_items([NEWOID,OldVal],Name),
 	newoid_struct(Name,Index,OidObject).
 
 /*************************************************************************
-  new_oidobj(+RuleNum,+OidNumStr,+Index,-OidObject)
+  new_oidobj(+OidNumStr,+Index,-OidObject)
 *************************************************************************/
-new_oidobj(RuleNum,OidNumStr,Index,OidObject) :-
+new_oidobj(OidNumStr,Index,OidObject) :-
 	( ruleoid(OidNumStr,_,Count)
 	-> Count_new is Count+1,
 	    %% TODO: see if we can replace assert/retract with conget/conset
@@ -1901,8 +1893,8 @@ new_oidobj(RuleNum,OidNumStr,Index,OidObject) :-
 	;  asserta(ruleoid(OidNumStr,Index,1))
 	), 
 	!,
-	flora_term_to_atom(RuleNum,RuleNumAtm),
-        flora_concat_atoms([NEWOID,RuleNumAtm,'|',OidNumStr],Name),
+	flora_get_counter(RULE_NUM, RuleNum), 
+        flora_concat_items([NEWOID,RuleNum,'|',OidNumStr],Name),
 	newoid_struct(Name,Index,OidObject).
 
 /*************************************************************************
@@ -1926,6 +1918,7 @@ clear_ruleoid :- flora_retractall_substitute(ruleoid(_,_,_)).
 
 ****************************************************************************/
 reset_rulenum :- flora_set_counter(RULE_NUM,1).
+increment_rule_number :- flora_increment_counter(RULE_NUM,1,_,_).
 
 /****************************************************************************
   collect_prvars(+CompilerTerm,-Vars)
@@ -2576,7 +2569,7 @@ flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,Status) 
 	DBGOUTLN('----------------------------------------------'),
 */
 	prepare_to_compile_rule,
-	flora_increment_counter(RULE_NUM,1,_,_),
+	increment_rule_number,
         compile_descriptor_list([],addrule,DescriptorIdCode,DescrVarsTerm,MetaFactDiffList,_),
 	compile_add_internal(ParserTerm,
 			     DescriptorIdCode,DescrVarsTerm,
@@ -2729,7 +2722,7 @@ flora_compile(ParserTerm,RuleDiffList,FactDiffList,MetaFactDiffList,UDFPredsDiff
 	DBGOUTLN('----------------------------------------------'),
 */
 	prepare_to_compile_rule,
-	flora_increment_counter(RULE_NUM,1,_,_),
+	increment_rule_number,
 	compile_internal(ParserTerm,
 			 _DescrIdCode,_DescrVarsTerm,
 			 RuleDiffList,FactDiffList,MetaFactDiffList,
@@ -3534,8 +3527,9 @@ compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFac
 		member(FLDESCRIPTOR(IdParserTerm,FLRULEID,Idx),FlatDescrList),
 		IdParserTermList),
 	!,
+	increment_default_ruleid,
 	set_context(no_symbol_check),
-	set_context(compiling_descriptors),
+	set_context(compiling_descriptors(Mode)),
 	(length(IdParserTermList,Len), Len > 1
 	-> IdParserTermList = [_,_-Idx|_],
 	    compiling_error(Idx,MULTIPLE_RULE_IDS,Err),
@@ -3561,13 +3555,13 @@ compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFac
 	),
 	(IdStatus == NO_ERRORS, Mode \== udfrule
 	->
-	    determine_defeasibility(FlatDescrList,Mode,DescrIdCode,DescrVarsTermOut,DefeatMetaFact,StatDefeat),
+	    extract_features_from_descriptor_list(FlatDescrList,DescrFeatures),
+	    determine_defeasibility(DescrFeatures,Mode,DescrIdCode,DescrVarsTermOut,DefeatMetaFact,StatDefeat),
 	    (StatDefeat = NO_ERRORS ->
 		compile_descriptor_list1(FlatDescrList,Mode,DescrIdCode,RuleidFrameCode,DescrVarsTermOut,MetaFacts1-MetaFactsTail,Status),
 		construct_rule_enabling_fact(DescrIdCode,Mode,RuleEnablerFact),
 		%% make the rule id into its tag as well, if no explicit tag
-		(memberchk(FLDESCRIPTOR(_,FLTAG,_),FlatDescrList)
-		-> TagIdMetaFact = NULL
+		(memberchk(FLTAG_FEATURE,DescrFeatures) -> TagIdMetaFact = NULL
 		; construct_tag_descriptor_fact_from_id(DescrIdCode,Mode,DescrVarsTermOut,TagIdMetaFact)
 		),
 		(DefeatMetaFact == NULL, RuleEnablerFact == NULL ->
@@ -3586,12 +3580,10 @@ compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFac
 	; Status = IdStatus,
 	    MetaFacts = []
 	),
-	clear_context(compiling_descriptors),
+	clear_context(compiling_descriptors(Mode)),
 	clear_context(no_symbol_check).
 
 
-#define MAKE_DEFEASIBLE_BOOL_DESCRIPTOR(Descr,Idx) flatom_struct(FL_DEFEASIBLE,Idx,Descr)
-#define MAKE_STRICT_BOOL_DESCRIPTOR(Descr,Idx) flatom_struct(FL_STRICT,Idx,Descr)
 
 /*
     determine_defeasibility(+FlatDescrList,+Mode,+DescrIdCode,+DescrVarsTerm,-DefeatMetaFact,-Status)
@@ -3605,42 +3597,88 @@ compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFac
           Otherwise: assume strict.
 */
 %% If Mode=clause_construct, ie, the clause statement, don't produce defeasibility fact
-determine_defeasibility(_FlatDescrList,clause_construct,_DescrIdCode,_DescrVarsTerm,NULL,[]) :- !.
-determine_defeasibility(FlatDescrList,Mode,DescrIdCode,DescrVarsTerm,DefeatMetaFact,Status) :-
+determine_defeasibility(_Features,clause_construct,_DescrIdCode,_DescrVarsTerm,NULL,[]) :- !.
+determine_defeasibility(DescrFeatures,Mode,DescrIdCode,DescrVarsTerm,DefeatMetaFact,Status) :-
 	memberchk(Mode,[rule,dynrule,addrule]),
 	!,
-	MAKE_DEFEASIBLE_BOOL_DESCRIPTOR(DefeasibleDescr,DefaultIdx),
-	MAKE_STRICT_BOOL_DESCRIPTOR(StrictDescr,DefaultIdx),
-	findall(Idx,
-		(member(FLDESCRIPTOR(DefeasibleDescr,FLBOOLDESCRIPTOR,Idx), FlatDescrList)
-		;
-		    member(FLDESCRIPTOR(StrictDescr,FLBOOLDESCRIPTOR,Idx), FlatDescrList)
-		),
-		DescrList),
-	(DescrList = [_,SecondOccurrence|_] ->
-	    compiling_error(SecondOccurrence,MULTIPLE_RULE_DEFEASIBILITY_INDICATORS,Err),
+	(memberchk(FL_DEFEASIBLE,DescrFeatures),
+	    memberchk(FL_STRICT,DescrFeatures)
+	->
+	    approx_prindex(DescrIdCode,ErrIdx),
+	    compiling_error(ErrIdx,MULTIPLE_RULE_DEFEASIBILITY_INDICATORS,Err),
 	    Status = [Err]
 	; \+ has_permaoption(FLDEFEASIBLE(_ArgTheory)),
-	    member(FLDESCRIPTOR(DefeasibleDescr,FLBOOLDESCRIPTOR,Idx),FlatDescrList)
-	-> %% @defeasible is specified but not use_argumentation_theory
-	    compiling_error(Idx,DEFEASIBLE_RULE_BUT_NO_ARGUMENTATION_THEORY,Err),
+	    memberchk(FL_DEFEASIBLE,DescrFeatures)
+	-> %% defeasible is specified but no :- use_argumentation_theory
+	    approx_prindex(DescrIdCode,ErrIdx),
+	    compiling_error(ErrIdx,DEFEASIBLE_RULE_BUT_NO_ARGUMENTATION_THEORY,Err),
 	    Status = [Err]
-	; DescrList = [_] -> DefeatMetaFact = NULL, %% already specified
+	; (memberchk(FL_DEFEASIBLE,DescrFeatures) ; memberchk(FL_STRICT,DescrFeatures))
+	-> DefeatMetaFact = NULL, %% already specified
 	    Status = NO_ERRORS
-	; memberchk(FLDESCRIPTOR(_,FLTAG,_),FlatDescrList) ->
+	; (memberchk(FLTAG_FEATURE,DescrFeatures) ; has_permaoption(FLDEFEASIBLE_RULE_DEFAULT))
+	->
 	    %% If TAG is given, assume rule is defeasible by default
-	    construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DefeasibleDescr,[DefeatMetaFact|Tail]-Tail,Status)
-	; has_permaoption(FLDEFEASIBLE_RULE_DEFAULT) ->
-	    %% If rules are defeasible by default, assume rule is defeasible
+	    %% If rules are defeasible by default, also assume defeasible rule
+	    flatom_struct(FL_DEFEASIBLE,NO_INDEX,DefeasibleDescr),
 	    construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DefeasibleDescr,[DefeatMetaFact|Tail]-Tail,Status)
 	;  %% otherwise, assume rule is strict
+	    flatom_struct(FL_STRICT,NO_INDEX,StrictDescr),
 	    construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,StrictDescr,[DefeatMetaFact|Tail]-Tail,Status)
-	),
-	%% must be at the end:  we are relying earlier that this index is a var
-	(var(DefaultIdx) -> DefaultIdx = NO_INDEX
-	; true
 	).
 
+
+%% extract a list of interesting features from FlatDescrList.
+%% features include: tag, strict, defeasible
+extract_features_from_descriptor_list(DescrList,Features) :-
+	extract_features_from_descriptor_list1(DescrList,Features1),
+	flatten(Features1,Features2),
+	sort(Features2,Features).
+
+extract_features_from_descriptor_list1([],[]) :- !.
+extract_features_from_descriptor_list1([Descr|DescrList],[DFeatures|Features]) :-
+	descriptor_feature(Descr,DFeatures),
+	extract_features_from_descriptor_list1(DescrList,Features).
+
+descriptor_feature(FLDESCRIPTOR(_,FLTAG,_), FLTAG_FEATURE) :- !.
+descriptor_feature(FLDESCRIPTOR(FlAtom,FLBOOLDESCRIPTOR,_), Name) :-
+	get_flatom_name(FlAtom,Name),
+	(Name == FL_STRICT ; Name == FL_DEFEASIBLE),
+	!.
+descriptor_feature(FLDESCRIPTOR(List,FLRULEID,_), Features) :-
+	!,
+	extract_features_from_ruleid(List,Features).
+%% this is unreachable for now
+descriptor_feature(_Descriptor, []).
+
+extract_features_from_ruleid([],[]) :- !.
+extract_features_from_ruleid([First|Rest],[Features|RestFeatures]) :-
+	is_flobjspec(First,_,Spec),
+	!,
+	extract_features_from_objspec(Spec,Features),
+	extract_features_from_ruleid(Rest,RestFeatures).
+extract_features_from_ruleid([_|Rest],RestFeatures) :-
+	extract_features_from_ruleid(Rest,RestFeatures).
+
+extract_features_from_objspec(Spec,Features) :-
+	is_flconjunct(Spec,Left,Right),
+	!,
+	extract_features_from_objspec(Left,F1),
+	extract_features_from_objspec(Right,F2),
+	(is_list(F2) -> Features = [F1|F2]
+	; Features = [F1,F2]
+	).
+extract_features_from_objspec(Spec, FLTAG_FEATURE) :-
+	is_flmvdattspec(Spec,Att,RefType,_),
+	is_mvdspecop(RefType), %% FL_MVDARROW, ->
+	get_flatom_name(Att,FL_TAG_PROPERTY),
+	!.
+extract_features_from_objspec(Spec, Name) :-
+	is_flmethspec(Spec,BoolProp),
+	get_flatom_name(BoolProp,Name),
+	(Name == FL_STRICT ; Name == FL_DEFEASIBLE),
+	!.
+extract_features_from_objspec(_Spec, []).
 
 
 /*
@@ -3672,9 +3710,8 @@ compile_descriptor(Descriptor,Mode,DescrIdCode,RuleidFrameCode,DescrVarsTerm,Met
 	; Type == FLBOOLDESCRIPTOR
 	-> construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,MetaFactDiffList,Status)
 	; Type == FLRULEID 
-	-> MetaFactDiffList = Meta-Meta,
-	     %%writeln(mmmm=RuleidFrameCode),
-	    Status = NO_ERRORS
+	-> 
+	    construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,RuleidFrameCode,MetaFactDiffList,Status)
 	),
 	!.
 %% already compiled
@@ -3697,11 +3734,11 @@ compile_ruleid_descriptor(IdDescriptorBundle,DescrIdCode,FrameCode,Status) :-
 */
 construct_default_ruleid_descriptor(rule,RuleIdCode) :-
 	!,
-	new_default_ruleid(RuleId),
+	current_default_ruleid(RuleId),
 	atomobj_struct(RuleId,RuleIdCode).
 construct_default_ruleid_descriptor(udfrule,RuleIdCode) :-
 	!,
-	new_default_ruleid(RuleId1),
+	current_default_ruleid(RuleId1),
 	flora_concat_atoms(['udf_',RuleId1],RuleId),
 	atomobj_struct(RuleId,RuleIdCode).
 construct_default_ruleid_descriptor(addrule,RuleIdCode) :-
@@ -3717,6 +3754,10 @@ construct_default_ruleid_descriptor(clause_construct,RuleIdCode) :-
 %% construct_bool_descriptor_facts(+DescrIdCode,+Mode,+DescrVarsTerm,+DescrContent,-MetaFactDiffList,-Stat)
 construct_tag_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[TagIdMetaFact|Tail]-Tail,Status) :-
 	compile_simple_descriptor(DescrContents,DescrCode,Status),
+	construct_tag_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,DescrCode,TagIdMetaFact).
+%% Like construct_tag_descriptor_facts, but uses DescrCode (pr-obj) instead of
+%% DescrContents (fl-obj)
+construct_tag_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,DescrCode,TagIdMetaFact) :-
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
 	(memberchk(Mode,[clause_construct,dynrule]) ->
 	    new_prvariable(NO_INDEX,ModuleVar),
@@ -3733,6 +3774,10 @@ construct_tag_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[Tag
 
 construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[BoolIdMetaFact|Tail]-Tail,Status) :-
 	compile_simple_descriptor(DescrContents,DescrCode,Status),
+	construct_bool_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,DescrCode,BoolIdMetaFact).
+%% Like construct_tag_descriptor_facts, but uses DescrCode (pr-obj) instead of
+%% DescrContents (fl-obj)
+construct_bool_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,DescrCode,BoolIdMetaFact) :-
 	PredCode = FL_BOOL_DESCRIPTOR_META_PREDICATE,
 	(memberchk(Mode,[clause_construct,dynrule]) ->
 	    new_prvariable(NO_INDEX,ModuleVar),
@@ -3745,6 +3790,50 @@ construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[Bo
 	; %% Mode = clause_construct/dynrule/addrule
 	    BoolIdMetaTerm = BoolIdMetaFact
 	).
+
+construct_prop_descriptor_facts(_,_,_,NULL,Meta-Meta,[]) :- !.
+construct_prop_descriptor_facts(_,_,_,FL_TRUE,Meta-Meta,[]) :- !.
+
+construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,RuleidFrameCode,LeftMeta-RightTail,Status) :-
+	RuleidFrameCode = PRAND(Left,Right),
+	!,
+	construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,Left,LeftMeta-LeftTail,S1),
+	construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,Right,LeftTail-RightTail,S2),
+	!,
+	append(S1,S2,Status).
+
+construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,PRMVD(DescrIdCode,Prop,Val,_),[MetaFact|Tail]-Tail,NO_ERRORS) :-
+	!,
+	%% if property=tag: construct a tag metafact; else - property metafact
+	(is_pratom(Prop,FL_TAG_PROPERTY)
+	-> 
+	    construct_tag_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,Val,MetaFact)
+	;
+	    construct_prop_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,Prop,Val,MetaFact)
+	).
+
+construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,PRMETH(DescrIdCode,Val,_),[MetaFact|Tail]-Tail,NO_ERRORS) :-
+	!,
+	construct_bool_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,Val,MetaFact).
+
+construct_prop_descriptor_facts(_DescrIdCode,_Mode,_DescrVarsTerm,RuleidFrameCode,_DiffList,[Err]) :-
+	approx_prindex(RuleidFrameCode,Idx),
+	compiling_error(Idx,NO_NESTED_DESCRIPTOR_FRAME,Err).
+
+construct_prop_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,Prop,Val,MetaFact) :-
+	PredCode = FL_PROP_DESCRIPTOR_META_PREDICATE,
+	(memberchk(Mode,[clause_construct,dynrule]) ->
+	    new_prvariable(NO_INDEX,ModuleVar),
+	    generate_prolog_liblit(PredCode,5,[DescrIdCode,ModuleVar,Prop,Val,DescrVarsTerm], MetaTerm)
+	;
+	    thismodule_struct(ThisModule),
+	    generate_prolog_liblit(PredCode,5,[DescrIdCode,ThisModule,Prop,Val,DescrVarsTerm], MetaTerm)
+	),
+	(Mode == rule -> fact_struct(MetaTerm,MetaFact)
+	; %% Mode = clause_construct/dynrule/addrule
+	    MetaTerm = MetaFact
+	).
+
 
 
 %% descriptor without attached frames
@@ -5219,7 +5308,7 @@ compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
-	    ((has_context(goal_reification);has_context(compiling_descriptors))
+	    ((has_context(goal_reification);has_context(compiling_descriptors(_)))
 	    ->
 		Code = NULL,
 		(compiling_flrshell_command ->
@@ -5246,7 +5335,7 @@ compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
-	    ((has_context(goal_reification);has_context(compiling_descriptors))
+	    ((has_context(goal_reification);has_context(compiling_descriptors(_)))
 	    ->
 		Code = NULL,
 		(compiling_flrshell_command ->
@@ -5254,8 +5343,7 @@ compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 		    new_dynoidobj(Num,Index,Object)
 		;   %% If not in the shell, generate a new Skolem constant
 		    OidCode = NULL,
-		    flora_get_counter(RULE_NUM, Rule_num), 
-		    new_oidobj(Rule_num,Num,Index,Object)
+		    new_oidobj(Num,Index,Object)
 		)
 	    ;
 		OidCode = NULL,
@@ -5269,10 +5357,14 @@ compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	; is_fltoken(ParserTerm,FL_RULEID_TOKEN_PREFIX,FL_RULEID_SYM,Index) ->
 	    BodyHeadList=[],
 	    Code = NULL,
-	    ((has_context(compiling_dynrule(DescrIdCode)) ; has_context(compiling_rule(DescrIdCode)))
+	    ((has_context(compiling_dynrule(DescrIdCode))
+	     ; has_context(compiling_rule(DescrIdCode)))
 	    ->
 		Object = DescrIdCode,
-		%%thisruleid_var_structure(Object),
+		Status = NO_ERRORS
+	    ; has_context(compiling_descriptors(Mode))
+	    -> construct_default_ruleid_descriptor(Mode,DescrIdCode),
+		Object = DescrIdCode,
 		Status = NO_ERRORS
 	    ; compiling_error(Index,RULEID_TOKEN_NOT_IN_RULE,Err),
 		Status = [Err]
@@ -7226,16 +7318,15 @@ compile_head_fltoken(Token,Index,Object) :-
 ****************************************************************************/
 compile_head_fltoken(Token,Suffix,Index,Object,Status) :-
         ( Token == FL_NEWOID ->
-            flora_get_counter(RULE_NUM, Rule_num), 
-	    new_oidobj(Rule_num,Suffix,Index,Object),
+	    new_oidobj(Suffix,Index,Object),
 	    Status = NO_ERRORS
 	; Token == FL_RULEID_TOKEN_PREFIX, Suffix == FL_RULEID_SYM ->
 	    ((has_context(compiling_dynrule(DescrIdCode)) ; has_context(compiling_rule(DescrIdCode)))
 	    -> 
 		Object = DescrIdCode,
-		%%thisruleid_var_structure(Object),
 		Status = NO_ERRORS
-	    ; compiling_error(Index,RULEID_TOKEN_NOT_IN_RULE,Err),
+	    ;
+		compiling_error(Index,RULEID_TOKEN_NOT_IN_RULE,Err),
 		Status = [Err]
 	    )
         ;
