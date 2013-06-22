@@ -713,7 +713,7 @@ is_reification(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),Args,N,Ip) :-
 	get_atom(Funct,Atom),
 	is_reifyop(Atom).
 
-annotated_construct_struct(DescriptorsCode,ContentCode,FLTAGGEDCONSTRUCT(DescriptorsCode,ContentCode)).
+annotated_construct_struct(DescriptorsCode,ContentCode,FLANNOTATEDCONSTRUCT(DescriptorsCode,ContentCode)).
 
 annotation_struct(IdConstruct,Type,Idx,FLDESCRIPTOR(IdConstruct,Type,Idx)).
 
@@ -770,7 +770,7 @@ is_sortable_aggregop(FL_BAG)        :- !.
 
 is_negop(FL_NEG)	:- !.
 is_plgnafop(FL_PLGNAF)	:- !.
-is_silknafop(FL_SILKNAF)	:- !.
+is_silknafop(FL_RULELOGNAF)	:- !.
 
 %% 2nd arg is the canonical name of the quantifier
 is_logicalquantifier(FL_EXISTS,FL_EXISTS)        :- !.
@@ -1032,7 +1032,7 @@ flconjunct_struct(Cond1,Cond2,FLCONJUNCT(Cond1,Cond2)).
 fldisjunct_struct(Cond1,Cond2,FLDISJUNCT(Cond1,Cond2)).
 
 flnaf_struct(Goal,FLPLGNAF(Goal)).
-flnot_struct(Goal,FLSILKNAF(Goal)).
+flnot_struct(Goal,FLRULELOGNAF(Goal)).
 flneg_struct(Goal,Index,FLNEG(Goal,Index)).
 
 flquantifier_struct(Quant,VarNames,FormulaCode,Idx,
@@ -1165,8 +1165,8 @@ flsimpleprimitive_struct(Primitive,Args,FLSIMPLEPRIMITIVE(Primitive,Args)).
 
 flclause_struct(Head,Body,FLCLAUSE(Head,Body)).
 flclause_struct(Mode,Head,Body,FLCLAUSE(Mode,Head,Body)).
-flclause_with_descriptor_struct(Descriptors,Head,Body,FLTAGGEDCLAUSE(Descriptors,Head,Body)).
-flclause_with_descriptor_struct(Descriptors,Mode,Head,Body,FLTAGGEDCLAUSE(Descriptors,Mode,Head,Body)).
+flclause_with_descriptor_struct(Descriptors,Head,Body,FLANNOTATEDCLAUSE(Descriptors,Head,Body)).
+flclause_with_descriptor_struct(Descriptors,Mode,Head,Body,FLANNOTATEDCLAUSE(Descriptors,Mode,Head,Body)).
 
 is_flcallermodule_struct(FLCALLERMODULE(_,_)).
 is_flupdaterule_struct(FLUPDATERULE(_,_)).
@@ -1634,15 +1634,15 @@ export_compose_term([CANOTERM(Funct,_N,FL_PARENTHESIS,Args,_If,_Ip)],WS,_IsUpdat
  One or many external modules (or terms) specified.
  ==================================================
  Term >> (Module(s))
- canoterm(RIGHTTO,_,FL_PARANTHESIS, [canoterm(Term),canoterm(ModuleList)],_,_)
+ canoterm(RIGHTTO,_,FL_PARENTHESIS, [canoterm(Term),canoterm(ModuleList)],_,_)
 
  (Term1, Term2, ...) >> (Module(s))
- canoterm(RIGHTTO,N,FL_PARANTHESIS, [ canoterm(comma,_,FL_PARANTHESIS,[canoterm(Term1),canoterm(Term2)...],_,_),
+ canoterm(RIGHTTO,N,FL_PARENTHESIS, [ canoterm(comma,_,FL_PARENTHESIS,[canoterm(Term1),canoterm(Term2)...],_,_),
 				     canoterm(ModuleList)
 				   ],_,_)
 
  Term >> Module(s)
- canoterm(RIGHTTO,_,FL_PARANTHESIS, [canoterm([Term,FirstModule]),OtherModuleList],_,_)
+ canoterm(RIGHTTO,_,FL_PARENTHESIS, [canoterm([Term,FirstModule]),OtherModuleList],_,_)
 ****************************************************************************/
 export_compose_term([CANOTERM(Funct,_N,FL_PARENTHESIS,[Term|FirstModule],_If,_Ip)|OtherModules],WS,IsUpdatable,Code) :- 
 	get_name(Funct,FL_RIGHTTO),
@@ -1663,7 +1663,7 @@ export_compose_term([CANOTERM(Funct,_N,FL_PARENTHESIS,[Term|FirstModule],_If,_Ip
  Say the export statement is :- export (_[c1->_]>>m3,m4), _[b1(_,_)->_]>>m1.
 
  comma_separated_list returns the exported list in the following form:
- [ canoterm(comma,_,FL_PARANTHESIS,[canoterm(FirstExportedTerm)],_,_),
+ [ canoterm(comma,_,FL_PARENTHESIS,[canoterm(FirstExportedTerm)],_,_),
    canoterm(SecondExportedTerm), ....]
 
  Thus for the first term, we need extract the canonical term by stripping the 
@@ -3310,6 +3310,14 @@ parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_WS,_DWS,_Code,Sta
 	get_name(Funct,FL_ELSE_INTERNAL),
 	!,
         parsing_error(If,ERROR_ELSEBODY,Status).
+
+%% @!{...} query in the rule body
+parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[Arg],If,_Ip),_WS,_DWS,Code,Status) :-
+	Arg = CANOBRACE(Descr,_,_),
+	get_atom(Funct,FL_RULEID_OP),
+	!,
+	%% VarsOK = true
+	parse_descriptor_aux(FL_RULEID_OP,Descr,If,true,[Code],Status).
 
 %% Parse the a<~~b form of if-then
 parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[ThenPart,IfPart],_If,_Ip),WS,DWS,Code,Status) :-

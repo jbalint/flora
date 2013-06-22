@@ -84,7 +84,7 @@ is_flrule(FLRULE(Head,Body),Head,Body).
 is_flfact(FLFACT(Head),Head).
 is_flquery(FLQUERY(Body),Body).
 is_fldirective(FLDIRECTIVE(DirectList,I),DirectList,I).
-is_flannotated_construct(FLTAGGEDCONSTRUCT(Descriptor,MainPartOfRule),Descriptor,MainPartOfRule).
+is_flannotated_construct(FLANNOTATEDCONSTRUCT(Descriptor,MainPartOfRule),Descriptor,MainPartOfRule).
 is_fludfunction(FLUDF(Function,Body,ReturnValue),Function,Body,ReturnValue).
 is_fludfunctionfact(FLUDFFACT(Function,Value),Function,Value).
 %% udfunction_struct causes flrcoder.P to record UDF definitions in the registry
@@ -137,9 +137,9 @@ is_flconjunct(FLCONJUNCT(L,R),L,R).
 is_fldisjunct(FLDISJUNCT(L,R),L,R).
 
 is_flplgnaf(FLPLGNAF(Goal),Goal).
-is_flsilknaf(FLSILKNAF(Goal),Goal).
+is_flsilknaf(FLRULELOGNAF(Goal),Goal).
 is_flneg(FLNEG(Goal,Idx),Goal,Idx).
-is_default_negation(Term,Goal,FL_SILKNAF) :- is_flsilknaf(Term,Goal).
+is_default_negation(Term,Goal,FL_RULELOGNAF) :- is_flsilknaf(Term,Goal).
 is_default_negation(Term,Goal,FL_PLGNAF)  :- is_flplgnaf(Term,Goal).
 
 is_fllogicquantifier(FLQUANTIFIER(Quant,VarNames,FormulaCode,Idx),
@@ -232,8 +232,8 @@ is_flprefixprimitive(FLPREFIXPRIMITIVE(Prefix,Expansion,Module),Prefix,Expansion
 
 is_flclause(FLCLAUSE(Head,Body),Head,Body).
 is_flclause(FLCLAUSE(Mode,Head,Body),Mode,Head,Body).
-is_flannotated_clause_stmt(FLTAGGEDCLAUSE(Descriptor,Head,Body),Descriptor,Head,Body).
-is_flannotated_clause_stmt(FLTAGGEDCLAUSE(Descriptor,Mode,Head,Body),Descriptor,Mode,Head,Body).
+is_flannotated_clause_stmt(FLANNOTATEDCLAUSE(Descriptor,Head,Body),Descriptor,Head,Body).
+is_flannotated_clause_stmt(FLANNOTATEDCLAUSE(Descriptor,Mode,Head,Body),Descriptor,Mode,Head,Body).
 
 is_flcatch(FLCATCH(Goal,Error,Handler),Goal,Error,Handler).
 is_flthrow(FLTHROW(Error),Error).
@@ -248,7 +248,6 @@ is_flnewmodule(FLNEWMODULE(Op,Module),Op,Module).
 is_flerasemodule(FLERASEMODULE(Op,Module),Op,Module).
 is_flupdaterule(FLUPDATERULE(Op,RuleList),Op,RuleList).
 
-%% Use _@! instead of thisruleid{?X}
 is_flsimpleprimitive(FLSIMPLEPRIMITIVE(PrimName,Args),PrimName,Args).
 
 is_flaggregate(FLAGGREGATE(Op,V,GV,Sort,Goal),Op,V,GV,Sort,Goal).
@@ -420,19 +419,23 @@ approx_flindex(FLUNLESSDO(Cond,_),I)        :- !, approx_flindex(Cond,I).
 approx_flindex(FLCONJUNCT(First,_),I)       :- !, approx_flindex(First,I).
 approx_flindex(FLDISJUNCT(First,_),I)       :- !, approx_flindex(First,I).
 approx_flindex(FLRULE(Head,_),I)            :- !, approx_flindex(Head,I).
+approx_flindex(FLDYNRULE(Head,_,_),I)       :- !, approx_flindex(Head,I).
+approx_flindex(FLUPDATERULE(_,Rule),I)      :- !, approx_flindex(Rule,I).
 approx_flindex(FLFACT(Head),I)              :- !, approx_flindex(Head,I).
 approx_flindex(FLQUERY(Body),I)             :- !, approx_flindex(Body,I).
 approx_flindex(FLDIRECTIVE(_Dir,I),I)       :- !.
-approx_flindex(FLTAGPRIMITIVE(Labl,_),I)  :- !, approx_flindex(Labl,I).
+approx_flindex(FLTAGPRIMITIVE(Labl,_),I)    :- !, approx_flindex(Labl,I).
 
-approx_flindex(FLTAGGEDCLAUSE(_,_,H,_),I)  :- !, approx_flindex(H,I).
-approx_flindex(FLTAGGEDCLAUSE(_,H,_),I)    :- !, approx_flindex(H,I).
+approx_flindex(FLANNOTATEDCLAUSE(_,_,H,_),I)   :- !, approx_flindex(H,I).
+approx_flindex(FLANNOTATEDCLAUSE(_,H,_),I)     :- !, approx_flindex(H,I).
 approx_flindex(FLCLAUSE(_,Head,_),I)        :- !, approx_flindex(Head,I).
 approx_flindex(FLCLAUSE(Head,_),I)          :- !, approx_flindex(Head,I).
 approx_flindex(FLUNIVEQFORM(Left,_),I)      :- !, approx_flindex(Left,I).
 approx_flindex(FLMETAUNIV(Left,_),I)        :- !, approx_flindex(Left,I).
 approx_flindex(FLAGGREGATE(Op,_,_,_),I)     :- !, approx_flindex(Op,I).
 approx_flindex(FLCONSTRAINT(C),I)           :- !, approx_flindex(C,I).
+approx_flindex(FLANNOTATEDCONSTRUCT(Descr,_),I)  :- !, approx_flindex(Descr,I).
+approx_flindex(FLDESCRIPTOR(_,_,I),I)         :- !.
 
 approx_flindex(FLREIFYOP(Form),I)             :- !, approx_flindex(Form,I).
 approx_flindex(FLTRUTHVALUE(Form,_),I)        :- !, approx_flindex(Form,I).
@@ -442,16 +445,22 @@ approx_flindex(FLPLIBALL(P,_M),I)             :- !, approx_flindex(P,I).
 approx_flindex(FLPLIBALL(P),I)                :- !, approx_flindex(P,I).
 approx_flindex(FLFLORALIB(P,_M),I)            :- !, approx_flindex(P,I).
 approx_flindex(FLWORKSPACE(P,_WS),I)          :- !, approx_flindex(P,I).
+approx_flindex(FLCONSTRAINT(C),I)             :- !, approx_flindex(C,I).
+
+approx_flindex(FLUDF(Fun,_,_),I)              :- !, approx_flindex(Fun,I).
+approx_flindex(FLUDFFACT(Fun,_),I)            :- !, approx_flindex(Fun,I).
 
 approx_flindex(FLINSERT(Op,_List,_Cond),I)    :- !, approx_flindex(Op,I).
 approx_flindex(FLINSERT(Op,_List),I)          :- !, approx_flindex(Op,I).
 approx_flindex(FLDELETE(Op,_List,_Cond),I)    :- !, approx_flindex(Op,I).
 approx_flindex(FLDELETE(Op,_List),I)          :- !, approx_flindex(Op,I).
 
+approx_flindex(FLLOAD(List),I)                :- !, approx_flindex(List,I).
+
 approx_flindex(FLDELAYEDLITERAL(Op,_),I)      :- !, approx_flindex(Op,I).
 approx_flindex(FLDELAYEDLITERAL(Op,_,_),I)    :- !, approx_flindex(Op,I).
-approx_flindex(FLSILKNAF(G),I)                    :- !, approx_flindex(G,I).
-approx_flindex(FLPLGNAF(G),I)                    :- !, approx_flindex(G,I).
+approx_flindex(FLRULELOGNAF(G),I)             :- !, approx_flindex(G,I).
+approx_flindex(FLPLGNAF(G),I)                 :- !, approx_flindex(G,I).
 approx_flindex(FLNEG(_G,I),I)                 :- !.
 approx_flindex(FLQUANTIFIER(_Quant,_,_,I),I)  :- !.
 
@@ -529,10 +538,10 @@ approx_prindex(PRFACT(Head),I)                :- !, approx_prindex(Head,I).
 approx_prindex(PRREIFY(F),I)                  :- !, approx_prindex(F,I).
 approx_prindex(PRQUERY(Body),I)               :- !, approx_prindex(Body,I).
 approx_prindex(PRDIRECTIVE(Direct),I)         :- !, approx_prindex(Direct,I).
-approx_flindex(PRCONSTRAINT(C),I)             :- !, approx_flindex(C,I).
+approx_prindex(PRCONSTRAINT(C),I)             :- !, approx_prindex(C,I).
 
 approx_prindex(FLORASYSLIB(NO_INDEX,_,_,Args),I) :- !, approx_prindex(Args,I).
-approx_prindex(FLORASYSLIB(Idx,_,_,_),Idx)    :- !.
+approx_prindex(FLORASYSLIB(Idx,_,_,_),Idx)       :- !.
 
 approx_prindex(PROLOGTERM(F,_,_),I)           :- !, approx_prindex(F,I).
 approx_prindex(PROLOGTERM(F,_,_,_),I)         :- !, approx_prindex(F,I).
@@ -542,7 +551,7 @@ approx_prindex(PRFDBSTORAGE(P),I)             :- !, approx_prindex(P,I).
 approx_prindex(PRWORKSPACE(P,_WS),I)          :- !, approx_prindex(P,I).
 approx_prindex(PRWORKSPACETERM(WS),I)         :- !, approx_prindex(WS,I).
 
-approx_prindex(PRSILKNAF(G),I)                :- !, approx_prindex(G,I).
+approx_prindex(PRRULELOGNAF(G),I)             :- !, approx_prindex(G,I).
 approx_prindex(PRPLGNAF(G),I)                 :- !, approx_prindex(G,I).
 approx_prindex(PRNEG(G),I)                    :- !, approx_prindex(G,I).
 approx_prindex(PRQUANTIFIER(Form,_,_),I)      :- !, approx_prindex(Form,I).
@@ -608,7 +617,7 @@ is_prquantifier(PRQUANTIFIER(QuantifierType,FormCode,FreVarObjs),
 %% \+
 naf_struct_prolog(Goal,PRPLGNAF(Goal)).
 %% naf
-pure_naf_struct_flora(Goal,FreeVars,PRSILKNAF(WrappedGoal,FreeVars,Line,CurrFileName)) :-
+pure_naf_struct_flora(Goal,FreeVars,PRRULELOGNAF(WrappedGoal,FreeVars,Line,CurrFileName)) :-
 	code_line_and_file_by_prterm(Goal,Line,CurrFileName),
 	modularized_pratom_struct(FL_TABLED_UNNUMBER_CALL,NO_INDEX,FunCode),
 	prologterm_struct(FunCode,1,[Goal],WrappedGoal).
@@ -962,6 +971,7 @@ list_struct(List,Term,Index,PRLIST(List,Term,Index)).
 list_struct(List,Term,PRLIST(List,Term,NO_INDEX)).
 
 workspace_struct(P,WS,PRWORKSPACE(P,WS)).
+is_prworkspace(PRWORKSPACE(P,WS),P,WS).
 newpredicate_struct(Name,N,Args,PRNEWPRED(Name,N,Args)).
 thismodule_struct(PRTHISMODULE(PRTHISMODULE)).
 
@@ -1169,12 +1179,6 @@ caller_binding_code(Binding,Code) :-
 	atomobj_struct(FL_SILENT_EQUAL,EqCode),
 	prologterm_struct(EqCode,2,[CallerVar,Binding],Code).
 
-/*
-thisruleid_binding_code(Binding,Code) :-
-	thisruleid_var_structure(RuleIdVar),
-	atomobj_struct(FL_SILENT_EQUAL,EqCode),
-	prologterm_struct(EqCode,2,[RuleIdVar,Binding],Code).
-*/
 
 /*
 is_prtermlit(PRTERMLIT(Obj,_,_),I) :- approx_prindex(Obj,I).
@@ -2570,7 +2574,8 @@ flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,Status) 
 */
 	prepare_to_compile_rule,
 	increment_rule_number,
-        compile_descriptor_list([],addrule,DescriptorIdCode,DescrVarsTerm,MetaFactDiffList,_),
+	approx_flindex(ParserTerm,RuleIdx),
+        compile_descriptor_list([]-RuleIdx,addrule,DescriptorIdCode,DescrVarsTerm,MetaFactDiffList,_),
 	compile_add_internal(ParserTerm,
 			     DescriptorIdCode,DescrVarsTerm,
 			     RuleDiffList,FactDiffList,MetaFactDiffList,
@@ -2690,7 +2695,8 @@ compile_direct_add(DirectTerm,DirIdx,DCodeList,S) :-
   MetaFactDiffList - diff list of meta facts generated from annotations
 ****************************************************************************/
 compile_annotated_construct_add(DescriptorList,MainPartOfRule,RuleDiffList,FactDiffList,Status) :-
-	compile_descriptor_list(DescriptorList,addrule,DescrIdCode,DescrVarsTerm,MetaFactDifflist,Status1),
+	approx_flindex(MainPartOfRule,RuleIdx),
+	compile_descriptor_list(DescriptorList-RuleIdx,addrule,DescrIdCode,DescrVarsTerm,MetaFactDifflist,Status1),
 	( no_errors_found(Status1) -> 
 	    %% this rule won't bring any new meta facts
 	    compile_add_internal(MainPartOfRule,
@@ -2752,7 +2758,8 @@ compile_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiff
 	    (var(DescriptorIdCode) ->
 		%% MetaFactDiffList is nonvar, if compile_internal is called by
 		%% compile_annotated_construct (it is = []-[] then)
-		compile_descriptor_list([],rule,DescriptorIdCode,DescrVarsTerm,MetaFactDiffList,_)
+		approx_flindex(ParserTerm,RuleIdx),
+		compile_descriptor_list([]-RuleIdx,rule,DescriptorIdCode,DescrVarsTerm,MetaFactDiffList,_)
 	    ; true
 	    ),
 	    compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,S),
@@ -3213,12 +3220,12 @@ compile_symbol_term(Funct,N,Args,WS,Context,Transactional,Status) :-
 	flora_get_flatomvar_name(Funct,Name),
 	(symbol_star_argument(Args) ->
 		(N==1 ->
-			add_nowarn_symbol(Name,FL_STAR,WS,Context,Transactional),
-			Status = NO_ERRORS
+		    add_nowarn_symbol(Name,FL_STAR,WS,Context,Transactional),
+		    Status = NO_ERRORS
 		;
-			approx_flindex(Funct,Index),
-			compiling_error(Index,ERROR_SYMBOL_CONTEXT_STAR_ARG,Err),
-			Status = [Err]
+		    approx_flindex(Funct,Index),
+		    compiling_error(Index,ERROR_SYMBOL_CONTEXT_STAR_ARG,Err),
+		    Status = [Err]
 		)
 	;
 		add_nowarn_symbol(Name,N,WS,Context,Transactional),
@@ -3321,7 +3328,8 @@ compile_flfact(Head,RuleDiffList,FactDiffList,MetaFactDiffList,Status) :-
 		conjunct_code([H2BCodeHead,H2BCodeTail],H2BCode),
 		add_dynrule_attr_code(L,H2BCode,BodyCode),
 		%% no explicit id given: just generate new rule id
-		compile_descriptor_list([],rule,DescrIdCode,DescrVarsTerm,MetaFactDiffList,_),
+		approx_flindex(Head,RuleIdx),
+		compile_descriptor_list([]-RuleIdx,rule,DescrIdCode,DescrVarsTerm,MetaFactDiffList,_),
 		split_ruleheads_add_rulesig(HeadCodeList,
 					    BodyCode,BodyCode,
 					    DescrIdCode,DescrVarsTerm,
@@ -3497,7 +3505,8 @@ compile_query(Body,RuleList-RuleTail,Facts-Facts,Status) :-
 		 FactList includes meta-facts
 ****************************************************************************/
 compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,FactDiffList,MetaFacts-MetaFactsTail,Status) :-
-	compile_descriptor_list(DescriptorList,rule,DescrIdCode,DescrVarsTerm,MetaFacts-MetaFactsTail,Status1),
+	approx_flindex(MainPartOfRule,RuleIdx),
+	compile_descriptor_list(DescriptorList-RuleIdx,rule,DescrIdCode,DescrVarsTerm,MetaFacts-MetaFactsTail,Status1),
 	( no_errors_found(Status1) -> 
 	    %% this rule won't bring any new meta facts
 	    compile_internal(MainPartOfRule,DescrIdCode,DescrVarsTerm,
@@ -3509,7 +3518,7 @@ compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,FactDiffL
 
 
 /*
- compile_descriptor_list(+DescriptorList,+Mode,-DescrIdCode,-DescrVarsTermOut,
+ compile_descriptor_list(+DescriptorList-RuleIdx,+Mode,-DescrIdCode,-DescrVarsTermOut,
                          -MetaFactDiffList,-Status)
  Mode - rule/query/dynrule.
         The 'query' mode is used for the clause{...} construct.
@@ -3520,7 +3529,7 @@ compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,FactDiffL
      compile_descriptor_list1, so MetaFacts will have unbound variable as arg 2.
      This is what we need for clause{....}
 */
-compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFacts-MetaFactsTail,Status) :-
+compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut,MetaFacts-MetaFactsTail,Status) :-
 	flatten(DescriptorList,FlatDescrList),
 	%% First, extract the code for the rule id
 	findall(IdParserTerm-Idx,
@@ -3535,7 +3544,7 @@ compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFac
 	    compiling_error(Idx,MULTIPLE_RULE_IDS,Err),
 	    IdStatus = [Err]
 	; IdParserTermList == [] % no explicit rule id
-	-> construct_default_ruleid_descriptor(Mode,DescrIdCode),
+	-> construct_default_ruleid_descriptor(Mode,RuleIdx,DescrIdCode),
 	    RuleidFrameCode = _M - _M,
 	    IdStatus = NO_ERRORS
 	; IdParserTermList = [[IdParserTerm|_] - Idx],
@@ -3596,8 +3605,9 @@ compile_descriptor_list(DescriptorList,Mode,DescrIdCode,DescrVarsTermOut,MetaFac
           If tag is specified, assume defeasible.
           Otherwise: assume strict.
 */
-%% If Mode=clause_construct, ie, the clause statement, don't produce defeasibility fact
+%% If Mode=clause_construct/query then don't produce defeasibility fact
 determine_defeasibility(_Features,clause_construct,_DescrIdCode,_DescrVarsTerm,NULL,[]) :- !.
+determine_defeasibility(_Features,query,_DescrIdCode,_DescrVarsTerm,NULL,[]) :- !.
 determine_defeasibility(DescrFeatures,Mode,DescrIdCode,DescrVarsTerm,DefeatMetaFact,Status) :-
 	memberchk(Mode,[rule,dynrule,addrule]),
 	!,
@@ -3683,9 +3693,11 @@ extract_features_from_objspec(_Spec, []).
 
 /*
    compile_descriptor_list1(+DescriptorList,+Mode,+DescrIdCode,+RuleidFrameCode,+DescrVarsTerm,-MetaFactDiffList,-Status)
-   Mode - rule/clause_construct/dynrule/addrule.
-        The 'clause_construct' mode is used for the clause{...} construct.
+   Mode - rule/clause_construct/query/dynrule/addrule/udfrule
+        'clause_construct' is used for the clause{...} construct.
+        `query' is used for @!{...} queries to metainfo in rule bodies.
         'dynrule' is for dynamic rules.
+	etc.
 */
 compile_descriptor_list1([],_Mode,_DescrIdCode,_RuleidFrameCode,_DescrVarsTerm,M-M,[]).
 compile_descriptor_list1([Descriptor|RestDescr],Mode,DescrIdCode,RuleidFrameCode,DescrVarsTerm,MetaFacts-MetaTail,Status) :-
@@ -3699,9 +3711,12 @@ compile_descriptor_list1([Descriptor|RestDescr],Mode,DescrIdCode,RuleidFrameCode
 
 /*
    compile_descriptor(+Descriptor,+Mode,+DescrIdCode,+DescrVarsTerm,-MetaFactDiffList,-Status)
-   Mode - rule/clause_construct/dynrule/addrule/udfrule
-        The 'clause_construct' mode is used for the clause{...} construct.
+   Mode - rule/clause_construct/query/dynrule/addrule/udfrule
+        'rule' - rule descriptor in static rules
+        'clause_construct' mode is used for the clause{...} construct.
+        'query' - for @!{...} queries in rule bodies
         'dynrule' is for dynamic rules.
+	etc.
 */
 compile_descriptor(Descriptor,Mode,DescrIdCode,RuleidFrameCode,DescrVarsTerm,MetaFactDiffList,Status) :-
 	is_fldescriptor(Descriptor,DescrContents,Type,_Index),
@@ -3717,124 +3732,141 @@ compile_descriptor(Descriptor,Mode,DescrIdCode,RuleidFrameCode,DescrVarsTerm,Met
 %% already compiled
 compile_descriptor(Descriptor,_Mode,_DescrIdCode,_RuleidFrameCode,_DescrVarsTerm,Descriptor,[]) :- !.
 
-compile_ruleid_descriptor(IdDescriptorBundle,DescrIdCode,FrameCode,Status) :-
-	compile_complex_descriptor(IdDescriptorBundle,DescrIdCode,FrameCode,
+compile_ruleid_descriptor(IdDescriptorWithFrame,DescrIdCode,FrameCode,Status) :-
+	compile_complex_descriptor(IdDescriptorWithFrame,DescrIdCode,FrameCode,
 				   frames_ok,Status).
 
 
 /*
-   Mode - rule/clause_construct/dynrule/addrule/udfrule
-        The 'clause_construct' mode is used for the clause{...} construct.
+   Mode - rule/clause_construct/query/dynrule/addrule/udfrule
+        'rule' - rule descriptor in static rules
+        'clause_construct' mode is used for the clause{...} construct.
 	       In that case, the default rule Id is just a new variable.
 	       Same for dynrule/addrule: these Ids are set at run time,
 	            so here we just make the id into a variable.
+        'query' is for @!{....} queries to metainfo in rule bodies
         'dynrule' is for dynamic rules inserted at run time by insertrule.
         'addrule' is for dynamic rules inserted by _add.
         'udfrule' is for rules created as part of the UDF encoding
 */
-construct_default_ruleid_descriptor(rule,RuleIdCode) :-
+construct_default_ruleid_descriptor(rule,Idx,RuleIdCode) :-
 	!,
 	current_default_ruleid(RuleId),
-	atomobj_struct(RuleId,RuleIdCode).
-construct_default_ruleid_descriptor(udfrule,RuleIdCode) :-
+	atomobj_struct(RuleId,Idx,RuleIdCode).
+construct_default_ruleid_descriptor(udfrule,Idx,RuleIdCode) :-
 	!,
 	current_default_ruleid(RuleId1),
 	flora_concat_atoms(['udf_',RuleId1],RuleId),
-	atomobj_struct(RuleId,RuleIdCode).
-construct_default_ruleid_descriptor(addrule,RuleIdCode) :-
+	atomobj_struct(RuleId,Idx,RuleIdCode).
+construct_default_ruleid_descriptor(addrule,Idx,RuleIdCode) :-
 	!,
-	new_prvariable(NO_INDEX,RuleIdCode).
-construct_default_ruleid_descriptor(dynrule,RuleIdCode) :-
+	new_prvariable(Idx,RuleIdCode).
+construct_default_ruleid_descriptor(dynrule,Idx,RuleIdCode) :-
 	!,
-	new_prvariable(NO_INDEX,RuleIdCode).
-construct_default_ruleid_descriptor(clause_construct,RuleIdCode) :-
-	new_prvariable(NO_INDEX,RuleIdCode).
+	new_prvariable(Idx,RuleIdCode).
+construct_default_ruleid_descriptor(clause_construct,Idx,RuleIdCode) :-
+	new_prvariable(Idx,RuleIdCode).
+construct_default_ruleid_descriptor(query,Idx,RuleIdCode) :-
+	new_prvariable(Idx,RuleIdCode).
 
 %% construct_tag_descriptor_facts(+DescrIdCode,+Mode,+DescrVarsTerm,+DescrContent,-MetaFactDiffList,-Stat)
 %% construct_bool_descriptor_facts(+DescrIdCode,+Mode,+DescrVarsTerm,+DescrContent,-MetaFactDiffList,-Stat)
 construct_tag_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[TagIdMetaFact|Tail]-Tail,Status) :-
 	compile_simple_descriptor(DescrContents,DescrCode,Status),
-	construct_tag_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,DescrCode,TagIdMetaFact).
-%% Like construct_tag_descriptor_facts, but uses DescrCode (pr-obj) instead of
+	construct_tag_descriptor_fact1(DescrIdCode,NULL,Mode,DescrVarsTerm,DescrCode,TagIdMetaFact).
+
+%% Like construct_tag_descriptor_facts/7, but uses DescrCode (pr-obj) instead of
 %% DescrContents (fl-obj)
-construct_tag_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,DescrCode,TagIdMetaFact) :-
+%% Also takes ExplicitModule
+construct_tag_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,DescrCode,TagIdMetaFact) :-
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
-	(memberchk(Mode,[clause_construct,dynrule]) ->
-	    new_prvariable(NO_INDEX,ModuleVar),
-	    generate_prolog_liblit(PredCode,4,[DescrIdCode,ModuleVar,DescrCode,DescrVarsTerm], TagIdMetaTerm)
-	;
-	    thismodule_struct(ThisModule),
-	    generate_prolog_liblit(PredCode,4,[DescrIdCode,ThisModule,DescrCode,DescrVarsTerm], TagIdMetaTerm)
-	),
+	get_descriptor_module(ExplicitModule,Mode,DescrModule),
+	generate_prolog_liblit(PredCode,4,[DescrIdCode,DescrModule,DescrCode,DescrVarsTerm], TagIdMetaTerm),
 	(Mode == rule -> fact_struct(TagIdMetaTerm,TagIdMetaFact)
-	; %% Mode = clause_construct/dynrule/addrule
+	; %% Mode = clause_construct/query/dynrule/addrule/udfrule
 	    TagIdMetaTerm = TagIdMetaFact
 	).
 
 
 construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[BoolIdMetaFact|Tail]-Tail,Status) :-
 	compile_simple_descriptor(DescrContents,DescrCode,Status),
-	construct_bool_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,DescrCode,BoolIdMetaFact).
+	construct_bool_descriptor_fact1(DescrIdCode,NULL,Mode,DescrVarsTerm,DescrCode,BoolIdMetaFact).
 %% Like construct_tag_descriptor_facts, but uses DescrCode (pr-obj) instead of
 %% DescrContents (fl-obj)
-construct_bool_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,DescrCode,BoolIdMetaFact) :-
+construct_bool_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,DescrCode,BoolIdMetaFact) :-
 	PredCode = FL_BOOL_DESCRIPTOR_META_PREDICATE,
-	(memberchk(Mode,[clause_construct,dynrule]) ->
-	    new_prvariable(NO_INDEX,ModuleVar),
-	    generate_prolog_liblit(PredCode,4,[DescrIdCode,ModuleVar,DescrCode,DescrVarsTerm], BoolIdMetaTerm)
-	;
-	    thismodule_struct(ThisModule),
-	    generate_prolog_liblit(PredCode,4,[DescrIdCode,ThisModule,DescrCode,DescrVarsTerm], BoolIdMetaTerm)
-	),
+	get_descriptor_module(ExplicitModule,Mode,DescrModule),
+	generate_prolog_liblit(PredCode,4,[DescrIdCode,DescrModule,DescrCode,DescrVarsTerm], BoolIdMetaTerm),
 	(Mode == rule -> fact_struct(BoolIdMetaTerm,BoolIdMetaFact)
-	; %% Mode = clause_construct/dynrule/addrule
+	; %% Mode = clause_construct/query/dynrule/addrule/udfrule
 	    BoolIdMetaTerm = BoolIdMetaFact
 	).
 
 construct_prop_descriptor_facts(_,_,_,NULL,Meta-Meta,[]) :- !.
 construct_prop_descriptor_facts(_,_,_,FL_TRUE,Meta-Meta,[]) :- !.
 
+%% construct_prop_descriptor_facts/6
 construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,RuleidFrameCode,LeftMeta-RightTail,Status) :-
 	RuleidFrameCode = PRAND(Left,Right),
 	!,
 	construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,Left,LeftMeta-LeftTail,S1),
-	construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,Right,LeftTail-RightTail,S2),
-	!,
-	append(S1,S2,Status).
+	(S1 == NO_ERRORS ->
+	    construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,Right,LeftTail-RightTail,Status)
+	; Status =S1
+	).
 
-construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,PRMVD(DescrIdCode,Prop,Val,_),[MetaFact|Tail]-Tail,NO_ERRORS) :-
+%% construct_prop_descriptor_facts/6
+construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,RuleidFrameCode,Metafacts,Status) :-
+	(is_prworkspace(RuleidFrameCode,RealCode,ExplicitModule) -> true
+	; RealCode = RuleidFrameCode, ExplicitModule = NULL
+	),
+	%% construct_prop_descriptor_facts/7
+	construct_prop_descriptor_facts(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,RealCode,Metafacts,Status).
+
+
+%% construct_prop_descriptor_facts/7 for attr-val pairs
+construct_prop_descriptor_facts(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,PRMVD(DescrIdCode,Prop,Val,_),[MetaFact|Tail]-Tail,NO_ERRORS) :-
 	!,
 	%% if property=tag: construct a tag metafact; else - property metafact
 	(is_pratom(Prop,FL_TAG_PROPERTY)
 	-> 
-	    construct_tag_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,Val,MetaFact)
+	    construct_tag_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Val,MetaFact)
 	;
-	    construct_prop_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,Prop,Val,MetaFact)
+	    construct_prop_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Prop,Val,MetaFact)
 	).
 
-construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,PRMETH(DescrIdCode,Val,_),[MetaFact|Tail]-Tail,NO_ERRORS) :-
+%% construct_prop_descriptor_facts/7 for Boolean properties
+construct_prop_descriptor_facts(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,PRMETH(DescrIdCode,Val,_),[MetaFact|Tail]-Tail,NO_ERRORS) :-
 	!,
-	construct_bool_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,Val,MetaFact).
+	construct_bool_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Val,MetaFact).
 
-construct_prop_descriptor_facts(_DescrIdCode,_Mode,_DescrVarsTerm,RuleidFrameCode,_DiffList,[Err]) :-
+%% construct_prop_descriptor_facts/7 for empty frames: empty metafacts
+construct_prop_descriptor_facts(DescrIdCode,_,_,_,PREXISTS(DescrIdCode,_),Meta-Meta,NO_ERRORS) :-
+	!.
+
+%% construct_prop_descriptor_facts/7
+construct_prop_descriptor_facts(_DescrIdCode,_ExplicitModule,_Mode,_DescrVarsTerm,RuleidFrameCode,_DiffList,[Err]) :-
 	approx_prindex(RuleidFrameCode,Idx),
 	compiling_error(Idx,NO_NESTED_DESCRIPTOR_FRAME,Err).
 
-construct_prop_descriptor_fact1(DescrIdCode,Mode,DescrVarsTerm,Prop,Val,MetaFact) :-
+%% constructs meta facts for 1 attr-value pair
+construct_prop_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Prop,Val,MetaFact) :-
 	PredCode = FL_PROP_DESCRIPTOR_META_PREDICATE,
-	(memberchk(Mode,[clause_construct,dynrule]) ->
-	    new_prvariable(NO_INDEX,ModuleVar),
-	    generate_prolog_liblit(PredCode,5,[DescrIdCode,ModuleVar,Prop,Val,DescrVarsTerm], MetaTerm)
-	;
-	    thismodule_struct(ThisModule),
-	    generate_prolog_liblit(PredCode,5,[DescrIdCode,ThisModule,Prop,Val,DescrVarsTerm], MetaTerm)
-	),
+	get_descriptor_module(ExplicitModule,Mode,DescrModule),
+	generate_prolog_liblit(PredCode,5,[DescrIdCode,DescrModule,Prop,Val,DescrVarsTerm], MetaTerm),
 	(Mode == rule -> fact_struct(MetaTerm,MetaFact)
-	; %% Mode = clause_construct/dynrule/addrule
+	; %% Mode = clause_construct/query/dynrule/addrule/udfrule
 	    MetaTerm = MetaFact
 	).
 
 
+get_descriptor_module(ExplicitMod,Mode,OutModule) :-
+	(ExplicitMod \== NULL -> OutModule = ExplicitMod
+	; memberchk(Mode,[clause_construct,query,dynrule]) ->
+	    new_prvariable(NO_INDEX,OutModule)
+	; %% rule/addrule
+	    thismodule_struct(OutModule)
+	).
 
 %% descriptor without attached frames
 compile_simple_descriptor(DescrContents,Object,Status) :-
@@ -3862,11 +3894,13 @@ compile_complex_descriptor(DescrContents,Object,FrameCode,FramesOK,Status) :-
 	).
 	
 %% construct_rule_enabling_fact(+DescrIdCode,+Mode,-RuleEnablerMetaFact)
+%% For clause{...} and the @!{...} query, don't construct the rule-enabling fact
 construct_rule_enabling_fact(_DescrIdCode,clause_construct,NULL) :- !.
+construct_rule_enabling_fact(_DescrIdCode,query,NULL) :- !.
 construct_rule_enabling_fact(DescrIdCode,Mode,RuleEnablerMetaFact) :-
 	construct_rule_enabling_test(DescrIdCode,RuleEnablerMetaTerm),
 	(Mode == rule -> fact_struct(RuleEnablerMetaTerm,RuleEnablerMetaFact)
-	; %% clause_construct/dynrule/addrule
+	; %% clause_construct/query/dynrule/addrule/udfrule
 	    RuleEnablerMetaTerm = RuleEnablerMetaFact
 	).
 
@@ -3877,18 +3911,18 @@ construct_rule_enabling_test(DescrIdCode,RuleEnablerMetaTerm) :-
 construct_tag_descriptor_fact_from_id(DescrIdCode,Mode,DescrVarsTerm,TagIdMetaFact) :-
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
 	(Mode == dynrule ->
-	    new_prvariable(NO_INDEX,ModuleVar),
-	    generate_prolog_liblit(PredCode,4,[DescrIdCode,ModuleVar,DescrIdCode,DescrVarsTerm], TagIdMetaTerm)
-	; Mode == clause_construct ->
-	    new_prvariable(NO_INDEX,ModuleVar),
-	    new_prvariable(NO_INDEX,TagVar),
-	    generate_prolog_liblit(PredCode,4,[DescrIdCode,ModuleVar,TagVar,DescrVarsTerm], TagIdMetaTerm)
+	    new_prvariable(NO_INDEX,Module),
+	    Tag = DescrIdCode
+	; memberchk(Mode,[clause_construct,query]) ->
+	    new_prvariable(NO_INDEX,Module),
+	    new_prvariable(NO_INDEX,Tag)
 	;
-	    thismodule_struct(ThisModule),
-	    generate_prolog_liblit(PredCode,4,[DescrIdCode,ThisModule,DescrIdCode,DescrVarsTerm], TagIdMetaTerm)
+	    thismodule_struct(Module),
+	    Tag = DescrIdCode
 	),
+	generate_prolog_liblit(PredCode,4,[DescrIdCode,Module,Tag,DescrVarsTerm], TagIdMetaTerm),
 	(Mode == rule -> fact_struct(TagIdMetaTerm,TagIdMetaFact)
-	; %% Mode = clause_construct/dynrule/addrule
+	; %% Mode = clause_construct/query/dynrule/addrule/udfrule
 	    TagIdMetaTerm = TagIdMetaFact
 	).
 
@@ -3924,7 +3958,7 @@ compile_export_predicate(ExportTerm,Code,Status) :-
 	;
 	    %% Here WS is the dynamic module name. It is used only in
 	    %% executable instruction like this:
-	    %%    ?- (export aaa(?)>>foo)@bar.
+	    %%    ?- (export pred(?)>>foo)@bar.
 	    %% where dynamic module name = bar.
 	    is_flexport(ExportTerm,WS,BodyTerm,ModuleList,IsUpdatable)
 	),
@@ -3979,7 +4013,7 @@ compile_export_extract_facts([],InitTerm,_WSCode,_ModuleListCode,_IsUpdatableCod
   Constructs an appropriate prexport struct.
   Here WSCode is the dynamic module name. It is used only in
   executable instruction like this:
-  ?- (export aaa(?)>>foo)@bar.
+  ?- (export pred(?)>>foo)@bar.
   where dynamic module name = bar.
 ****************************************************************************/
 construct_export_struct(TermCode,WSCode,IsUpdatableCode,ModuleListCode,Code) :-
@@ -4047,7 +4081,8 @@ compile_udf_definition(Function,Body,ReturnValue,CodeList-ListTail,FactDiffList,
 		;
 		    UDFPreds = UDFPredsTail
 		),
-		compile_descriptor_list([],udfrule,DescrIdCode,DescrVarsTerm,_,_),
+		approx_flindex(Funct,FunctIndex),
+		compile_descriptor_list([]-FunctIndex,udfrule,DescrIdCode,DescrVarsTerm,_,_),
 		( Body=NULL ->
 		    %% UDFs are always compiled as rules: add a dummy body
 		    flatom_struct(FL_TRUE,NO_INDEX,RealBody),
@@ -4058,7 +4093,6 @@ compile_udf_definition(Function,Body,ReturnValue,CodeList-ListTail,FactDiffList,
 				 DescrIdCode, DescrVarsTerm,
 				 RuleList-ListTail,FactDiffList,S)
 		;
-		    approx_flindex(Funct,FunctIndex),
 		    new_udfrule_body(Body,FunctIndex,ReturnValue,NewReturnValue,NewBody),
 		    %% empty descr list - just generate new rule id
 		    compile_rule([NewHead],NewBody,
@@ -4088,7 +4122,6 @@ compile_udf_definition(Function,Body,ReturnValue,CodeList-ListTail,FactDiffList,
 		Status = FStatus
 	   )
 	;
-	    %%CodeList=ListTail,
 	    approx_flindex(Function,Index),
 	    compiling_error(Index,ERROR_UDF,Err),
 	    Status = [Err]
@@ -4326,8 +4359,6 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,Facts-Fa
 	    (has_context(compiling_udf_definition) -> RuleEnablerTest = true
 	    ; construct_rule_enabling_test(DescriptorIdCode,RuleEnablerTest)
 	    ),
-	    %%thisruleid_binding_code(DescriptorIdCode,ThisRuleIdBindingCode),
-	    %%conjunct_struct(RuleEnablerTest,ThisRuleIdBindingCode,PreBody),
 	    PreBody = RuleEnablerTest,
 	    PostBody = DelayCode,
 	    conjunct_struct(PreBody,BodyCodeSansDelay,BodyCode_aux),
@@ -4697,7 +4728,7 @@ compile_body(ParserTerm,Code,Status) :-
 		remove_existential_vars(FreeVarObjList1,FreeVarObjList),
 		list_struct(FreeVarObjList,[],FreeVarObjs)
 	    ),
-	    (NAFType == FL_SILKNAF
+	    (NAFType == FL_RULELOGNAF
 	    -> naf_struct_flora(FormCode,FreeVarObjs,Code)
 	    ; naf_struct_prolog(FormCode,Code)
 	    )
@@ -4757,6 +4788,12 @@ compile_body(ParserTerm,Code,Status) :-
 	    true
 	).
 
+
+compile_body(ParserTerm,Code,Status) :-
+	is_fldescriptor(ParserTerm,_,FLRULEID,_),
+	approx_flindex(ParserTerm,QueryIdx),
+	compile_descriptor_list([ParserTerm]-QueryIdx,query,_,_,CodeList-[],Status),
+	conjunct_code(CodeList,Code).
 
 compile_body(ParserTerm,Code,Status) :-
         compile_body_literal(ParserTerm,0,LitCode,BodyHeadList,Status),
@@ -4993,13 +5030,6 @@ compile_body_literal(ParserTerm,Nesting,Code,BodyHeadList,Status) :-
 	    compile_pathexplist(Args,Nesting1,ArgsCode,OidCode,_ListCode,_BodyHdLst,Status),
 	    prologterm_struct(PrimPredicate,N,ArgsCode,PrimModule,SpecCodePre),
 	    prologliblit_struct(SpecCodePre,SpecCode)
-
-	/*
-	%% Use _@! instead of thisruleid{?X}
-	; is_flthisruleid(ParserTerm,Arg) ->
-	    compile_pathexp(Arg,ArgObjCode,OidCode,_ArgBoolCode,Status),
-	    thisruleid_binding_code(ArgObjCode,SpecCode)
-	*/
 
 	; is_flupdaterule(ParserTerm,Op,List) ->
 	    BodyHeadList = [],
@@ -5250,10 +5280,10 @@ compile_flcontrolconstruct(Cond,Action,Wrapper,Code,Status) :-
   Code    - code for the actual Boolean expression that corresponds to
             a.b[c.d->e.f], ie, ?X[?Y->?Z].
             Note: Code is conjoined from the right. For instance,
-	          in aaa[bbb->c.d], the Code for c.d appears after the code
-		  for aaa[bbb->...]. Namely, the overall code will be:
+	          in obj[attr->c.d], the Code for c.d appears after the code
+		  for obj[attr->...]. Namely, the overall code will be:
 		    OidCode(for_c.d,Object(for_c.d)),
-		      aaa[bbb->Object(for_c.d)],
+		      obj[attr->Object(for_c.d)],
 		        Code(for_c.d)
   BodyHeadList - code to add at the beginning of the body
                  (mostly for user defined fnctions),
@@ -5304,7 +5334,7 @@ compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	%% in reified formulas, which are compiled as body literals
 	; is_fltoken(ParserTerm,FL_NEWOID,Index) ->
 	    /*
-	    %% no point checking skolems
+	    %% no point checking skolems!!!
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
@@ -5363,7 +5393,8 @@ compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 		Object = DescrIdCode,
 		Status = NO_ERRORS
 	    ; has_context(compiling_descriptors(Mode))
-	    -> construct_default_ruleid_descriptor(Mode,DescrIdCode),
+	    ->  approx_flindex(ParserTerm,Idx),
+		construct_default_ruleid_descriptor(Mode,Idx,DescrIdCode),
 		Object = DescrIdCode,
 		Status = NO_ERRORS
 	    ; compiling_error(Index,RULEID_TOKEN_NOT_IN_RULE,Err),
@@ -6538,7 +6569,7 @@ compile_flspecbody(Object,SpecTerm,OidCode,Code,BodyHeadList,Status) :-
 		list_struct(FreeVarObjList,[],FreeVarObjs)
 	    ),
 	    conjunct_code([OidCode,FormCode],CombinedCode),
-	    (NAFType == FL_SILKNAF
+	    (NAFType == FL_RULELOGNAF
 	    -> naf_struct_flora(CombinedCode,FreeVarObjs,Code)
 	    ; naf_struct_prolog(CombinedCode,Code)
 	    )
@@ -8912,10 +8943,10 @@ compile_prologliblit(ParserTerm,Nesting,OidCode,Code,BodyHeadList,Status) :-
 ****************************************************************************/
 compile_prologliblit(ParserTerm,Module,Nesting,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    %%is_flatom(Funct,FAtom), %% this prevents _p(a)@_plg(aaa) from getting compiled
+	    %%is_flatom(Funct,FAtom), %% this prevents _p(a)@_plg(mod) from getting compiled
 	    compile_prlgterm(Funct,N,Args,Module,Nesting,TCode,OidCode,ACode,BodyHeadList,Status)
 	;
-	    %%is_flatom(ParserTerm,FAtom),  %% %% this prevents _p@_plg(aaa) from getting compiled
+	    %%is_flatom(ParserTerm,FAtom),  %% %% this prevents _p@_plg(mod) from getting compiled
 	    atomobj_struct(ParserTerm,FObj),
 	    N=0,
 	    prologterm_struct(FObj,0,[],Module,TCode),
@@ -9010,10 +9041,10 @@ compile_prologlibobj(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 ****************************************************************************/
 compile_prologlibobj(ParserTerm,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    %%is_flatom(Funct,FAtom), %% this prevents f(_p(a))@_plg(aaa) from getting compiled
+	    %%is_flatom(Funct,FAtom), %% this prevents f(_p(a))@_plg(mod) from getting compiled
 	    compile_prlgterm(Funct,N,Args,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 	;
-	    %%is_flatom(ParserTerm,FAtom), %% this prevents f(_p)@_plg(aaa) from getting compiled
+	    %%is_flatom(ParserTerm,FAtom), %% this prevents f(_p)@_plg(mod) from getting compiled
 	    atomobj_struct(ParserTerm,FObj),
 	    N=0,
 	    prologterm_struct(FObj,0,[],Module,Object),
@@ -9979,7 +10010,8 @@ compile_flinsert_list([H|T],Code,Status) :-
 		%% a path expression, the annotation code is empty.
 		%% The last FL_TRUE is the defeasible condition to be
 		%% attached to rule bodies.
-		compile_descriptor_list([],dynrule,DescrIdCode,DescrVarsTerm,DefaultMetaFactDiffList,_),
+		approx_flindex(H,RuleIdx),
+		compile_descriptor_list([]-RuleIdx,dynrule,DescrIdCode,DescrVarsTerm,DefaultMetaFactDiffList,_),
 		set_context(compile_with_var_module),
 		set_context(compiling_dynrule(DescrIdCode)),
 		compile_head_literal(H,HeadCode,H2BCodeHead,H2BCodeTail,S),
@@ -10220,7 +10252,15 @@ compile_fldynrule(_Op,R,RCode,Status) :-
 %%       are not allowed to be dynamic in FLORA-2.
 compile_fldynrule(Op,R,RCode,Status) :-
 	is_fldynrule(R,Head,Body,DescriptorList),
-	compile_descriptor_list(DescriptorList,dynrule,DescrIdCode,DescrVarsTerm,MetaFactDiffList,DescriptorStatus),
+	approx_flindex(R,RuleIdx),
+	%% If delete op: default rule id descriptor should be Var
+	%% and shouldn't generate the rule enabling metafact.
+	%% In this case we use the same representation as in clause{...},
+	%% whence the 'clause_construct' mode in compile_descriptor_list/6
+	(is_fldeleteruleop(Op) -> DescrMode = clause_construct
+	; DescrMode = dynrule
+	),
+	compile_descriptor_list(DescriptorList-RuleIdx,DescrMode,DescrIdCode,DescrVarsTerm,MetaFactDiffList,DescriptorStatus),
 	( no_errors_found(DescriptorStatus) -> 
 	    compile_fldynrule_main(Op,Head,Body,
 				   DescrIdCode,DescrVarsTerm,MetaFactDiffList,
@@ -10261,8 +10301,6 @@ compile_fldynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,R
 		; construct_rule_enabling_test(DescrIdCode,RuleEnablerTest)
 		),
 		delay_literals_checking_code(Head,Body,DelayCode),
-		%%thisruleid_binding_code(DescrIdCode,ThisRuleIdBindingCode),
-		%%conjunct_struct(RuleEnablerTest,ThisRuleIdBindingCode,PreBody),
 		PreBody = RuleEnablerTest,
 		PostBody = DelayCode,
 		dynrule_struct(HeadCodeList,BodyCodeSansDelay,HVL,BVL,
@@ -10338,7 +10376,7 @@ compile_flrefresh(List,Code,Status) :-
 
 /****************************************************************************
   compile_flclause(+Mode,+HeadList,+Body,-Code,-Status)
-  Mode determines which rules to search: static only, dynamic only, etc.
+  Mode determines which rules to search for: static only, dynamic only, etc.
 ****************************************************************************/
 /*
    TODO: clause{Head,Body} has several problems:
@@ -10351,7 +10389,8 @@ compile_flrefresh(List,Code,Status) :-
       Possible solution: same as in 1.
 */
 compile_flclause(Descriptor,Mode,HeadList,Body,Code,Status) :-
-	compile_descriptor_list(Descriptor,clause_construct,DescrIdCode,
+	approx_flindex(HeadList,ClauseIdx),
+	compile_descriptor_list(Descriptor-ClauseIdx,clause_construct,DescrIdCode,
 				DescrVarTerm,
 				MetaFactDiffList,Descr_Status),
 	( no_errors_found(Descr_Status) -> 

@@ -417,19 +417,19 @@ flora_insert_rule(InsOp,Id,DescrVarTerm,Head,ActualBody,OrigBody,DefeatCond,Brid
  FLLIBDELETERULE(+CallerModule,+RuleList)
 ************************************************************************/ 
 FLLIBDELETERULE_A(_ThisModuleName,RuleList) :-
-	flora_check_and_delete_rules(FLLIBDELETERULE_A,RuleList).
+	flora_select_and_delete_rules(FLLIBDELETERULE_A,RuleList).
 FLLIBDELETERULE_Z(_ThisModuleName,RuleList) :-
-	flora_check_and_delete_rules(FLLIBDELETERULE_Z,RuleList).
+	flora_select_and_delete_rules(FLLIBDELETERULE_Z,RuleList).
 FLLIBDELETERULE(_ThisModuleName,RuleList) :-
-        flora_check_and_delete_rules(_DONOTCARE,RuleList).
+        flora_select_and_delete_rules(_DONOTCARE,RuleList).
 
 /***********************************************************************
- flora_check_and_delete_rules(+DelOp,+RuleList)
+ flora_select_and_delete_rules(+DelOp,+RuleList)
  InsOp is FLLIBDELETERULE_A or FLLIBDELETERULE_Z or unbound
  check the existence of all rules and delete them
 ************************************************************************/ 
-flora_check_and_delete_rules(DelOp,RuleList) :-
-        flora_check_rules(DelOp,RuleList,SigList,HeadList),
+flora_select_and_delete_rules(DelOp,RuleList) :-
+        flora_select_rules_for_deletion(DelOp,RuleList,SigList,HeadList),
         flora_delete_rules(SigList),
         flora_bind_libmodobj(HeadList,BoundHeadList),
         flora_refresh_ruleheads(BoundHeadList).
@@ -450,28 +450,34 @@ flora_refresh_rulehead(Head) :-
 	flora_refresh_tables(HHead).
 
 /***********************************************************************
- flora_check_rules(+DelOp,+RuleList,-SigList,-HeadList)
+ flora_select_rules_for_deletion(+DelOp,+RuleList,-SigList,-HeadList)
  check if the rule exists and return matching rule signatures
 ************************************************************************/ 
-flora_check_rules(_DelOp,[],[],[]) :- !.
-flora_check_rules(DelOp,[FLSYSRULEUPDATE(_Id,_DescrVarTerm,_DescrMetaFacts,HeadList,Body,_HV,_BV,_PreBody,_PostBody,_DefeatCond)|L],SigList,HL) :-
+flora_select_rules_for_deletion(_DelOp,[],[],[]) :- !.
+flora_select_rules_for_deletion(DelOp,[FLSYSRULEUPDATE(_Id,_DescrVarTerm,DescrMetaFacts,HeadList,Body,_HV,_BV,_PreBody,_PostBody,_DefeatCond)|L],SigList,HL) :-
 	!,
-	flora_check_multiheaded_rule(DelOp,HeadList,Body,HSigList,HHL),
-	flora_check_rules(DelOp,L,LSigList,LHL),
-        append(HSigList,LSigList,SigList),
-        append(HHL,LHL,HL).
-%% conjunct of rules - convert to list
-flora_check_rules(DelOp,[(R,L)|Rules],SigList,HL) :-
+	%% Match the metafacts before deciding to delete
+	(call_metafact_list(DescrMetaFacts)
+	->
+	    flora_check_multiheaded_rule(DelOp,HeadList,Body,HSigList,HHL),
+	    flora_select_rules_for_deletion(DelOp,L,LSigList,LHL),
+	    append(HSigList,LSigList,SigList),
+	    append(HHL,LHL,HL)
+	;
+	    flora_select_rules_for_deletion(DelOp,L,SigList,HL)
+	).
+%% conjunction of rules - convert to list
+flora_select_rules_for_deletion(DelOp,[(R,L)|Rules],SigList,HL) :-
 	!,
 	conjunct_to_list((R,L),RuleList),
-	flora_check_rules(DelOp,RuleList,HSigList,HHL),
-	flora_check_rules(DelOp,Rules,RSigList,RHL),
+	flora_select_rules_for_deletion(DelOp,RuleList,HSigList,HHL),
+	flora_select_rules_for_deletion(DelOp,Rules,RSigList,RHL),
         append(HSigList,RSigList,SigList),
         append(HHL,RHL,HL).
-flora_check_rules(_DelOp,[H|_Tail],_SigList,_HL) :-
+flora_select_rules_for_deletion(_DelOp,[H|_Tail],_SigList,_HL) :-
 	!,
 	flora_decode_goal_as_atom(H,AtomH),
-	flora_abort(['non-rule item in the rule-list of deleterule{...}, ',
+	flora_abort(['non-rule item ', H, ' in the rule-list of deleterule{...}, ',
 		     AtomH],FLORA_ABORT_NOTRACE).
 
 /***********************************************************************
@@ -776,6 +782,12 @@ assert_metafact_list([H|T],Module) :-
 	),
 	flora_adaptive_assert(H),
 	assert_metafact_list(T,Module).
+
+call_metafact_list([]) :- !.
+call_metafact_list([NULL|Rest]) :- !, call_metafact_list(Rest).
+call_metafact_list([Head|Rest]) :-
+	call(Head),
+	call_metafact_list(Rest).
 
 /*
 adaptive_retract_list([]) :- !.
