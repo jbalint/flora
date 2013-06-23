@@ -100,6 +100,7 @@
 	bind_head_in_defeat_condition/2,
         flora_record_rule_signature/9,
         flora_retract_signatures/8,
+	rule_signature_member/3,
         flora_build_pred_signature/2
    from flrcanon.
 
@@ -416,20 +417,20 @@ flora_insert_rule(InsOp,Id,DescrVarTerm,Head,ActualBody,OrigBody,DefeatCond,Brid
  FLLIBDELETERULE_Z(+CallerModule,+RuleList)
  FLLIBDELETERULE(+CallerModule,+RuleList)
 ************************************************************************/ 
-FLLIBDELETERULE_A(_ThisModuleName,RuleList) :-
-	flora_select_and_delete_rules(FLLIBDELETERULE_A,RuleList).
-FLLIBDELETERULE_Z(_ThisModuleName,RuleList) :-
-	flora_select_and_delete_rules(FLLIBDELETERULE_Z,RuleList).
-FLLIBDELETERULE(_ThisModuleName,RuleList) :-
-        flora_select_and_delete_rules(_DONOTCARE,RuleList).
+FLLIBDELETERULE_A(CallerMod,RuleList) :-
+	flora_select_and_delete_rules(FLLIBDELETERULE_A,CallerMod,RuleList).
+FLLIBDELETERULE_Z(CallerMod,RuleList) :-
+	flora_select_and_delete_rules(FLLIBDELETERULE_Z,CallerMod,RuleList).
+FLLIBDELETERULE(CallerMod,RuleList) :-
+        flora_select_and_delete_rules(_DONOTCARE,CallerMod,RuleList).
 
 /***********************************************************************
- flora_select_and_delete_rules(+DelOp,+RuleList)
+ flora_select_and_delete_rules(+DelOp,+CallerMod,+RuleList)
  InsOp is FLLIBDELETERULE_A or FLLIBDELETERULE_Z or unbound
  check the existence of all rules and delete them
 ************************************************************************/ 
-flora_select_and_delete_rules(DelOp,RuleList) :-
-        flora_select_rules_for_deletion(DelOp,RuleList,SigList,HeadList),
+flora_select_and_delete_rules(DelOp,CallerMod,RuleList) :-
+        flora_select_rules_for_deletion(DelOp,CallerMod,RuleList,SigList,HeadList),
         flora_delete_rules(SigList),
         flora_bind_libmodobj(HeadList,BoundHeadList),
         flora_refresh_ruleheads(BoundHeadList).
@@ -450,54 +451,52 @@ flora_refresh_rulehead(Head) :-
 	flora_refresh_tables(HHead).
 
 /***********************************************************************
- flora_select_rules_for_deletion(+DelOp,+RuleList,-SigList,-HeadList)
+ flora_select_rules_for_deletion(+DelOp,+CallerMod,+RuleList,-SigList,-HeadList)
  check if the rule exists and return matching rule signatures
 ************************************************************************/ 
-flora_select_rules_for_deletion(_DelOp,[],[],[]) :- !.
-flora_select_rules_for_deletion(DelOp,[FLSYSRULEUPDATE(_Id,_DescrVarTerm,DescrMetaFacts,HeadList,Body,_HV,_BV,_PreBody,_PostBody,_DefeatCond)|L],SigList,HL) :-
+flora_select_rules_for_deletion(_DelOp,_Mod,[],[],[]) :- !.
+flora_select_rules_for_deletion(DelOp,CallerMod,[FLSYSRULEUPDATE(Id,_DescrVarTerm,DescrMetaFacts,HeadList,Body,_HV,_BV,_PreBody,_PostBody,_DefeatCond)|L],SigList,HL) :-
 	!,
+	flora_check_multiheaded_rule(DelOp,Id,RuleMod,HeadList,Body,HSigList,HHL),
+	(var(RuleMod) -> RuleMod = CallerMod ; true),
 	%% Match the metafacts before deciding to delete
-	(call_metafact_list(DescrMetaFacts)
-	->
-	    flora_check_multiheaded_rule(DelOp,HeadList,Body,HSigList,HHL),
-	    flora_select_rules_for_deletion(DelOp,L,LSigList,LHL),
-	    append(HSigList,LSigList,SigList),
-	    append(HHL,LHL,HL)
-	;
-	    flora_select_rules_for_deletion(DelOp,L,SigList,HL)
-	).
+	call_metafact_list(DescrMetaFacts,RuleMod),
+	flora_select_rules_for_deletion(DelOp,CallerMod,L,LSigList,LHL),
+	append(HSigList,LSigList,SigList),
+	append(HHL,LHL,HL).
 %% conjunction of rules - convert to list
-flora_select_rules_for_deletion(DelOp,[(R,L)|Rules],SigList,HL) :-
+flora_select_rules_for_deletion(DelOp,CallerMod,[(R,L)|Rules],SigList,HL) :-
 	!,
 	conjunct_to_list((R,L),RuleList),
-	flora_select_rules_for_deletion(DelOp,RuleList,HSigList,HHL),
-	flora_select_rules_for_deletion(DelOp,Rules,RSigList,RHL),
+	flora_select_rules_for_deletion(DelOp,CallerMod,RuleList,HSigList,HHL),
+	flora_select_rules_for_deletion(DelOp,CallerMod,Rules,RSigList,RHL),
         append(HSigList,RSigList,SigList),
         append(HHL,RHL,HL).
-flora_select_rules_for_deletion(_DelOp,[H|_Tail],_SigList,_HL) :-
+flora_select_rules_for_deletion(_DelOp,_Mod,[H|_Tail],_SigList,_HL) :-
 	!,
 	flora_decode_goal_as_atom(H,AtomH),
 	flora_abort(['non-rule item ', H, ' in the rule-list of deleterule{...}, ',
 		     AtomH],FLORA_ABORT_NOTRACE).
 
 /***********************************************************************
-  flora_check_multiheaded_rule(+DelOp,+HeadList,+Body,-RuleSigList,-NewHeadList)
+  flora_check_multiheaded_rule(+DelOp,+Id,+RuleMod,+HeadList,+Body,-RuleSigList,-NewHeadList)
   For multiheaded rules, check if a rule for each head component exists.
 ***********************************************************************/
-flora_check_multiheaded_rule(_DelOp,[],_Body,[],[]) :- !.
-flora_check_multiheaded_rule(DelOp,[H|L],Body,[HSig|LSig],[HH|LH]) :-
-        flora_check_rule(DelOp,H,Body,HSig,HH),
-        flora_check_multiheaded_rule(DelOp,L,Body,LSig,LH).
+flora_check_multiheaded_rule(_DelOp,_Mod,_Id,[],_Body,[],[]) :- !.
+flora_check_multiheaded_rule(DelOp,Id,RuleMod,[H|L],Body,[HSig|LSig],[HH|LH]) :-
+        flora_check_rule(DelOp,Id,RuleMod,H,Body,HSig,HH),
+        flora_check_multiheaded_rule(DelOp,Id,RuleMod,L,Body,LSig,LH).
 
-flora_check_rule(DelOp,Head,Body,RuleSig,BoundHead) :-
+flora_check_rule(DelOp,Id,RuleMod,Head,Body,RuleSig,BoundHead) :-
         get_canonical_form(Head,FLCANON(_,_,_,HT,_)),
 	convert_to_body_literal(HT,BHead),
         ( DelOp == FLLIBDELETERULE_A ->
-            matching_rule_signature(_Id,_DescrVarTerm,FL_DYNAPREFIX,BHead,Body,RuleSig)
+            matching_rule_signature(Id,_DescrVarTerm,FL_DYNAPREFIX,BHead,Body,RuleSig)
         ; DelOp == FLLIBDELETERULE_Z ->
-            matching_rule_signature(_Id,_DescrVarTerm,FL_DYNZPREFIX,BHead,Body,RuleSig)
-        ; matching_rule_signature(_Id,_DescrVarTerm,_,BHead,Body,RuleSig)
+            matching_rule_signature(Id,_DescrVarTerm,FL_DYNZPREFIX,BHead,Body,RuleSig)
+        ; matching_rule_signature(Id,_DescrVarTerm,_,BHead,Body,RuleSig)
         ),
+	rule_signature_member(module,RuleSig,RuleMod),
         get_canonical_form(BHead,FLCANON(_,_,_,BoundHead,_)).
 
 
@@ -783,11 +782,13 @@ assert_metafact_list([H|T],Module) :-
 	flora_adaptive_assert(H),
 	assert_metafact_list(T,Module).
 
-call_metafact_list([]) :- !.
-call_metafact_list([NULL|Rest]) :- !, call_metafact_list(Rest).
-call_metafact_list([Head|Rest]) :-
+call_metafact_list([],_) :- !.
+call_metafact_list([NULL|Rest],Mod) :- !, call_metafact_list(Rest,Mod).
+call_metafact_list([Head|Rest],Mod) :-
+	functor(Head,_,Arity),
+	(Arity > 1 -> arg(2,Head,Mod) ; true),
 	call(Head),
-	call_metafact_list(Rest).
+	call_metafact_list(Rest,Mod).
 
 /*
 adaptive_retract_list([]) :- !.
