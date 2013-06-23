@@ -256,26 +256,37 @@ make_rule_strict(Id,Mod) :-
    disable_rule_by_id/2 fails if the rule is already disabled
 *************************************************************************/
 enable_rule_by_id(Id,Mod) :-
-	show_rule_signature(Id,_DescrVarTerm,_Prefix,Mod,Head,_Body,
-			    _DefeatCond,_RuleList,_BridgeRule),
+	findall(Head,
+		show_rule_signature(Id,_DescrVarTerm,_Prefix,Mod,Head,_Body,
+				    _DefeatCond,_RuleList,_BridgeRule),
+		HeadList),
+	%% refreshing all heads in a multiheaded rule
+	refresh_head_list(HeadList),
 	flora_modularize_atom(FL_RULE_ENABLER,Mod,ModularEnabler),
 	EnablerPred =.. [ModularEnabler,Id],
 	(EnablerPred -> true  % idempotent
-	; flora_adaptive_assert(EnablerPred),
-	    convert_to_head_literal(Head,HeadAsHead),
-	    flora_refresh_tables(HeadAsHead)
+	; flora_adaptive_assert(EnablerPred)
 	).
 
 disable_rule_by_id(Id,Mod) :-
-	show_rule_signature(Id,_DescrVarTerm,_Prefix,Mod,Head,_Body,
-			    _DefeatCond,_RuleList,_BridgeRule),
+	findall(Head,
+	        show_rule_signature(Id,_DescrVarTerm,_Prefix,Mod,Head,_Body,
+				    _DefeatCond,_RuleList,_BridgeRule),
+		HeadList),
+	%% refreshing all heads in a multiheaded rule
+	refresh_head_list(HeadList),
 	flora_modularize_atom(FL_RULE_ENABLER,Mod,ModularEnabler),
 	EnablerPred =.. [ModularEnabler,Id],
 	(\+EnablerPred -> true
-	; flora_adaptive_retract(EnablerPred),
-	    convert_to_head_literal(Head,HeadAsHead),
-	    flora_refresh_tables(HeadAsHead)
+	; flora_adaptive_retract(EnablerPred)
 	).
+
+refresh_head_list([]) :- !.
+refresh_head_list([H|Rest]) :-
+	convert_to_head_literal(H,HeadAsHead),
+	flora_refresh_tables(HeadAsHead),
+	refresh_head_list(Rest).
+
 
 is_enabled_rule(Id,Mod) :-
 	var(Mod),
