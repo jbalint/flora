@@ -10,7 +10,7 @@ REM   makeflora -c full-path-to-prolog
 REM       means: use the C compiler to recompile the directory
 REM   makeflora -c64 full-path-to-prolog
 REM       Like -c, but make for the 64 bit version of Windows
-REM   .\p2h - developer's option
+REM   .\cc - developer's option
 
 REM  NOTE: DOS batch language is very brittle. For instance, replacing
 REM        %1 with %ARG%, where set ARG=%1 will not work if
@@ -47,7 +47,7 @@ REM  Generates runflora.bat file that can be used to run flora
 if exist runflora.bat  del runflora.bat
 call %PROLOG% -e "[flrconfig]. halt."
 
-cd p2h
+cd cc
 if exist *.dll   del *.dll
 if exist *.lib   del *.lib
 if exist *.def   del *.def

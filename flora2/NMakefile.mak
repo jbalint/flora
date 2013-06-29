@@ -59,7 +59,7 @@ OPTIONS = [optimize,ti_all]
 
 .SUFFIXES: $(PROLOGEXT) $(OBJEXT)
 
-## p2h is handled specially, by makeflora
+## cc is handled specially, by makeflora
 ALL:: CLEANTEMP $(ALLOBJS)
 	cd closure
 	nmake /nologo /f NMakefile.mak
@@ -88,7 +88,7 @@ CLEAN : CLEANTEMP
 	-@if exist *.bak erase *.bak
 	-@if exist .#* erase .#*
 	-@if exist ..\flora2$(OBJEXT) erase ..\flora2$(OBJEXT)
-	cd p2h
+	cd cc
 	nmake /nologo /f NMakefile.mak clean
 	cd ..\closure
 	nmake /nologo /f NMakefile.mak clean

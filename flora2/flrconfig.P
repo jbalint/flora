@@ -50,7 +50,6 @@
 :- import get_date/6 from standard.
 
 ?- path_sysop(expand,'.',FloraDirPrelim),
-   PrologOptions = '-m 2000000 -c 50000',  % to experiment with performance
    xsb_configuration(install_dir,InstallDirPrelim),
    xsb_configuration(config_bindir,ConfigBinDirPrelim),
    xsb_configuration(user_home,UserHome),
@@ -77,7 +76,8 @@
    -> write('PROLOG='), write(ConfigBinDir), writeln('\\xsb'),
        write('PROLOGDIR='), writeln(InstallDir),
        flora_user_floradir(FloraTmpDir),
-       %% does not seem that the shell understands wildcards in this context
+       %% does not seem that the windows shell understands
+       %% wildcards in this context
        shell(['if exist "', FloraTmpDir, '\\*.P"    erase "', FloraTmpDir, '\\*.P"']),
        shell(['if exist "', FloraTmpDir, '\\*.xwam" erase "', FloraTmpDir, '\\*.xwam"'])
    ;
@@ -87,22 +87,13 @@
    ),
    told,
    (flora_running_under(windows)
-   -> tell('runflora.bat'),
+   -> tell('.flora_paths.bat'),
        writeln('@echo OFF'),
        write('@set FLORADIR="'), writeq(FloraDir), writeln('"'),
-       write('@set PROLOG='), write(ConfigBinDir), writeln('\\xsb'),
-       write('REM @set PROLOGOPTIONS="'), write(PrologOptions), writeln('"'),
-       write('REM @set PROLOGOPTIONS="-p '), write(PrologOptions), writeln('"'),
-       writeln('REM @set PROLOGOPTIONS="-p"'),
-       writeln('REM @set PROFILING="xsb_profiling:profile_unindexed_calls(on)."'),
-       writeln('@%PROLOG% %PROLOGOPTIONS% -e "%PROFILING% asserta(library_directory(%FLORADIR%)). [flora2]. flora_shell." %1 %2 %3 %4 %5 %6 %7')
+       write('@set PROLOG='), write(ConfigBinDir), writeln('\\xsb')
    ;
-       tell('runflora'),
-       %% Use write with \n instead of writeln to avoid the extra ^M in Cygwin
-       write('#! /bin/sh\n\n'),
-       write('if test ! "$*" = ""; then\n'),
-       write('    extra_args="$*"\n'),
-       write('fi\n\n'),
+       tell('.flora_paths'),
+       %% Use write with \n, NOT writeln to avoid extra ^Ms in Cygwin
        write('FLORADIR="'),
        (flora_running_under(cygwin)
        ->
@@ -112,48 +103,20 @@
            writeq(FloraDir)
        ),
        write('"\n'),
-       write('PROLOG='), write(InstallDir), write('/bin/xsb\n'),
-       write('#PROLOGOPTIONS="'), write(PrologOptions), write('"\n'),
-       write('#PROLOGOPTIONS="-p '), write(PrologOptions), write('"\n'),
-       write('#PROLOGOPTIONS="-p"\n'),
-       write('#PROFILING="xsb_profiling:profile_unindexed_calls(on)."\n'),
-       write('$PROLOG $PROLOGOPTIONS -e "$PROFILING asserta(library_directory($FLORADIR)). [flora2]. flora_shell." $extra_args\n')
+       write('PROLOG='), write(InstallDir), write('/bin/xsb\n')
    ),
    told,
+   %% Build .flora_buildinfo.P
    flora_slash(Slash),
-   /* %% not used any more
-   (flora_running_under(windows)
-   -> flora_concat_atoms([FloraDir,Slash,platforms,Slash,
-			  windows,Slash,'floraInstallMode.P'],
-			 FloraInstallModeFile)
-   ; flora_running_under(cygwin)
-   -> flora_concat_atoms([FloraDir,Slash,platforms,Slash,
-			  cygwin,Slash,'floraInstallMode.P'],
-			 FloraInstallModeFile)
-   ;  flora_concat_atoms([FloraDir,Slash,platforms,Slash,
-			  unix,Slash,'floraInstallMode.P'],
-			 FloraInstallModeFile)
-   ),
-   tell(FloraInstallModeFile),
-   */
    flora_concat_atoms([FloraDir,Slash,'.flora_buildinfo.P'],FloraBuildInfoFile),
    tell(FloraBuildInfoFile),
    writeln(':- import flora_configuration/2 from flrregistry.'),
-   %% We now load floraInstallMode.P dynamically
-   %% so as to not compile the installation dir into binary code.
-   /*
-   %% this is now done in flora2.P
-   flora_file_op(expand,FloraDir,FloraDirExpanded),
-   write('flora_configuration(installdir,'),
-   writeq(FloraDirExpanded),
-   writeln(').'),
-   */
    get_date(Yr,Mon,Day,_,_,_),
    write('flora_configuration(builddate,'''),
    write(Yr), write('-'), write(Mon), write('-'), write(Day),
    writeln(''').'),
    told,
-   %% set up the variables for Java
+   %% Set up the variables for Java
    (flora_running_under(windows)
    -> tell('java\\flora_settings.bat'),
        flora_convert_backslash_to_forward(FloraDir,FloraDirForwShash),
