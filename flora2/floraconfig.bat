@@ -29,8 +29,8 @@ goto end
 :usage
 @echo.
 @echo +++++ Usage:
-@echo +++++    confflora path-to-\XSB\bin\xsb.bat    (32 bit installations)
-@echo +++++    confflora path-to-\XSB\bin\xsb64.bat  (64 bit installations)
+@echo +++++    floraconfig path-to-\XSB\bin\xsb.bat    (32 bit installations)
+@echo +++++    floraconfig path-to-\XSB\bin\xsb64.bat  (64 bit installations)
 @echo.
 goto end
 

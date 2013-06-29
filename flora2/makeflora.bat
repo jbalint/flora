@@ -39,7 +39,7 @@ if "%prologcmd%" == "" goto usage
 if "%1" == "clean" nmake /nologo /f NMakefile.mak clean
 if "%1" == "clean" goto end
 
-call confflora.bat %prologcmd% compiling || goto end
+call floraconfig.bat %prologcmd% compiling || goto end
 REM This sets %PROLOG%, %PROLOGDIR%, %FLORADIR%
 call .flora_paths.bat
 
@@ -74,9 +74,9 @@ goto end
 :binary
 @echo.
 @echo +++++ This seems to be a binary distribution of FLORA-2.
-@echo +++++ Please use confflora.bat to configure it:
-@echo +++++   confflora path-for-\XSB\bin\xsb.bat    (32 bit installations)
-@echo +++++   confflora path-for-\XSB\bin\xsb64.bat  (64 bit installations)
+@echo +++++ Please use floraconfig.bat to configure it:
+@echo +++++   floraconfig path-for-\XSB\bin\xsb.bat    (32 bit installations)
+@echo +++++   floraconfig path-for-\XSB\bin\xsb64.bat  (64 bit installations)
 @echo.
 goto end
 
