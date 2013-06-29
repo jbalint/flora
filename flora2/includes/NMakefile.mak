@@ -26,10 +26,6 @@
 
 ALLOBJS = flrdefinition.flh
 
-!IF EXISTS (..\.prolog_path_wind) 
-!INCLUDE ..\.prolog_path_wind
-!ENDIF
-
 .SUFFIXES: .fli .flh
 
 ALL: $(ALLOBJS)

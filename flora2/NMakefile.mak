@@ -53,32 +53,28 @@ ALLOBJS = flrarguments$(OBJEXT) \
 
 OPTIONS = [optimize,ti_all]
 
-!IF EXISTS (.prolog_path_wind) 
-!INCLUDE .prolog_path_wind
-!ENDIF
-
 .SUFFIXES: $(PROLOGEXT) $(OBJEXT)
 
 ## cc is handled specially, by makeflora
 ALL:: CLEANTEMP $(ALLOBJS)
 	cd closure
-	nmake /nologo /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
 	cd ..\includes
-	nmake /nologo /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
 	cd ..\genincludes
-	nmake /nologo /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
 	cd ..\syslib
-	nmake /nologo /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
 	cd ..\lib
-	nmake /nologo /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
 	cd ..\AT
-	nmake /nologo /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
 	cd ..\debugger
-	nmake /nologo /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
 	cd ..\pkgs
-	nmake /nologo /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
 	cd ..\demos
-	nmake /nologo /f NMakefile.mak
+	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
 	cd ..
 
 CLEAN : CLEANTEMP
@@ -86,6 +82,7 @@ CLEAN : CLEANTEMP
 	-@if exist *$(OBJEXT) erase *$(OBJEXT)
 	-@if exist .flora_aux_files\* erase .flora_aux_files\*
 	-@if exist *.bak erase *.bak
+	-@if exist .flora_paths.bat erase .flora_paths.bat
 	-@if exist .#* erase .#*
 	-@if exist ..\flora2$(OBJEXT) erase ..\flora2$(OBJEXT)
 	cd cc

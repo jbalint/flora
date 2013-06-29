@@ -31,10 +31,6 @@ ALLOBJS = flrio$(PROLOGEXT) \
 	  flrparse$(PROLOGEXT) \
 	  flrtypeconstraint$(PROLOGEXT)
 
-!IF EXISTS (..\.prolog_path_wind) 
-!INCLUDE ..\.prolog_path_wind
-!ENDIF
-
 OPTIONS = [optimize]
 
 .SUFFIXES: $(PROLOGEXT) .flr
@@ -55,7 +51,7 @@ CLEAN:
 	-@if exist *.fls erase *.fls
 	-@if exist *.fls2 erase *.fls2
 	-@if exist *.flm erase *.flm
-	-@if exist .flora_aux_files\* erase .flora_aux_files\*
+	-@if exist .flora_aux_files\*.xwam del /q .flora_aux_files
 	-@if exist *~ erase *~
 	-@if exist *.bak erase *.bak
 	-@if exist .#* erase .#*

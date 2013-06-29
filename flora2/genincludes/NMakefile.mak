@@ -35,10 +35,6 @@ ALLOBJS = flrpatch.flh flrpreddef.flh flrindex_P.flh \
 	  flrdescriptor_metafacts.flh \
 	  flrrefreshtable.flh
 
-!IF EXISTS (..\.prolog_path_wind) 
-!INCLUDE ..\.prolog_path_wind
-!ENDIF
-
 .SUFFIXES: .fli .flh
 
 ALL: $(ALLOBJS)

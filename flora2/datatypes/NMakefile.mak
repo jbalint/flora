@@ -23,10 +23,6 @@
 
 
 
-!IF EXISTS (..\.prolog_path_wind) 
-!INCLUDE ..\.prolog_path_wind
-!ENDIF
-
 OBJEXT = .xwam
 PROLOGEXT = .P
 

@@ -1,10 +1,6 @@
 # Make file for prolog2hilog.dll
 
 
-!IF EXISTS (..\.prolog_path_wind) 
-!INCLUDE ..\.prolog_path_wind
-!ENDIF
-
 CPP = cl.exe
 LINK32 = link.exe
 
