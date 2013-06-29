@@ -6,7 +6,7 @@
 
 files=" \
         ./flora2/Makefile ./flora2/NMakefile.mak \
-    	./flora2/makeflora ./flora2/makeflora.bat \
+    	./flora2/makeflora ./runflora ./floraconfig ./*.bat \
         ./flora2/*.sh ./flora2/*.xwam ./flora2/*.flh\
         ./flora2/AT/*.flr ./flora2/AT/Makefile ./flora2/AT/NMakefile.mak
     	./flora2/closure/Makefile ./flora2/closure/NMakefile.mak \

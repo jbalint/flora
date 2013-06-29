@@ -50,7 +50,7 @@
 '_$_$_flora_load_cc'(Basename) :-
     flora_slash(Slash),
     flora_configuration(installdir, FloraDir),
-    '_$_$_flora_target_shared_lib'(Basename,TrgSharedLib,TrgPrlgObjFile),
+    '_$_$_flora_target_shared_lib'(Basename,TrgSharedLib,TrgSharedLibDos,TrgPrlgObjFile),
     flora_concat_atoms([FloraDir,Slash,cc,Slash,Basename],Module),
     flora_concat_atoms([Module,'.', PROLOG_OBJFILE_EXT], Objfile),
     (   %% avoid recompilation: check if FILE.OBJ exists and 
@@ -87,7 +87,7 @@
 	; 
 	    (flora_file_op(unlink,TrgSharedLib), ! ; true),
 	    %% Important to quote WinModDLL below!
-	    shell(['copy /B /Y "', WinModDLL, '" ', TrgSharedLib]),
+	    shell(['copy /B /Y "', WinModDLL, '" ', TrgSharedLibDos]),
 	    %% In windows Objfile is created by ?- [Basename], so it
 	    %% is copied after
 	    (flora_file_op(unlink,TrgPrlgObjFile), ! ; true),
@@ -118,7 +118,9 @@
      ).
 
 
-'_$_$_flora_target_shared_lib'(Basename,TrgSharedLib,TrgPrlgObjFile) :-
+%% TrgSharedLibDos is like TrgSharedLib, but quoted with "..." in case the file
+%% hame has spaces. Used in the DOS copy command.
+'_$_$_flora_target_shared_lib'(Basename,TrgSharedLib,TrgSharedLibDos,TrgPrlgObjFile) :-
 	flora_slash(Slash),
 	xsb_configuration(config_libdir, ConfigLibdir),
 	xsb_configuration(config_bindir, ConfigBindir),
@@ -126,12 +128,16 @@
 			    TrgPrlgObjFile),
     	(flora_running_under(windows)
 	%% Important to quote TrgSharedLib below
-	-> flora_concat_atoms(['"',ConfigBindir,Slash,Basename,'.dll"'],TrgSharedLib)
+	-> flora_concat_atoms([ConfigBindir,Slash,Basename,'.dll'],TrgSharedLib),
+	    flora_concat_atoms(['"',ConfigBindir,Slash,Basename,'.dll"'],TrgSharedLibDos)
 	; flora_running_under(cygwin)
-	-> flora_concat_atoms([ConfigLibdir,Slash,Basename,'.dll'],TrgSharedLib)
+	-> flora_concat_atoms([ConfigLibdir,Slash,Basename,'.dll'],TrgSharedLib),
+	    TrgSharedLibDos = TrgSharedLib
 	; flora_running_under(darwin)
-	-> flora_concat_atoms([ConfigLibdir,Slash,Basename,'.dylib'],TrgSharedLib)
+	-> flora_concat_atoms([ConfigLibdir,Slash,Basename,'.dylib'],TrgSharedLib),
+	    TrgSharedLibDos = TrgSharedLib
 	; flora_running_under(unix)
-	-> flora_concat_atoms([ConfigLibdir,Slash,Basename,'.so'],TrgSharedLib)
+	-> flora_concat_atoms([ConfigLibdir,Slash,Basename,'.so'],TrgSharedLib),
+	    TrgSharedLibDos = TrgSharedLib
 	; flora_abort('Cannot determine the type of the operating system')
 	).

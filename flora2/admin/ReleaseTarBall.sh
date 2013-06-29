@@ -6,7 +6,7 @@
 
 files="./flora2/INSTALLATION ./flora2/LICENSE \
         ./flora2/Makefile ./flora2/NMakefile.mak \
-    	./flora2/makeflora ./flora2/makeflora.bat \
+    	./flora2/makeflora ./runflora ./floraconfig ./*.bat \
         ./flora2/*.sh ./flora2/*.P ./flora2/*.H ./flora2/*.flh\
         ./flora2/AT/*.flr ./flora2/AT/Makefile ./flora2/AT/NMakefile.mak \
         ./flora2/AT/prolog/*.P  ./flora2/AT/include/*.flh  \

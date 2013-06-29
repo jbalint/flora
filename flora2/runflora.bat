@@ -1,7 +1,7 @@
 @echo OFF
 
-@set thisdir=%0\..
-@call %thisdir%\.flora_paths_wind
+@set thisdir=%0\..\
+@call %thisdir%.flora_paths.bat
 
 REM @set PROLOGOPTIONS="-m 2000000 -c 50000"
 REM @set PROLOGOPTIONS="-p -m 2000000 -c 50000"
