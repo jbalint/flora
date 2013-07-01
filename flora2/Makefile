@@ -97,7 +97,7 @@ showerrors:
 	@cat $(FLORADIR)/.flora*.tmp
 	@rm $(FLORADIR)/.flora*.tmp
 
-top: cleantemp init $(ALLOBJS) finish
+top: init $(ALLOBJS) finish
 	./CompileChangedFiles.sh $(PROLOG_COMMAND)
 	cd datatypes && $(MAKE) PROLOG=$(PROLOG)
 	@cat $(SVFILE)

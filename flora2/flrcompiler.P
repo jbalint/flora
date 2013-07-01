@@ -590,6 +590,9 @@ verbatim_struct(Instruction,PRVERBATIM(Instruction)).
 table_directive_struct(SpecList,PRTABLE(SpecList)).
 
 
+is_prconjunct(PRAND(L,R),L,R).
+is_prdisjunct(PROR(L,R),L,R).
+
 /****************************************************************************
   conjunct_struct(+Goal1,+Goal2,-Code)
   disjunct_struct(+Goal1,+Goal2,-Code)
@@ -3546,10 +3549,11 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
 	; IdParserTermList == [] % no explicit rule id
 	-> construct_default_ruleid_descriptor(Mode,RuleIdx,DescrIdCode),
 	    RuleidFrameCode = _M - _M,
+	    ExplicitModule = NULL,
 	    IdStatus = NO_ERRORS
 	; IdParserTermList = [[IdParserTerm|_] - Idx],
 	    %% compile Id descriptor here
-	    compile_ruleid_descriptor(IdParserTerm,DescrIdCode,RuleidFrameCode,IdStatus)
+	    compile_ruleid_descriptor(IdParserTerm,DescrIdCode,RuleidFrameCode,ExplicitModule,IdStatus)
 	),
 	(memberchk(Mode,[rule,addrule,dynrule,udfrule])
 	->
@@ -3571,7 +3575,7 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
 		construct_rule_enabling_fact(DescrIdCode,Mode,RuleEnablerFact),
 		%% make the rule id into its tag as well, if no explicit tag
 		(memberchk(FLTAG_FEATURE,DescrFeatures) -> TagIdMetaFact = NULL
-		; construct_tag_descriptor_fact_from_id(DescrIdCode,Mode,DescrVarsTermOut,TagIdMetaFact)
+		; construct_tag_descriptor_fact_from_id(DescrIdCode,Mode,ExplicitModule,DescrVarsTermOut,TagIdMetaFact)
 		),
 		(DefeatMetaFact == NULL, RuleEnablerFact == NULL ->
 		    MetaFacts = [TagIdMetaFact|MetaFacts1]
@@ -3732,9 +3736,10 @@ compile_descriptor(Descriptor,Mode,DescrIdCode,RuleidFrameCode,DescrVarsTerm,Met
 %% already compiled
 compile_descriptor(Descriptor,_Mode,_DescrIdCode,_RuleidFrameCode,_DescrVarsTerm,Descriptor,[]) :- !.
 
-compile_ruleid_descriptor(IdDescriptorWithFrame,DescrIdCode,FrameCode,Status) :-
-	compile_complex_descriptor(IdDescriptorWithFrame,DescrIdCode,FrameCode,
-				   frames_ok,Status).
+compile_ruleid_descriptor(IdDescriptorWithFrame,DescrIdCode,FrameCode,ExplicitModule,Status) :-
+	compile_complex_descriptor(IdDescriptorWithFrame,
+				   frames_ok,
+				   DescrIdCode,FrameCode,ExplicitModule,Status).
 
 
 /*
@@ -3807,13 +3812,20 @@ construct_prop_descriptor_facts(_,_,_,FL_TRUE,Meta-Meta,[]) :- !.
 
 %% construct_prop_descriptor_facts/6
 construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,RuleidFrameCode,LeftMeta-RightTail,Status) :-
-	RuleidFrameCode = PRAND(Left,Right),
+	is_prconjunct(RuleidFrameCode,Left,Right),
 	!,
 	construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,Left,LeftMeta-LeftTail,S1),
 	(S1 == NO_ERRORS ->
 	    construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,Right,LeftTail-RightTail,Status)
 	; Status =S1
 	).
+%% this should be unreachable due to the parser, but just in case
+construct_prop_descriptor_facts(_,Mode,_,RuleidFrameCode,_,[Err]) :-
+	is_prdisjunct(RuleidFrameCode,_,_),
+	memberchk(Mode,[rule,dynrule,addrule,udfrule]),
+	!,
+	approx_prindex(RuleidFrameCode,Idx),
+	compiling_error(Idx,NO_DISJUNCTS_DESCRIPTOR_FRAME,Err).
 
 %% construct_prop_descriptor_facts/6
 construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,RuleidFrameCode,Metafacts,Status) :-
@@ -3862,20 +3874,22 @@ construct_prop_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Pr
 
 get_descriptor_module(ExplicitMod,Mode,OutModule) :-
 	(ExplicitMod \== NULL -> OutModule = ExplicitMod
-	; memberchk(Mode,[clause_construct,query,dynrule]) ->
+	; memberchk(Mode,[clause_construct,dynrule]) ->
 	    new_prvariable(NO_INDEX,OutModule)
+	; Mode == query
+	-> thismodule_struct(OutModule)
 	; %% rule/addrule
 	    thismodule_struct(OutModule)
 	).
 
 %% descriptor without attached frames
 compile_simple_descriptor(DescrContents,Object,Status) :-
-	compile_complex_descriptor(DescrContents,Object,_,no_frames,Status).
+	compile_complex_descriptor(DescrContents,no_frames,Object,_,_,Status).
 
 %% When compiling tags or bool descriptors,
 %% no frames are allowed: FramesOK == no_frames
 %% When compiling rule ids, frames are allowed: FramesOK == frames_ok
-compile_complex_descriptor(DescrContents,Object,FrameCode,FramesOK,Status) :-
+compile_complex_descriptor(DescrContents,FramesOK,Object,FrameCode,ExplicitModule,Status) :-
 	(FramesOK == frames_ok -> true
 	; FrameCode = NULL
 	),
@@ -3891,6 +3905,14 @@ compile_complex_descriptor(DescrContents,Object,FrameCode,FramesOK,Status) :-
 	; approx_flindex(DescrContents,Idx),
 	    compiling_error(Idx,SIMPLE_FRAMES_IN_RULE_DESCRIPTORS,Err),
 	    Status = [Err]
+	),
+	(var(FrameCode) -> ExplicitModule = NULL
+	; is_prworkspace(FrameCode,_,ExplicitModule) -> true
+	; is_prconjunct(FrameCode,Left,_), is_prworkspace(Left,_,ExplicitModule)
+	-> true
+	; is_prdisjunct(FrameCode,Left,_), is_prworkspace(Left,_,ExplicitModule)
+	-> true
+	; ExplicitModule = NULL
 	).
 	
 %% construct_rule_enabling_fact(+DescrIdCode,+Mode,-RuleEnablerMetaFact)
@@ -3908,13 +3930,18 @@ construct_rule_enabling_test(DescrIdCode,RuleEnablerMetaTerm) :-
 	modularized_pratom_struct(FL_RULE_ENABLER,NO_INDEX,PredCode),
 	generate_prolog_liblit(PredCode,1,[DescrIdCode],RuleEnablerMetaTerm).
 
-construct_tag_descriptor_fact_from_id(DescrIdCode,Mode,DescrVarsTerm,TagIdMetaFact) :-
+construct_tag_descriptor_fact_from_id(DescrIdCode,Mode,ExplicitModule,DescrVarsTerm,TagIdMetaFact) :-
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
 	(Mode == dynrule ->
 	    new_prvariable(NO_INDEX,Module),
 	    Tag = DescrIdCode
-	; memberchk(Mode,[clause_construct,query]) ->
+	; Mode == clause_construct ->
 	    new_prvariable(NO_INDEX,Module),
+	    new_prvariable(NO_INDEX,Tag)
+	; Mode == query ->
+	    (ExplicitModule == NULL -> thismodule_struct(Module)
+	    ; Module = ExplicitModule
+	    ),
 	    new_prvariable(NO_INDEX,Tag)
 	;
 	    thismodule_struct(Module),
@@ -5387,14 +5414,18 @@ compile_pathexp(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	; is_fltoken(ParserTerm,FL_RULEID_TOKEN_PREFIX,FL_RULEID_SYM,Index) ->
 	    BodyHeadList=[],
 	    Code = NULL,
-	    ((has_context(compiling_dynrule(DescrIdCode))
-	     ; has_context(compiling_rule(DescrIdCode)))
-	    ->
-		Object = DescrIdCode,
-		Status = NO_ERRORS
-	    ; has_context(compiling_descriptors(Mode))
+	    ( has_context(compiling_descriptors(Mode))
 	    ->  approx_flindex(ParserTerm,Idx),
 		construct_default_ruleid_descriptor(Mode,Idx,DescrIdCode),
+		Object = DescrIdCode,
+		Status = NO_ERRORS
+	    ;  %% Note: descriptors are compiled BEFORE compiling_dynrule
+	       %% is set. So, this test must be after
+	       %% has_context(compiling_descriptors(Mode)) above
+		(has_context(compiling_dynrule(DescrIdCode)) -> true
+		; has_context(compiling_rule(DescrIdCode))
+		)
+	    ->
 		Object = DescrIdCode,
 		Status = NO_ERRORS
 	    ; compiling_error(Index,RULEID_TOKEN_NOT_IN_RULE,Err),
@@ -7351,8 +7382,15 @@ compile_head_fltoken(Token,Suffix,Index,Object,Status) :-
         ( Token == FL_NEWOID ->
 	    new_oidobj(Suffix,Index,Object),
 	    Status = NO_ERRORS
-	; Token == FL_RULEID_TOKEN_PREFIX, Suffix == FL_RULEID_SYM ->
-	    ((has_context(compiling_dynrule(DescrIdCode)) ; has_context(compiling_rule(DescrIdCode)))
+	;  %% _@!, the rule id
+	    Token == FL_RULEID_TOKEN_PREFIX, Suffix == FL_RULEID_SYM ->
+	    ( has_context(compiling_descriptors(Mode))
+	    -> construct_default_ruleid_descriptor(Mode,Index,DescrIdCode),
+		Object = DescrIdCode,
+		Status = NO_ERRORS
+	    ; (has_context(compiling_dynrule(DescrIdCode)) -> true
+	      ; has_context(compiling_rule(DescrIdCode))
+	      )
 	    -> 
 		Object = DescrIdCode,
 		Status = NO_ERRORS

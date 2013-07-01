@@ -1,7 +1,9 @@
 @echo off
 
 REM  Generate the files that contain the Prolog & Flora installation directories
-REM  Generates runflora.bat file that can be used to run flora
+
+@set OBJEXT = .xwam
+@set PROLOGEXT = .P
 
 if "%1" == "" goto florausage
 
@@ -11,6 +13,12 @@ if "%2" == "" (if not exist genincludes\flrtable.flh goto floranotcompilederror)
 @set PROLOG=%1
 call %PROLOG% -e "halt." > null 2>&1 || goto xsbinstallerror
 call %PROLOG% -e "[flrdepstest]. halt." > null 2>&1 || goto xsbsourceserror
+
+REM This for-loop causes recompilation of all .flr files by cleaning out the
+REM .xsb\flora-* directories
+for /D %%i in (%USERPROFILE%\.xsb\"flora-*") do \
+     if exist %%i\*%OBJEXT% erase %%i\*%OBJEXT% %%i\*%PROLOGEXT%
+
 call %PROLOG% -e "[flrconfig]. halt." || goto floraconfigerror
 
 if "%2" == "" goto success

@@ -56,7 +56,7 @@ OPTIONS = [optimize,ti_all]
 .SUFFIXES: $(PROLOGEXT) $(OBJEXT)
 
 ## cc is handled specially, by makeflora
-ALL:: CLEANTEMP $(ALLOBJS)
+ALL::  $(ALLOBJS)
 	cd closure
 	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
 	cd ..\includes
