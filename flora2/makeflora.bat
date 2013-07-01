@@ -19,7 +19,6 @@ REM        path-for-\XSB\bin\... has a file extension, e.g., \xsb\bin\wxsb.bat
 if exist binary-distribution.txt goto binary
 
 set default_tabling=flrincludes\.flora_default_tabling
-echo. > %default_tabling%
 if "%1" == "-S" echo #define FLORA_SUBSUMPTIVE_TABLING > %default_tabling%
 if "%1" == "-S" shift
 if "%1" == "-I" echo #define FLORA_INCREMENTAL_TABLING > %default_tabling%

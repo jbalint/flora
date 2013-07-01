@@ -36,7 +36,7 @@ goto end
 @echo.
 @echo.
 @echo +++++ Engine %PROLOG% has failed to start:
-@echo +++++    XSB has not been configured properly
+@echo +++++    XSB has not been configured properly at that location
 @echo.
 goto end
 
@@ -72,6 +72,9 @@ goto end
 goto end
 
 :end
+set default_tabling=flrincludes\.flora_default_tabling
+echo. > %default_tabling%
+
 @echo.
 
 
