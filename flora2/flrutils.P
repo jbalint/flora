@@ -746,6 +746,9 @@ flora_flload(FlrFile,Workspace,ReportingType,FileStatus,ErrList) :-
 	),
 	!,
 	
+	%% clean up the registry before loading, but not adding
+	flora_cleanup_registry(Workspace),
+
 	(FileStatus == FLORA_FAILURE -> true %% ReportingType \== print
 	; ( %% FileStatus \== FLORA_FAILURE
 	      (var(FileStatus) -> FileStatus = FLORA_SUCCESS ; true),
@@ -4439,13 +4442,24 @@ write_tabled_udf_predicates([(PredName,PredArity),UDFPreds]):-
 
 write_tabled_udf_predicates(_).
 
-%% This is called when a new module is loaded, but not when added.
-%% This is because we want UDFs and modular prolog predicates to be inherited
-%% by added files. If the loaded context has a symbol, foo/N,
-%% which is declared as modular prolog or a UDF and we are adding another file
-%% in which foo/N is compiled differently, then there would be a loading error.
-%% So, this inheritance is safe.
-%% 
+/******************************************************************************
+**   flora_cleanup_registry(+Module)
+**   flora_cleanup_udf(+Module)
+**
+** These are called when a new module is loaded, but not when added.
+** This is because we want UDFs and modular prolog predicates to be inherited
+** by added files. If the loaded context has a symbol, foo/N,
+** which is declared as modular prolog or a UDF and we are adding another file
+** in which foo/N is compiled differently, then there would be a loading error.
+** So, this inheritance is safe.
+** 
+******************************************************************************/
+
+flora_cleanup_registry(Module) :-
+	(retract(flrregistry:flora_defeasible_module_registry(Module,_)) -> true
+	; true
+	).
+
 flora_cleanup_udf(Module) :-
 	(Module == FLORA_DEFAULT_WORKSPACE ->
 	    %% flora_used_udf_registry(+Fun,+Arity,-UDFCode,-NewPredCode)
