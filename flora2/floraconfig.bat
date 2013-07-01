@@ -16,8 +16,7 @@ call %PROLOG% -e "[flrdepstest]. halt." > null 2>&1 || goto xsbsourceserror
 
 REM This for-loop causes recompilation of all .flr files by cleaning out the
 REM .xsb\flora-* directories
-for /D %%i in (%USERPROFILE%\.xsb\"flora-*") do \
-     if exist %%i\*%OBJEXT% erase %%i\*%OBJEXT% %%i\*%PROLOGEXT%
+for /D %%i in (%USERPROFILE%\.xsb\"flora-*") do if exist %%i\*%OBJEXT% del /Q %%i\*%OBJEXT% %%i\*%PROLOGEXT%
 
 call %PROLOG% -e "[flrconfig]. halt." || goto floraconfigerror
 

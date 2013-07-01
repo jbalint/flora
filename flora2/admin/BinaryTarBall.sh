@@ -6,8 +6,9 @@
 
 files=" \
         ./flora2/Makefile ./flora2/NMakefile.mak \
-    	./flora2/makeflora ./runflora ./floraconfig ./*.bat \
-        ./flora2/*.sh ./flora2/*.xwam ./flora2/*.flh\
+    	./flora2/makeflora ./flora2/runflora ./flora2/floraconfig \
+        ./flora2/*.bat ./flora2/*.sh \
+        ./flora2/*.xwam ./flora2/*.flh\
         ./flora2/AT/*.flr ./flora2/AT/Makefile ./flora2/AT/NMakefile.mak
     	./flora2/closure/Makefile ./flora2/closure/NMakefile.mak \
     	./flora2/closure/*.flh \
@@ -33,18 +34,17 @@ files=" \
     	./flora2/includes/*.flh \
     	./flora2/includes/*.fli \
     	./flora2/includes/Makefile ./flora2/includes/NMakefile.mak \
-    	./flora2/includes/Makefile ./flora2/includes/NMakefile.mak \
     	./flora2/lib/*.flr ./flora2/lib/Makefile ./flora2/lib/NMakefile.mak \
 	./flora2/lib/include/*flh \
     	./flora2/libinc/*.flh \
-    	./flora2/p2h/prolog2hilog.* ./flora2/p2h/*.P \
-    	./flora2/p2h/flora_ground.* \
-        ./flora2/p2h/Makefile \
-	./flora2/p2h/NMakefile.mak ./flora2/p2h/NMakefile64.mak \
-        ./flora2/p2h/windows/*.dll ./flora2/p2h/windows/*.exp \
-    	./flora2/p2h/windows/*.lib \
-        ./flora2/p2h/windows64/*.dll ./flora2/p2h/windows64/*.exp \
-    	./flora2/p2h/windows64/*.lib \
+    	./flora2/cc/prolog2hilog.* ./flora2/cc/*.P \
+    	./flora2/cc/flora_ground.* \
+        ./flora2/cc/Makefile \
+	./flora2/cc/NMakefile.mak ./flora2/cc/NMakefile64.mak \
+        ./flora2/cc/windows/*.dll ./flora2/cc/windows/*.exp \
+    	./flora2/cc/windows/*.lib \
+        ./flora2/cc/windows64/*.dll ./flora2/cc/windows64/*.exp \
+    	./flora2/cc/windows64/*.lib \
     	./flora2/pkgs/Makefile ./flora2/pkgs/NMakefile.mak \
         ./flora2/pkgs/*.flr ./flora2/pkgs/prolog/*.P \
 	./flora2/pkgs/include/*.flh \
