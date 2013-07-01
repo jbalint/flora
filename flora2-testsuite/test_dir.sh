@@ -41,6 +41,7 @@ exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
               callReified_foo.flr callReified_foo2.flr \
     	      module_foo.flr \
     	      depcheck_control.flr \
+              descriptors_moo.flr \
               encap_mod1.flr encap_mod2.flr encap_syntax_check.flr \
               error_invalidsym.flr error_dynmod.flr \
               error_nonvar.flr error_nonvar2.flr error_nonvar3.flr \
