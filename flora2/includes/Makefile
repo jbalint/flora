@@ -29,7 +29,7 @@ ALLOBJS = flrdefinition.flh
 
 PROLOG = none
 
-PROLOG_COMMAND = $(PROLOG) -m 60000 -c 10000 -e 'segfault_handler(warn).'
+PROLOG_COMMAND = "$(PROLOG)" -m 60000 -c 10000 -e 'segfault_handler(warn).'
 
 FLORA_INCLUDES_DIR = ../flrincludes
 

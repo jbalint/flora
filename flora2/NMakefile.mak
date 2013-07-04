@@ -58,23 +58,23 @@ OPTIONS = [optimize,ti_all]
 ## cc is handled specially, by makeflora
 ALL::  $(ALLOBJS)
 	cd closure
-	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
 	cd ..\includes
-	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
 	cd ..\genincludes
-	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
 	cd ..\syslib
-	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
 	cd ..\lib
-	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
 	cd ..\AT
-	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
 	cd ..\debugger
-	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
 	cd ..\pkgs
-	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
 	cd ..\demos
-	nmake /nologo /f NMakefile.mak PROLOG=$(PROLOG)
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
 	cd ..
 
 CLEAN : CLEANTEMP
@@ -115,7 +115,7 @@ CLEAN : CLEANTEMP
 
 
 $(PROLOGEXT)$(OBJEXT):
-	$(PROLOG) -e "['.\\flora2']. import bootstrap_flora/0 from flora2. bootstrap_flora,mc(%|fF,$(OPTIONS)). halt."
+	"$(PROLOG)" -e "['.\\flora2']. import bootstrap_flora/0 from flora2. bootstrap_flora,mc(%|fF,$(OPTIONS)). halt."
 
 
 .SILENT:

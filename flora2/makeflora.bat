@@ -19,24 +19,24 @@ REM        path-for-\XSB\bin\... has a file extension, e.g., \xsb\bin\wxsb.bat
 if exist binary-distribution.txt goto binary
 
 set default_tabling=flrincludes\.flora_default_tabling
-if "%1" == "-S" echo #define FLORA_SUBSUMPTIVE_TABLING > %default_tabling%
-if "%1" == "-S" shift
-if "%1" == "-I" echo #define FLORA_INCREMENTAL_TABLING > %default_tabling%
-if "%1" == "-I" shift
-if "%1" == "-S" echo #define FLORA_SUBSUMPTIVE_TABLING > %default_tabling%
-if "%1" == "-S" shift
+if [%1] == [-S] echo #define FLORA_SUBSUMPTIVE_TABLING > %default_tabling%
+if [%1] == [-S] shift
+if [%1] == [-I] echo #define FLORA_INCREMENTAL_TABLING > %default_tabling%
+if [%1] == [-I] shift
+if [%1] == [-S] echo #define FLORA_SUBSUMPTIVE_TABLING > %default_tabling%
+if [%1] == [-S] shift
 
-if "%1" == "" goto usage
+if [%1] == [] goto usage
 
-if        "%1" == "-c"    (set prologcmd=%2
-) else if "%1" == "-c64"  (set prologcmd=%2
+if        [%1] == [-c]    (set prologcmd=%2
+) else if [%1] == [-c64]  (set prologcmd=%2
 ) else                    set prologcmd=%1
 
-if "%prologcmd%" == "" goto usage
+if [%prologcmd%] == [] goto usage
 
 
-if "%1" == "clean" nmake /nologo /f NMakefile.mak clean
-if "%1" == "clean" goto end
+if [%1] == [clean] nmake /nologo /f NMakefile.mak clean
+if [%1] == [clean] goto end
 
 call floraconfig.bat %prologcmd% compiling || goto end
 REM This sets %PROLOG%, %PROLOGDIR%, %FLORADIR%
@@ -52,8 +52,8 @@ if exist *.a     del *.a
 if exist *.o     del *.o
 if exist *.xwam  del *.xwam
 
-if "%1" == "-c"  nmake /nologo /f NMakefile.mak PROLOG=%PROLOG% PROLOGDIR=%PROLOGDIR%
-if "%1" == "-c64"  nmake /nologo /f NMakefile64.mak PROLOG=%PROLOG% PROLOGDIR=%PROLOGDIR%
+if [%1] == [-c]  nmake /nologo /f NMakefile.mak PROLOG=%PROLOG% PROLOGDIR=%PROLOGDIR%
+if [%1] == [-c64]  nmake /nologo /f NMakefile64.mak PROLOG=%PROLOG% PROLOGDIR=%PROLOGDIR%
 
 cd ..
 
@@ -65,8 +65,8 @@ goto end
 :usage
 @echo.
 @echo +++++ Usage:
-@echo +++++   makeflora -c path-for-\XSB\bin\xsb.bat      (32 bit installations)
-@echo +++++   makeflora -c64 path-for-\XSB\bin\xsb64.bat  (64 bit installations)
+@echo +++++   makeflora [-c] path-for-\XSB\bin\xsb      (32 bit installations)
+@echo +++++   makeflora [-c64] path-for-\XSB\bin\xsb64  (64 bit installations)
 @echo.
 goto end
 

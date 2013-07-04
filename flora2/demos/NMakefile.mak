@@ -42,7 +42,7 @@ ALL: $(ALLOBJS)
 
 
 .flr$(PROLOGEXT):
-	$(PROLOG) -e "asserta(library_directory('..')). ['..\\flora2']. import bootstrap_flora/0 from flora2. bootstrap_flora. import ('_compile')/1 from flora2. '_compile'(%|fF). halt."
+	"$(PROLOG)" -e "asserta(library_directory('..')). ['..\\flora2']. import bootstrap_flora/0 from flora2. bootstrap_flora. import ('_compile')/1 from flora2. '_compile'(%|fF). halt."
 
 
 CLEAN:

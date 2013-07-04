@@ -5,9 +5,9 @@ REM  Generate the files that contain the Prolog & Flora installation directories
 @set OBJEXT = .xwam
 @set PROLOGEXT = .P
 
-if "%1" == "" goto florausage
+if [%1] == [] goto florausage
 
-if "%2" == "" (if not exist genincludes\flrtable.flh goto floranotcompilederror)
+if [%2] == [] (if not exist genincludes\flrtable.flh goto floranotcompilederror)
 
 @echo.
 @set PROLOG=%1
@@ -20,7 +20,7 @@ for /D %%i in (%USERPROFILE%\.xsb\"flora-*") do if exist %%i\*%OBJEXT% del /Q %%
 
 call %PROLOG% -e "[flrconfig]. halt." || goto floraconfigerror
 
-if "%2" == "" goto success
+if [%2] == [] goto success
 
 goto end
 
