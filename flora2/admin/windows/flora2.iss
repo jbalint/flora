@@ -5,13 +5,15 @@
 ; by the MyBaseDir variable below.
 
 #define MyAppName "Flora-2"
-#define MyAppVerName "Flora-2 0.99.2"
+#define MyAppVerName "Flora-2 v.0.99.2 (Lotus)"
 #define MyAppPublisher "Flora-2"
 #define MyAppURL "http://flora.sourceforge.net/"
 #define MyAppUrlName "Flora-2 Web Site.url"
+#define MyAppLicenseURL "http://www.apache.org/licenses/LICENSE-2.0"
+#define MyAppLicenseUrlName "Apache License Web Site.url"
 
-#define FLORA_DIR "{reg:HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment,FLORA_DIR|{pf}\Flora-2}"
-#define MyBaseDir "C:\flora2"
+#define FLORA_DIR "{reg:HKLM\SYSTEM\CurrentControlSet\Control\Session #Manager\Environment,FLORA_DIR|{pf}\flora2}"
+#define MyBaseDir "H:\FLORA\flora2"
 
 [Setup]
 AppName={#MyAppName}
@@ -25,7 +27,7 @@ DefaultDirName={#FLORA_DIR}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 LicenseFile={#MyBaseDir}\LICENSE
-InfoBeforeFile={#MyBaseDir}\README
+InfoBeforeFile={#MyBaseDir}\admin\windows\InstallMessage
 OutputBaseFilename=flora2-0.99.2
 Compression=lzma
 SolidCompression=yes
@@ -45,12 +47,13 @@ Name: "base"; Description: "Base Flora-2 installation"
 
 [Components]
 Name: "base"; Description: "Base system"; Types: full base; Flags: disablenouninstallwarning
-Name: "base\sources"; Description: "Base system plus Prolog source files"; Types: full base; Flags: disablenouninstallwarning
+Name: "base\sources"; Description: "Base system plus source files"; Types: full base; Flags: disablenouninstallwarning
 Name: "documentation"; Description: "Documentation"; Types: full; Flags: disablenouninstallwarning
 
 [Tasks]
 Name: website; Description: "&Visit {#MyAppName} web site"; Components: base
-Name: shortcut; Description: "&Create a desktop shortcut to the Flora-2 folder"; Components: base
+;Name: configure; Description: "&Configure Flora-2"; Components: base
+Name: shortcut; Description: "&Create a desktop shortcut to run Flora-2"; Components: base
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -66,6 +69,8 @@ Source: "{#MyBaseDir}\*.xwam"; Excludes: ".*,CVS"; DestDir: "{app}\"; Components
 Source: "{#MyBaseDir}\*.flh"; Excludes: ".*,CVS"; DestDir: "{app}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#MyBaseDir}\floraconfig.bat"; Excludes: ".*,CVS"; DestDir: "{app}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#MyBaseDir}\runflora.bat"; Excludes: ".*,CVS"; DestDir: "{app}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+
+Source: "{#MyBaseDir}\LICENSE"; Excludes: ".*,CVS"; DestDir: "{app}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#MyBaseDir}\etc\flora.ico"; Excludes: ".*,CVS"; DestDir: "{app}\etc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
@@ -149,7 +154,6 @@ Source: "{#MyBaseDir}\cc\windows64\*.lib"; Excludes: ".*,CVS"; DestDir: "{app}\c
 Source: "{#MyBaseDir}\pkgs\*.flr"; Excludes: ".*,CVS"; DestDir: "{app}\pkgs"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#MyBaseDir}\pkgs\include\*.flh"; Excludes: ".*,CVS"; DestDir: "{app}\pkgs\include"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#MyBaseDir}\pkgs\prolog\*.P"; Excludes: ".*,CVS"; DestDir: "{app}\pkgs\prolog"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#MyBaseDir}\pkgs\prolog\*.xwam"; Excludes: ".*,CVS"; DestDir: "{app}\pkgs\prolog"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#MyBaseDir}\pkgs\NMakefile.mak"; Excludes: ".*,CVS"; DestDir: "{app}\pkgs"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#MyBaseDir}\syslib\*.xwam"; Excludes: ".*,CVS"; DestDir: "{app}\syslib"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -164,24 +168,25 @@ Source: "{#MyBaseDir}\java"; Excludes: ".*,CVS"; DestDir: "{app}\java"; Componen
 
 [INI]
 Filename: "{app}\{#MyAppUrlName}"; Section: "InternetShortcut"; Key: "URL"; String: "{#MyAppURL}"; Components: base
+Filename: "{app}\{#MyAppLicenseUrlName}"; Section: "InternetShortcut"; Key: "URL"; String: "{#MyAppLicenseURL}"; Components: base
 
 
 [Icons]
-Name: "{group}\Flora-2"; Filename: "{app}\runflora.bat"; Parameters: ""; Comment: "Runs Flora-2 within a command shell"; WorkingDir: "{userdocs}"; Components: base; Flags: createonlyiffileexists IconFilename: "{app}\etc\flora.ico"
+Name: "{group}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {app} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{app}"; Components: base; IconFilename: "{app}\etc\flora.ico"
 
-Name: "{group}\License"; Filename: "{app}\LICENSE"; Components: base
+Name: "{userdesktop}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {app} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{app}"; Components: base; IconFilename: "{app}\etc\flora.ico"; Tasks: shortcut
+
+Name: "{group}\License"; Filename: "{#MyAppLicenseURL}"; Components: base
+
+Name: "{group}\Web Site"; Filename: "{#MyAppURL}"; Components: base
 
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"; Components: base
-
-Name: "{userdesktop}\Flora-2"; Filename: "{app}"; Components: base; Tasks: shortcut
-
-Name: "{group}\Web Site"; Filename: "{#MyAppUrl}"; Components: base
 
 [Registry]
 Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; ValueType: expandsz; ValueName: "FLORA_DIR"; ValueData: "{app}"; Components: base; Flags: deletevalue uninsdeletevalue
 
 [Run]
-Filename: "{app}\floraconfig.bat"; Parameters: {XSB_script}
+Filename: "cmd" ; Parameters: "/c """"{app}\floraconfig.bat"" ""{code:GetXSBLocation|{app}}"""""; WorkingDir: "{app}"
 Filename: "{app}\{#MyAppUrlName}"; Flags: shellexec nowait; Tasks: website
 
 [UninstallDelete]
@@ -189,20 +194,20 @@ Type: filesandordirs; Name: "{app}"; Components: base
 Type: filesandordirs; Name: "{group}"; Components: base
 
 [Code]
-var XSB_script: String;
+var Page: TInputFileWizardPage;
 
 procedure InitializeWizard();
 begin
-var Page: TInputDirWizardPage;
-
   Page := CreateInputFilePage(wpSelectDir,
-    'Specify the location of the XSB invocation script.'
-    'It should look like ....\XSB\bin\xsb.bat or ....\XSB\bin\xsb64.bat' +
-    'depending on whether you configured a 32-bit or a 64-bit version of XSB.',
-    'Use the Browse button to navigate to the script.');
-  Page.Add('Location of xsb.bat or xsb64.bat: ', "*.bat", "*.bat");
+    'Specify the location of the XSB invocation script.',
+    'It should look like something\XSB\bin\xsb64.bat (or ...\xsb.bat if you are using a 32-bit version of XSB).',
+    'Pls use the Browse button to navigate to the desired script.');
+  Page.Add('Location of xsb.bat or xsb64.bat: ', '*.bat', '*.bat');
+end;
 
+function GetXSBLocation(Param: String): String;
+begin
   // Read value into variable
-  XSB_script := Page.Values[0];
-end
+  Result := Page.Values[0];
+end;
 
