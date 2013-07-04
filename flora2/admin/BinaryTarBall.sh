@@ -7,6 +7,7 @@
 files=" \
         ./flora2/Makefile ./flora2/NMakefile.mak \
     	./flora2/makeflora ./flora2/runflora ./flora2/floraconfig \
+    	./flora2/etc \
         ./flora2/*.bat ./flora2/*.sh \
         ./flora2/*.xwam ./flora2/*.flh\
         ./flora2/AT/*.flr ./flora2/AT/Makefile ./flora2/AT/NMakefile.mak
@@ -23,7 +24,7 @@ files=" \
     	./flora2/demos/Makefile ./flora2/demos/NMakefile.mak \
     	./flora2/docs/*.pdf \
     	./flora2/docs/NMakefile.mak \
-    	./flora2/emacs/flora.el \
+    	./flora2/emacs/flora.el* \
     	./flora2/emacs/README \
     	./flora2/emacs/Makefile \
     	./flora2/emacs/NMakefile.mak \
