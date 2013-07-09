@@ -5,14 +5,15 @@
 ; by the MyBaseDir variable below.
 
 #define MyAppName "Flora-2"
-#define MyAppVerName "Flora-2 v.0.99.2 (Lotus)"
+#define FlrVersion "0.99.3"
+#define MyAppVerName "Flora-2  v. "+FlrVersion+" (Aronia)"
 #define MyAppPublisher "Flora-2"
 #define MyAppURL "http://flora.sourceforge.net/"
 #define MyAppUrlName "Flora-2 Web Site.url"
 #define MyAppLicenseURL "http://www.apache.org/licenses/LICENSE-2.0"
 #define MyAppLicenseUrlName "Apache License Web Site.url"
 
-#define FLORA_DIR "{reg:HKLM\SYSTEM\CurrentControlSet\Control\Session #Manager\Environment,FLORA_DIR|{pf}\flora2}"
+#define FLORA_DIR "{reg:HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment,FLORA_DIR|{pf}\flora2}"
 #define MyBaseDir "H:\FLORA\flora2"
 
 [Setup]
@@ -28,12 +29,12 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 LicenseFile={#MyBaseDir}\LICENSE
 InfoBeforeFile={#MyBaseDir}\admin\windows\InstallMessage
-OutputBaseFilename=flora2-0.99.2
+OutputBaseFilename=flora2-{#FlrVersion}
 Compression=lzma
 SolidCompression=yes
 PrivilegesRequired=none
 
-VersionInfoVersion=0.99.2
+VersionInfoVersion={#FlrVersion}
 VersionInfoCopyright=© The Research Foundation of SUNY, 1999 - 2013
 
 AllowRootDirectory=yes
@@ -52,14 +53,13 @@ Name: "documentation"; Description: "Documentation"; Types: full; Flags: disable
 
 [Tasks]
 Name: website; Description: "&Visit {#MyAppName} web site"; Components: base
-;Name: configure; Description: "&Configure Flora-2"; Components: base
 Name: shortcut; Description: "&Create a desktop shortcut to run Flora-2"; Components: base
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
-BeveledLabel=Flora-2 0.99.2 © The Research Foundation of SUNY, 1999 - 2013
+BeveledLabel=Flora-2 {#FlrVersion} © The Research Foundation of SUNY, 1999 - 2013
 
 [Dirs]
 Name: "{userdocs}\Flora-2 uninstaller"
