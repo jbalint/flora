@@ -31,7 +31,6 @@
 
 
 :- import
-	put_attr/3,
 	term_psc/2,
 	term_new/2
    from machine.
@@ -241,6 +240,11 @@
    from flrdecode.
 
 :- import
+	flora_attributed_vars_disabled/0,
+	flora_put_attr/3
+   from flrwhen.
+
+:- import
         matching_rule_signature/6
    from flrcanon.
 
@@ -299,10 +303,6 @@
 	flora_compiler_environment/2,
 	flora_cleanup_udf/1,
 
-	flora_put_attr/3,
-	flora_disable_attributed_variables/0,
-	flora_enable_attributed_variables/0,
-	flora_when/2,
 	flora_experimenting_with/1,
 
 	flora_read_canonical_and_insert/2,

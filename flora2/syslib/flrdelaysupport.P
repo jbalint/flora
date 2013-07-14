@@ -30,8 +30,7 @@
 #include "flora_porting.flh"
 #include "flora_exceptions.flh"
 
-%%:- import term_variables/2 from constraintLib.
-:- import get_trigger_goal/2 from constraintLib.
+:- import get_trigger_goal/2 from flrwhen.
 
 :- import
 	%%flrtrim_last/2,
@@ -58,7 +57,7 @@
 	del_attr/2
    from machine.
 
-:- import flora_when/2 from flrutils.
+:- import flora_when/2 from flrwhen.
 
 %%:- import flora_decode_predicate/6 from flrwrapper.
 
@@ -66,6 +65,8 @@
 :- index(delay_spec_to_predicate/6,[1,5]).
 :- dynamic delayed_sensor/3.
 :- index(delayed_sensor/3,trie).
+:- dynamic delayed_undefeated_lits/1.
+:- index(delayed_undefeated_lits/1,trie).
 
 :- dynamic experimental/1.
 
@@ -113,24 +114,29 @@ FLLIBDELAYEDLITERAL(Builtin,FileN,Line,Args) :-
 	).
 
 %% Delay wrapper for the FL_UNDEFEATED condition
-%% _File,_Line,_VarnameList - not used currently:
+%% _File,_Line,_HeadVarnameList - not used currently:
 %% we are not issuing nongroundedness errors
-FLLIBDEFEATDELAY(_File,_Line,DefeatCond,DynHead,VarList,_VarnameList) :-
+FLLIBDEFEATDELAY(_File,_Line,DefeatCond,DynHead,HeadVarList,_HeadVarnameList) :-
 	term_arg(DefeatCond,1,RuleId),
 	term_arg(DefeatCond,4,Module),
 	(is_strict_rule(RuleId,Module) -> true
 	; is_cyclic(DefeatCond) -> fail
 	%% Not checking for groundedness
 	;
-	    flrterm_vars(DynHead,DynVars,1),
-	    (ground((DynVars,VarList)) -> DefeatCond
-	    ; flora_when(ground((VarList,DynVars)),DefeatCond)
+	    flrterm_vars((HeadVarList,DynHead),ConditionalVars,0),
+	    (ground(ConditionalVars) -> DefeatCond
+	    ;
+		functor(DefeatCond,Func,Arity),
+		functor(DefeatCondTemplate,Func,Arity),
+		assert(delayed_undefeated_lits(DefeatCondTemplate)),
+		flora_when(ground(ConditionalVars),DefeatCond)
 	    )
 	).
 
 FLLIBNAFDELAY(Goal) :-
 	(experimental(delay_naf) ->
-	    term_arg(Goal,2,Vars),
+	    term_arg(Goal,2,OrigVars),
+	    flrterm_vars(OrigVars,Vars,0),
 	    flora_when(ground(Vars),Goal)
 	;
 	    Goal
@@ -336,30 +342,13 @@ extract_triggers_and_execute([Var|RestBodyVars],HeadVars) :-
 
 get_var_triggers(Var,HeadVars,Triggers) :-
 	(aliased_to_head(Var,HeadVars) -> Triggers = []
-	; get_attr(Var,when,Triggers)
+	; get_attr(Var,flrwhen,Triggers)
 	->  %% remove attrs to avoid delayed lit calling itself repeatedly
 	    %% during its own work (eg, if it instantiates a when-variable)
-	    del_attr(Var,when)
+	    del_attr(Var,flrwhen)
 	; Triggers = []
 	),
 	!.
-
-/*
-get_all_triggers(BodyVars,HeadVars,Triggers) :-
-	get_all_triggers(BodyVars,HeadVars,Triggers,[]).
-get_all_triggers([],_HeadVars,Triggers,Triggers) :- !.
-get_all_triggers([Var|Rest],HeadVars,NewTrigs,OldTrigs) :-
-	(aliased_to_head(Var,HeadVars) -> NewTrigs = OldTrigs
-	; get_attr(Var,when,Trigs)
-	->  %% remove attrs to avoid delayed lit calling itself repeatedly
-	    %% during its own work (eg, if it instantiates a when-variable)
-	    NewTrigs = [Trigs|RestNewTrigs],
-	    del_attr(Var,when)
-	; NewTrigs = RestNewTrigs
-	),
-	!,
-	get_all_triggers(Rest,HeadVars,RestNewTrigs,OldTrigs).
-*/
 
 aliased_to_head(V,[H|_HV]):- V == H, !.
 aliased_to_head(V,[_|H]):- aliased_to_head(V,H).
@@ -385,30 +374,6 @@ call_trigger_list([Trigger|Rest]) :-
 	    true
 	),
 	call_trigger_list(Rest).
-
-/*
-%% this is now in constraintLib.P
-:- import
-	trigger_ground/2, trigger_nonvar/2, trigger/2, check_disj/2
-   from constraintLib.
-get_trigger_goal(trigger_nonvar(_,Trigger),Goal) :-
-	!,
-	get_trigger_goal(Trigger,Goal).
-get_trigger_goal(trigger_ground(_,Trigger),Goal) :-
-	!,
-	get_trigger_goal(Trigger,Goal).
-get_trigger_goal(trigger(_,Trigger),Goal) :-
-	!,
-	get_trigger_goal(Trigger,Goal).
-get_trigger_goal(check_disj(Det,Trigger),Goal) :-
-	!,
-	%% note: if Det is nonvar, the trigger's goal has already been used
-	%% so we just fail
-	var(Det),
-	Det = (-),
-	get_trigger_goal(Trigger,Goal).
-get_trigger_goal(Trigger,Trigger).
-*/
 
 
 %% For binary builtins
@@ -438,6 +403,8 @@ builtin_instantiation_error(File,Line,Builtin,Message,Arg) :-
 
 
 
+delayed_pred_template(FLORA_NAF_PREDICATE(_,_,_,_)) :- !.
+delayed_pred_template(Template) :- delayed_undefeated_lits(Template), !.
 delayed_pred_template(Template) :- delay_spec_to_predicate(_,_,_,_,Template,_).
 
 %% The first two args in sensor declaration are file name and line number
@@ -534,29 +501,6 @@ flora_register_delay(SensorType,_,_,_,_,_,_) :-
    flora_register_delay(builtin,'_ischarlist',F,L,[X],
 			flora_ischarlist_builtin(F,L,X),
 			(nonvar(X))),
-
-   /*
-   %% These should be deleted when we switch to _atom and such names
-   flora_register_delay(builtin,number,F,L,[X],
-			flora_number_builtin(F,L,X),
-			(nonvar(X))),
-   flora_register_delay(builtin,integer,F,L,[X],
-			flora_integer_builtin(F,L,X),
-			(nonvar(X))),
-   flora_register_delay(builtin,float,F,L,[X],
-			flora_float_builtin(F,L,X),
-			(nonvar(X))),
-   flora_register_delay(builtin,atom,F,L,[X],
-			flora_atom_builtin(F,L,X),
-			(nonvar(X))),
-   flora_register_delay(builtin,compound,F,L,[X],
-			flora_compound_builtin(F,L,X),
-			(nonvar(X))),
-   flora_register_delay(builtin,atomic,F,L,[X],
-			flora_atomic_builtin(F,L,X),
-			(nonvar(X))),
-   %% The above should be deleted when we switch to _atom and such names
-   */
 
    flora_register_delay(builtin,FL_DELAYQUANT,F,L,[Quant,Condition,Goal],
 			flora_delay_quantifier(F,L,[Quant,Condition,Goal]),
@@ -665,4 +609,4 @@ disable_experiment(X) :-
 	; retractall(experimental(X))
 	).
 
-%%experimental(delay_naf).
+experimental(delay_naf).

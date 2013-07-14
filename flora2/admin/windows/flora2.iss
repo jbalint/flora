@@ -62,6 +62,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 BeveledLabel=Flora-2 {#FlrVersion} © The Research Foundation of SUNY, 1999 - 2013
 
 [Dirs]
+Name: "{app}" ; Permissions: users-modify users-full
 Name: "{userdocs}\Flora-2 uninstaller"
 
 [Files]

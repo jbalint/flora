@@ -93,15 +93,14 @@
         conjunct_to_list/2,
         flora_bind_libmodobj/2,
         matching_rule_signature/6,
-        show_rule_signature/9,
+        show_rule_signature/11,
         get_canonical_form/2,
 	convert_to_body_literal/2,
 	convert_to_head_literal/2,
 	bind_head_in_defeat_condition/2,
-        flora_record_rule_signature/9,
+        flora_record_rule_signature/11,
         flora_retract_signatures/8,
-	rule_signature_member/3,
-        flora_build_pred_signature/2
+	rule_signature_member/3
    from flrcanon.
 
 :- import flora_bind_last/2 from flrtrim.
@@ -202,14 +201,14 @@ flora_insert_rules(_InsOp,[H|_Tail]) :-
 	!,
 	flora_abort('uninstantiated member in the rule list of insertrule{...}',
 		    FLORA_ABORT_NOTRACE).
-flora_insert_rules(InsOp,[FLSYSRULEUPDATE(RuleId,DescrVarTerm,DescrMetaFacts,HeadList,Body,HV,BV,PreBody,PostBody,DefeatCond)|L]) :-
+flora_insert_rules(InsOp,[FLSYSRULEUPDATE(RuleId,DescrVarTerm,DescrMetaFacts,HeadList,PureBody,HV,BV,PreBody,PostBody,DefeatCond)|L]) :-
 	!,
-	inst_body(Body,InstBody),
+	inst_body(PureBody,InstBody),
 	%% flrunify_handlers.P defines the unify handler for FLDYNRULEVARCHECK
         (get_attr(HV,FLDYNRULEVARCHECK,HVars),
 	    get_attr(BV,FLDYNRULEVARCHECK,BVars)
 	->
-	    check_vars(HeadList,Body,HVars,BVars,Warns),
+	    check_vars(HeadList,PureBody,HVars,BVars,Warns),
 	    sort(Warns,SortedWarns),
 	    show_warnings(SortedWarns)
 	; true
@@ -252,10 +251,10 @@ flora_expand_and_ins_rules(Id,DescrVarTerm,InsOp,[Head],Body,PreBody,PostBody,De
 	!,
 	%% attach delay checker to body to be asserted,
 	%% but not to body in signature (the second body-argument
-	(nonvar(PostBody) -> ActualBody = (PreBody,Body,PostBody)
-	; ActualBody = (PreBody,Body)
+	(var(PostBody) -> PostBody = true
+	; true
 	),
-	flora_insert_rule(InsOp,Id,DescrVarTerm,Head,ActualBody,Body,DefeatCond,[],MName).
+	flora_insert_rule(InsOp,Id,DescrVarTerm,Head,Body,Body,PreBody,PostBody,DefeatCond,[],MName).
 
 flora_expand_and_ins_rules(Id,DescrVarTerm,InsOp,HeadList,Body,PreBody,PostBody,DefeatCond,MName) :-
 	HeadList=[H|_L],
@@ -285,10 +284,14 @@ flora_expand_and_ins_rules(Id,DescrVarTerm,InsOp,HeadList,Body,PreBody,PostBody,
 	flora_module_predicate(IntermediatePredicateName,NewP_Arguments,MName,IntermediatePredicate),
 	%% here we attach the delay checker and pre-body to the body
 	%% of the bridge rule
-	(nonvar(PostBody) -> ActualBody = (PreBody,Body,PostBody)
-	; ActualBody = (PreBody,Body)
+	(var(PostBody) -> PostBody = true
+	; true
 	),
-	BridgeRule =.. [FL_IMPLYOP,IntermediatePredicate,ActualBody],
+	/*
+	TODO: We should move concatenation of the pre/post body + defeat
+	condition for the bridge rule here.
+	*/
+	BridgeRule =.. [FL_IMPLYOP,IntermediatePredicate,Body],
 	%% This copy-term speeds up unification with rule signatures for
 	%% multi-headed rules. This is because the variables in Head/Body
 	%% would be different from the variables in the head/bridge rules.
@@ -300,7 +303,7 @@ flora_expand_and_ins_rules(Id,DescrVarTerm,InsOp,HeadList,Body,PreBody,PostBody,
  flora_insert_multiheaded_rule(+Op,+Id,+DescrVarTerm,+HeadList,+IntermediatePredicate,+OrigBody,+PreBody,+PostBody,+DefeatCond,+BridgeRules)
 
  For each element H in the HeadList, call
-     flora_insert_rule(Op,Id,DescrVarTerm,IntermedPred,ActualBody,BodyForSignature,DefeatCond,[Bridge],Module)
+     flora_insert_rule(Op,Id,DescrVarTerm,IntermedPred,Body,BodyForSignature,PreBody,PostBody,DefeatCond,[Bridge],Module)
 
  OrigBody - the original body of the multiheaded rule
  IntermediatePredicate - the new atom that represents the original body for each of
@@ -318,17 +321,17 @@ flora_insert_multiheaded_rule(_InsOp,_Id,_DescrVarTerm,[],_IntermediatePredicate
 flora_insert_multiheaded_rule(InsOp,Id,DescrVarTerm,[H|L],IntermediatePredicate,OrigBody,PreBody,PostBody,DefeatCond,BridgeRule) :-
 	%% flora_insert_rule binds DefeatCond, so we copy it here first
 	copy_term(DefeatCond,DefeatCond1),
-	flora_insert_rule(InsOp,Id,DescrVarTerm,H,IntermediatePredicate,OrigBody,DefeatCond1,BridgeRule,_MName),
+	flora_insert_rule(InsOp,Id,DescrVarTerm,H,IntermediatePredicate,OrigBody,PreBody,PostBody,DefeatCond1,BridgeRule,_MName),
 	flora_insert_multiheaded_rule(InsOp,Id,DescrVarTerm,L,IntermediatePredicate,OrigBody,PreBody,PostBody,DefeatCond,BridgeRule).
 
 /***********************************************************************
- flora_insert_rule(+InsOp,+RuleId,+DescrVarTerm,+Head,+ActualBody,+OrigBody,+DefeatCond,+BridgeRules,-ModName)
+ flora_insert_rule(+InsOp,+RuleId,+DescrVarTerm,+Head,+Body,+OrigBody,+PreBody,+PostBody,+DefeatCond,+BridgeRules,-ModName)
 
  Assert a rule with the given Head and Body, refresh tables, and define
  the head for undefinedness checking.
 
  If this came from a multi-headed rule (called by flora_insert_multiheaded_rule)
- then ActualBody and OrigBody are not the same.
+ then Body and OrigBody are not the same.
  Body will be the intermediate predicate used in multiheaded rules
  (newpredicateXYZ below) and OrigBody is the original body of the multiheaded
  rule. OrigBody is used here only to set up the rule signature.
@@ -347,12 +350,12 @@ flora_insert_multiheaded_rule(InsOp,Id,DescrVarTerm,[H|L],IntermediatePredicate,
          newpredicateXYZ :- r.
  The last rule is called the bridge rule.
 ************************************************************************/ 
-flora_insert_rule(_InsOp,_Id,_DescrVarTerm,Head,_Body,_OrigBody,_DefeatCond,_BridgeRule,_MName) :-
+flora_insert_rule(_InsOp,_Id,_DescrVarTerm,Head,_Body,_OrigBody,_Pre,_Post,_DefeatCond,_BridgeRule,_MName) :-
         var(Head),
         !,
         flora_abort('uninstantiated rule head in insertrule{...}',FLORA_ABORT_NOTRACE).
 
-flora_insert_rule(InsOp,Id,DescrVarTerm,Head,ActualBody,OrigBody,DefeatCond,BridgeRule,Module) :-
+flora_insert_rule(InsOp,Id,DescrVarTerm,Head,Body,OrigBody,PreBody,PostBody,DefeatCond,BridgeRule,Module) :-
         ( Head=FLLIBMODLIT(_F,_A1,PossibleMName,_Caller) ->
             get_canonical_form(Head,FLCANON(_Wrap,_A2,MName,InstHead,_)),
 	    (var(MName) -> MName = PossibleMName ; true),
@@ -387,10 +390,10 @@ flora_insert_rule(InsOp,Id,DescrVarTerm,Head,ActualBody,OrigBody,DefeatCond,Brid
 	%% flora_record_rule_signature will bind DefeatCond, if it isn't NULL
 	(DefeatCond == FL_TRUE
 	->
-	    NewRule =.. [FL_IMPLYOP,NewHead,ActualBody]
+	    NewRule =.. [FL_IMPLYOP,NewHead,(PreBody,Body,PostBody)]
 	; 
 	    bind_head_in_defeat_condition(NewHead,DefeatCond),
-	    NewRule =.. [FL_IMPLYOP,NewHead,(ActualBody,DefeatCond)]
+	    NewRule =.. [FL_IMPLYOP,NewHead,(PreBody,Body,DefeatCond,PostBody)]
 	),
 	%% This copy-term speeds up unification with rule signatures for
 	%% multi-headed rules. This is because the variables in Head/Body
@@ -398,9 +401,9 @@ flora_insert_rule(InsOp,Id,DescrVarTerm,Head,ActualBody,OrigBody,DefeatCond,Brid
 	copy_term(NewRule,NewRule1),
 	convert_to_body_literal(InstHead,InstHeadB),
         ( InsOp == FLLIBINSERTRULE_A ->
-            flora_record_rule_signature(Id,DescrVarTerm,FL_DYNAPREFIX,Module,InstHeadB,OrigBody,DefeatCond,[NewRule1],BridgeRule)
+            flora_record_rule_signature(Id,DescrVarTerm,FL_DYNAPREFIX,Module,InstHeadB,OrigBody,PreBody,PostBody,DefeatCond,[NewRule1],BridgeRule)
         ;
-            flora_record_rule_signature(Id,DescrVarTerm,FL_DYNZPREFIX,Module,InstHeadB,OrigBody,DefeatCond,[NewRule1],BridgeRule)
+            flora_record_rule_signature(Id,DescrVarTerm,FL_DYNZPREFIX,Module,InstHeadB,OrigBody,PreBody,PostBody,DefeatCond,[NewRule1],BridgeRule)
         ),
 	flora_adaptive_assert(NewRule),
 	flora_refresh_tables(InstHead),
@@ -505,7 +508,8 @@ flora_check_rule(DelOp,Id,RuleMod,Head,Body,RuleSig,BoundHead) :-
 
 ***********************************************************************/
 flora_delete_rules([]) :- !.
-flora_delete_rules([(Id,DescrVarTerm,DynPrefix,Mod,Head,Body,_DefeatCond,RuleList,BridgeRule)|L]) :-
+%% Atr is rule_signature list
+flora_delete_rules([(Id,DescrVarTerm,DynPrefix,Mod,Head,Body,_PreBody,_PostBody,_DefeatCond,RuleList,BridgeRule)|L]) :-
         flora_retract_rulelist(RuleList),
 	%% retract signatures does not ask for DefeatCond, so it's missing below
         flora_retract_signatures(Id,DescrVarTerm,DynPrefix,Mod,Head,Body,RuleList,BridgeRule),
@@ -517,7 +521,7 @@ flora_delete_rules([(Id,DescrVarTerm,DynPrefix,Mod,Head,Body,_DefeatCond,RuleLis
 	    %% flora_retract_signatures/8 will not delete all the signatures
 	    %% that have BridgeRule. So, we are testing if BridgeRule is still
 	    %% there. If so, we do not delete BridgeRule.
-            ( show_rule_signature(Id,_DescrVarTerm,DynPrefix,Mod,_H,_BS,_DefeatCond,_RL,BridgeRule) -> true
+            ( show_rule_signature(Id,_DescrVarTerm,DynPrefix,Mod,_H,_BS,_PreB,_PostB,_DefeatCond,_RL,BridgeRule) -> true
             ;
                 flora_retract_rulelist(BridgeRule)
             )

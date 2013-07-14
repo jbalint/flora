@@ -27,7 +27,7 @@ goto end
 :success
 @echo.
 @echo.
-@echo +++++ All is well: run FLORA-2 using the script
+@echo +++++ All is well: you can now run Flora-2 using the script
 @echo +++++    runflora.bat
 @echo.
 goto end
@@ -50,14 +50,14 @@ goto end
 :floranotcompilederror
 @echo.
 @echo.
-@echo +++++ FLORA-2 must first be compiled with the makeflora.bat command
+@echo +++++ Flora-2 must first be compiled with the makeflora.bat command
 @echo.
 goto end
 
 :floraconfigerror
 @echo.
 @echo.
-@echo +++++ Failed to configure FLORA-2
+@echo +++++ Failed to configure Flora-2
 @echo +++++ Please report to flora-users@lists.sf.net and include the log
 @echo.
 goto end

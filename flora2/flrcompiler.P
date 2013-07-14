@@ -627,9 +627,9 @@ pure_naf_struct_flora(Goal,FreeVars,PRRULELOGNAF(WrappedGoal,FreeVars,Line,CurrF
 %% We can optimize this by passing free variables list. If the list is empty,
 %% we won't delay
 naf_struct_flora(Goal,FreeVars,Code) :-
-	pure_naf_struct_flora(Goal,FreeVars,PureSilkNAFcode),
+	pure_naf_struct_flora(Goal,FreeVars,PureNAFcode),
 	%% delay default negation
-	delay_naf_struct(PureSilkNAFcode,Code).
+	delay_naf_struct(PureNAFcode,Code).
 
 %% delay struct
 delay_struct(Index,DelayOp,Args,Code) :-
@@ -650,8 +650,8 @@ delay_defeat_struct(Index,DefeatCond,Headvars,HeadvarNames,DynHead,Code) :-
 			  FLDELAYSUPPORTMOD,
 			  Code).
 
-delay_naf_struct(PureSilkNAFcode,Code) :-
-	prologterm_struct(FLLIBNAFDELAY,1,[PureSilkNAFcode],
+delay_naf_struct(PureNAFcode,Code) :-
+	prologterm_struct(FLLIBNAFDELAY,1,[PureNAFcode],
 			  FLDELAYSUPPORTMOD,
 			  Code).
 
@@ -808,12 +808,14 @@ conjunct_code([],Goal) :-
 	generate_prolog_liblit(FL_TRUE,0,[],Goal).
 conjunct_code([Goal],Goal) :- !.
 
+%% DON't include the case FL_TRUE here!
 conjunct_code([NULL|GList],ConjGoal) :- !, conjunct_code(GList,ConjGoal).
 
 conjunct_code([Goal|GList],ConjGoal) :-
 	conjunct_code(GList,ConjGoalTail),
 	!,
 	( ConjGoalTail == NULL -> ConjGoal=Goal
+	%% DON't include the case FL_TRUE here!
 	;
 	  conjunct_struct(Goal,ConjGoalTail,ConjGoal)
 	).
@@ -928,7 +930,14 @@ numobj_struct(Number,PRNUMBER(Number,NO_INDEX)) :- number(Number).
 %% transactional numbers are used only in :- index %arity-argument
 transactionalnumobj_struct(FLTRANSACTIONALNUMBER(Number,I),PRTRANSACTIONALNUMBER(Number,I)).
 
+%% decompile prvar to flvar
 prvar_to_flvar_struct(PRVARIABLE(Name,Index),FLVAR(Name,Index)).
+%% decompile prvar list  to flvar list 
+prvar_to_flvar_struct_list([], []) :- !.
+prvar_to_flvar_struct_list([Var|Rest], [FlVar|FlRest]) :-
+	prvar_to_flvar_struct(Var,FlVar),
+	prvar_to_flvar_struct_list(Rest,FlRest).
+
 flvar_struct_change_index(FLVAR(Name,_Index),FlIndex,FLVAR(Name,FlIndex)).
 
 varobj_struct(FLVAR(Name,Index),PRVARIABLE(Name,Index)) :- !.
@@ -1458,9 +1467,9 @@ clause_struct(Id,DescrVarTerm,MetaFacts,Mode,HeadList,Body,Code) :-
 	report_option(FLSYSLIB(FLLIBUNIVEQFORM),NO_INDEX),
 	florasyslib_struct(FLLIBCLAUSE,6,[Id,DescrVarTerm,MetaFacts,Mode,HeadList,Body],Code).
 
-insert_rulesig_struct(HeadList,Body,(DescrIdCode,DescrVarsTerm,DefeatCond),Newpred,Code) :-
+insert_rulesig_struct(HeadList,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,DefeatCond),Newpred,Code) :-
 	thismodule_struct(WS),
-	florasyslib_struct(FLLIBINSRULESIG,7,[DescrIdCode,DescrVarsTerm,WS,HeadList,Body,DefeatCond,Newpred],Code).
+	florasyslib_struct(FLLIBINSRULESIG,9,[DescrIdCode,DescrVarsTerm,WS,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],Code).
 
 insert_syslib(FL_INSERT,FLLIBINSERT) :- !.
 insert_syslib(FL_INSERTALL,FLLIBINSERTALL) :- !.
@@ -3286,7 +3295,7 @@ compile_defsensor_direct(SensCall,DelayCond,Code,Status) :-
 	%% termlit_struct, which takes flterm's.
 	flprologlib_call(SensCall,SensFLtermCall),
 	compile_body_literal(SensFLtermCall,SensCode,S1),
-	(no_errors_found(S1) -> compile_body_literal(DelayCond,DelayCode,S2)
+	(no_errors_found(S1) -> compile_body_literal(DelayCond,DelayCheckCode,S2)
 	; S2 = S1
 	),
 	(no_errors_found(S2) ->
@@ -3300,7 +3309,7 @@ compile_defsensor_direct(SensCall,DelayCond,Code,Status) :-
 	!,
 	report_option(FLSYSLIB(FLLIBSENSOR),NO_INDEX),
 	prologterm_struct(flora_register_sensor,2,
-			  [SensCode,DelayCode],FLDELAYSUPPORTMOD,Code),
+			  [SensCode,DelayCheckCode],FLDELAYSUPPORTMOD,Code),
 	clear_context(compiling_sensor_directive(SensName,SensArity)).
 	
 
@@ -3334,7 +3343,7 @@ compile_flfact(Head,RuleDiffList,FactDiffList,MetaFactDiffList,Status) :-
 		approx_flindex(Head,RuleIdx),
 		compile_descriptor_list([]-RuleIdx,rule,DescrIdCode,DescrVarsTerm,MetaFactDiffList,_),
 		split_ruleheads_add_rulesig(HeadCodeList,
-					    BodyCode,BodyCode,
+					    BodyCode,FL_TRUE,FL_TRUE,
 					    DescrIdCode,DescrVarsTerm,
 					    RuleDiffList,[]),
 		FactDiffList = _F-_F, %% empty fact diff list
@@ -3454,7 +3463,7 @@ add_fact_attr_code([(Var,Val)|L],BCode,NewCode) :-
 attrvar_code(Var,Val,AttrName,Code) :-
 	atomobj_struct(flora_put_attr,PutAttrFunct),
         atomobj_struct(AttrName,AttrCode),
-        prologterm_struct(PutAttrFunct,3,[Var,AttrCode,Val],flrutils,VCode),
+        prologterm_struct(PutAttrFunct,3,[Var,AttrCode,Val],flrwhen,VCode),
         prologliblit_struct(VCode,Code).
 
 %% This version creates record that will enable flrutils.P
@@ -3572,7 +3581,7 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
 	    compile_flvar_list(DescrVars,DescrVarsCode),
 	    length(DescrVarsCode,VarListLen),
 	    %% construct the term containing all the vars in the descriptor
-	    generate_prolog_liblit(vars,VarListLen,DescrVarsCode,DescrVarsTermOut)
+	    generate_prolog_liblit(FL_DESCRIPTOR_VARS_WRAPPER,VarListLen,DescrVarsCode,DescrVarsTermOut)
 	%% we are compiling clause{...}.
 	%% Generate a var in this case
 	;   new_prvariable(NO_INDEX,DescrVarsTermOut)
@@ -4389,25 +4398,24 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,Facts-Fa
 	    append(DTVarsCode,[H2BCodeHead,BCode1,H2BCodeTail],BCodeList),
 	    conjunct_code(BCodeList,BCode),
             get_dynrule_varlist(L),
-            add_dynrule_attr_code(L,BCode,BodyCodeSansDelay),
+            add_dynrule_attr_code(L,BCode,PureBodyCode),
 	    %% should not add delay-checker to sensor rules
-	    (all_defined_as_sensors(HeadCodeList) -> DelayCode = NULL
-	    ; delay_literals_checking_code(Head,Body,DelayCode)
+	    (all_defined_as_sensors(HeadCodeList) -> DelayCheckCode = NULL
+	    ; delay_literals_checking_code(Head,Body,DescrVarsTerm,DelayCheckCode)
 	    ),
 	    (has_context(compiling_udf_definition) -> RuleEnablerTest = true
 	    ; construct_rule_enabling_test(DescriptorIdCode,RuleEnablerTest)
 	    ),
 	    PreBody = RuleEnablerTest,
-	    PostBody = DelayCode,
-	    conjunct_struct(PreBody,BodyCodeSansDelay,BodyCode_aux),
-	    (is_prvariable(PostBody) -> BodyCode = BodyCode_aux
-	    ; conjunct_struct(BodyCode_aux,PostBody,BodyCode)
+	    PostBody = DelayCheckCode,
+	    (is_prvariable(PostBody) -> RealPostBody = NULL
+	    ; RealPostBody = PostBody
 	    ),
 	    ( no_errors_found(BodyStatus) ->
 		%%get_directive(DirectCodeList),
 		%%append(DirectCodeList,Tail,RuleList),
 		split_ruleheads_add_rulesig(HeadCodeList,
-					    BodyCode,BodyCodeSansDelay,
+					    PureBodyCode,PreBody,RealPostBody,
 					    DescriptorIdCode,DescrVarsTerm,
 					    RuleList-RuleTail, Status1),
 		( no_errors_found(Status1), \+ has_context(compiling_udf_definition)
@@ -4427,7 +4435,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,Facts-Fa
 	!.
 
 /****************************************************************************
-  split_ruleheads_add_rulesig(+HeadCodeList,+BodyCode,+BodyCodeSansDelay,+DescriptorIdCode,+DescrVarsTerm,-RuleDiffList,-Status)
+  split_ruleheads_add_rulesig(+HeadCodeList,+PureBodyCode,+PreBody,+PostBody,+DescriptorIdCode,+DescrVarsTerm,-RuleDiffList,-Status)
 
   HeadCodeList is a list of atoms in the rule head. BodyCode is the formula
   in the rule body. This procedure splits the list of atoms in the rule
@@ -4439,16 +4447,16 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,Facts-Fa
   Note: delay checker is NOT added to the body in signatures
 ****************************************************************************/
 
-split_ruleheads_add_rulesig([H],Body,BodySansDelay,DescriptorIdCode,DescrVarsTerm,[InsSigCode,Code|T]-T,[]) :-
+split_ruleheads_add_rulesig([H],PureBodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,[InsSigCode,Code|T]-T,[]) :-
 	!,
 	%% Only a single atom appears in the rule head.
 	construct_defeasible_condition_for_signature_or_dynrule(H,DescriptorIdCode,DescrVarsTerm,DefeatCond),
-	insert_rule_signature_onehead(H,BodySansDelay,(DescriptorIdCode,DescrVarsTerm,DefeatCond),InsSigCode),
+	insert_rule_signature_onehead(H,PureBodyCode,PreBody,PostBody,(DescriptorIdCode,DescrVarsTerm,DefeatCond),InsSigCode),
 	construct_static_defeasible_condition(H,DescriptorIdCode,DescrVarsTerm,DefeatCondWithHead),
-	add_defeasible_condition_to_body(DefeatCondWithHead,Body,NewBody),
+	add_defeasible_condition_to_body(DefeatCondWithHead,PureBodyCode,PreBody,PostBody,NewBody),
 	rule_struct(H,NewBody,Code).
 
-split_ruleheads_add_rulesig(HeadList,Body,BodySansDelay,DescriptorIdCode,DescrVarsTerm,[InsSigCode,Code|CodeList]-ListTail,Status) :-
+split_ruleheads_add_rulesig(HeadList,PureBodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,[InsSigCode,Code|CodeList]-ListTail,Status) :-
 	%% Multiple atoms appear in the rule head.
 	%% Generate a temp rule.
 	collect_prvars(HeadList,HeadVars),
@@ -4459,34 +4467,34 @@ split_ruleheads_add_rulesig(HeadList,Body,BodySansDelay,DescriptorIdCode,DescrVa
 	append(HeadVars,[CallerVarObj],HeadVarsAndCaller),
 	N1 is N+1,
 	newpredicate_struct(Name,N1,HeadVarsAndCaller,Newpredicate),
-        insert_rule_signature_multihead(HeadList,BodySansDelay,(DescriptorIdCode,DescrVarsTerm),Newpredicate,InsSigCode),
-	rule_struct(Newpredicate,Body,Code),
+        insert_rule_signature_multihead(HeadList,PureBodyCode,PreBody,PostBody,(DescriptorIdCode,DescrVarsTerm),Newpredicate,InsSigCode),
+	rule_struct(Newpredicate,PureBodyCode,Code),
 	%% Split the head over this temp rule.
-	rule_difflist(HeadList,Newpredicate,DescriptorIdCode,DescrVarsTerm,CodeList-ListTail,Status).
+	rule_difflist(HeadList,Newpredicate,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,CodeList-ListTail,Status).
 
 
-rule_difflist([],_B,_IdCode,_DescrVarsTerm,CodeList-CodeList,[]) :- !.
+rule_difflist([],_B,_PreB,_PostB,_IdCode,_DescrVarsTerm,CodeList-CodeList,[]) :- !.
 
-rule_difflist([H|L],B,IdCode,DescrVarsTerm,[HC|LC]-T,Status) :-
+rule_difflist([H|L],B,PreB,PostB,IdCode,DescrVarsTerm,[HC|LC]-T,Status) :-
 	construct_static_defeasible_condition(H,IdCode,DescrVarsTerm,DefeatCond),
-	add_defeasible_condition_to_body(DefeatCond,B,NewB),
+	add_defeasible_condition_to_body(DefeatCond,B,PreB,PostB,NewB),
 	rule_struct(H,NewB,HC),
-	rule_difflist(L,B,IdCode,DescrVarsTerm,LC-T,Status).
+	rule_difflist(L,B,PreB,PostB,IdCode,DescrVarsTerm,LC-T,Status).
 
-insert_rule_signature_onehead(Head,Body,(DescrIdCode,DescrVarsTerm,DefeatCond),Code) :-
-        insert_rulesig_struct(Head,Body,(DescrIdCode,DescrVarsTerm,DefeatCond),NULL,CCode),
+insert_rule_signature_onehead(Head,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,DefeatCond),Code) :-
+        insert_rulesig_struct(Head,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,DefeatCond),NULL,CCode),
         query_struct(CCode,Code).
 
-insert_rule_signature_multihead(HeadList,Body,(DescrIdCode,DescrVarsTerm),Newpred,Code) :-
+insert_rule_signature_multihead(HeadList,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm),Newpred,Code) :-
         list_struct(HeadList,[],HeadListCode),
 	construct_defeasible_condition_for_signature_or_dynrule(HeadList,DescrIdCode,DescrVarsTerm,DefeatCond),
-        insert_rulesig_struct(HeadListCode,Body,(DescrIdCode,DescrVarsTerm,DefeatCond),Newpred,CCode),
+        insert_rulesig_struct(HeadListCode,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,DefeatCond),Newpred,CCode),
         query_struct(CCode,Code).
 
 
-%% add_defeasible_condition_to_body(+DefeatCondCode,+BodyCode,-NewBodyCode)
-add_defeasible_condition_to_body(DefeatCondCode,BodyCode,NewBodyCode) :-
-	conjunct_struct(BodyCode,DefeatCondCode,NewBodyCode).
+%% add_defeasible_condition_to_body(+DefeatCondCode,+BodyCode,+PreBody,+PostBody,-NewBodyCode)
+add_defeasible_condition_to_body(DefeatCondCode,BodyCode,PreBody,PostBody,NewBodyCode) :-
+	conjunct_code([PreBody,BodyCode,DefeatCondCode,PostBody],NewBodyCode).
 
 %% DefeatCondCode = FL_UNDEFEATED(DescrIdCode,VarsCode,NewVar,ThisModule)
 %% FL_UNDEFEATED is modularized Prolog predicate
@@ -6962,11 +6970,11 @@ compile_mvdattspec(Object,AttObj,RefType,[T|L],OidCode,Code,BodyHeadList,Status)
   compile_flaggregate(+Op,+Var,+GVars,+SortSpec,+BodyTerm,-Object,-Code,-Status)
 ****************************************************************************/
 compile_flaggregate(Op,Var,GVars,SortSpec,BodyTerm,Object,Code,Status) :-
-	compile_body(BodyTerm,BCodeSansDelay,S),
-	delay_literals_checking_code([],BodyTerm,DelayCode),
-	PostBody = DelayCode,
-	(is_prvariable(PostBody) -> BCode = BCodeSansDelay
-	; conjunct_struct(BCodeSansDelay,PostBody,BCode)
+	compile_body(BodyTerm,BodyPureCode,S),
+	delay_literals_checking_code([],BodyTerm,FL_DESCRIPTOR_VARS_WRAPPER,DelayCheckCode),
+	PostBody = DelayCheckCode,
+	(is_prvariable(PostBody) -> BCode = BodyPureCode
+	; conjunct_struct(BodyPureCode,PostBody,BCode)
 	),
 	( no_errors_found(S) -> 
             (
@@ -10070,10 +10078,10 @@ compile_flinsert_list([H|T],Code,Status) :-
 		list_struct(HCode,[],HeadCodeList),
 		conjunct_code([H2BCodeHead,H2BCodeTail],H2BCode),
 		%% only the vars in the fact-term are to be checked
-		delay_literals_checking_code([],H,DelayCode),
+		delay_literals_checking_code([],H,DescrVarsTerm,DelayCheckCode),
 		construct_rule_enabling_test(DescrIdCode,RuleEnablerTest),
 		PreBody = RuleEnablerTest,
-		PostBody = DelayCode,
+		PostBody = DelayCheckCode,
 		dynrule_struct(HeadCodeList,H2BCode,HVL,BVL,PreBody,PostBody,
 			       (DescrIdCode,
 				   DescrVarsTerm,
@@ -10339,7 +10347,7 @@ compile_fldynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,R
 	        collect_prdatatypevars([HeadCode,BodyCode1],DTVarsCode),
 		%% TODO: get rid of this append!!!
 		append(DTVarsCode,[H2BCodeHead,BodyCode1,H2BCodeTail],BCodeList),
-		conjunct_code(BCodeList,BodyCodeSansDelay),
+		conjunct_code(BCodeList,PureBodyCode),
 
 	        list_struct(HeadCode,[],HeadCodeList),
                 new_prvariable(NO_INDEX,BVL),
@@ -10349,10 +10357,10 @@ compile_fldynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,R
 		(has_context(compiling_udf_definition) -> RuleEnablerTest = true
 		; construct_rule_enabling_test(DescrIdCode,RuleEnablerTest)
 		),
-		delay_literals_checking_code(Head,Body,DelayCode),
+		delay_literals_checking_code(Head,Body,DescrVarsTerm,DelayCheckCode),
 		PreBody = RuleEnablerTest,
-		PostBody = DelayCode,
-		dynrule_struct(HeadCodeList,BodyCodeSansDelay,HVL,BVL,
+		PostBody = DelayCheckCode,
+		dynrule_struct(HeadCodeList,PureBodyCode,HVL,BVL,
 			       PreBody,PostBody,
 			       (DescrIdCode,DescrVarsTerm,MetaFactDiffList,DefeatCondCode),
 			       RuleCode),
@@ -10645,14 +10653,24 @@ compile_delayed_literal(+Op,+Args,+Mod,+Nesting,-SpecCode,-OidCode,-BodyHeadList
 compile_delayed_literal(Op,Args,Nesting,SpecCode,OidCode,BodyHeadList,Status) :-
 	is_flatom(Op,_,Index),
 	code_line_and_file_by_index(Index,Line,CurrFileName),
-	is_flatom(CurrFileParserObj,CurrFileName,NO_INDEX),
+	%% Normally, CurrFileName is an atom. But can be flvar, if reification
+	(atom(CurrFileName)
+	-> is_flatom(CurrFileParserObj,CurrFileName,NO_INDEX)
+	; %% assume it is flvar
+	    CurrFileParserObj = CurrFileName
+	),
 	compile_prlgterm(FLLIBDELAYEDLITERAL,4,[Op,CurrFileParserObj,Line,Args],
 			 FLDELAYSUPPORTMOD,
 			 Nesting,SpecCode,OidCode,_ACode,BodyHeadList,Status).
 compile_delayed_literal(Op,Args,Mod,Nesting,SpecCode,OidCode,BodyHeadList,Status) :-
 	is_flatom(Op,_,Index),
 	code_line_and_file_by_index(Index,Line,CurrFileName),
-	is_flatom(CurrFileParserObj,CurrFileName,NO_INDEX),
+	%% Normally, CurrFileName is an atom. But can be flvar, if reification
+	(atom(CurrFileName)
+	-> is_flatom(CurrFileParserObj,CurrFileName,NO_INDEX)
+	; %% assume it is flvar
+	    CurrFileParserObj = CurrFileName
+	),
 	is_flplib(OpModTerm,Op,Mod),
 	compile_prlgterm(FLLIBDELAYEDLITERAL,4,[OpModTerm,CurrFileParserObj,Line,Args],
 			 FLDELAYSUPPORTMOD,
@@ -10759,11 +10777,16 @@ is_unimplemented_neg_negatable_literal(X) :-
 */
 
 
-delay_literals_checking_code(Head,Body,Code) :-
+delay_literals_checking_code(Head,Body,DescrVarsTerm,Code) :-
 	collect_flvars(Head,HeadVars1),
 	collect_flvars(Body,BodyVars1),
+	%% DescrVarsTerm is a pr-object, so use collect_prvars
+	collect_prvars(DescrVarsTerm,DescrPrvars),
+	prvar_to_flvar_struct_list(DescrPrvars,DescrFlvars),
+	%% BodyVars2 now contains descriptor vars
+	append(BodyVars1,DescrFlvars,BodyVars2),
 	remove_dupflvars(HeadVars1,HeadVars),
-	remove_dupflvars(BodyVars1,BodyVars),
+	remove_dupflvars(BodyVars2,BodyVars),
 	(has_context(rule_reification),
 	    has_context(compiling_body_pathexp)
 	-> %% use new flvariables
@@ -10773,12 +10796,13 @@ delay_literals_checking_code(Head,Body,Code) :-
 	    is_fllist(ParserHeadVars,HeadVars,[],NO_INDEX),
 	    is_fllist(ParserBodyVars,BodyVars,[],NO_INDEX)
 	),
-	%% Optimization: if HeadVars contains BodyVars, no delay checking is
-	%% needed for that rule. Instead, we put a var instead of the delay
+	%% Optimization: if HeadVars contains BodyVars+DescrVars,
+	%% no delay checking is
+	%% needed for that rule. Instead, we put a var in place of the delay
 	%% checker. In static & dynamic code, this var is ignored in generating
 	%% the corresponding rules. However, dynamic rules are encoded as
 	%% FLSYSRULEUPDATE(Id,DescrVarTerm,DescrMetaFacts,Head,Body,Hvars,Bvars,PreBody,PostBody,Defeat)
-	%% To match reified rules, we make DelayCode into a new var
+	%% To match reified rules, we make DelayCheckCode into a new var
 	%% If there will be other stuff in PostBody, we'll have to integrate it.
 	(vars_contains(HeadVars,BodyVars) ->
 	    new_dontcare_prvariable(NO_INDEX,Code)
@@ -10942,6 +10966,12 @@ code_line_and_file_by_prterm(CompiledTerm,Line,File) :-
 	get_current_compile_file(File).
 
 %% Get the line number and file name of code represented by line/position index
+code_line_and_file_by_index(Index,LineVar,FileVar) :-
+	has_context(goal_reification),
+	!,
+	%% if reification, file/line should be variables
+	new_flvariable(Index,LineVar,_),
+	new_flvariable(Index,FileVar,_).
 code_line_and_file_by_index(NO_INDEX,NULL,NULL) :- !.
 code_line_and_file_by_index(Index,Line,File) :-
 	flora_token_index_to_line(Index,Line),
