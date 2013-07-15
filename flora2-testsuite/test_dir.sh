@@ -52,10 +52,11 @@ exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
 	      test_builtin_err.flr \
     	      test_delays_errors1.flr test_delays_errors2.flr \
               test_delays_errors3.flr \
-    	      justification_test_fl.flr \\
-    	      justification_test_prog.flr \\
-    	      justification_test_prog_aux.flr \\
-    	      justification_test_just.flr \\
+    	      justification_test_fl.flr \
+    	      justification_test_prog.flr \
+    	      justification_test_prog_aux.flr \
+    	      justification_test_just.flr \
+              justifier_ex.flr \
               atco_specific2.flr \
               atco_specific2_aux.flr"
 

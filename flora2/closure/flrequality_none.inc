@@ -120,7 +120,7 @@ FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
    is not possible when equality is on, since WRAP_DIFFOBJEQL_AUX/3 is
    essentially in the body of every rule (if unfolded).
 */
-:- import FLLIBDELAYEDLITERAL/4 from flrdelaysupport.
+:- import FLLIBDELAYEDLITERAL/4 from usermod.
 ?-  (
       clause(WRAP_DIFFOBJEQL_AUX(_,_,_),_) -> true
     ;

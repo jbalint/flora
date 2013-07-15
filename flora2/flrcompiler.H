@@ -127,7 +127,6 @@
    from flrwrapper.
 
 :- import
-	%%flora_delayed_literal/3,
 	flora_delayed_builtin_literal/2,
 	flora_delayed_sensor_literal/3
    from FLDELAYSUPPORTMOD.

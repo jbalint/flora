@@ -638,7 +638,6 @@ delay_struct(Index,DelayOp,Args,Code) :-
 	%% this never gives out errors, so no need for file/nline args
 	prologterm_struct(FLLIBDELAYEDLITERAL,4,
 			  [DelayOp,CurrFileName,Line,CodeList],
-			  FLDELAYSUPPORTMOD,
 			  Code).
 
 delay_defeat_struct(Index,DefeatCond,Headvars,HeadvarNames,DynHead,Code) :-
@@ -647,12 +646,10 @@ delay_defeat_struct(Index,DefeatCond,Headvars,HeadvarNames,DynHead,Code) :-
 			  [CurrFileName,Line,
 			   DefeatCond,DynHead,
 			   Headvars,HeadvarNames],
-			  FLDELAYSUPPORTMOD,
 			  Code).
 
 delay_naf_struct(PureNAFcode,Code) :-
 	prologterm_struct(FLLIBNAFDELAY,1,[PureNAFcode],
-			  FLDELAYSUPPORTMOD,
 			  Code).
 
 neg_struct(PRAND(Goal1,Goal2),Idx,PRAND(Goal1,Struct2),Status) :-
@@ -3308,8 +3305,7 @@ compile_defsensor_direct(SensCall,DelayCond,Code,Status) :-
 	),
 	!,
 	report_option(FLSYSLIB(FLLIBSENSOR),NO_INDEX),
-	prologterm_struct(flora_register_sensor,2,
-			  [SensCode,DelayCheckCode],FLDELAYSUPPORTMOD,Code),
+	prologterm_struct(FLLIBREGISTERSENSOR,2,[SensCode,DelayCheckCode],Code),
 	clear_context(compiling_sensor_directive(SensName,SensArity)).
 	
 
@@ -6887,7 +6883,9 @@ compile_flspecbody(_Object,SpecTerm,NULL,Code,BodyHeadList,Status) :-
 	is_flpassthru(SpecTerm,P),
 	is_flterm(P, Funct, N, Args),
 	!,
-	compile_prlgterm(Funct,N,Args,0,TCode,_OidCode,ACode,BodyHeadList,Status),
+	compile_prlgterm(Funct,N,Args,
+			 0, % Nesting
+			 TCode,_OidCode,ACode,BodyHeadList,Status),
 	( no_errors_found(Status) -> conjunct_code([ACode,TCode],Code)
 	; true
 	).
@@ -8740,7 +8738,9 @@ compile_wsflspecbody(_Object,SpecTerm,_WS,NULL,Code,BodyHeadList,Status) :-
 	is_flpassthru(SpecTerm,P),
 	is_flterm(P, Funct, N, Args),
 	!,
-	compile_prlgterm(Funct,N,Args,0,TCode,_OidCode,ACode,BodyHeadList,Status),
+	compile_prlgterm(Funct,N,Args,
+			 0, % Nesting
+			 TCode,_OidCode,ACode,BodyHeadList,Status),
 	( no_errors_found(Status) -> conjunct_code([ACode,TCode],Code)
 	; true
 	).
@@ -8978,7 +8978,9 @@ compile_prefixprimitive(Prefix,Expansion,Module,Code,Status) :-
 ****************************************************************************/
 compile_prologliblit(ParserTerm,Nesting,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_prlgterm(Funct,N,Args,Nesting,TCode,OidCode,ACode,BodyHeadList,Status),
+	    compile_prlgterm(Funct,N,Args,
+			     Nesting,
+			     TCode,OidCode,ACode,BodyHeadList,Status),
 	    ( no_errors_found(Status) -> 
 		conjunct_code([ACode,TCode],Code)
 	    ; true
@@ -9001,7 +9003,9 @@ compile_prologliblit(ParserTerm,Nesting,OidCode,Code,BodyHeadList,Status) :-
 compile_prologliblit(ParserTerm,Module,Nesting,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
 	    %%is_flatom(Funct,FAtom), %% this prevents _p(a)@_plg(mod) from getting compiled
-	    compile_prlgterm(Funct,N,Args,Module,Nesting,TCode,OidCode,ACode,BodyHeadList,Status)
+	    compile_prlgterm(Funct,N,Args,Module,
+			     Nesting,
+			     TCode,OidCode,ACode,BodyHeadList,Status)
 	;
 	    %%is_flatom(ParserTerm,FAtom),  %% %% this prevents _p@_plg(mod) from getting compiled
 	    atomobj_struct(ParserTerm,FObj),
@@ -9078,7 +9082,9 @@ compile_prologallliblit(ParserTerm,Module,Nesting,OidCode,Code,BodyHeadList,Stat
 ****************************************************************************/
 compile_prologlibobj(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_prlgterm(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,Status)
+	    compile_prlgterm(Funct,N,Args,
+			     Nesting,
+			     Object,OidCode,Code,BodyHeadList,Status)
 	;
 	    atomobj_struct(ParserTerm,FObj),
 	    N=0,
@@ -9099,7 +9105,9 @@ compile_prologlibobj(ParserTerm,Nesting,Object,OidCode,Code,BodyHeadList,Status)
 compile_prologlibobj(ParserTerm,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
 	    %%is_flatom(Funct,FAtom), %% this prevents f(_p(a))@_plg(mod) from getting compiled
-	    compile_prlgterm(Funct,N,Args,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status)
+	    compile_prlgterm(Funct,N,Args,Module,
+			     Nesting,
+			     Object,OidCode,Code,BodyHeadList,Status)
 	;
 	    %%is_flatom(ParserTerm,FAtom), %% this prevents f(_p)@_plg(mod) from getting compiled
 	    atomobj_struct(ParserTerm,FObj),
@@ -9157,10 +9165,6 @@ compile_prologalllibobj(ParserTerm,Module,Nesting,Object,OidCode,Code,BodyHeadLi
 		 it is output argument, but if it is initialized to
 		 empty ([]) ignores user defined functions
 ****************************************************************************/
-/*
-compile_prlgterm(Funct,N,Args,Object,OidCode,Code,Status) :-
-	compile_prlgterm(Funct,N,Args,0,Object,OidCode,Code,[],Status).
-*/
 compile_prlgterm(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	atomobj_struct(Funct,FObj),
 	prologterm_struct(FObj,N,AObj,Object),
@@ -9173,17 +9177,7 @@ compile_prlgterm(Funct,N,Args,Nesting,Object,OidCode,Code,BodyHeadList,Status) :
 	),
 	!.
 
-/*
-compile_prlgterm(Funct,N,Args,Object,OidCode,Code,Status) :-
-	atomobj_struct(Funct,FObj),
-	prologterm_struct(FObj,N,AObj,Object),
-	compile_pathexplist(Args,AObj,OidCode,Code,Status),
-	!.
-*/
-
 %% Generate prolog term with module prefix
-compile_prlgterm(Funct,N,Args,Module,Object,OidCode,Code,Status) :-
-	compile_prlgterm(Funct,N,Args,Module,0,Object,OidCode,Code,[],Status).
 compile_prlgterm(Funct,N,Args,Module,Nesting,Object,OidCode,Code,BodyHeadList,Status) :-
 	atomobj_struct(Funct,FObj),
 	prologterm_struct(FObj,N,AObj,Module,Object),
@@ -10413,8 +10407,7 @@ compile_stop_delay(VarList,_Idx,Code,Status) :-
 	compile_pathexplist(VarList,VarListCode,_,_,Status),
 	list_struct(VarListCode,[],ArgsCode),
 	list_struct([],[],EmptyListCode), %% empty list
-	prologterm_struct(FLORA_DELAY_CHECKER,2,[ArgsCode,EmptyListCode],
-			  FLDELAYSUPPORTMOD,Code).
+	prologterm_struct(FLORA_DELAY_CHECKER,2,[ArgsCode,EmptyListCode],Code).
 
 
 /****************************************************************************
@@ -10660,8 +10653,8 @@ compile_delayed_literal(Op,Args,Nesting,SpecCode,OidCode,BodyHeadList,Status) :-
 	    CurrFileParserObj = CurrFileName
 	),
 	compile_prlgterm(FLLIBDELAYEDLITERAL,4,[Op,CurrFileParserObj,Line,Args],
-			 FLDELAYSUPPORTMOD,
-			 Nesting,SpecCode,OidCode,_ACode,BodyHeadList,Status).
+			 Nesting,
+			 SpecCode,OidCode,_ACode,BodyHeadList,Status).
 compile_delayed_literal(Op,Args,Mod,Nesting,SpecCode,OidCode,BodyHeadList,Status) :-
 	is_flatom(Op,_,Index),
 	code_line_and_file_by_index(Index,Line,CurrFileName),
@@ -10673,8 +10666,8 @@ compile_delayed_literal(Op,Args,Mod,Nesting,SpecCode,OidCode,BodyHeadList,Status
 	),
 	is_flplib(OpModTerm,Op,Mod),
 	compile_prlgterm(FLLIBDELAYEDLITERAL,4,[OpModTerm,CurrFileParserObj,Line,Args],
-			 FLDELAYSUPPORTMOD,
-			 Nesting,SpecCode,OidCode,_ACode,BodyHeadList,Status).
+			 Nesting,
+			 SpecCode,OidCode,_ACode,BodyHeadList,Status).
 
 
 /*******************************************************************************
@@ -10808,8 +10801,8 @@ delay_literals_checking_code(Head,Body,DescrVarsTerm,Code) :-
 	    new_dontcare_prvariable(NO_INDEX,Code)
 	; compile_prlgterm(FLORA_DELAY_CHECKER,2,
 			   [ParserBodyVars,ParserHeadVars],
-			   FLDELAYSUPPORTMOD,
-			   Code,_OidCode,_ACode,_Status)
+			   0, % Nesting
+			   Code,_OidCode,_ACode,[],_Status)
 	),
 	!.
 

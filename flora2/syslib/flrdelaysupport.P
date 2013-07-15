@@ -71,10 +71,10 @@
 :- dynamic experimental/1.
 
 :- export
-	FLORA_DELAY_CHECKER/2,
-	FLLIBDELAYEDLITERAL/4,
-	FLLIBDEFEATDELAY/6,
-	FLLIBNAFDELAY/1,
+	flora_execute_delayed_calls/2,
+	flora_delayed_literal_wrapper/4,
+	flora_defeat_delay_wrapper/6,
+	flora_NAF_delay_wrapper/1,
 	FLLIBRECORDSENSORS/2.
 :- export
 	flora_register_sensor/2,
@@ -101,7 +101,7 @@ clear_test_mode :- retract(test_mode(debug)).
 
 
 /*******    Wrappers for builtins    ********/
-FLLIBDELAYEDLITERAL(Builtin,FileN,Line,Args) :-
+flora_delayed_literal_wrapper(Builtin,FileN,Line,Args) :-
 	delay_spec_to_predicate(Builtin,FileN,Line,Args,Call,Condition_pre),
 	%% sometimes statically created delay conditions need postprocessing
 	make_delay_condition(Builtin,Args,Condition_pre,Condition),
@@ -116,7 +116,7 @@ FLLIBDELAYEDLITERAL(Builtin,FileN,Line,Args) :-
 %% Delay wrapper for the FL_UNDEFEATED condition
 %% _File,_Line,_HeadVarnameList - not used currently:
 %% we are not issuing nongroundedness errors
-FLLIBDEFEATDELAY(_File,_Line,DefeatCond,DynHead,HeadVarList,_HeadVarnameList) :-
+flora_defeat_delay_wrapper(_File,_Line,DefeatCond,DynHead,HeadVarList,_HeadVarnameList) :-
 	term_arg(DefeatCond,1,RuleId),
 	term_arg(DefeatCond,4,Module),
 	(is_strict_rule(RuleId,Module) -> true
@@ -133,7 +133,7 @@ FLLIBDEFEATDELAY(_File,_Line,DefeatCond,DynHead,HeadVarList,_HeadVarnameList) :-
 	    )
 	).
 
-FLLIBNAFDELAY(Goal) :-
+flora_NAF_delay_wrapper(Goal) :-
 	(experimental(delay_naf) ->
 	    term_arg(Goal,2,OrigVars),
 	    flrterm_vars(OrigVars,Vars,0),
@@ -317,7 +317,7 @@ flora_delay_quantifier(File,Line,[FL_MUST,Condition,Goal]) :-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-FLORA_DELAY_CHECKER(InstantiatedBodyVars,HeadVars) :-
+flora_execute_delayed_calls(InstantiatedBodyVars,HeadVars) :-
 	extract_triggers_and_execute_all(InstantiatedBodyVars,HeadVars),
 	%% this cut is needed to release stack.
 	%% otherwise, lots of warnings about stack overflow
@@ -564,44 +564,6 @@ strip_usermod(SensorSymbol,Stripped) :-
 	SensorSymbol = usermod:Stripped -> true
 	; Stripped = SensorSymbol.
 
-%% strip the delaying machinery.
-%% identity if not delayed
-%% Only strips FLLIBDELAYEDLITERAL and FLLIBNAFDELAY.
-%% Others (FLLIBDEFEATDELAY) do not occur in user code
-strip_delay(':'(FLDELAYSUPPORTMOD,PreStripped),Stripped) :-
-	strip_delay(PreStripped,Stripped),
-	PreStripped \= Stripped,
-	!.
-strip_delay(PreStripped,Stripped) :-
-	(functor(PreStripped,FLLIBNAFDELAY,_) -> arg(1,PreStripped,Stripped)
-	; functor(PreStripped,FLLIBDELAYEDLITERAL,_) -> arg(4,PreStripped,Stripped)
-	),
-	!.
-strip_delay(Stripped,Stripped).
-
-
-/*
-flora_term_variables(Term, Vars) :-
-	get_significant_vars(Term, Vars, []).
-
-get_significant_vars(Term, Vh, Vt) :-
-	(var(Term)
-	 ->	Vh = [Term | Vt]
-	; Term = FLORA_NAF_PREDICATE(Call,_FreeVars,_Line,_File)
-	-> get_significant_vars(Call,Vh,Vt)
-	; flora_decode_predicate(Term,CallType,_,_,_,Args),
-	    (CallType == prolog ->
-		TrueArgs = Args
-	    ;
-		flrtrim_last(Args,TrueArgs)
-	    ),
-	    get_significant_vars_aux(TrueArgs,Vh,Vt)
-	).
-get_significant_vars_aux([], V, V).
-get_significant_vars_aux([T|Ts], Vh, Vt) :-
-	get_significant_vars(T, Vh, Vm),
-	get_significant_vars_aux(Ts, Vm, Vt).
-*/
 
 enable_experiment(X) :- assert(experimental(X)).
 disable_experiment(X) :-
