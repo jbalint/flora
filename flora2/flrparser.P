@@ -1165,7 +1165,7 @@ flsimpleprimitive_struct(Primitive,Args,FLSIMPLEPRIMITIVE(Primitive,Args)).
 
 flclause_struct(Head,Body,FLCLAUSE(Head,Body)).
 flclause_struct(Mode,Head,Body,FLCLAUSE(Mode,Head,Body)).
-flclause_with_descriptor_struct(Descriptors,Head,Body,FLANNOTATEDCLAUSE(Descriptors,Head,Body)).
+%%flclause_with_descriptor_struct(Descriptors,Head,Body,FLANNOTATEDCLAUSE(Descriptors,Head,Body)).
 flclause_with_descriptor_struct(Descriptors,Mode,Head,Body,FLANNOTATEDCLAUSE(Descriptors,Mode,Head,Body)).
 
 is_flcallermodule_struct(FLCALLERMODULE(_,_)).
@@ -4157,8 +4157,15 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	DWS==NULL,
 	!,
 	set_context(clause_construct),
-	(Args = [Arg],
-	    get_statement_descriptors(Arg,Descriptors,Statement),
+	(   %% whan clause{...} has descriptors then it is parsed either as a
+	    %% single argument [DescrHeadBodyTerm] or [Mode,DescrHeadBodyTerm]
+	    (Args = [RulePattern], ModeCode = NULL
+	    ; Args = [Mode,RulePattern],
+		flobject_struct(Mode,ModeCode),
+		is_flatom_struct(ModeCode,ModeAtom),
+		valid_clause_mode(ModeAtom)
+	    ),
+	    get_statement_descriptors(RulePattern,Descriptors,Statement),
 	    Descriptors \== []
 	->
 	    parse_descriptor_list(Descriptors,true,DescrCode,S1),
@@ -4171,16 +4178,15 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 		(Status == NO_ERRORS
 		-> 
 		    (flclause_struct(H,B,Code1)
-		    -> flclause_with_descriptor_struct(DescrCode,H,B,Code)
-		    ; flclause_struct(Mode,H,B,Code1)
-		    -> flclause_with_descriptor_struct(DescrCode,Mode,H,B,Code)
+		    -> flclause_with_descriptor_struct(DescrCode,ModeCode,H,B,Code)
+		    ; flclause_struct(ModeCode,H,B,Code1)
+		    -> flclause_with_descriptor_struct(DescrCode,ModeCode,H,B,Code)
 		    )
 		; true
 		)
 	    ; Status = S1
 	    )
-        ;
-	    N==2 ->
+        ; N==2 ->
             Args = [Head,Body],
 	    comma_separated_list(Head,HeadList),
 	    parse_dbliteral_list(FLCLS,HeadList,DWS,HeadCodeList,S1),
