@@ -850,7 +850,7 @@ flora_locate_file(FL_URL(InFile),ExtType,ExtFile) :-
 	    ;
 		flora_abort(['cannot create the Web cache directory: ',
 			     UserWebCache,
-			     ' HTTP interface will become nonoperational'])
+			     ' HTTP interface will become inoperational'])
 	    )
 	),
 	flora_concat_atoms([UserWebCache,S,DirEnc],InFileCacheDirectory),
@@ -1981,7 +1981,7 @@ flora_loaddyn_data(OrigInFile,Module,Ext) :-
 	    ((var(SymbolErrNum) ; SymbolErrNum == 0) ->
 		flora_loader_message('Done loading ~w. CPU time used: ~w seconds (elapsed time: ~w seconds)',[File,T,WT])
 	    ;  %% abort loading
-		flora_abort('Errors in the use of predicate symbols found', FLORA_ABORT_NOTRACE)
+		flora_abort('Conflicts in the use of predicate and function symbols found', FLORA_ABORT_NOTRACE)
 	    ),
 	    ((var(MetaErrNum) ; MetaErrNum == 0) -> true
 	    ;  %% abort loading
@@ -2028,12 +2028,13 @@ flora_read_descriptor_metafacts_canonical_and_insert(File,ErrNumFinal) :-
 	    flora_match_substring(FL_RULE_ENABLER,Fun,_),
 	    Term
 	->
-	    flora_increment_counter(flora_load_errors,1,_,_),
 	    arg(1,Term,RuleId),
 	    parse_filename(File,_,Base,_),
-	    flora_stderr_nl,
-	    flora_error_line('[~w.~w] <Loader> rule with Id  `~w'' is already loaded, possibly from another file',
-			    [Base,FLORA_FILE_EXT,RuleId]),
+	    flora_concat_atoms([Base,FLORA_FILE_EXT],ErrFile),
+	    flora_concat_atoms(['rule with Id `',RuleId,
+				''' is already loaded, possibly from another file'],
+			       Mesg),
+	    util_load_metafact_error(ErrFile,Mesg),
 	    fail
 	;
             asserta(Term),
@@ -2068,8 +2069,7 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
 	->
 	    compiling_error(SymbolIndex,ERROR_UDF_WITHOUT_DEFINITION,Stat),
 	    ContextStatus = [Stat],
-	    util_load_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
-	    flora_increment_counter(flora_load_errors,ErrNum,_,_),
+	    util_load_symbol_context_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
             storage_insert_fact(StorageName,Term,_Inserted),
 	    fail
 	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,UDF_SYMBOL,SymbolTransactional,FileName),
@@ -2084,8 +2084,7 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
 			     ' (prior definition: file ',UsedFileName,', line ',UsedLine,')'],
 			    Stat),
 	    ContextStatus = [Stat],
-	    util_load_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
-	    flora_increment_counter(flora_load_errors,ErrNum,_,_),
+	    util_load_symbol_context_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
             storage_insert_fact(StorageName,Term,_Inserted),
 	    fail
 	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,UDF_SYMBOL,SymbolTransactional,FileName),
@@ -2098,8 +2097,7 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
 			     ' ',UsedFileName,', line ',UsedLine],
 			    Stat),
 	    ContextStatus = [Stat],
-	    util_load_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
-	    flora_increment_counter(flora_load_errors,ErrNum,_,_),
+	    util_load_symbol_context_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
             storage_insert_fact(StorageName,Term,_Inserted),
 	    fail
 	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,USE_SENSOR_SYMBOL,SymbolTransactional,FileName),
@@ -2107,8 +2105,7 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
 	->
 	    compiling_error(SymbolIndex,ERROR_SENSOR_WITHOUT_DEFINITION,Stat),
 	    ContextStatus = [Stat],
-	    util_load_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
-	    flora_increment_counter(flora_load_errors,ErrNum,_,_),
+	    util_load_symbol_context_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
             storage_insert_fact(StorageName,Term,_Inserted),
 	    fail
 	; Term = flora_symbol(SymbolName,SymbolArity,WS,SymbolIndex,SymbolLine,SymbolContext,SymbolTransactional,FileName), SymbolName\=HILOG_SYMBOL_NAME,
@@ -2124,9 +2121,8 @@ flora_read_symbols_canonical_and_insert(StorageName,ErrNumFinal) :-
 	    )
 	->
 	    make_symbol_context_load_status(StorageName,UsedLine,UsedFileName,UsedContext,UsedTransactional,UsedArity,SymbolName,SymbolArity,WS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus),
-	    util_load_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
-	    flora_increment_counter(flora_load_errors,ErrNum,_,_),
-	    util_load_warn(ContextStatus,SymbolLine,SymbolName,FileName,WarnNum),
+	    util_load_symbol_context_error(ContextStatus,SymbolLine,SymbolName,FileName,ErrNum),
+	    util_load_symbol_context_warn(ContextStatus,SymbolLine,SymbolName,FileName,WarnNum),
 	    flora_increment_counter(flora_load_warnings,WarnNum,_,_),
 	    %% sensors are module-independent, so they go into common FLS tries
 	    (SymbolContext == SENSOR_SYMBOL
@@ -2329,8 +2325,7 @@ flora_save_module_util(File) :-
 *************************************************************************/
 
 save_module_internal(Module,FlrFile) :-
-	flora_loader_message('Saving module ~w in file ~w',
-			     [Module, FlrFile]),
+	flora_loader_message('Saving module ~w in file ~w', [Module, FlrFile]),
 	flora_walltime(WT0),
 	flora_cputime(T0),
 	telling(PreInFile),
@@ -3523,29 +3518,29 @@ util_compiler_warn([_|L],WarmNum,SkippedWarns) :-
 
 
 /*************************************************************************
-  util_load_error(+CompileStat,+ErrorLine,+SymbolName,+FileName,-ErrNum)
-  util_load_warn(+CompileStat,+WarnLine,+SymbolName,+FileName,-WarnNum)
+  util_load_symbol_context_error(+CompileStat,+ErrorLine,+SymbolName,+FileName,-ErrNum)
+  util_load_symbol_context_warn(+CompileStat,+WarnLine,+SymbolName,+FileName,-WarnNum)
 *************************************************************************/
-util_load_error([],_,_,_,0) :- !.
+util_load_symbol_context_error([],_,_,_,0) :- !.
 
-util_load_error([error(_Indx,Mesg)|_L],Line,SymbolName,FileName,1) :-
+util_load_symbol_context_error([error(_Indx,Mesg)|_L],Line,SymbolName,FileName,1) :-
 	!,
+	flora_increment_counter(flora_load_errors,1,_,_),
 	flora_stderr_nl,
 	flora_decode_oid_as_atom(SymbolName,SymbolNamePrintable),
 	flora_error_line('[~w] <Loader> near line(~w)/symbol(~w)',
                              [FileName,Line,SymbolNamePrintable]),
 	flora_error_indentline,
 	flora_stderr_string('~w~n',[Mesg]).
-	%%%util_load_error(L,Line,SymbolName,FileName,EN),
-	%%%ErrNum is EN+1.
 
-%% Skip errors
-util_load_error([_|L],Line,SymbolName,FileName,ErrNum) :- util_load_error(L,Line,SymbolName,FileName,ErrNum).
+%% Skip errors to the last one (if ErrNum > 1)
+util_load_symbol_context_error([_|L],Line,SymbolName,FileName,ErrNum) :-
+	util_load_symbol_context_error(L,Line,SymbolName,FileName,ErrNum).
 
 
-util_load_warn([],_,_,_,0) :- !.
+util_load_symbol_context_warn([],_,_,_,0) :- !.
 
-util_load_warn([warning(_Indx,Mesg)|_L],Line,SymbolName,FileName,1) :-
+util_load_symbol_context_warn([warning(_Indx,Mesg)|_L],Line,SymbolName,FileName,1) :-
 	!,
 	flora_stdwarn_nl,
 	flora_decode_oid_as_atom(SymbolName,SymbolNamePrintable),
@@ -3553,11 +3548,14 @@ util_load_warn([warning(_Indx,Mesg)|_L],Line,SymbolName,FileName,1) :-
                                [FileName,Line,SymbolNamePrintable]),
 	flora_warning_indentline,
 	flora_stdwarn_string('~w~n',[Mesg]).
-        %%%util_load_warn(L,Line,SymbolName,FileName,WN),
-	%%%WarnNum is WN+1.
 
-%% Skip warnings
-util_load_warn([_|L],Line,SymbolName,FileName,WarmNum) :- util_load_warn(L,Line,SymbolName,FileName,WarmNum).
+%% Skip warnings to the last one (if ErrNum > 1)
+util_load_symbol_context_warn([_|L],Line,SymbolName,FileName,WarmNum) :-
+	util_load_symbol_context_warn(L,Line,SymbolName,FileName,WarmNum).
+
+util_load_metafact_error(FileName,Mesg) :-
+	flora_stderr_nl,
+	flora_error_line('[~w] <Loader> ~w', [FileName,Mesg]).
 
 
 /*************************************************************************
