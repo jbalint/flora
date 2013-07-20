@@ -26,6 +26,8 @@
 
 :- compiler_options([xpp_on]).
 
+%%#define EXPERIMENTING_WITH_OMNIS
+
 #include "flora_exceptions.flh"
 #include "flora_status_codes.flh"
 
@@ -1268,6 +1270,8 @@ clear_context(_).
   parsing_error(+IndexOrTerm,+ErrorMessage,-Status)
   parsing_error(+CanoniTerm,+ErrorMessage,-Status)
 
+  If ErrorMessage is a list, it is first concatenated.
+
   Note on handling the Status parameter in parsing predicates:
   If a call to a parsing predicate comes with non-empty Status,
   DO NOT call parsing_error/3, but rather pass the Status parameter 
@@ -1275,6 +1279,10 @@ clear_context(_).
 
   Status must ALWAYS be unbound
 ****************************************************************************/
+parsing_error(Index,ErrorMessage,Status) :-
+	is_list(ErrorMessage),
+	flora_concat_atoms(ErrorMessage,RealMesg),
+	parsing_error(Index,RealMesg,Status).
 parsing_error(Index,ErrorMessage,Status) :-
 	integer(Index),
 	!,
@@ -1298,7 +1306,9 @@ flora_parse(ComposerTerm,Code,Status) :-
 	!.
 
 %% This rule is for debugging.
-flora_parse(_ComposerTerm,_Code,[error(UNKNOWN_ERROR)]).
+flora_parse(ComposerTerm,_Code,Status) :-
+	get_index(ComposerTerm,Ind),
+	parsing_error(Ind,[UNKNOWN_ERROR,'\n\t\t Details: in flora_parse'],Status).
 
 
 parse_canonical(CanoniTerm,Code,Status) :-
@@ -3150,12 +3160,17 @@ parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTHESI
 	get_atom(Funct,FL_QUANTVARCONNECTOR),
 	get_atom(Quant,QuantAtom,QuantIdx),
 	is_logicalquantifier(QuantAtom,QuantAtomCanon),
+#ifndef EXPERIMENTING_WITH_OMNIS
 	has_context(parsing_default_negation),
 	!,
 	(\+is_existentialquant(QuantAtomCanon)
 	-> parsing_error(QuantIdx,ONLY_EXISTENTIALS,S1)
 	; S1 = NO_ERRORS
 	),
+#else
+        !,
+	S1 = NO_ERRORS,
+#endif
 	%% parse_varlist/4 checks that Vars are indeed vars
 	%% the compiler would have to make sure that Vars occus in Goal
 	%% Vars = '*' means all vars in the quantified formula
@@ -5673,12 +5688,17 @@ parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTH
 	get_atom(Funct,FL_QUANTVARCONNECTOR),
 	get_atom(Quant,QuantAtom,QuantIdx),
 	is_logicalquantifier(QuantAtom,QuantAtomCanon),
+#ifndef EXPERIMENTING_WITH_OMNIS
 	has_context(parsing_default_negation),
 	!,
 	(\+is_existentialquant(QuantAtomCanon)
 	-> parsing_error(QuantIdx,ONLY_EXISTENTIALS,S1)
 	; S1 = NO_ERRORS
 	),
+#else
+        !,
+	S1 = NO_ERRORS,
+#endif
 	%% Vars = '*' means all vars in the quantified formula
 	(Vars = [StarObj], get_atom(StarObj,FL_STAR)
 	-> VarNames=FL_STAR, S2 = NO_ERRORS
