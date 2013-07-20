@@ -84,6 +84,7 @@ files="./XSB/LICENSE ./XSB/INSTALL ./XSB/INSTALL_PROBLEMS \
     	./flora2/syslibinc/*.flh  \
         ./flora2/java "
 
+cd ../..
 if [ -d ./flora2 -a -d ./XSB ]; then
     flrdir=$currdir/flora2
     xsbdir=$currdir/XSB
@@ -121,4 +122,6 @@ tar cvf flora2/flora2bundle.tar --exclude-from=$EXCLUDEFILE $files
 
 gzip -f flora2/flora2bundle.tar
 
+echo ""
+echo "The archive is placed in flora2/flora2bundle.tar.gz"
 echo "To untar, use:    tar xpzf flora2bundle.tar.gz"
