@@ -606,6 +606,7 @@ flora_load_system_module_util(Module) :-
 	    -> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
 	    ;  true
 	    ),
+	    assert(flora_load_registry(FlrFile,Module,load)),
 	    consult(WSXWAMFile),
 	    flora_clear_xpp_options
 	;
@@ -688,6 +689,7 @@ flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 		),
 		  util_rename_file(AddXWAMFile,WSXWAMFile)
 	      ),
+	      assert(flora_load_registry(FlrFile,Module,add)),
 	      flora_measure_time(
 				 consult(WSXWAMFile),
 				 ['Done adding ', FlrFile, '. CPU time used:']
@@ -770,6 +772,7 @@ flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 		  util_rename_file(MainXWAMFile,WSXWAMFile)
 	      ),
 	      flora_call_hooks(Module,LOADTOMODULE,FlrFile,before,AroundHookLink),
+	      assert(flora_load_registry(FlrFile,Module,load)),
 	      %% We clear out UDF preds before loading (NOT adding!) modules.
 	      %% See comment about this where flora_cleanup_udf/1 is defined.
 	      %% Note: cleaning up UDFs *cannot* be done from within
@@ -1072,10 +1075,6 @@ util_dump_filename(File,DFile) :-
 	util_hidden_aux_file_base(File,AuxBase),
 	flora_concat_atoms([AuxBase,'_dump.',Ext],DFile).
 
-util_FLR_filename(File,FlrFile) :-
-	util_hidden_aux_file_base(File,AuxBase),
-	flora_concat_atoms([AuxBase,'.',FLORA_FILE_EXT],FlrFile).	
-	
 util_FLS_filename(File,FLSFile) :-
 	util_hidden_aux_file_base(File,AuxBase),
 	flora_concat_atoms([AuxBase,'.',FLORA_FLS_EXT],FLSFile).
@@ -1086,6 +1085,11 @@ util_FLS2_filename(File,FLS2File) :-
 util_FLT_filename(File,FLTFile) :-
 	util_hidden_aux_file_base(File,AuxBase),
 	flora_concat_atoms([AuxBase,'.',FLORA_FLT_EXT],FLTFile).
+
+util_FLR_filename(File,FlrFile) :-
+	parse_filename(File,_,Base,_),
+	flora_concat_atoms([Base,'.',FLORA_FILE_EXT],FlrFile).	
+	
 
 /*************************************************************************
   flora_check_filename(+OrigFile,-OutFile): must be atom or url(File)
@@ -4462,9 +4466,10 @@ write_tabled_udf_predicates(_).
 ******************************************************************************/
 
 flora_cleanup_registry(Module) :-
-	(retract(flrregistry:flora_defeasible_module_registry(Module,_)) -> true
+	(retract(flora_defeasible_module_registry(Module,_)) -> true
 	; true
-	).
+	),
+	retractall(flora_load_registry(_,Module,_)).
 
 flora_cleanup_udf(Module) :-
 	(Module == FLORA_DEFAULT_WORKSPACE ->
