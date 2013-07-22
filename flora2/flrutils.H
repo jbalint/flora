@@ -304,6 +304,7 @@
 
 	flora_compiler_environment/2,
 	flora_cleanup_udf/1,
+	flora_cleanup_registry/1,
 
 	flora_experimenting_with/1,
 
