@@ -38,133 +38,133 @@
 /***************************************************************************
   closure rules for neg X::Y
 ***************************************************************************/
-FLNEGPREFIX(WRAP_SUB)(X,Y,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_SUB)(X,Y,CallerInfo).
+FLNEGPREFIX(WRAP_SUB)(X,Y,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_SUB)(X,Y,[Caller|_]).
 
-FLNEGPREFIX(WRAP_SUB)(X,Y,CallerInfo) :-
-	FLTRAILERPREFIX(WRAP_SUB)(Y,X,CallerInfo).
+FLNEGPREFIX(WRAP_SUB)(X,Y,[Caller|_]) :-
+	FLTRAILERPREFIX(WRAP_SUB)(Y,X,[Caller|_]).
 
-FLNEGPREFIX(WRAP_SUB)(Z,Y,CallerInfo) :-
-	silent_sub(X,Z,CallerInfo),
-	FLNEGTRAILERPREFIX(WRAP_SUB)(X,Y,CallerInfo).
+FLNEGPREFIX(WRAP_SUB)(Z,Y,[Caller|_]) :-
+	silent_sub(X,Z,[Caller|_]),
+	FLNEGTRAILERPREFIX(WRAP_SUB)(X,Y,[Caller|_]).
 
-FLNEGPREFIX(WRAP_SUB)(Z,Y,CallerInfo) :-
-        WRAP_ISA(X,Z,CallerInfo),
-	FLNEGTRAILERPREFIX(WRAP_ISA)(X,Y,CallerInfo).
+FLNEGPREFIX(WRAP_SUB)(Z,Y,[Caller|_]) :-
+        WRAP_ISA(X,Z,[Caller|_]),
+	FLNEGTRAILERPREFIX(WRAP_ISA)(X,Y,[Caller|_]).
 
 
 /***************************************************************************
   closure rules for neg O:C
 ***************************************************************************/
 %% WRAP_ISA/3
-FLNEGPREFIX(WRAP_ISA)(O,C,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_ISA)(O,C,CallerInfo).
+FLNEGPREFIX(WRAP_ISA)(O,C,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_ISA)(O,C,[Caller|_]).
 
-FLNEGPREFIX(WRAP_ISA)(O,S,CallerInfo) :-
-	silent_sub(S,C,CallerInfo),
-	FLNEGTRAILERPREFIX(WRAP_ISA)(O,C,CallerInfo).
+FLNEGPREFIX(WRAP_ISA)(O,S,[Caller|_]) :-
+	silent_sub(S,C,[Caller|_]),
+	FLNEGTRAILERPREFIX(WRAP_ISA)(O,C,[Caller|_]).
 
 
 /*****************************************************************************
   closure for neg X[Y->Z], neg X[Y*->Z], neg X[Y->{}]
 *****************************************************************************/
-FLNEGPREFIX(WRAP_IMVD)(C,M,V,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_IMVD)(C,M,V,CallerInfo).
+FLNEGPREFIX(WRAP_IMVD)(C,M,V,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_IMVD)(C,M,V,[Caller|_]).
 
-FLNEGPREFIX(WRAP_MVD)(O,M,V,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_MVD)(O,M,V,CallerInfo).
+FLNEGPREFIX(WRAP_MVD)(O,M,V,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_MVD)(O,M,V,[Caller|_]).
 
-FLNEGPREFIX(WRAP_MVDDEF)(O,M,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_MVDDEF)(O,M,CallerInfo).
+FLNEGPREFIX(WRAP_MVDDEF)(O,M,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_MVDDEF)(O,M,[Caller|_]).
 
-FLNEGPREFIX(WRAP_MVD)(O,M,_V,CallerInfo) :-
-	FLNEGPREFIX(WRAP_MVDDEF)(O,M,CallerInfo).
+FLNEGPREFIX(WRAP_MVD)(O,M,_V,[Caller|_]) :-
+	FLNEGPREFIX(WRAP_MVDDEF)(O,M,[Caller|_]).
 
-FLNEGPREFIX(WRAP_IMVDDEF)(O,M,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_IMVDDEF)(O,M,CallerInfo).
+FLNEGPREFIX(WRAP_IMVDDEF)(O,M,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_IMVDDEF)(O,M,[Caller|_]).
 
 /* note: for neg WRAP_MVDDEF the implication goes in the opposite direction
    than for WRAP_MVDDEF */
-FLNEGPREFIX(WRAP_IMVD)(O,M,_V,CallerInfo) :-
-	FLNEGPREFIX(WRAP_IMVDDEF)(O,M,CallerInfo).
+FLNEGPREFIX(WRAP_IMVD)(O,M,_V,[Caller|_]) :-
+	FLNEGPREFIX(WRAP_IMVDDEF)(O,M,[Caller|_]).
 
 
 /*****************************************************************************
   binary attributes (tabled methods)
 *****************************************************************************/
-FLNEGPREFIX(WRAP_METH)(O,M,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_METH)(O,M,CallerInfo).
+FLNEGPREFIX(WRAP_METH)(O,M,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_METH)(O,M,[Caller|_]).
 
-FLNEGPREFIX(WRAP_IMETH)(C,M,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_IMETH)(C,M,CallerInfo).
+FLNEGPREFIX(WRAP_IMETH)(C,M,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_IMETH)(C,M,[Caller|_]).
 
 
 /*****************************************************************************
   signatures
 *****************************************************************************/
 %% WRAP_MVDSIG/4
-FLNEGPREFIX(WRAP_MVDSIG)(O,M,R,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_MVDSIG)(O,M,R,CallerInfo).
+FLNEGPREFIX(WRAP_MVDSIG)(O,M,R,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_MVDSIG)(O,M,R,[Caller|_]).
 
-FLNEGPREFIX(WRAP_IMVDSIG)(C,M,R,CallerInfo) :-
-	WRAP_ISA(O,C,CallerInfo),
-	FLNEGPREFIX(WRAP_MVDSIG)(O,M,R,CallerInfo).
+FLNEGPREFIX(WRAP_IMVDSIG)(C,M,R,[Caller|_]) :-
+	WRAP_ISA(O,C,[Caller|_]),
+	FLNEGPREFIX(WRAP_MVDSIG)(O,M,R,[Caller|_]).
 
 %% WRAP_MVDSIGDEF/3
-FLNEGPREFIX(WRAP_MVDSIGDEF)(O,M,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_MVDSIGDEF)(O,M,CallerInfo).
+FLNEGPREFIX(WRAP_MVDSIGDEF)(O,M,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_MVDSIGDEF)(O,M,[Caller|_]).
 
-FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,CallerInfo) :-
-	WRAP_ISA(O,C,CallerInfo),
-	FLNEGPREFIX(WRAP_MVDSIGDEF)(O,M,CallerInfo).
+FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,[Caller|_]) :-
+	WRAP_ISA(O,C,[Caller|_]),
+	FLNEGPREFIX(WRAP_MVDSIGDEF)(O,M,[Caller|_]).
 
-FLNEGPREFIX(WRAP_MVDSIG)(O,M,_V,CallerInfo) :-
-	FLNEGPREFIX(WRAP_MVDSIGDEF)(O,M,CallerInfo).
+FLNEGPREFIX(WRAP_MVDSIG)(O,M,_V,[Caller|_]) :-
+	FLNEGPREFIX(WRAP_MVDSIGDEF)(O,M,[Caller|_]).
 
 
 %% WRAP_IMVDSIG/4
-FLNEGPREFIX(WRAP_IMVDSIG)(C,M,R,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_IMVDSIG)(C,M,R,CallerInfo).
+FLNEGPREFIX(WRAP_IMVDSIG)(C,M,R,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_IMVDSIG)(C,M,R,[Caller|_]).
 
-FLNEGPREFIX(WRAP_IMVDSIG)(S,M,R,CallerInfo) :-
-	FLINHERITANCEPREFIX(WRAP_SUB)(C,S,CallerInfo),
-	FLNEGPREFIX(WRAP_IMVDSIG)(C,M,R,CallerInfo).
+FLNEGPREFIX(WRAP_IMVDSIG)(S,M,R,[Caller|_]) :-
+	FLINHERITANCEPREFIX(WRAP_SUB)(C,S,[Caller|_]),
+	FLNEGPREFIX(WRAP_IMVDSIG)(C,M,R,[Caller|_]).
 
 
 %% WRAP_IMVDSIGDEF/3
-FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_IMVDSIGDEF)(C,M,CallerInfo).
+FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_IMVDSIGDEF)(C,M,[Caller|_]).
 
-FLNEGPREFIX(WRAP_IMVDSIGDEF)(S,M,CallerInfo) :-
-	FLINHERITANCEPREFIX(WRAP_SUB)(C,S,CallerInfo),
-	FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,CallerInfo).
+FLNEGPREFIX(WRAP_IMVDSIGDEF)(S,M,[Caller|_]) :-
+	FLINHERITANCEPREFIX(WRAP_SUB)(C,S,[Caller|_]),
+	FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,[Caller|_]).
 
 /* note: for neg WRAP_IMVDSIGDEF the implication goes in the opposite direction
    than for WRAP_IMVDDEF */
-FLNEGPREFIX(WRAP_IMVDSIG)(C,M,_V,CallerInfo) :-
-	FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,CallerInfo).
+FLNEGPREFIX(WRAP_IMVDSIG)(C,M,_V,[Caller|_]) :-
+	FLNEGPREFIX(WRAP_IMVDSIGDEF)(C,M,[Caller|_]).
 
 
 %% WRAP_BOOLSIG/3
-FLNEGPREFIX(WRAP_BOOLSIG)(O,M,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_BOOLSIG)(O,M,CallerInfo).
+FLNEGPREFIX(WRAP_BOOLSIG)(O,M,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_BOOLSIG)(O,M,[Caller|_]).
 
-FLNEGPREFIX(WRAP_BOOLSIG)(C,M,CallerInfo) :-
-	WRAP_ISA(O,C,CallerInfo),
-	FLNEGPREFIX(WRAP_IBOOLSIG)(O,M,CallerInfo).
+FLNEGPREFIX(WRAP_BOOLSIG)(C,M,[Caller|_]) :-
+	WRAP_ISA(O,C,[Caller|_]),
+	FLNEGPREFIX(WRAP_IBOOLSIG)(O,M,[Caller|_]).
 
 %% WRAP_IBOOLSIG/3
-FLNEGPREFIX(WRAP_IBOOLSIG)(C,M,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_IBOOLSIG)(C,M,CallerInfo).
+FLNEGPREFIX(WRAP_IBOOLSIG)(C,M,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_IBOOLSIG)(C,M,[Caller|_]).
 
-FLNEGPREFIX(WRAP_IBOOLSIG)(S,M,CallerInfo) :-
-	FLINHERITANCEPREFIX(WRAP_SUB)(C,S,CallerInfo),
-	FLNEGPREFIX(WRAP_IBOOLSIG)(C,M,CallerInfo).
+FLNEGPREFIX(WRAP_IBOOLSIG)(S,M,[Caller|_]) :-
+	FLINHERITANCEPREFIX(WRAP_SUB)(C,S,[Caller|_]),
+	FLNEGPREFIX(WRAP_IBOOLSIG)(C,M,[Caller|_]).
 
 
 /*****************************************************************************
   object existence
 *****************************************************************************/
-FLNEGPREFIX(WRAP_EXISTS)(X,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_EXISTS)(X,CallerInfo).
+FLNEGPREFIX(WRAP_EXISTS)(X,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_EXISTS)(X,[Caller|_]).
 

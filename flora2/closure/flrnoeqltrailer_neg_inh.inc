@@ -32,81 +32,81 @@
 
 %% Block inheritance of *-> to subclasses, if neg Method is defined
 %% FLLOCALPREFIX(WRAP_IMVD)/2
-FLLOCALPREFIX(WRAP_IMVD)(S,MethSign,CallerInfo) :-
+FLLOCALPREFIX(WRAP_IMVD)(S,MethSign,[Caller|_]) :-
 	var(MethSign),
-	FLNEGTRAILERPREFIX(WRAP_IMVD)(S,M,_V,CallerInfo),
+	FLNEGTRAILERPREFIX(WRAP_IMVD)(S,M,_V,[Caller|_]),
 	%% Should have a cut here when XSB will allow
 	flora_funct_arity(M,MethSign).
 
-FLLOCALPREFIX(WRAP_IMVD)(S,MethSign,CallerInfo) :-
+FLLOCALPREFIX(WRAP_IMVD)(S,MethSign,[Caller|_]) :-
 	var(MethSign),
 	!,
-	FLNEGTRAILERPREFIX(WRAP_IMVDDEF)(S,M,CallerInfo),
+	FLNEGTRAILERPREFIX(WRAP_IMVDDEF)(S,M,[Caller|_]),
 	flora_funct_arity(M,MethSign).
 
-FLLOCALPREFIX(WRAP_IMVD)(S,MethSign,CallerInfo) :-
+FLLOCALPREFIX(WRAP_IMVD)(S,MethSign,[Caller|_]) :-
 	nonvar(MethSign), % the cut above might not work under local scheduling
 	flora_funct_arity(M,MethSign),
-	FLNEGTRAILERPREFIX(WRAP_IMVD)(S,M,_V,CallerInfo).
+	FLNEGTRAILERPREFIX(WRAP_IMVD)(S,M,_V,[Caller|_]).
 	%% Should have a cut here when XSB will allow
 
-FLLOCALPREFIX(WRAP_IMVD)(S,MethSign,CallerInfo) :-
+FLLOCALPREFIX(WRAP_IMVD)(S,MethSign,[Caller|_]) :-
 	nonvar(MethSign), % the cut above might not work under local scheduling
 	flora_funct_arity(M,MethSign),
-	FLNEGTRAILERPREFIX(WRAP_IMVDDEF)(S,M,CallerInfo).
+	FLNEGTRAILERPREFIX(WRAP_IMVDDEF)(S,M,[Caller|_]).
 
 %% Block inheritance of *-> to class members, if neg Method is defined
-FLLOCALPREFIX(WRAP_MVD)(S,MethSign,CallerInfo) :-
+FLLOCALPREFIX(WRAP_MVD)(S,MethSign,[Caller|_]) :-
 	var(MethSign),
-	FLNEGTRAILERPREFIX(WRAP_MVD)(S,M,_V,CallerInfo),
+	FLNEGTRAILERPREFIX(WRAP_MVD)(S,M,_V,[Caller|_]),
 	%% Should have a cut here when XSB will allow
 	flora_funct_arity(M,MethSign).
 
-FLLOCALPREFIX(WRAP_MVD)(S,MethSign,CallerInfo) :-
+FLLOCALPREFIX(WRAP_MVD)(S,MethSign,[Caller|_]) :-
 	var(MethSign),
 	!,
-	FLNEGTRAILERPREFIX(WRAP_MVDDEF)(S,M,CallerInfo),
+	FLNEGTRAILERPREFIX(WRAP_MVDDEF)(S,M,[Caller|_]),
 	flora_funct_arity(M,MethSign).
 
-FLLOCALPREFIX(WRAP_MVD)(S,MethSign,CallerInfo) :-
+FLLOCALPREFIX(WRAP_MVD)(S,MethSign,[Caller|_]) :-
 	nonvar(MethSign), % the cut above might not work under local scheduling
 	flora_funct_arity(M,MethSign),
-	FLNEGTRAILERPREFIX(WRAP_MVD)(S,M,_V,CallerInfo).
+	FLNEGTRAILERPREFIX(WRAP_MVD)(S,M,_V,[Caller|_]).
 	%% Should have a cut here when XSB will allow
 
-FLLOCALPREFIX(WRAP_MVD)(S,MethSign,CallerInfo) :-
+FLLOCALPREFIX(WRAP_MVD)(S,MethSign,[Caller|_]) :-
 	nonvar(MethSign), % the cut above might not work under local scheduling
 	flora_funct_arity(M,MethSign),
-	FLNEGTRAILERPREFIX(WRAP_MVDDEF)(S,M,CallerInfo).
+	FLNEGTRAILERPREFIX(WRAP_MVDDEF)(S,M,[Caller|_]).
 
 %% Block inheritance of *boolean to classes, if neg boolean is defined
 %% FLLOCALPREFIX(WRAP_IMETH)/3
-FLLOCALPREFIX(WRAP_IMETH)(S,MethSign,CallerInfo) :-
+FLLOCALPREFIX(WRAP_IMETH)(S,MethSign,[Caller|_]) :-
 	var(MethSign),
 	!,
-	FLNEGTRAILERPREFIX(WRAP_IMETH)(S,M,CallerInfo),
+	FLNEGTRAILERPREFIX(WRAP_IMETH)(S,M,[Caller|_]),
 	%% Should have a cut here when XSB will allow
 	flora_funct_arity(M,MethSign).
 
-FLLOCALPREFIX(WRAP_IMETH)(S,MethSign,CallerInfo) :-
+FLLOCALPREFIX(WRAP_IMETH)(S,MethSign,[Caller|_]) :-
 	nonvar(MethSign), % the cut above might not work under local scheduling
 	flora_funct_arity(M,MethSign),
-	FLNEGTRAILERPREFIX(WRAP_IMETH)(S,M,CallerInfo).
+	FLNEGTRAILERPREFIX(WRAP_IMETH)(S,M,[Caller|_]).
 	%% Should have a cut here when XSB will allow
 
 
 %% Block inheritance of *boolean to class members, if neg boolean is defined
 %% FLLOCALPREFIX(WRAP_METH)/3
-FLLOCALPREFIX(WRAP_METH)(S,MethSign,CallerInfo) :-
+FLLOCALPREFIX(WRAP_METH)(S,MethSign,[Caller|_]) :-
 	var(MethSign),
 	!,
-	FLNEGTRAILERPREFIX(WRAP_METH)(S,M,CallerInfo),
+	FLNEGTRAILERPREFIX(WRAP_METH)(S,M,[Caller|_]),
 	%% Should have a cut here when XSB will allow
 	flora_funct_arity(M,MethSign).
 
-FLLOCALPREFIX(WRAP_METH)(S,MethSign,CallerInfo) :-
+FLLOCALPREFIX(WRAP_METH)(S,MethSign,[Caller|_]) :-
 	nonvar(MethSign), % the cut above might not work under local scheduling
 	flora_funct_arity(M,MethSign),
-	FLNEGTRAILERPREFIX(WRAP_METH)(S,M,CallerInfo).
+	FLNEGTRAILERPREFIX(WRAP_METH)(S,M,[Caller|_]).
 	%% Should have a cut here when XSB will allow
 

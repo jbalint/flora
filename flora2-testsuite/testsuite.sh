@@ -110,7 +110,6 @@ if test -n "$config_tag" ; then
     config_tag="-$config_tag"
 fi
 
-PROLOGDIR=`cat $FLORADIR/.prolog_path`/..
 
 if test -n "$windows"; then
     runflora_script=runflora.bat

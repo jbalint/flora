@@ -26,54 +26,55 @@
 ?- assert((
     	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_SUB)(X,Y,_Caller)) :-
 	    	    !,
-	       	    flora_abolish_table_call(WRAP_SUB(X,Y,_Caller)),
-	       	    flora_abolish_table_call(FLNEGPREFIX(WRAP_SUB)(X,Y,_Caller))
+	       	    flora_abolish_table_call(WRAP_SUB(X,Y,_)),
+	       	    flora_abolish_table_call(FLNEGPREFIX(WRAP_SUB)(X,Y,_))
 	  )).
 ?- assert((
-            FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_ISA)(X,Y,_Caller)) :-
+            FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_ISA)(X,Y,_)) :-
 	    	    !,
-		    flora_abolish_table_call(WRAP_ISA(X,Y,_Caller)),
-		    flora_abolish_table_call(FLNEGPREFIX(WRAP_ISA)(X,Y,_Caller))
+		    flora_abolish_table_call(WRAP_ISA(X,Y,_)),
+		    flora_abolish_table_call(FLNEGPREFIX(WRAP_ISA)(X,Y,_))
 	  )).
 	
 %% MVD, IMVD
 ?- assert((
     	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_MVD)(X,Y,Z,_Caller)) :-
 	    	    !,
-		    flora_abolish_table_call(WRAP_MVD(X,Y,Z,_Caller)),
-		    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVD)(X,Y,Z,_Caller)),
-	    	    flora_abolish_table_call(WRAP_MVDDEF(X,Y,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVDDEF)(X,Y,_Caller))
+		    flora_abolish_table_call(WRAP_MVD(X,Y,Z,_)),
+		    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVD)(X,Y,Z,_)),
+	    	    flora_abolish_table_call(WRAP_MVDDEF(X,Y,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVDDEF)(X,Y,_))
 	  )).
 	
 ?- assert((
-    	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_IMVD)(X,Y,Z,Caller)) :-
+    	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_IMVD)(X,Y,Z,_Caller))
+    	    :-
 	    	    !,
-	    	    flora_abolish_table_call(WRAP_IMVD(X,Y,Z,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_IMVD)(X,Y,Z,_Caller)),
-	    	    flora_abolish_table_call(WRAP_IMVDDEF(X,Y,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_IMVDDEF)(X,Y,_Caller)),
-	    	    flora_abolish_table_call(WRAP_MVD(X,Y,Z,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVD)(X,Y,Z,_Caller)),
-	    	    flora_abolish_table_call(WRAP_MVDDEF(X,Y,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVDDEF)(X,Y,_Caller))
+	    	    flora_abolish_table_call(WRAP_IMVD(X,Y,Z,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_IMVD)(X,Y,Z,_)),
+	    	    flora_abolish_table_call(WRAP_IMVDDEF(X,Y,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_IMVDDEF)(X,Y,_)),
+	    	    flora_abolish_table_call(WRAP_MVD(X,Y,Z,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVD)(X,Y,Z,_)),
+	    	    flora_abolish_table_call(WRAP_MVDDEF(X,Y,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVDDEF)(X,Y,_))
 	  )).
 
 %% MVDSIG, IMVDSIG
 ?- assert((
     	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_MVDSIG)(X,Y,Z,_Caller)) :-
 	    	    !,
-	    	    flora_abolish_table_call(WRAP_MVDSIG(X,Y,Z,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVDSIG)(X,Y,Z,_Caller))
+	    	    flora_abolish_table_call(WRAP_MVDSIG(X,Y,Z,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVDSIG)(X,Y,Z,_))
 	  )).
 	
 ?- assert((
     	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_IMVDSIG)(X,Y,Z,_Caller)) :-
 	    	    !,
-	    	    flora_abolish_table_call(WRAP_IMVDSIG(X,Y,Z,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_IMVDSIG)(X,Y,Z,_Caller)),
-	    	    flora_abolish_table_call(WRAP_MVDSIG(X,Y,Z,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVDSIG)(X,Y,Z,_Caller))
+	    	    flora_abolish_table_call(WRAP_IMVDSIG(X,Y,Z,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_IMVDSIG)(X,Y,Z,_)),
+	    	    flora_abolish_table_call(WRAP_MVDSIG(X,Y,Z,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVDSIG)(X,Y,Z,_))
 	  )).
 
 %% MVDDEF, IMVDDEF
@@ -81,51 +82,51 @@
 ?- assert((
     	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_MVDDEF)(X,Y,_Caller)) :-
 	    	    !,
-		    flora_abolish_table_call(WRAP_MVDDEF(X,Y,_Caller)),
-		    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVDDEF)(X,Y,_Caller))
+		    flora_abolish_table_call(WRAP_MVDDEF(X,Y,_)),
+		    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVDDEF)(X,Y,_))
 	  )).
 	
 ?- assert((
     	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_IMVDDEF)(X,Y,_Caller)) :-
 	    	    !,
-	    	    flora_abolish_table_call(WRAP_IMVDDEF(X,Y,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_IMVDDEF)(X,Y,_Caller)),
-	    	    flora_abolish_table_call(WRAP_MVDDEF(X,Y,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVDDEF)(X,Y,_Caller))
+	    	    flora_abolish_table_call(WRAP_IMVDDEF(X,Y,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_IMVDDEF)(X,Y,_)),
+	    	    flora_abolish_table_call(WRAP_MVDDEF(X,Y,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_MVDDEF)(X,Y,_))
 	  )).
 
 %% METH, IMETH
 ?- assert((
     	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_METH)(X,Y,_Caller)) :-
 	    	    !,
-	    	    flora_abolish_table_call(WRAP_METH(X,Y,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_METH)(X,Y,_Caller))
+	    	    flora_abolish_table_call(WRAP_METH(X,Y,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_METH)(X,Y,_))
 	  )).
 	
 ?- assert((
     	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_IMETH)(X,Y,_Caller)) :-
 	    	    !,
-	    	    flora_abolish_table_call(WRAP_IMETH(X,Y,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_IMETH)(X,Y,_Caller)),
-	    	    flora_abolish_table_call(WRAP_METH(X,Y,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_METH)(X,Y,_Caller))
+	    	    flora_abolish_table_call(WRAP_IMETH(X,Y,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_IMETH)(X,Y,_)),
+	    	    flora_abolish_table_call(WRAP_METH(X,Y,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_METH)(X,Y,_))
 	  )).
 
 %% BOOLSIG, IBOOLSIG
 ?- assert((
     	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_BOOLSIG)(X,Y,_Caller)) :-
 	    	    !,
-	    	    flora_abolish_table_call(WRAP_BOOLSIG(X,Y,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_BOOLSIG)(X,Y,_Caller))
+	    	    flora_abolish_table_call(WRAP_BOOLSIG(X,Y,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_BOOLSIG)(X,Y,_))
 	  )).
 	
 ?- assert((
     	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_IBOOLSIG)(X,Y,_Caller)) :-
 	    	    !,
-	    	    flora_abolish_table_call(WRAP_IBOOLSIG(X,Y,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_IBOOLSIG)(X,Y,_Caller)),
-	    	    flora_abolish_table_call(WRAP_BOOLSIG(X,Y,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_BOOLSIG)(X,Y,_Caller))
+	    	    flora_abolish_table_call(WRAP_IBOOLSIG(X,Y,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_IBOOLSIG)(X,Y,_)),
+	    	    flora_abolish_table_call(WRAP_BOOLSIG(X,Y,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_BOOLSIG)(X,Y,_))
 	  )).
 
 	
@@ -133,13 +134,13 @@
 ?- assert((
     	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_EXISTS)(X,_Caller)) :-
 	    	    !,
-	    	    flora_abolish_table_call(WRAP_EXISTS(X,_Caller)),
-	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_EXISTS)(X,_Caller))
+	    	    flora_abolish_table_call(WRAP_EXISTS(X,_)),
+	    	    flora_abolish_table_call(FLNEGPREFIX(WRAP_EXISTS)(X,_))
 	  )).
 ?- assert((
     	    FLORA_SYMBOL('refresh_table_for')(FLNEGPREFIX(WRAP_OBJEQL)(X,Y,_Caller)) :-
 	    	    !,
-	    	    flora_abolish_table_call(WRAP_DIFFOBJEQL(X,Y,_Caller))
+	    	    flora_abolish_table_call(WRAP_DIFFOBJEQL(X,Y,_))
 	  )).
 
 

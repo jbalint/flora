@@ -66,52 +66,52 @@ WRAP_OBJEQL(X,Y,_CallerInfo) :-
 %% The rest of the axioms: transitivity, reflexivity, symmetry
 WRAP_OBJEQL(X,Y,_CallerInfo) :- X=Y.
 %%WRAP_OBJEQL(X,Y,_Caller) :- (nonvar(X); nonvar(Y)), X=Y.
-WRAP_OBJEQL(X,Y,CallerInfo) :- WRAP_DIFFOBJEQL(X,Y,CallerInfo).
+WRAP_OBJEQL(X,Y,[Caller|_]) :- WRAP_DIFFOBJEQL(X,Y,[Caller|_]).
 
 %% WRAP_DIFFOBJEQL means X,Y are equal, but not identical
-WRAP_DIFFOBJEQL(X,Y,CallerInfo) :-
-	FLTRAILERPREFIX(WRAP_OBJEQL)(X,Y,CallerInfo),
+WRAP_DIFFOBJEQL(X,Y,[Caller|_]) :-
+	FLTRAILERPREFIX(WRAP_OBJEQL)(X,Y,[Caller|_]),
 	X \= Y.
 
-WRAP_DIFFOBJEQL(X,Y,CallerInfo) :-
-	FLTRAILERPREFIX(WRAP_OBJEQL)(Y,X,CallerInfo),
+WRAP_DIFFOBJEQL(X,Y,[Caller|_]) :-
+	FLTRAILERPREFIX(WRAP_OBJEQL)(Y,X,[Caller|_]),
 	X \= Y.
 
 %% transitivity of equality
-WRAP_DIFFOBJEQL(X,Y,CallerInfo) :-
-	WRAP_DIFFOBJEQL(X,Z,CallerInfo),
-	WRAP_DIFFOBJEQL(Z,Y,CallerInfo),
+WRAP_DIFFOBJEQL(X,Y,[Caller|_]) :-
+	WRAP_DIFFOBJEQL(X,Z,[Caller|_]),
+	WRAP_DIFFOBJEQL(Z,Y,[Caller|_]),
 	X \= Y.
 
 
 /* neg WRAP_OBJEQL  */
-FLNEGPREFIX(WRAP_OBJEQL)(X,Y,CallerInfo) :-
-        FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo).
+FLNEGPREFIX(WRAP_OBJEQL)(X,Y,[Caller|_]) :-
+        FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,[Caller|_]).
 
-FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
-	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(X,Y,CallerInfo),
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,[Caller|_]) :-
+	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(X,Y,[Caller|_]),
 	X \= Y.
 
-FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
-	FLNEGPREFIX(WRAP_OBJEQL)(Y,X,CallerInfo),
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,[Caller|_]) :-
+	FLNEGPREFIX(WRAP_OBJEQL)(Y,X,[Caller|_]),
 	X \= Y.
 
-FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
-	FLTRAILERPREFIX(WRAP_SUB)(X,Y,CallerInfo).
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,[Caller|_]) :-
+	FLTRAILERPREFIX(WRAP_SUB)(X,Y,[Caller|_]).
 
 /* neg WRAP_DIFFOBJEQL  */
 %% WRAP_DIFFOBJEQL means X,Y are unequal and not identical
-FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
-	WRAP_DIFFOBJEQL(X,V,CallerInfo),
-	WRAP_DIFFOBJEQL(Y,W,CallerInfo),
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,[Caller|_]) :-
+	WRAP_DIFFOBJEQL(X,V,[Caller|_]),
+	WRAP_DIFFOBJEQL(Y,W,[Caller|_]),
 	X \= Y,
-	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(V,W,CallerInfo).
+	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(V,W,[Caller|_]).
 
-FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,CallerInfo) :-
-	WRAP_DIFFOBJEQL(X,V,CallerInfo),
-	WRAP_DIFFOBJEQL(Y,W,CallerInfo),
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,[Caller|_]) :-
+	WRAP_DIFFOBJEQL(X,V,[Caller|_]),
+	WRAP_DIFFOBJEQL(Y,W,[Caller|_]),
 	X \= Y,
-	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(W,V,CallerInfo).
+	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(W,V,[Caller|_]).
 
 
 /*
