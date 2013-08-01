@@ -26,6 +26,11 @@
 
 :- compiler_options([xpp_on]).
 
+%%#define SHOW_COMPILE_INPUT
+%%#define SHOW_COMPILE_OUTPUT
+%%#define SHOW_COMPILE_ADD_INPUT
+%%#define SHOW_COMPILE_ADD_OUTPUT
+
 #include "flora_errors.flh"
 #include "flora_terms.flh"
 #include "flora_porting.flh"
@@ -987,6 +992,7 @@ is_prworkspace(PRWORKSPACE(P,WS),P,WS).
 newpredicate_struct(Name,N,Args,PRNEWPRED(Name,N,Args)).
 thismodule_struct(PRTHISMODULE(PRTHISMODULE)).
 
+%% TODO: check if we actually need to wrap this with PRWORKSPACETERM
 workspaceterm_struct(WS,PRWORKSPACETERM(WSTerm)) :-
 	compile_workspace_term(WS,WSTerm).
 
@@ -2579,11 +2585,11 @@ flora_reset_compiler(Purpose) :-
 flora_compile_add(NULL,R-R,F-F,U-U,[]) :- !.
 	
 flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,Status) :-
-/*
+#ifdef SHOW_COMPILE_ADD_INPUT
 	DBGOUTLN('------------result of parsing-----------------'),
 	DBGOUTLN(ParserTerm),
 	DBGOUTLN('----------------------------------------------'),
-*/
+#endif
 	prepare_to_compile_rule,
 	increment_rule_number,
 	approx_flindex(ParserTerm,RuleIdx),
@@ -2593,7 +2599,7 @@ flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,Status) 
 			     RuleDiffList,FactDiffList,MetaFactDiffList,
 			     UDFPredsDiffList,
 			     Status),
-/*
+#ifdef SHOW_COMPILE_ADD_OUTPUT
 	DBGOUTLN('------------result of add_compilation-------------'),
 	DBGOUTLN(rules=RuleDiffList),
 	DBGOUTLN(facts=FactDiffList),
@@ -2601,7 +2607,7 @@ flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,Status) 
 	%%DBGOUTLN(udfs =UDFPredsDiffList),
 	DBGOUTLN(status=Status),
 	DBGOUTLN('--------------------------------------------------'),
-*/
+#endif
 	!.
 	
 %% This rule is for debugging.
@@ -2737,11 +2743,11 @@ compile_annotated_construct_add(DescriptorList,MainPartOfRule,RuleDiffList,FactD
 flora_compile(NULL,R-R,F-F,M-M,U-U,[]) :- !.
 
 flora_compile(ParserTerm,RuleDiffList,FactDiffList,MetaFactDiffList,UDFPredsDiffList,Status) :-
-/*
+#ifdef SHOW_COMPILE_INPUT
 	DBGOUTLN('------------result of parsing-----------------'),
 	DBGOUTLN(ParserTerm),
 	DBGOUTLN('----------------------------------------------'),
-*/
+#endif
 	prepare_to_compile_rule,
 	increment_rule_number,
 	compile_internal(ParserTerm,
@@ -2749,7 +2755,7 @@ flora_compile(ParserTerm,RuleDiffList,FactDiffList,MetaFactDiffList,UDFPredsDiff
 			 RuleDiffList,FactDiffList,MetaFactDiffList,
 			 UDFPredsDiffList,
 			 Status),
-/*
+#ifdef SHOW_COMPILE_OUTPUT
 	DBGOUTLN('------------result of compilation-----------------'),
 	DBGOUTLN(rules=RuleDiffList),
 	DBGOUTLN(facts=FactDiffList),
@@ -2757,7 +2763,7 @@ flora_compile(ParserTerm,RuleDiffList,FactDiffList,MetaFactDiffList,UDFPredsDiff
 	%%DBGOUTLN(udfs =UDFPredsDiffList),
 	DBGOUTLN(status=Status),
 	DBGOUTLN('--------------------------------------------------'),
-*/
+#endif
 	!.
 	
 %% This rule is for debugging.
@@ -3014,6 +3020,7 @@ usefunction_option(FunName/Arity/_Idx,PermaOption) :-
 	flatom_struct(FunName,NO_INDEX,Funct),
 	new_udf_predicate(Funct,_FunCompiled,FunNameCode,UDFCode,Arity,_,_NewHead,NewHeadPredName,NewHeadPredArity,_NewReturnValue,NewHeadCode,Status),
 	( \+no_errors_found(Status) ->
+	    %% TODO:  THIS IS BAD: Need to pass status
 	    flora_abort([ERROR_UDF,', ',FunName,'/',Arity],FLORA_ABORT_NOTRACE)
 	; true),
 	flora_modularize_atom(NewHeadPredName,FLORA_DEFAULT_WORKSPACE,
@@ -3022,7 +3029,7 @@ usefunction_option(FunName/Arity/_Idx,PermaOption) :-
 	(\+current_predicate(NewHeadPredNameModularized/NewHeadPredArity1),
 	    compiling_flrshell_command
 	->
-	    %% TODO: convert this to use Status argument rather than abort
+	    %% TODO: THIS IS BAD: Need to pass status
 	    flora_abort([ERROR_UDF_WITHOUT_DEFINITION,', ',FunName,'/',Arity],FLORA_ABORT_NOTRACE)
 	; PermaOption = udf_option(FunNameCode,Arity,UDFCode,NewHeadCode),
 	    asserta(flora_used_udf_registry(FunNameCode,Arity,UDFCode,NewHeadCode))
