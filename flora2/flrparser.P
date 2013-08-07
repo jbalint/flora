@@ -811,7 +811,7 @@ flexport_wrap_term(WS,Term,Modules,UpdTag,Code) :-
 	).
 flexport_unwrap_term((WS,Term,Modules,Updtag),WS,Term,Modules,Updtag).
 
-flexport_struct(Term,Modules,Updtag,FLEXPORT(Term,Modules,FLATOM(Updtag,_I))).
+%%flexport_struct(Term,Modules,Updtag,FLEXPORT(Term,Modules,FLATOM(Updtag,_I))).
 flexport_struct(DynamicModule,Term,Modules,Updtag,FLEXPORT(DynamicModule,Term,Modules,FLATOM(Updtag,_I))).
 flexport_struct_list(TermList,FLEXPORT_LIST(TermList)).
 
@@ -1063,6 +1063,7 @@ flmodule_struct(Goal,Name,PROLOGALLMODULE,FLPLIBALL(Goal,Name)). :- !.
 
 %% code for _@ workspace
 flthismodule_struct(FLTOKEN(FL_THISMODULE,NO_INDEX)).
+is_thismodule(FLTOKEN(FL_THISMODULE,_)).
 
 %% Encoding module specs of the form @_prolog() and @_prologall()
 %% Takes a goal and protects it against hilog conversion
@@ -1077,8 +1078,17 @@ flora_get_module_from_spec(FLORAUSERMOD(Mod),FLORAUSERMOD,Mod) :- !.
 flora_get_module_from_spec(FLORASYSMOD(Mod),FLORASYSMOD,Mod) :- !.
 flora_get_module_from_spec(PROLOGMODULE(Mod),PROLOGMODULE,Mod) :- !.
 flora_get_module_from_spec(PROLOGALLMODULE(Mod),PROLOGALLMODULE,Mod) :- !.
-%%flora_get_module_from_spec(PROLOGMODULE,NULL) :- !.
-%%flora_get_module_from_spec(PROLOGALLMODULE,NULL) :- !.
+flora_get_module_from_spec(NULL,FLORAUSERMOD,FL_THISMODULE) :- !.
+flora_get_module_from_spec(NULL,PROLOGMODULE,_) :- !, fail.
+flora_get_module_from_spec(NULL,PROLOGALLMODULE,_) :- !, fail.
+flora_get_module_from_spec(ThisModToken,FLORAUSERMOD,FL_THISMODULE) :-
+	is_thismodule(ThisModToken),
+	!.
+%% This is for debugging only. Should never happen.
+flora_get_module_from_spec(Spec,Type,_Mod) :-
+	nonvar(Spec),
+	var(Type),
+	flora_abort([UNKNOWN_ERROR,'\n\t\t Details: in flora_get_module_from_spec'],FLORA_ABORT_NOTRACE).
 
 
 is_flmodulespec_struct(FLWORKSPACE(_G,_N)) :- !.
@@ -1794,7 +1804,7 @@ export_parse_term(TermCode,ExportCode,Status) :-
  export_parse_body_term(+Args,+WS,-Code,-Status)
  Parses the predicate body by calling the appropriate parse_rule_body predicate.
       WS is initialized through the exec_export_directive call. 
-      When the same module exports the term, the variable WS will be NULL.
+      When the same module exports the term, WS will be NULL.
       Else, it may be an atom or a variable.
  ATOM: ?- (export foo)@bar.
  VARIABLE: ?- (export foo)@?WS.
@@ -1826,12 +1836,8 @@ export_parse_modules(OtherModules,OtherModuleList,Status) :-
  export_struct(+WorkSpace,+TermCode,+ModuleListCode,+IsUpdatable,-ExportCode)
 **************************************************************************/
 export_struct(WS,TermCode,ModuleCodeList,IsUpdatable,ExportCode) :-
-	(WS==NULL -> 
-		flexport_struct(TermCode,ModuleCodeList,IsUpdatable,ExportCode)
-	;
-                flora_get_module_from_spec(WS,_ModuleType,Module),
-		flexport_struct(Module,TermCode,ModuleCodeList,IsUpdatable,ExportCode)
-	).
+	flora_get_module_from_spec(WS,_ModuleType,Module),
+	flexport_struct(Module,TermCode,ModuleCodeList,IsUpdatable,ExportCode).
 
 
 /**************** start of error handling for export ************************/
@@ -2934,10 +2940,8 @@ parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status
 	parse_head_pathexplist(Args,DWS,[LCode,RCode],Status),
 	(Status == NO_ERRORS -> 
             flbirelate_struct(LCode,F,RCode,TCode),
-            (flora_get_module_from_spec(DWS,ModuleType,Module) ->
-                flmodule_struct(TCode,Module,ModuleType,Code)
-            ;   Code=TCode
-            )
+            flora_get_module_from_spec(DWS,ModuleType,Module),
+	    flmodule_struct(TCode,Module,ModuleType,Code)
         ; true).
 
 %% Path expression without a []: a.c.b rather than a.b.c[].
@@ -2963,10 +2967,8 @@ parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status
 	parse_head_pathexplist(Args,DWS,[LCode,RCode],Status),
 	(Status == NO_ERRORS -> 
             flobjeql_struct(LCode,RCode,TCode),
-            (flora_get_module_from_spec(DWS,ModuleType,Module) ->
-                flmodule_struct(TCode,Module,ModuleType,Code)
-            ;   Code=TCode
-            )
+            flora_get_module_from_spec(DWS,ModuleType,Module),
+	    flmodule_struct(TCode,Module,ModuleType,Code)
         ; true).
 
 parse_head_literal(CANOTERM(Funct,1,FL_PARENTHESIS,[Arg],If,_Ip),DWS,Code,Status) :-
@@ -2979,11 +2981,9 @@ parse_head_literal(CANOTERM(Funct,1,FL_PARENTHESIS,[Arg],If,_Ip),DWS,Code,Status
 	%% check that only meaningful literals can be under neg.
 	parse_head_literal(Arg,DWS,ArgCode,S1),
 	(S1 == NO_ERRORS -> 
-            flneg_struct(ArgCode,If,Code),
-            (flora_get_module_from_spec(DWS,ModuleType,Module) ->
-                flmodule_struct(NegCode,Module,ModuleType,Code)
-            ;   Code=NegCode
-            ),
+            flneg_struct(ArgCode,If,NegCode),
+            flora_get_module_from_spec(DWS,ModuleType,Module),
+	    flmodule_struct(NegCode,Module,ModuleType,Code),
 	    Status = S1
         ; parsing_error(Arg,ILLEGAL_NEGHEAD,S2),
 	    append(S2,S1,Status)
@@ -3013,21 +3013,19 @@ parse_head_literal(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status
 	!,
 	parse_head_term(Funct,N,Args,ALLOW_TRANS,DWS,TCode,Status),
         ( Status  == NO_ERRORS ->
-            (flora_get_module_from_spec(DWS,ModuleType,Module) ->
-                flmodule_struct(TCode,Module,ModuleType,Code)
-            ;   Code=TCode
-            )
-        ; true).
+            flora_get_module_from_spec(DWS,ModuleType,Module),
+	    flmodule_struct(TCode,Module,ModuleType,Code)
+        ; true
+	).
 
 parse_head_literal(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),DWS,Code,Status) :-
 	!,
 	parse_head_objspec(Funct,N,Args,DWS,TCode,Status),
         ( Status == NO_ERRORS ->
-            (flora_get_module_from_spec(DWS,ModuleType,Module) ->
-                flmodule_struct(TCode,Module,ModuleType,Code)
-            ;   Code=TCode
-            )
-        ; true).
+            flora_get_module_from_spec(DWS,ModuleType,Module),
+	    flmodule_struct(TCode,Module,ModuleType,Code)
+        ; true
+	).
 
 parse_head_literal(CanoniTerm,DWS,Code,Status) :-
 	get_atom(CanoniTerm,A),
@@ -3037,12 +3035,8 @@ parse_head_literal(CanoniTerm,DWS,Code,Status) :-
 	    parsing_error(CanoniTerm,ERROR_HDLITERAL,Status)
 	;
 	    flobject_struct(CanoniTerm,TCode),
-            (
-	      flora_get_module_from_spec(DWS,ModuleType,Module)
-	    ->
-	      flmodule_struct(TCode,Module,ModuleType,Code)
-            ;   Code=TCode
-            ),
+	    flora_get_module_from_spec(DWS,ModuleType,Module),
+	    flmodule_struct(TCode,Module,ModuleType,Code),
 	    Status = NO_ERRORS
         ).
 
@@ -3051,10 +3045,8 @@ parse_head_literal(CanoniTerm,DWS,Code,Status) :-
         !,
         fltransactionalobject_struct(CanoniTerm,TCode),
         Status = NO_ERRORS,
-        (flora_get_module_from_spec(DWS,ModuleType,Module) ->
-            flmodule_struct(TCode,Module,ModuleType,Code)
-        ;   Code=TCode
-        ).
+        flora_get_module_from_spec(DWS,ModuleType,Module),
+	flmodule_struct(TCode,Module,ModuleType,Code).
 
 parse_head_literal(CanoniTerm,_DWS,_Code,Status) :-
 	!,
@@ -3476,8 +3468,6 @@ parse_rule_body(CanoniTerm,WS,DWS,Goal,Status) :-
 parse_rule_body(CanoniTerm,NULL,NULL,Code,Status) :-
 	!,
 	%% no explicit module name
-	%%thismodule_struct(ThisModuleCode),
-	%%parse_body_literal(CanoniTerm,ThisModuleCode,Code,Status).
 	parse_body_literal(CanoniTerm,NULL,Code,Status).
 
 /****************************************************************************
@@ -3883,17 +3873,13 @@ distribute_workspace([A|Args],WS,DWS,[TA|TArgs],Status) :-
   parse_body_literal(+CanoniTerm,+DWS,-Code,-Status)
 
   This predicate is called to parse a literal in a rule body.
-  If DWS=NULL (which is indicated by the failure of flora_get_module_from_spec/3),
-  this means that the literal has no module name specification.
 
 ****************************************************************************/
 parse_body_literal(CanoniTerm,DWS,Code,Status) :-
 	exec_directive(CanoniTerm,DWS,TCode,Status),
 	!,
-        (flora_get_module_from_spec(DWS,ModuleType,Module) ->
-            flmodule_struct(TCode,Module,ModuleType,Code)
-        ;   Code=TCode
-        ).
+        flora_get_module_from_spec(DWS,ModuleType,Module),
+	flmodule_struct(TCode,Module,ModuleType,Code).
 
 %% :(_,_), ::(_,_)
 parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
@@ -3903,11 +3889,10 @@ parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status
 	parse_body_pathexplist(Args,DWS,[LCode,RCode],Status),
 	(Status == NO_ERRORS ->
             flbirelate_struct(LCode,F,RCode,TCode),
-            (flora_get_module_from_spec(DWS,ModuleType,Module) ->
-                flmodule_struct(TCode,Module,ModuleType,Code)
-            ;   Code=TCode      %% DWS is NULL
-            )
-        ; true).
+            flora_get_module_from_spec(DWS,ModuleType,Module),
+	    flmodule_struct(TCode,Module,ModuleType,Code)
+        ; true
+	).
 
 %% Path expression without a []: a.c.b rather than a.b.c[].
 %% '.'(_,_), '!'(_,_),
@@ -4054,10 +4039,7 @@ parse_body_literal(CANOTERM(Funct,2,FL_BRACE,[Prefix,Expansion],If,_Ip),DWS,Code
 	get_name(Funct,Atom),
 	is_prefixprimitive_op(Atom),
 	!,
-	(flora_get_module_from_spec(DWS,_ModuleType,ModuleCode) -> true
-	; %% Module part is NULL (not specified)
-	    ModuleCode = NULL
-	),
+	flora_get_module_from_spec(DWS,_ModuleType,ModuleCode),
 	(name_or_var(Prefix,PrefixCode),
 	    name_or_var(Expansion,ExpansionCode) ->
 	    flprefixprimitive_struct(PrefixCode,ExpansionCode,ModuleCode,Code),
@@ -4255,22 +4237,18 @@ parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status
 	parse_body_pathexplist(Args,DWS,[LCode,RCode],Status),
 	(Status == NO_ERRORS ->
             flobjeql_struct(LCode,RCode,TCode),
-            (flora_get_module_from_spec(DWS,ModuleType,Module) ->
-                flmodule_struct(TCode,Module,ModuleType,Code)
-            ;   Code=TCode      %% DWS is NULL
-            )
-        ; true).
+            flora_get_module_from_spec(DWS,ModuleType,Module),
+	    flmodule_struct(TCode,Module,ModuleType,Code)
+        ; true
+	).
 
 parse_body_literal(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
 	!,
 	parse_body_term(Funct,N,Args,ALLOW_TRANS,DWS,TCode,Status),
         ( Status == NO_ERRORS ->
-            ( get_atom(Funct,F), flora_nowsp(F,N) ->
-                TCode = Code
-            ; DWS == NULL ->
-                TCode = Code
+            ( get_atom(Funct,F), flora_nowsp(F,N) -> Code = TCode
             ; flora_get_module_from_spec(DWS,ModuleType,Module),
-              flmodule_struct(TCode,Module,ModuleType,Code)
+		flmodule_struct(TCode,Module,ModuleType,Code)
             )
         ; true).
 
@@ -4279,11 +4257,10 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),DWS,Code,Status) :-
 	!,
 	parse_body_objspec(Funct,N,Args,DWS,TCode,Status),
 	(Status == NO_ERRORS ->
-            (flora_get_module_from_spec(DWS,ModuleType,Module) ->
-                flmodule_struct(TCode,Module,ModuleType,Code)
-            ;   Code=TCode      %% DWS is NULL
-            )
-        ; true).
+            flora_get_module_from_spec(DWS,ModuleType,Module),
+	    flmodule_struct(TCode,Module,ModuleType,Code)
+        ; true
+	).
 
 parse_body_literal(CANOLIST(L,T,_N,I,_Ib),_DWS,Code,Status) :-
 	!,
@@ -4319,14 +4296,9 @@ parse_body_literal(CanoniTerm,DWS,Code,[]) :-
 	    flcut_struct(I,Code)
 	;
 	    flobject_struct(CanoniTerm,TCode),
-            ( flora_nowsp(A,0)
-	    ->
-                TCode = Code
-            ; DWS == NULL
-	    ->
-                TCode = Code
+            ( flora_nowsp(A,0) -> Code = TCode
             ; flora_get_module_from_spec(DWS,ModuleType,Module),
-              flmodule_struct(TCode,Module,ModuleType,Code)
+		flmodule_struct(TCode,Module,ModuleType,Code)
             )
         ).
 
@@ -4334,10 +4306,8 @@ parse_body_literal(CanoniTerm,DWS,Code,[]) :-
 	get_transactionalatom(CanoniTerm,_A),
 	!,
 	fltransactionalobject_struct(CanoniTerm,TCode),
-        (flora_get_module_from_spec(DWS,ModuleType,Module) ->
-            flmodule_struct(TCode,Module,ModuleType,Code)
-        ;   Code=TCode      %% DWS is NULL
-        ).
+        flora_get_module_from_spec(DWS,ModuleType,Module),
+	flmodule_struct(TCode,Module,ModuleType,Code).
 
 parse_body_literal(CanoniTerm,DWS,Code,Status) :-
 	get_flvar_struct(CanoniTerm,C),
@@ -4351,16 +4321,13 @@ parse_body_literal(CanoniTerm,DWS,Code,Status) :-
 	    )
 	/*
 	%% This happens when we have a predicate with a variable in an argument
-	%% declared as FL_BODYLITERAL. Do not flag an error in this case.
+	%% declared as FL_BODYLITERAL. Do NOT issue an error in this case.
 	; has_context(parsing_fact) ->
             parsing_error(CanoniTerm,NO_PRED_VAR,Status)
 	*/
         ;   Status = NO_ERRORS,
-            ( flora_get_module_from_spec(DWS,ModuleType,Module) ->
-                flmodule_struct(C,Module,ModuleType,Code)
-            ;
-                C=Code
-            )
+            flora_get_module_from_spec(DWS,ModuleType,Module),
+	    flmodule_struct(C,Module,ModuleType,Code)
         ).
 
 parse_body_literal(CanoniTerm,DWS,Code,Status) :-
@@ -4374,7 +4341,7 @@ parse_body_literal(CanoniTerm,DWS,Code,Status) :-
             parsing_error(CanoniTerm,ERROR_TRANSACTIONALVARLIT,Status)
 	/*
 	%% This happens when we have a predicate with a variable in an argument
-	%% declared as BODYLITERAL. Do not flag an error in this case.
+	%% declared as BODYLITERAL. Do NOT issue an error in this case.
         ; has_context(parsing_fact) ->
             parsing_error(CanoniTerm,NO_PRED_VAR,Status)
 	*/
@@ -4420,7 +4387,7 @@ parse_body_template(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Code,Status) 
 
 parse_body_template(CanoniTerm,Code,Status) :-
         %%parse_body_literal_template(CanoniTerm,LitCode,Status),
-	%%thismodule_struct(ThisModuleCode),
+	%%flthismodule_struct(ThisModuleCode),
 	%%flmodule_struct(LitCode,ThisModuleCode,FLORAUSERMOD,Code).
         parse_body_literal_template(CanoniTerm,Code,Status).
 
@@ -4791,6 +4758,7 @@ term_template(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,_AllowVarA
 	get_atom(Funct,F),
 	is_curi_op(F),
 	!,
+	%% we call with DWS=NULL here, if no explicit WS
 	parse_curi(Args,TransFlag,NULL,Code,Status).
 
                 
@@ -5121,7 +5089,7 @@ parse_prlgterm(CanoniTerm,_DWS,_Code,Status) :-
 
 
 /****************************************************************************
-  parse_body_term(+Funct,+Arity,+Args,+TransFlag,+DSW,-Code,-Status)
+  parse_body_term(+Funct,+Arity,+Args,+TransFlag,+DWS,-Code,-Status)
 
   Parse a term Funct-spec(Args). Arguments are parsed according to
   the argument spec in flora_argdef. The final parsed term is composed
@@ -5530,7 +5498,7 @@ parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,DWS,C
 		      flpliball_struct(LCode,Code)
 
 		  %% Covers: @mod, @_mod, @_prolog(mod), @_prologall(mod)
-		  ; flora_get_module_from_spec(WSCode,ModuleType,Mod) ->
+		  ; flora_get_module_from_spec(WSCode,ModuleType,Mod),
 		      flmodule_struct(LCode,Mod,ModuleType,Code)
 		  )
 	        )
@@ -5969,7 +5937,8 @@ parse_aggregt(Funct,N,Args,If,_Ip,DWS,Code,Status) :-
 		get_atom(Bar,FL_BAR)
 	    ->
 	        aggr_vars_and_sortspec(L,Var,GroupVars,SortSpec,S1),
-		( S1 == NO_ERRORS, (is_sortable_aggregop(FAtom) ; SortSpec == NULL)
+		( S1 == NO_ERRORS,
+		    (is_sortable_aggregop(FAtom) ; SortSpec == NULL)
 		->
 		    parse_rule_body(R,DWS,DWS,Conds,Status),
 		    ( Status == NO_ERRORS
@@ -6362,11 +6331,10 @@ parse_head_objspec(CANOTERM(Funct,1,FL_PARENTHESIS,[Arg],If,_Ip),DWS,Code,Status
 	parse_head_objspec(Arg,DWS,ArgCode,Status),
 	(Status == NO_ERRORS -> 
             flneg_struct(ArgCode,If,NegCode),
-            (flora_get_module_from_spec(DWS,ModuleType,Module) ->
-                flmodule_struct(NegCode,Module,ModuleType,Code)
-            ;   Code=NegCode
-            )
-        ; true).
+            flora_get_module_from_spec(DWS,ModuleType,Module),
+	    flmodule_struct(NegCode,Module,ModuleType,Code)
+        ; true
+	).
 
 parse_head_objspec(CANOTERM(Funct,1,FL_PARENTHESIS,[_G],If,_Ip),_DWS,_Code,Status) :-
 	get_atom(Funct,F),
@@ -6668,12 +6636,8 @@ parse_dbliteral(Mode,CanoniTerm,DWS,[Code],Status) :-
 	%% now the literal is stripped of commas and workspaces - do
 	%% the main processing of db literal
 	parse_stripped_dbliteral(Mode,CanoniTerm,DWS,TCode,Status),
-        (DWS == NULL ->
-            Code=TCode
-        ; 
-            flora_get_module_from_spec(DWS,ModuleType,Module),
-            flmodule_struct(TCode,Module,ModuleType,Code)
-        ).
+	flora_get_module_from_spec(DWS,ModuleType,Module),
+	flmodule_struct(TCode,Module,ModuleType,Code).
 
 
 /****************************************************************************
@@ -7403,11 +7367,8 @@ parse_dynrule_no_module(CanoniTerm,DWS,Descriptors,Code,Status) :-
 		parse_rule_body(Body,DWS,DWS,BodyCode,Status),
 		fldynrule_struct(HCL,BodyCode,Descriptors,RuleCode),
 		%% add default workspace, if any
-                (flora_get_module_from_spec(DWS,_ModuleType,Module) ->
-                    flmodule_struct(RuleCode,Module,FLORARULEWORKSPACE,Code)
-                ;
-                    Code=RuleCode
-                )
+                flora_get_module_from_spec(DWS,_ModuleType,Module),
+		flmodule_struct(RuleCode,Module,FLORARULEWORKSPACE,Code)
 	    ;
 		Status = S
             )
@@ -7420,11 +7381,8 @@ parse_dynrule_no_module(CanoniTerm,DWS,Descriptors,Code,Status) :-
 		flatom_struct(FL_TRUE,NO_INDEX,BodyCode),
 		fldynrule_struct(HCL,BodyCode,Descriptors,RuleCode),
 		%% add default workspace, if any
-                (flora_get_module_from_spec(DWS,_ModuleType,Module) ->
-                    flmodule_struct(RuleCode,Module,FLORARULEWORKSPACE,Code)
-                ;
-                    Code=RuleCode
-                )
+                flora_get_module_from_spec(DWS,_ModuleType,Module),
+		flmodule_struct(RuleCode,Module,FLORARULEWORKSPACE,Code)
 	    ;
 		true
             )
@@ -7508,12 +7466,8 @@ parse_dynhead(CanoniTerm,DWS,[Code],Status) :-
                 parsing_error(I,ERROR_ANONVAR_HEAD,Status)
             ;
                 Status = NO_ERRORS,
-                ( flora_get_module_from_spec(DWS,ModuleType,Module)
-		->
-                    flmodule_struct(C,Module,ModuleType,Code)
-                ;
-                    C=Code
-                )
+                flora_get_module_from_spec(DWS,ModuleType,Module),
+		flmodule_struct(C,Module,ModuleType,Code)
             )
         ; get_fltransactionalvar_struct(CanoniTerm,Code)
 	->
@@ -7808,6 +7762,7 @@ parse_curi([Prefix,LocalName],TransFlag,DWS,Code,Status) :-
 	      parsing_error(Index_LocalName,ERROR_CURI_LOCAL,Stat1)
 	),
 	(Stat1 == NO_ERRORS ->
+	    %% we call with DWS=NULL here, if no explicit WS
 	    (DWS == NULL -> Mod = FLORA_DEFAULT_WORKSPACE, Stat2 = NO_ERRORS
 	    ; 
 		flora_get_module_from_spec(DWS,_,ModuleAtmCode),

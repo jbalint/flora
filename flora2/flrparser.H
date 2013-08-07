@@ -34,6 +34,7 @@
    from basics.
 
 :- import
+	flora_abort/2,
 	flora_set_counter/2,
 	flora_get_counter/2,
 	flora_concat_items/2,

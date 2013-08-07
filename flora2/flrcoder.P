@@ -1452,7 +1452,7 @@ coder_write_syslib(Lib,6,[Id,DescrVarTerm,MetaFacts,Mode,HeadList,Body],_Context
 	    Status = Status_Id
 	).
 
-coder_write_syslib(Lib,7,[DescrId,DescrVarsTerm,WS,HeadList,Body,DefeatCond,Newpred],_Context,Status) :-
+coder_write_syslib(Lib,9,[DescrId,DescrVarsTerm,WS,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],_Context,Status) :-
         is_fllibinsrulesig(Lib),
 	!,
 	write_canonical(Lib),
@@ -1474,14 +1474,26 @@ coder_write_syslib(Lib,7,[DescrId,DescrVarsTerm,WS,HeadList,Body,DefeatCond,Newp
 		flora_write_struct(Body,CODER_BODY_CONTEXT,Status_Body),
 		( Status_Body == [] ->
 		    put(CH_COMMA),
-		    flora_write_struct(DefeatCond,CODER_BODY_CONTEXT,Status_Defeat),
-		    ( Status_Defeat == [] ->
+		    flora_write_struct(PreBody,CODER_BODY_CONTEXT,Status_PreBody),
+		    ( Status_PreBody == [] ->
 			put(CH_COMMA),
-			flora_write_struct(Newpred,CODER_GENERIC_CONTEXT,Status)
+			flora_write_struct(PostBody,CODER_BODY_CONTEXT,Status_PostBody),
+			( Status_PostBody == [] ->
+			    put(CH_COMMA),
+			    flora_write_struct(DefeatCond,CODER_BODY_CONTEXT,Status_Defeat),
+			    ( Status_Defeat == [] ->
+				put(CH_COMMA),
+				flora_write_struct(Newpred,CODER_GENERIC_CONTEXT,Status)
+			    ;
+				Status = Status_Defeat
+			    ),
+			    put(CH_RPAREN)
+			;
+			    Status = Status_PostBody
+			)
 		    ;
-			Status = Status_Defeat
-		    ),
-		    put(CH_RPAREN)
+			Status = Status_PreBody
+		    )
 		;
 		    Status = Status_Body
 		)
@@ -2011,17 +2023,14 @@ flora_build_struct(Term,DWS,Context,VarList,Code,(CodeInd,Index),Status) :-
         flora_build_struct(FObj,DWS,Context,_NewVar,_FCode,(_,Index),_Status),
         coder_build_wsliteral(Wrap,[FObj|Args],DWS,DWS,Context,VarList,Code,CodeInd,Status).
 
-flora_build_struct(Term,DWS,Context,VarList,Code,(CodeInd,Index),Status) :-
+flora_build_struct(Term,DWS,Context,VarList,Code,CodeInd,Status) :-
 	is_prworkspace(Term,P,WS),
 	!,
-	( is_pratom(WS,Atom,Index) ->
+	( is_pratom(WS,Atom,_) ->
 	    %% a user module name
 	    coder_build_wsstruct(P,Atom,DWS,Context,VarList,Code,CodeInd,Status)
 	;
 	    %% a Flora system module name
-	    (is_prfloralib(WS,_Atom,Index),!
-	    ; Index=NO_INDEX
-	    ),
 	    %% Requires WS=prfloralib(pratom(...,...))
 	    coder_build_wsstruct(P,WS,DWS,Context,VarList,Code,CodeInd,Status)
 	).
@@ -2454,9 +2463,9 @@ coder_build_syslib(Lib,6,[Id,DescrVarTerm,MetaFacts,Mode,HeadList,Body],DWS,_Con
 	    Status = Status_Id
 	).
 
-%% This is most likely dead code: signatures for dynamic rules are
-%% generated in flrdynrule.P
-coder_build_syslib(Lib,7,[DescrId,DescrVarsTerm,WSterm,HeadList,Body,DefeatCond,Newpred],DWS,_Context,VarList,Code,CodeInd,Status) :-
+%% Where is this used? Check!!!
+%% Maybe is used by flrdependency.P to build code for FLLIBINSRULESIG/9
+coder_build_syslib(Lib,9,[DescrId,DescrVarsTerm,WSterm,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],DWS,_Context,VarList,Code,CodeInd,Status) :-
 	is_fllibinsrulesig(Lib),
 	!,
 	flora_build_struct(DescrId,DWS,CODER_GENERIC_CONTEXT,VarList,DescrIdCode,DescrIdCodeInd,Stat_DescrId),
@@ -2469,13 +2478,23 @@ coder_build_syslib(Lib,7,[DescrId,DescrVarsTerm,WSterm,HeadList,Body,DefeatCond,
 		    ( Status_Head == [] ->
 			flora_build_struct(Body,DWS,CODER_BODY_CONTEXT,VarList,BodyCode,BodyCodeInd,Status_Body),
 			( Status_Body == [] ->
-			    flora_build_struct(DefeatCond,DWS,CODER_BODY_CONTEXT,VarList,DefeatCode,DefeatCodeInd,Status_Defeat),
-			    (Status_Defeat == [] ->
-				flora_build_struct(Newpred,DWS,CODER_GENERIC_CONTEXT,VarList,NewpredCode,NewpredCodeInd,Status),
-				Code =.. [Lib,DescrIdCode,DescrVarsTermCode,WStermCode,HeadListCode,BodyCode,DefeatCode,NewpredCode],
-				CodeInd =.. [Lib,DescrIdCodeInd,DescrVarsTermCodeInd,WStermCodeInd,HeadListCodeInd,BodyCodeInd,DefeatCodeInd,NewpredCodeInd]
+			    flora_build_struct(PreBody,DWS,CODER_BODY_CONTEXT,VarList,PreBodyCode,PreBodyCodeInd,Status_PreBody),
+			    ( Status_PreBody == [] ->
+				flora_build_struct(PostBody,DWS,CODER_BODY_CONTEXT,VarList,PostBodyCode,PostBodyCodeInd,Status_PostBody),
+				( Status_PostBody == [] ->
+				    flora_build_struct(DefeatCond,DWS,CODER_BODY_CONTEXT,VarList,DefeatCode,DefeatCodeInd,Status_Defeat),
+				    (Status_Defeat == [] ->
+					flora_build_struct(Newpred,DWS,CODER_GENERIC_CONTEXT,VarList,NewpredCode,NewpredCodeInd,Status),
+					Code =.. [Lib,DescrIdCode,DescrVarsTermCode,WStermCode,HeadListCode,BodyCode,PreBodyCode,PostBodyCode,DefeatCode,NewpredCode],
+					CodeInd =.. [Lib,DescrIdCodeInd,DescrVarsTermCodeInd,WStermCodeInd,HeadListCodeInd,BodyCodeInd,PreBodyCodeInd,PostBodyCodeInd,DefeatCodeInd,NewpredCodeInd]
+				    ;
+					Status = Status_Defeat
+				    )
+				;
+				    Status = Status_PostBody
+				)
 			    ;
-				Status = Status_Defeat
+				Status = Status_PreBody
 			    )
 			;
 			    Status = Status_Body

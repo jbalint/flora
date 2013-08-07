@@ -286,5 +286,5 @@ $GREP "TESTTIME" $LOG_FILE
 rm -f $RES_FILE
 rm -f $lockfile
 
-echo "Done"
+echo "Finished on `date`"
 echo ==============================================================
