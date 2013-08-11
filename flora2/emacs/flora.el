@@ -1,4 +1,4 @@
-;;; flora.el --- a major mode for editing and running FLORA-2 programs
+;;; flora.el --- a major mode for editing and running Flora-2 programs
 
 ;; Authors:
 ;; Heinz Uphoff (uphoff@informatik.uni-freiburg.de)
@@ -7,8 +7,8 @@
 
 ;;; Commentary:
 
-;; This package provides a major mode for editing FLORA-2 programs.  It knows
-;; about FLORA-2 syntax and comments (well, sort of), and can send
+;; This package provides a major mode for editing Flora-2 programs.  It knows
+;; about Flora-2 syntax and comments (well, sort of), and can send
 ;; regions, buffers, and files to an inferior interpreter process.
 
 ;; This package was adapted from flp.el by Michael Kifer.
@@ -18,7 +18,7 @@
 ;;
 ;; Put
 ;;   (setq auto-mode-alist (cons '("\\.fl[rih]$" . flora-mode) auto-mode-alist))
-;;   (autoload 'flora-mode "flora" "Major mode for editing FLORA-2 programs." t)
+;;   (autoload 'flora-mode "flora" "Major mode for editing Flora-2 programs." t)
 
 ;;; Code:
 
@@ -29,8 +29,8 @@
 ;; Is it Emacs?
 (defconst flora-emacs-p (not flora-xemacs-p))
 
-(defmacro flora-buffer-live-p (buf)
-  `( (and (, buf) (get-buffer (, buf)) (buffer-name (get-buffer (, buf))))))
+(defun flora-buffer-live-p (buf)
+  (and buf (get-buffer  buf) (buffer-name (get-buffer buf))))
 
 (defconst flora-temp-file-prefix
   (cond (flora-emacs-p temporary-file-directory)
@@ -40,10 +40,10 @@
 
 ;; This path has to be set at installation of the F-Logic-System!!!
 (defvar flora-program-name "~/FLORA/flora2/runflora"
-  "*Program name for invoking an inferior FLORA-2 with `run-flora'.")
+  "*Program name for invoking an inferior Flora-2 with `run-flora'.")
 
 (defvar flora-command-line nil
-  "*FLORA-2 command to execute at startup.")
+  "*Flora-2 command to execute at startup.")
 
 (defvar flora-mode-syntax-table nil)
 (defvar flora-mode-abbrev-table nil)
@@ -55,16 +55,16 @@
   "*Reinitialise  system")
 
 (defconst flora-process-buffer "*flora2*"
-  "Name of the FLORA-2 buffer.")
+  "Name of the Flora-2 buffer.")
 (defconst flora-process-name "flora2"
-  "Name of FLORA-2 process.")
+  "Name of Flora-2 process.")
 
 (defvar flora-offer-save t
   "*If non-nil, ask about saving modified buffers before 
 \\[flora-load-file] is run.")
 
 (defvar flora-electric nil
-  "*If t, typing RETURN automatically indents FLORA-2 lines.")
+  "*If t, typing RETURN automatically indents Flora-2 lines.")
 
 (defvar flora-indent-width 4)
 
@@ -112,7 +112,7 @@
 
 (defconst flora-directives-regexp
   "index\\|semantics\\|ignoredeps"
-  "FLORA-2 compiler directives without the \\( and \\).")
+  "Flora-2 compiler directives without the \\( and \\).")
 
 (defconst flora-font-lock-keywords
    (list
@@ -137,21 +137,21 @@
   "Additional expressions to highlight in flora mode.")
 
 (defvar flora-mode-menu
-  '(["Load FLORA-2 file"    flora-load-file   t]
-    ["Load FLORA-2 buffer"  flora-load-buffer t]
-    ["Load FLORA-2 region"  flora-load-region t]
+  '(["Load Flora-2 file"    flora-load-file   t]
+    ["Load Flora-2 buffer"  flora-load-buffer t]
+    ["Load Flora-2 region"  flora-load-region t]
     "---"
-    ["Load FLORA-2 file into module"    flora-load-file-to-module   t]
-    ["Load FLORA-2 buffer into module"  flora-load-buffer-to-module t]
-    ["Load FLORA-2 region into module"  flora-load-region-to-module t]
+    ["Load Flora-2 file into module"    flora-load-file-to-module   t]
+    ["Load Flora-2 buffer into module"  flora-load-buffer-to-module t]
+    ["Load Flora-2 region into module"  flora-load-region-to-module t]
     "---"
-    ["Execute region as a FLORA-2 query in main" flora-send-region-as-query t]
+    ["Execute region as a Flora-2 query in main" flora-send-region-as-query t]
     "---"
-    ["Start FLORA-2 process"     run-flora    	    t]
-    ["Restart FLORA-2 process"   flora-restart	    t]
+    ["Start Flora-2 process"     run-flora    	    t]
+    ["Restart Flora-2 process"   flora-restart	    t]
     "---"
-    ["Interrupt FLORA-2 process" flora-interrupt	    t]
-    ["Quit FLORA-2 process"      flora-quit    	    t]
+    ["Interrupt Flora-2 process" flora-interrupt	    t]
+    ["Quit Flora-2 process"      flora-quit    	    t]
     ))
     
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -224,16 +224,16 @@
   (define-key map "/"	     'flora-electric-slash))
 
 
-;; Set up FLORA-2 keymap
+;; Set up Flora-2 keymap
 (if flora-mode-map
     nil
   (setq flora-mode-map (make-sparse-keymap))
   (flora-mode-commands flora-mode-map))
 
-;; Set up FLORA-2 menus
+;; Set up Flora-2 menus
 (if window-system
-    (easy-menu-define flora-menubar flora-mode-map "FLORA-2 Commands"
-		      (cons "Flora" flora-mode-menu))
+    (easy-menu-define flora-menubar flora-mode-map "Flora-2 Commands"
+		      (cons "Flora-2" flora-mode-menu))
   )
 
 ;;;###autoload
@@ -249,13 +249,13 @@ if that value is non-nil."
   (kill-all-local-variables)
   (use-local-map flora-mode-map)
   (setq major-mode 'flora-mode)
-  (setq mode-name "FLORA-2")
+  (setq mode-name "Flora-2")
   (flora-mode-variables)
   (setq comint-prompt-regexp "flora + \\?- +")
   (run-hooks 'flora-mode-hook))
 
 (defun flora-indent-line (&optional whole-exp)
-  "Indent current line as FLORA-2 code.
+  "Indent current line as Flora-2 code.
 With argument, indent any additional lines of the same clause
 rigidly along with this one (not yet)."
   (interactive "p")
@@ -304,7 +304,7 @@ This assumes that the point is inside a comment."
     ))
 
 (defun flora-indent-level ()
-  "Compute FLORA-2 indentation level."
+  "Compute Flora-2 indentation level."
   (save-excursion
     (beginning-of-line)
     (skip-chars-forward " \t")
@@ -471,12 +471,12 @@ is inhibited."
 
 
 ;;;
-;;; Inferior FLORA-2 mode
+;;; Inferior Flora-2 mode
 ;;;
 (defvar inferior-flora-mode-map nil)
 
 (defun inferior-flora-mode ()
-  "Major mode for interacting with an inferior FLORA-2 process.
+  "Major mode for interacting with an inferior Flora-2 process.
 
 The following commands are available:
 \\{inferior-flora-mode-map}
@@ -499,7 +499,7 @@ Return not at end copies rest of line to end and sends it.
   (require 'comint)
   (comint-mode)
   (setq major-mode 'inferior-flora-mode
-	mode-name "Inferior-FLORA-2"
+	mode-name "Inferior-Flora-2"
 	comint-prompt-regexp "flora + \\?- +")
   (flora-mode-variables)
   (if inferior-flora-mode-map 
@@ -517,31 +517,29 @@ Return not at end copies rest of line to end and sends it.
 )
 
 (defun run-flora-background ()
-  "Run an inferior FLORA-2 process, input and output via buffer *flora*."
+  "Run an inferior Flora-2 process, input and output via buffer *flora*."
   (if (not (get-process flora-process-name))
-      (save-excursion
-	(set-buffer
-	 (if flora-command-line
-	     (make-comint flora-process-name
-			  flora-program-name
-			  nil
-			  "-e"
-			  flora-command-line)
-	   (make-comint flora-process-name flora-program-name))
-	 )
+      (with-current-buffer (if flora-command-line
+			       (make-comint flora-process-name
+					    flora-program-name
+					    nil
+					    "-e"
+					    flora-command-line)
+			     (make-comint
+			      flora-process-name flora-program-name))
 	(inferior-flora-mode))))
 
 
 ;;;###autoload
 (defun run-flora ()
-  "Run an inferior FLORA-2 process, input and output via buffer *flora*, and
+  "Run an inferior Flora-2 process, input and output via buffer *flora*, and
 switch to the buffer."
   (interactive)
   (run-flora-background)
   (show-flora-buffer 'switch))
 
 (defun flora-load-region (&optional beg end module)
-  "Send the region to the FLORA-2 process.
+  "Send the region to the Flora-2 process.
 The region must be created in advance."
   (interactive)
   (or (and beg end)
@@ -560,7 +558,7 @@ The region must be created in advance."
     ))
 
 (defun flora-send-region-as-query (&optional beg end)
-  "Send the region to the FLORA-2 process as a query.
+  "Send the region to the Flora-2 process as a query.
 The region must be a valid query terminated with a period."
   (interactive "r")
   (run-flora-background)
@@ -570,7 +568,7 @@ The region must be a valid query terminated with a period."
   (show-flora-buffer))
 
 (defun flora-load-buffer (&optional module)
-  "Send the current buffer to the FLORA-2 process.
+  "Send the current buffer to the Flora-2 process.
 Does not offer to save files."
   (interactive)
   (let ((file (file-name-nondirectory (buffer-file-name)))
@@ -586,7 +584,7 @@ Does not offer to save files."
 
 
 (defun flora-load-file (&optional file module)
-  "Prompt for a file, offer to save all buffers, then run FLORA-2 on the file."
+  "Prompt for a file, offer to save all buffers, then run Flora-2 on the file."
   (interactive "P")
   (let ((default-file (if (buffer-file-name)
 			  (buffer-file-name)
@@ -645,7 +643,7 @@ Does not offer to save files."
   (run-flora-background)
   (pop-to-buffer flora-process-buffer))
 
-;; SWITCH means switch to inferior FLORA-2 buffer
+;; SWITCH means switch to inferior Flora-2 buffer
 (defun show-flora-buffer (&optional switch)
   (let ((wind (selected-window)))
     (with-temp-buffer
