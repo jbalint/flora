@@ -49,6 +49,7 @@
 #define NEWOID                   FL_NEWOID_SYM
 #define RULE_NUM                 rule_num
 #define DEFAULT_RULE_ID          '_$$''''default_ruleid'
+#define TMPDIRECT                tmpdirect
 #define NEWOID_COUNT        	 FL_NEWOID_PREFIX
 #define LIBOPTION	         liboption
 #define PERMAOPTION	         permaoption
@@ -70,6 +71,8 @@
 :- index(LIBOPTION/2,trie).
 %% do NOT use trie indexing for PERMAOPTION. We rely on duplicates
 :- dynamic PERMAOPTION(_).
+
+%%:- dynamic TMPDIRECT(_).
 
 :- dynamic COMPILATION_CONTEXT(_).
 :- index(COMPILATION_CONTEXT/1,trie).
@@ -2490,6 +2493,12 @@ vars_to_var_names([V|VarList],[Name|NameList]) :-
   get_dynrule_varlist(-L)
   get_dynrule_varlist(+CompileVarList,-L)
 ****************************************************************************/
+/*
+clear_directive :- retractall(TMPDIRECT(_)).
+get_directive(L) :- findall(D,TMPDIRECT(D),L).
+report_directive(Direct) :- assert(TMPDIRECT(Direct)).
+*/
+
 %%clear_compilation_liboptions :- flora_retractall_substitute(LIBOPTION(_,_)).
 clear_compilation_liboptions :- retractall(LIBOPTION(_,_)).
 flora_get_compilation_liboptions(L) :- findall((O,Idx),LIBOPTION(O,Idx),L).
@@ -2517,6 +2526,8 @@ set_context(X) :-
 	compound(X),
 	!,
 	%% it is a trie - so no checking for duplicates
+	%% replacing COMPILATION_CONTEXT/1 with interned tries and
+	%% deleting tries instead of retractall does not help
 	assert(COMPILATION_CONTEXT(X)).
 	%%storage:storage_insert_fact(compiler_context,X,_).
 set_context(X) :-
@@ -3564,6 +3575,9 @@ compile_query(Body,RuleList-RuleTail,Facts-Facts,Status) :-
 	    %% in queries, since it is explicit in FLLIBANSWER
 	    florasyslib_struct(FLLIBANSWER,2,[AugmentedBodyCode,NVCode],Goal),
 	    query_struct(Goal,QueryCode),
+	    %% The commented part would be used if we used import
+	    %%get_directive(DirectCodeList),
+	    %%append(DirectCodeList,[QueryCode|RuleTail],RuleList)
 	    RuleList = [QueryCode|RuleTail]
 	;
 	  true
@@ -4475,6 +4489,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,Facts-Fa
 		split_ruleheads_add_rulesig(HeadCodeList,
 					    PureBodyCode,PreBody,RealPostBody,
 					    DescriptorIdCode,DescrVarsTerm,
+					    %%Tail-RuleTail, Status1),
 					    RuleList-RuleTail, Status1),
 		( no_errors_found(Status1), \+ has_context(compiling_udf_definition)
 		%% for UDFS checking of variables is done separately
@@ -7436,11 +7451,12 @@ compile_prologliblit(ParserTerm,OidCode,Code,BodyHeadList,Status) :-
 ****************************************************************************/
 compile_prologliblit(ParserTerm,Module,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    %%is_flatom(Funct,FAtom), %% this prevents _p(a)@_plg(mod) from getting compiled
+	    get_flatom_name(Funct,FAtom),
+	    %%compile_prlgterm(Funct,N,Args, %% Module,
 	    compile_prlgterm(Funct,N,Args,Module,
 			     TCode,OidCode,ACode,BodyHeadList,Status)
 	;
-	    %%is_flatom(ParserTerm,FAtom),  %% %% this prevents _p@_plg(mod) from getting compiled
+	    get_flatom_name(ParserTerm,FAtom),
 	    atomobj_struct(ParserTerm,FObj),
 	    N=0,
 	    prologterm_struct(FObj,0,[],Module,TCode),
@@ -7455,6 +7471,13 @@ compile_prologliblit(ParserTerm,Module,OidCode,Code,BodyHeadList,Status) :-
 	    %% only by compile_prologliblit/7
 	    prologliblit_struct(TCode,PCode),
 	    conjunct_code([ACode,PCode],Code)
+	/*
+	    %% generate an import statement for the corresponding XSB predicate
+	    is_flatom(Module,MName),
+	    import_struct(FAtom,N,MName,ICode),
+	    directive_struct(ICode,DCode),
+	    report_directive(DCode)
+	*/
 	;
 	  true
 	),
@@ -7497,9 +7520,11 @@ compile_prologallliblit(ParserTerm,Module,OidCode,Code,BodyHeadList,Status) :-
 	%% PrelimTermLitCode is bound and we decompose it
 	prologliblit_struct(PrelimTermCode,PrelimTermLitCode),
 	%% PrelimTermCode is bound and we decompose it
+	%%prologterm_struct(FunctCode,N,ArgsCode,PrelimTermCode),
 	prologterm_struct(FunctCode,N,ArgsCode,Module,PrelimTermCode),
 	new_prvarlist(N,NewVarList),
 	generate_convert_to_prolog_code(ArgsCode,NewVarList,ToPrologCode),
+	%%prologterm_struct(FunctCode,N,NewVarList,TermCode),
 	prologterm_struct(FunctCode,N,NewVarList,Module,TermCode),
 	prologliblit_struct(TermCode,TermLitCode),
 	generate_convert_from_prolog_code(ArgsCode,NewVarList,FromPrologCode),
@@ -7536,11 +7561,12 @@ compile_prologlibobj(ParserTerm,Object,OidCode,Code,BodyHeadList,Status) :-
 ****************************************************************************/
 compile_prologlibobj(ParserTerm,Module,Object,OidCode,Code,BodyHeadList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
-	    %%is_flatom(Funct,FAtom), %% this prevents f(_p(a))@_plg(mod) from getting compiled
+	    get_flatom_name(Funct,FAtom),
+	    %%compile_prlgterm(Funct,N,Args, %%Module,
 	    compile_prlgterm(Funct,N,Args,Module,
 			     Object,OidCode,Code,BodyHeadList,Status)
 	;
-	    %%is_flatom(ParserTerm,FAtom), %% this prevents f(_p)@_plg(mod) from getting compiled
+	    get_flatom_name(ParserTerm,FAtom),
 	    atomobj_struct(ParserTerm,FObj),
 	    N=0,
 	    prologterm_struct(FObj,0,[],Module,Object),
@@ -7549,6 +7575,17 @@ compile_prologlibobj(ParserTerm,Module,Object,OidCode,Code,BodyHeadList,Status) 
 	    BodyHeadList=[],
 	    Status = NO_ERRORS
 	),
+	/*
+	( no_errors_found(Status) -> 
+	    %% generate an import statement for the corresponding XSB predicate
+	    is_flatom(Module,MName),
+	    import_struct(FAtom,N,MName,ICode),
+	    directive_struct(ICode,DCode),
+	    report_directive(DCode)
+	;
+	  true
+	),
+	*/
 	!.
 
 
