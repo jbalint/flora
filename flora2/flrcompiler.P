@@ -149,7 +149,7 @@ is_fldisjunct(FLDISJUNCT(L,R),L,R).
 is_flplgnaf(FLPLGNAF(Goal),Goal).
 is_flrulelognaf(FLRULELOGNAF(Goal),Goal).
 is_flneg(FLNEG(Goal,Idx),Goal,Idx).
-is_default_negation(Term,Goal,FL_RULELOGNAF) :- is_flrulelognaf(Term,Goal).
+is_default_negation(Term,Goal,FL_RULELOGNAF) :- is_flrulelognaf(Term,Goal), !.
 is_default_negation(Term,Goal,FL_PLGNAF)  :- is_flplgnaf(Term,Goal).
 
 is_fllogicquantifier(FLQUANTIFIER(Quant,VarNames,FormulaCode,Idx),
@@ -240,8 +240,7 @@ is_flterm_or_flatom(Term,Funct,Arity,Args) :-
 	is_flterm(Term,Funct,Arity,Args),
 	!.
 is_flterm_or_flatom(Atom,Atom,0,[]) :-
-	is_flatom(Atom,_),
-	!.
+	is_flatom(Atom,_).
 
 is_flarith(FLARITH(Expr),Expr).
 
@@ -300,7 +299,7 @@ is_flitransig(FLITRANSIG(Att,RefType),Att,RefType).
 is_fltranspec(FLTRANSPEC(QN),Tran) :- 
 	is_fltransactionalpredspec(QN,Tran),
 	!.
-is_fltranspec(FLTRANSPEC(Tran),Tran).
+is_fltranspec(FLTRANSPEC(Tran),Tran) :- !.
 
 is_fltranspec(FLMETHSPEC(Meth),Tran) :-
 	is_fltransactionalpredspec(Meth,Tran),
@@ -554,11 +553,13 @@ approx_prindex(PROBJEQL(Obj,_,_),I)           :- !, approx_prindex(Obj,I).
 
 approx_prindex([Obj|_],I)                     :- !, approx_prindex(Obj,I).
 
-approx_prindex(PRAND(First,Second),I)         :-
-	(approx_prindex(First,I), I \= NO_INDEX, !
+approx_prindex(PRAND(First,Second),I)         :- !,
+	(approx_prindex(First,I), I \= NO_INDEX
+	-> true
 	; approx_prindex(Second,I)).
-approx_prindex(PROR(First,Second),I)               :- 
-	(approx_prindex(First,I), I \= NO_INDEX, !
+approx_prindex(PROR(First,Second),I)          :- !,
+	(approx_prindex(First,I), I \= NO_INDEX
+	-> true
 	; approx_prindex(Second,I)).
 approx_prindex(PRRULE(Head,_),I)              :- !, approx_prindex(Head,I).
 approx_prindex(PRDYNRULE(Head,_,_,_,_,_),I)   :- !, approx_prindex(Head,I).
@@ -1701,13 +1702,13 @@ sigattdef_struct(LiteralContext,Object,AttObj,RefType,Code) :-
 
 
 mvddef_struct(Context,Object,AttObj,PRMVDDEF(Object,AttObj,Caller)) :-
-		determine_caller_info(Context,Caller).
+	determine_caller_info(Context,Caller).
 imvddef_struct(Context,Object,AttObj,PRIMVDDEF(Object,AttObj,Caller)) :-
-		determine_caller_info(Context,Caller).
+	determine_caller_info(Context,Caller).
 mvdsigdef_struct(Context,Object,AttObj,PRMVDSIGDEF(Object,AttObj,Caller)) :-
-		determine_caller_info(Context,Caller).
+	determine_caller_info(Context,Caller).
 imvdsigdef_struct(Context,Object,AttObj,PRIMVDSIGDEF(Object,AttObj,Caller)) :-
-		determine_caller_info(Context,Caller).
+	determine_caller_info(Context,Caller).
 
 mvdattspec_struct(LiteralContext,Object,AttObj,RefType,ValObj,Code) :-
 	( is_mvdspecop(RefType) ->
@@ -1719,9 +1720,9 @@ mvdattspec_struct(LiteralContext,Object,AttObj,RefType,ValObj,Code) :-
 	!.
 
 mvdspec_struct(Context,Object,AttObj,ValObj,PRMVD(Object,AttObj,ValObj,Caller)) :-
-		determine_caller_info(Context,Caller).
+	determine_caller_info(Context,Caller).
 imvdspec_struct(Context,Object,AttObj,ValObj,PRIMVD(Object,AttObj,ValObj,Caller)) :-
-		determine_caller_info(Context,Caller).
+	determine_caller_info(Context,Caller).
 
 %% for +>> and *+>>
 %% appears only in the rule body
@@ -1776,7 +1777,7 @@ body_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
 	    mvdspec_struct(BODYLITERAL,Obj,Att,Val,Code)
 	;
 	  is_imvdrefop(RefType) ->
-	  imvdspec_struct(BODYLITERAL,Obj,Att,Val,Code)
+	    imvdspec_struct(BODYLITERAL,Obj,Att,Val,Code)
         ),
 	!.
 
@@ -1787,7 +1788,7 @@ head_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
             mvdspec_struct(HEADLITERAL,Obj,Att,Val,Code) 	 
         ; 	 
           is_imvdrefop(RefType) -> 	 
-          imvdspec_struct(HEADLITERAL,Obj,Att,Val,Code) 	 
+	    imvdspec_struct(HEADLITERAL,Obj,Att,Val,Code) 	 
         ),
 	!. 	 
  	 
@@ -3313,15 +3314,17 @@ compile_symbol_term(Funct,N,Args,WS,Context,Transactional,Status) :-
 	).
 
 /****************************************************************************
-  symbol_star_argumen(+Args)
+  symbol_star_argument(+Args)
 ****************************************************************************/
 symbol_star_argument([HArg]) :-
 	flora_get_flatomvar_name(HArg,ArgName),
-	ArgName==FL_STAR,!.
+	ArgName==FL_STAR,
+	!.
 
 symbol_star_argument([HArg,_TArgs]) :-
 	flora_get_flatomvar_name(HArg,ArgName),
-	ArgName==FL_STAR,!.
+	ArgName==FL_STAR,
+	!.
 
 symbol_star_argument([_HArg,TArgs]) :-
 	symbol_star_argument(TArgs).
@@ -4861,6 +4864,7 @@ compile_body(ParserTerm,Code,Status) :-
 
 compile_body(ParserTerm,Code,Status) :-
 	is_fldescriptor(ParserTerm,_,FLRULEID,_),
+	!,
 	approx_flindex(ParserTerm,QueryIdx),
 	compile_descriptor_list([ParserTerm]-QueryIdx,query,_,_,CodeList-[],Status),
 	conjunct_code(CodeList,Code).
@@ -6219,28 +6223,6 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
 	    BodyHeadList = [],
 	    OidCode=NULL
 
-	;
-	    atomlit_struct(BODYLITERAL,ParserTerm,Code),
-	    attach_workspace(Code,WS,WSCode,WSStatus),
-	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
-				  NONTRANSACTIONAL_SYMBOL,SymbolStatus)
-	    ->
-	    (WSStatus == NO_ERRORS -> Status = SymbolStatus
-	    ; Status = WSStatus
-	    ),
-	    BodyHeadList = [],
-	    OidCode=NULL
-	;
-	    transactionalatomlit_struct(BODYLITERAL,ParserTerm,Code),
-	    attach_workspace(Code,WS,WSCode,WSStatus),
-	    verify_symbol_context(ParserTerm,0,WS,PREDICATE_SYMBOL,
-				  TRANSACTIONAL_SYMBOL,SymbolStatus)
-	    ->
-	    (WSStatus == NO_ERRORS -> Status = SymbolStatus
-	    ; Status = WSStatus
-	    ),
-	    BodyHeadList = [],
-	    OidCode=NULL
 	;
 	    approx_flindex(ParserTerm,ErrIdx),
 	    compiling_error(ErrIdx,[UNKNOWN_ERROR,'\n\t\t Details: in compile_body_literal'],Err),
@@ -7948,21 +7930,10 @@ compile_head_pathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :
 	    Code = NULL,
 	    H2BCodeTail = NULL
 
-	/*
-	%% These two cases should not be hit. The parser prevents unreified
-	%% foo@bar in rule heads. (They are also not allowed in rule bodies.)
-	; atomlit_struct(HEADLITERAL,ParserTerm,A) ->
-	    workspaceobj_struct(A,WS,Object,Code),
-	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL,
-	    Status = NO_ERRORS
-
-	; transactionalatomlit_struct(HEADLITERAL,ParserTerm,A) ->
-	    workspaceobj_struct(A,WS,Object,Code),
-	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL,
-	    Status = NO_ERRORS
-	*/
+	;
+	    approx_flindex(ParserTerm,ErrIdx),
+	    compiling_error(ErrIdx,[UNKNOWN_ERROR,'\n\t\t Details: in compile_head_pathexp'],Err),
+	    Status = [Err]
         ),
 	!.
 
@@ -7981,14 +7952,14 @@ compile_head_termobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Compile
 	    	compile_udf_body_literal(Funct,Predicate,PCode,PH2BCodeHead,S),
 	    	SymbolContext = UDF_SYMBOL,
 	    	( no_errors_found(S) -> 
-			append(FunctBodyHeadList,PH2BCodeHead,List1),
-			append(List1,[PCode],List),
-			conjunct_code(List,H2BCodeHead),
-			Status = NO_ERRORS
+		    append(FunctBodyHeadList,PH2BCodeHead,List1),
+		    append(List1,[PCode],List),
+		    conjunct_code(List,H2BCodeHead),
+		    Status = NO_ERRORS
 	    	;
-			approx_flindex(Funct,Index),
-			compiling_error(Index,ERROR_UDF_COMPILE,Err),
-			Status = [Err|S]
+		    approx_flindex(Funct,Index),
+		    compiling_error(Index,ERROR_UDF_COMPILE,Err),
+		    Status = [Err|S]
 	    	)
 	    ;
 		approx_flindex(Funct,Index),
@@ -8201,9 +8172,9 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	( no_errors_found(S) -> 
 	    compile_head_specbody(Object,R,WS,RCode,RH2BCodeHead,RH2BCodeTail,Status),
 	    ( no_errors_found(Status) -> 
-		    conjunct_struct(LCode,RCode,Code),
-		    conjunct_code([LH2BCodeHead,RH2BCodeHead],H2BCodeHead),
-		    conjunct_code([LH2BCodeTail,RH2BCodeTail],H2BCodeTail)
+		conjunct_struct(LCode,RCode,Code),
+		conjunct_code([LH2BCodeHead,RH2BCodeHead],H2BCodeHead),
+		conjunct_code([LH2BCodeTail,RH2BCodeTail],H2BCodeTail)
 	    ; true
 	    )
 	;
@@ -8450,9 +8421,9 @@ compile_head_mvd_attspec(Object,AttObj,RefType,[T|L],WS,Code,H2BCodeHead,H2BCode
 	    compile_head_mvd_attspec(Object,AttObj,RefType,L,WS,LCode,LH2BCodeHead,LH2BCodeTail,AttspecStatus),
 	    append(AttspecStatus,WSStatus,Status),
 	    ( no_errors_found(Status) -> 
-		    conjunct_struct(TSCode,LCode,Code),
-		    conjunct_code([TH2BCodeHead,LH2BCodeHead],H2BCodeHead),
-		    conjunct_code([TH2BCodeTail,LH2BCodeTail],H2BCodeTail)
+		conjunct_struct(TSCode,LCode,Code),
+		conjunct_code([TH2BCodeHead,LH2BCodeHead],H2BCodeHead),
+		conjunct_code([TH2BCodeTail,LH2BCodeTail],H2BCodeTail)
 	    ; true
 	    )
 	;
@@ -8545,7 +8516,7 @@ compile_insert_literals(List,DBCodeList,Status) :-
 	compile_insert_litlist(List,Code,Status),
 	compile_conjunct2list(Code,CodeList),
 	( no_errors_found(Status) -> 
-		compile_dbupdate_list(CodeList,DBCodeList)
+	    compile_dbupdate_list(CodeList,DBCodeList)
 	;
 	    true
 	),
@@ -8686,7 +8657,7 @@ compile_delete_literals(List,DBCodeList,Status) :-
 	set_context(compiling_update_literals),
 	compile_delete_litlist(List,CodeList,Status),
 	( no_errors_found(Status) -> 
-		compile_dbupdate_list(CodeList,DBCodeList)
+	    compile_dbupdate_list(CodeList,DBCodeList)
 	;
 	    true
 	),
@@ -8818,8 +8789,8 @@ compile_dynrule_list(Op,[H|L],[HCode|LCode],Status) :-
 	compile_dynrule(Op,H,HCode,S),
 	!,
 	( no_errors_found(S) -> 
-		compile_dynrule_list(Op,L,LCode,S1),
-		append(S,S1,Status)
+	    compile_dynrule_list(Op,L,LCode,S1),
+	    append(S,S1,Status)
 	; S = Status
 	).
 
@@ -8937,10 +8908,8 @@ compile_stop_delay(_VarList,Idx,_Code,[Err]) :-
 compile_stop_delay(VarList,_Idx,Code,Status) :-
 	(var(VarList)
 	->
-	    (BODYVARS_PREDICATE(BVarList) ; BVarList = []),
-	    !,
-	    (HEADVARS_PREDICATE(HVarList) ; HVarList = []),
-	    !,
+	    (BODYVARS_PREDICATE(BVarList) -> true ; BVarList = []),
+	    (HEADVARS_PREDICATE(HVarList) -> true ; HVarList = []),
 	    append(HVarList,BVarList,VarList)
 	; true
 	),
@@ -9040,8 +9009,7 @@ compile_catch(Goal,Err,Handler,Code,Status) :-
 compile_throw(Err,Code,Status) :-
 	compile_body_pathexp(Err,FL_THISMODULE,ErrCode,_OidCode,_ObjSpec,[],Status),
 	!,
-	( no_errors_found(Status) -> 
-	    throw_struct(ErrCode,Code)
+	( no_errors_found(Status) -> throw_struct(ErrCode,Code)
 	; true
 	).
 
@@ -9053,8 +9021,7 @@ compile_p2h(Prolog,Hilog,Code,Status) :-
 	compile_body_pathexp(Prolog,FL_THISMODULE,PCode,_POidCode,_PObjSpec,[],PStatus),
 	( no_errors_found(PStatus) -> 
 	    compile_body_pathexp(Hilog,FL_THISMODULE,HCode,_HOidCode,_HObjSpec,[],Status),
-	    ( no_errors_found(Status) -> 
-		p2h_struct(PCode,HCode,Code)
+	    ( no_errors_found(Status) -> p2h_struct(PCode,HCode,Code)
 	    ; true
 	    )
 	; Status = PStatus
@@ -9076,7 +9043,7 @@ compile_execdirect_list([],_,[],[]) :- !.
 compile_execdirect_list([D|L],WS,[DCode|LCode],Status) :-
 	compile_execdirect(D,WS,DCode,S1),
 	( no_errors_found(S1) -> 
-		compile_execdirect_list(L,WS,LCode,Status)
+	    compile_execdirect_list(L,WS,LCode,Status)
 	; Status = S1
 	).
 
@@ -9229,7 +9196,8 @@ flora_compile_pathexp(ParserTerm,Code,Status) :-
 %% list of data type literals
 compile_datatype_list([],[],[]) :- !.
 compile_datatype_list([H|Tail],[HCode|TailCode],Status) :-
-	(integer(H) -> HCode = H, S1 = NO_ERRORS %% list of characters inside DATATYPE
+	(integer(H)
+	-> HCode = H, S1 = NO_ERRORS %% list of characters inside DATATYPE
 	;
 	    compile_body_pathexp(H,FL_THISMODULE,HCode,_,_,[],S1)
 	),
@@ -9414,7 +9382,7 @@ commalist2list((A,L), [A|LL]) :- commalist2list(L,LL).
 
 get_current_compile_file(CurrFileName) :-
 	flora_current_compile_filename(CurrFileName)->true
-	; CurrFileName='(interactive)'.
+	; CurrFileName = '(interactive)'.
 
 compiling_flrshell_command :- \+ flora_current_compile_filename(_).
 
@@ -9582,11 +9550,13 @@ add_nowarn_symbol(Name,N,WS,Context,Transactional) :-
 	assert(nowarn_symbol(Name,N,WSName,Context,Transactional)).
 
 has_symbol(Name,Arity,_,NO_INDEX,-1,BUILTIN_SYMBOL,_) :-
-	flora_nodefp(Name,Arity).
+	flora_nodefp(Name,Arity),
+	!.
 has_symbol(Name,Arity,_WS,NO_INDEX,-1,BUILTIN_SYMBOL,_) :-
 	%%flora_get_flatomvar_name(WS,WSName),
 	%%flora_delayed_literal(Name,Arity,WSName).
-	flora_delayed_builtin_literal(Name,Arity).
+	flora_delayed_builtin_literal(Name,Arity),
+	!.
 has_symbol(Name,N,WS,Index,LineNumber,Context,Transactional) :-
 	symbol(Name,N,WS,Index,LineNumber,Context,Transactional).
 
@@ -9714,11 +9684,3 @@ compile_sensor_literal(PrlgModName,FObj,N,ArgList,Code) :-
 	;
 	    prologterm_struct(NewFObj,SensArity2,NewArgList,PrlgModName,Code)
 	).
-
-/*
-prepend_two_anon_args_to_flterm(FlTerm,OutFlTerm) :-
-	is_flterm(FlTerm,Funct,N,Args),
-	is_anonymous_flvariable(AnonArg,NO_INDEX),
-	N2 is N+2,
-	is_flterm(OutFlTerm,Funct,N2,[AnonArg,AnonArg|Args]).
-*/
