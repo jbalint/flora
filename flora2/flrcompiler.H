@@ -166,7 +166,7 @@
 	flora_reset_compiler/1, 
 	flora_compile_pathexp/3,
 	flora_compile_add/5,
-	flora_compile/6,
+	flora_compile/7,
 	flora_clear_compilation_symbols/0,
 	%%flora_compiler_permaoption/1,
 	compiling_flrshell_command/0,

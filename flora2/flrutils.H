@@ -137,7 +137,7 @@
 	flora_clear_compilation_permaoptions/0,
 	flora_reset_compiler/1,
 	flora_compile_pathexp/3,
-	flora_compile/6,
+	flora_compile/7,
         flora_compile_add/5,
 	flora_get_compilation_liboptions/1,
 	symbol/7,
