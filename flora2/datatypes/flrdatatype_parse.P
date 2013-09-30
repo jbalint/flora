@@ -83,7 +83,10 @@ flora_parse_datatype(DT,_Idx,ParsedDT,[]) :-
 	FLORA_DATATYPE_CACHE(DT,ParsedDT),
 	!.
 flora_parse_datatype(DT,Idx,ParsedDT,Status) :-
-	flora_parse_datatype_internal(DT,Idx,ParsedDT,Status).
+	catch(flora_parse_datatype_internal(DT,Idx,ParsedDT,Status),
+	      _,
+	      dt_syntax_error_handler(DT)
+	     ).
 
 flora_parse_datatype_internal(DATATYPE(FL_TIME,LitChars),Idx,ParsedDT,Status) :-
 	!,
@@ -262,7 +265,14 @@ parse_time(LitChars,Idx,ErrorMsg,H,M,SecAtm,ZSign,ZH,ZM,Status) :-
 		SecChars1 = Rest,
 		ZoneChars="",  ZSign=1
 	    ),
-	    flora_cut_off_trailing_zeros(SecChars1,SecChars),
+	    (SecChars1 = [S1,S2|RestSec1]
+	    -> flora_cut_off_trailing_zeros(RestSec1,RestSec),
+		SecChars = [S1,S2|RestSec]
+	    ; SecChars1 = [S1|RestSec1]
+	    -> flora_cut_off_trailing_zeros(RestSec1,RestSec),
+		SecChars = [S1|RestSec]
+	    ; SecChars = [CH_0,CH_0]
+	    ),
 	    atom_codes(SecAtm,SecChars),
 	    (ZoneChars == ""
 	    -> ZHChars = "0", ZMChars = "0"
@@ -371,7 +381,14 @@ parse_duration(LitChars,_Idx,DSign,Yr,Mo,D,Hr,Min,SecAtm,[]) :-
 	-> number_codes(Sec,SecChars1), Sec >= 0
 	; SecChars1 = ""
 	),
-	flora_cut_off_trailing_zeros(SecChars1,SecChars),
+	(SecChars1 = [S1,S2|RestSec1]
+	-> flora_cut_off_trailing_zeros(RestSec1,RestSec),
+	    SecChars = [S1,S2|RestSec]
+	; SecChars1 = [S1|RestSec1]
+	-> flora_cut_off_trailing_zeros(RestSec1,RestSec),
+	    SecChars = [S1|RestSec]
+	; SecChars = ""
+	),
 	atom_codes(SecAtm,SecChars).
 
 parse_duration(_LitChars,Idx,_DSign,_Yr,_Mo,_D,_Hr,_Min,_Sec,Status) :-
@@ -853,3 +870,7 @@ abort_or_fail_on_status(Status,AbortFlag) :-
 	    ->  Status = [error(_,Msg)|_],
 		flora_abort(Msg,FLORA_ABORT_NOTRACE)
 	    ).
+
+dt_syntax_error_handler(DATATYPE(Type,Val)) :-
+	flrdecode:flora_decode_oid_as_atom(Val,Vatm),
+	flora_abort([Vatm,': syntax error in datatype ', Type],FLORA_ABORT_NOTRACE).

@@ -38,13 +38,14 @@
 %% Variable name corresponding to the caller module.
 %% It has the prefix '_', while program vars have the prefix '__',
 %% so a name clash with a program variable is not possible
-#define  FLORA_HEADLIT_CALLER_VAR_NAME  '_CallerModuleVar'
+#define  FLORA_HEADLIT_CALLER_VAR_NAME          '_CallerModuleVar'
 #define  FLORA_DYNRULE_HEADLIT_CALLER_VAR_NAME  '_DynRuleCallerModuleVar'
+#define  FLORA_FILENAME_IN_RULEID_VAR_NAME      '_FilenameInRuleidVar'
 
 %%#define  FLORA_THIS_RULEID_VAR_NAME     '_ThisRuleIdVarName'
 %%#define  FLORA_THIS_DYNRULEID_VAR_NAME  '_ThisDynRuleIdVarName'
 
-#define  FLORA_HEADLIT_CALLER_ARGS_VAR_NAME  '_CallerModuleArgsVar'
+#define  FLORA_HEADLIT_CALLER_ARGS_VAR_NAME         '_CallerModuleArgsVar'
 #define  FLORA_DYNRULE_HEADLIT_CALLER_INFOVAR_NAME  '_DynRuleCallerInfoVar'
 
 #define  FLORA_FILE_VAR_NAME  '_FileNameVar'
@@ -87,6 +88,7 @@ is_prthisfldstorage(PRTHISFLDSTORAGE(PRTHISFLDSTORAGE)) :- !.
 %% Variable in a rule head, which represents the caller module
 is_prcallervar(PRCALLERVAR(PRCALLERVAR)).
 is_prdyncallervar(PRDYNCALLERVAR(PRDYNCALLERVAR)).
+is_prfilenameinruleidvar(PRFILENAMEINRULEIDVAR(PRFILENAMEINRULEIDVAR)).
 
 %%is_prthisruleid(PRTHISRULEIDVAR(PRTHISRULEIDVAR)).
 %%is_prthisdynruleid(PRTHISDYNRULEIDVAR(PRTHISDYNRULEIDVAR)).
@@ -764,7 +766,7 @@ flora_write_struct(Term,_Context,[]) :-
 	!,
         flora_write_quoted_atom(FL_TRANSACTIONAL),
         put(CH_LPAREN),
-	write(Number),
+	write_canonical(Number),
         put(CH_RPAREN).
 
 flora_write_struct(Term,Context,Status) :- 
@@ -862,6 +864,11 @@ flora_write_struct(Term,_Context,[]) :-
 	is_prdyncallervar(Term),
 	!,
 	flora_write_atom(FLORA_DYNRULE_HEADLIT_CALLER_VAR_NAME).
+
+flora_write_struct(Term,_Context,[]) :-
+	is_prfilenameinruleidvar(Term),
+	!,
+	flora_write_atom(FLORA_FILENAME_IN_RULEID_VAR_NAME).
 
 flora_write_struct(Term,_Context,[]) :-
 	is_prspecialvar(Term,Type),
@@ -1452,7 +1459,8 @@ coder_write_syslib(Lib,6,[Id,DescrVarTerm,MetaFacts,Mode,HeadList,Body],_Context
 	    Status = Status_Id
 	).
 
-coder_write_syslib(Lib,9,[DescrId,DescrVarsTerm,WS,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],_Context,Status) :-
+%% FLLIBINSRULESIG
+coder_write_syslib(Lib,11,[DescrId,FileName,DescrVarsTerm,WS,RuleNum,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],_Context,Status) :-
         is_fllibinsrulesig(Lib),
 	!,
 	write_canonical(Lib),
@@ -1460,12 +1468,16 @@ coder_write_syslib(Lib,9,[DescrId,DescrVarsTerm,WS,HeadList,Body,PreBody,PostBod
 	flora_write_struct(DescrId,CODER_GENERIC_CONTEXT,Stat_DescrId),
 	put(CH_COMMA),
 	( Stat_DescrId == [] ->
+	    flora_write_struct(FileName,CODER_GENERIC_CONTEXT,_),
+	    put(CH_COMMA),
 	    %% writing DescrVarsTerm should always succeed
 	    flora_write_struct(DescrVarsTerm,CODER_GENERIC_CONTEXT,_),
 	    put(CH_COMMA),
 	    %% WS = PRTHISMODULE(PRTHISMODULE) - always succeds, so we
 	    %% do not condition flora_write_struct(WS,CODER_GENERIC_CONTEXT,_)
 	    flora_write_struct(WS,CODER_GENERIC_CONTEXT,_),
+	    put(CH_COMMA),
+	    write(RuleNum),
 	    put(CH_COMMA),
 	    %% Generate inserted rule heads as facts: do not add FL_HEADPREFIX
 	    flora_write_struct(HeadList,CODER_GENERIC_CONTEXT,Status_Head),
@@ -1520,15 +1532,19 @@ coder_write_dynrulelist([Term|T],Status) :-
 	coder_write_dynrulelist(T,Status).
 
 coder_write_dynrulelist([Term],Status) :-
-	is_prdynrule(Term,HeadList,Body,HVars,BVars,PreBody,PostBody,(Id,DescrVarsTerm,DescrMetaFacts,DefeatCond)),
+	is_prdynrule(Term,HeadList,Body,HVars,BVars,PreBody,PostBody,(Id,FileName,DescrVarsTerm,RuleNum,DescrMetaFacts,DefeatCond)),
 	!,
 	flora_write_atom(FLSYSRULEUPDATE),
 	put(CH_LPAREN),
 	flora_write_struct(Id,CODER_GENERIC_CONTEXT,Stat_Id),
 	(Stat_Id == [] ->
 	    put(CH_COMMA),
+	    flora_write_struct(FileName,CODER_GENERIC_CONTEXT,_),
+	    put(CH_COMMA),
 	    flora_write_struct(DescrVarsTerm,CODER_GENERIC_CONTEXT,Stat_descr_vars),
 	    (Stat_descr_vars==[] ->
+		put(CH_COMMA),
+		write(RuleNum),
 		put(CH_COMMA),
 		put(CH_LBRACKET),
 		DescrMetaFacts = DescrMetaList - [],
@@ -1929,6 +1945,11 @@ flora_build_struct(Term,_DWS,_Context,VarList,Code,(_V,NO_INDEX),[]) :-
 %% Instead, we bind all occurrences of this variable in a rule to the same var
 flora_build_struct(Term,_DWS,_Context,VarList,Code,(_V,NO_INDEX),[]) :-
 	is_prdyncallervar(Term),
+	!,
+	coder_build_variable(Term,VarList,Code).
+
+flora_build_struct(Term,_DWS,_Context,VarList,Code,(_V,NO_INDEX),[]) :-
+	is_prfilenameinruleidvar(Term),
 	!,
 	coder_build_variable(Term,VarList,Code).
 
@@ -2466,11 +2487,12 @@ coder_build_syslib(Lib,6,[Id,DescrVarTerm,MetaFacts,Mode,HeadList,Body],DWS,_Con
 
 %% Where is this used? Check!!!
 %% Maybe is used by flrdependency.P to build code for FLLIBINSRULESIG/9
-coder_build_syslib(Lib,9,[DescrId,DescrVarsTerm,WSterm,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],DWS,_Context,VarList,Code,CodeInd,Status) :-
+coder_build_syslib(Lib,11,[DescrId,FileName,DescrVarsTerm,WSterm,RuleNum,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],DWS,_Context,VarList,Code,CodeInd,Status) :-
 	is_fllibinsrulesig(Lib),
 	!,
 	flora_build_struct(DescrId,DWS,CODER_GENERIC_CONTEXT,VarList,DescrIdCode,DescrIdCodeInd,Stat_DescrId),
 	(Stat_DescrId == [] ->
+	    flora_build_struct(FileName,DWS,CODER_GENERIC_CONTEXT,VarList,FileNameCode,FileNameCodeInd,_),
 	    flora_build_struct(DescrVarsTerm,DWS,CODER_GENERIC_CONTEXT,VarList,DescrVarsTermCode,DescrVarsTermCodeInd,Stat_DescrVarsTerm),
 	    (Stat_DescrVarsTerm == [] ->
 		flora_build_struct(WSterm,DWS,CODER_GENERIC_CONTEXT,VarList,WStermCode,WStermCodeInd,Stat_WS),
@@ -2486,8 +2508,8 @@ coder_build_syslib(Lib,9,[DescrId,DescrVarsTerm,WSterm,HeadList,Body,PreBody,Pos
 				    flora_build_struct(DefeatCond,DWS,CODER_BODY_CONTEXT,VarList,DefeatCode,DefeatCodeInd,Status_Defeat),
 				    (Status_Defeat == [] ->
 					flora_build_struct(Newpred,DWS,CODER_GENERIC_CONTEXT,VarList,NewpredCode,NewpredCodeInd,Status),
-					Code =.. [Lib,DescrIdCode,DescrVarsTermCode,WStermCode,HeadListCode,BodyCode,PreBodyCode,PostBodyCode,DefeatCode,NewpredCode],
-					CodeInd =.. [Lib,DescrIdCodeInd,DescrVarsTermCodeInd,WStermCodeInd,HeadListCodeInd,BodyCodeInd,PreBodyCodeInd,PostBodyCodeInd,DefeatCodeInd,NewpredCodeInd]
+					Code =.. [Lib,DescrIdCode,FileNameCode,DescrVarsTermCode,WStermCode,RuleNum,HeadListCode,BodyCode,PreBodyCode,PostBodyCode,DefeatCode,NewpredCode],
+					CodeInd =.. [Lib,DescrIdCodeInd,FileNameCodeInd,DescrVarsTermCodeInd,WStermCodeInd,(RuleNum,NO_INDEX),HeadListCodeInd,BodyCodeInd,PreBodyCodeInd,PostBodyCodeInd,DefeatCodeInd,NewpredCodeInd]
 				    ;
 					Status = Status_Defeat
 				    )
@@ -2531,11 +2553,12 @@ coder_build_dynrulelist([Term|T],DWS,VarList,[Code|TCode],[CInd|TCInd],Status) :
 	coder_build_dynrulelist(T,DWS,VarList,TCode,TCInd,Status).
 
 coder_build_dynrulelist([Term],DWS,VarList,Code,CInd,Status) :-
-	is_prdynrule(Term,HeadList,Body,HVars,BVars,PreBody,PostBody,(Id,DescrVarsTerm,DescrMetaFacts,DefeatCond)),
+	is_prdynrule(Term,HeadList,Body,HVars,BVars,PreBody,PostBody,(Id,FileName,DescrVarsTerm,RuleNum,DescrMetaFacts,DefeatCond)),
 	!,
 	is_prlist(HeadList,Head,_T,NO_INDEX),
 	flora_build_struct(Id,DWS,CODER_GENERIC_CONTEXT,VarList,IdCode,IdCodeInd,Stat_Id),
 	(Stat_Id == [] ->
+	    flora_build_struct(FileName,DWS,CODER_GENERIC_CONTEXT,VarList,FileNameCode,FileNameCodeInd,_),
 	    flora_build_struct(DescrVarsTerm,DWS,CODER_GENERIC_CONTEXT,VarList,DescrVarsTermCode,DescrVarsTermICode,Stat_descr_vars),
 	    (Stat_descr_vars==[] ->
 		%% compile_add produces empty meta-lists,
@@ -2565,8 +2588,8 @@ coder_build_dynrulelist([Term],DWS,VarList,Code,CInd,Status) :-
 					    %% so we do not check it: the defeat
 					    %% cond literal is generated by compiler
 					    flora_build_struct(DefeatCond,DWS,CODER_BODY_CONTEXT,_,DefeatCode,DefeatCodeInd,Status),
-					    Code1 = FLSYSRULEUPDATE(IdCode,DescrVarsTermCode,DescrMetaFactsCode,HCode,BCode,HVCode,BVCode,PreBCode,PostBCode,DefeatCode),
-					    CInd1 = FLSYSRULEUPDATE(IdCodeInd,DescrVarsTermICode,DescrMetaFactsICode,HICode,BICode,HVICode,BVICode,PreBCodeInd,PostBCodeInd,DefeatCodeInd),
+					    Code1 = FLSYSRULEUPDATE(IdCode,FileNameCode,DescrVarsTermCode,RuleNum,DescrMetaFactsCode,HCode,BCode,HVCode,BVCode,PreBCode,PostBCode,DefeatCode),
+					    CInd1 = FLSYSRULEUPDATE(IdCodeInd,FileNameCodeInd,DescrVarsTermICode,(RuleNum,NO_INDEX),DescrMetaFactsICode,HICode,BICode,HVICode,BVICode,PreBCodeInd,PostBCodeInd,DefeatCodeInd),
 					    Code = [Code1],
 					    CInd = [CInd1]
 					;

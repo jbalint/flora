@@ -329,6 +329,9 @@
 	flora_read_parse_compile_build_term_list/3,
 	flora_read_parse_compile_build_loop/3,
 
+	util_read_parse_compile/8,
+	util_read_parse_compile_add/6,
+
 	flora_patch_full_filename/1,
 
 	incremental_tabling_in_effect/1,

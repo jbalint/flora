@@ -2486,7 +2486,7 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,UDFPredsList,R
 				    UDFPredsList-RestUDFPredsList,
 				    RuleStatus1),
 	!,
-	member(error(EN),RuleStatus1),
+	memberchk(error(EN),RuleStatus1),
 	NewErrNum is ErrNum+EN,
 	( EN > 0 -> %% errors found in the latest compiled rule
 	    ( MaxErr \== FLORA_ALL, NewErrNum >= MaxErr ->
@@ -2646,7 +2646,7 @@ util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledSigList,CompiledFactList,Co
 				UDFPredsList-RestUDFPredsList,
 				RuleStatus1),
 	!,
-	member(error(EN),RuleStatus1),
+	memberchk(error(EN),RuleStatus1),
 	NewErrNum is ErrNum+EN,
 	!,
 	( EN > 0 -> %% errors found in the latest compiled rule
@@ -2953,7 +2953,7 @@ flora_shell_command_line(Code,Options,Status) :-
 	flora_get_compilation_liboptions(RuleOptions),
 	strip_indices_from_options_and_split(RuleOptions,StrippedOptions,_TrailerOptions),
 	sort(StrippedOptions,Options),
-	member(error(ErrNum),RuleStatus),
+	memberchk(error(ErrNum),RuleStatus),
 	!,
 	( ErrNum > 0 ->
 	    ( flora_end_of_input(RuleStatus) ->
@@ -3160,48 +3160,56 @@ count_errors(List,Num) :-
 %% Lists must have same length, and Type1, Type2, etc., are in same order.
 :- dynamic util_stop_merging/1.
 :- index(util_stop_merging/1,0).
-merge_status_lists(_,L2,L2) :- util_stop_merging(true), !.
-merge_status_lists([],[],[]) :- !.
-merge_status_lists([FLORA_NOT_EOF|T1],[FLORA_NOT_EOF|T2],[FLORA_NOT_EOF|T3]) :-
+merge_status_lists(L1,L2,L) :-
+	util_stop_merging(true),
+	( memberchk(error(N),L2), N>0 -> L = L2
+	; memberchk(error(N),L1), N>0 -> merge_status_lists1(L1,L2,L)
+	; L = L2
+	),
+	!.
+merge_status_lists(L1,L2,L) :-
+	merge_status_lists1(L1,L2,L).
+
+merge_status_lists1([],[],[]) :- !.
+merge_status_lists1([FLORA_NOT_EOF|T1],[FLORA_NOT_EOF|T2],[FLORA_NOT_EOF|T3]) :-
 	!,
-	merge_status_lists(T1,T2,T3).
-merge_status_lists([FLORA_EOF|T1],[_|T2],[FLORA_EOF|T3]) :-
+	merge_status_lists1(T1,T2,T3).
+merge_status_lists1([FLORA_EOF|T1],[_|T2],[FLORA_EOF|T3]) :-
 	!,
-	merge_status_lists(T1,T2,T3).
-merge_status_lists([_|T1],[FLORA_EOF|T2],[FLORA_EOF|T3]) :-
+	merge_status_lists1(T1,T2,T3).
+merge_status_lists1([_|T1],[FLORA_EOF|T2],[FLORA_EOF|T3]) :-
 	!,
-	merge_status_lists(T1,T2,T3).
-merge_status_lists([error(N1)|T1],[error(N2)|T2],[error(N3)|T3]) :-
+	merge_status_lists1(T1,T2,T3).
+merge_status_lists1([error(N1)|T1],[error(N2)|T2],[error(N3)|T3]) :-
 	!,
 	N3 is N1 + N2,
-	merge_status_lists(T1,T2,T3).
-merge_status_lists([warning(N1)|T1],[warning(N2)|T2],[warning(N3)|T3]) :-
+	merge_status_lists1(T1,T2,T3).
+%% Check! Is warning/1 being used?
+merge_status_lists1([warning(N1)|T1],[warning(N2)|T2],[warning(N3)|T3]) :-
 	!,
 	N3 is N1 + N2,
-	merge_status_lists(T1,T2,T3).
-merge_status_lists([H1|T1], [H2|T2], Out) :-
+	merge_status_lists1(T1,T2,T3).
+merge_status_lists1([H1|T1], [H2|T2], Out) :-
 	%% this seems a bit faster than =..
 	functor(H1,F,_),
 	functor(H2,F,_),
 	arg(1,H1,A1),
 	arg(1,H2,A2),
-	%%H1 =.. [F|[A1]],
-	%%H2 =.. [F|[A2]],
 	!,
 	length(A2,LenA2),
 	flora_maxwarn(MaxWarn),
 	flora_maxerr(MaxErrNum),
 	((LenA2 =< 2*(MaxWarn+MaxErrNum)
-	 ; member(error(_EN),A1)
+	 ; memberchk(error(_EN),A1)
 	 )
 	 ->
 	    append(A1,A2,A3),
 	    H3 =.. [F|[A3]],
 	    Out =  [H3|T3],
-	    merge_status_lists(T1,T2,T3)
+	    merge_status_lists1(T1,T2,T3)
 	; Out = [H2|T2], assert(util_stop_merging(true))
 	).
-merge_status_lists(L1,L2,_) :-
+merge_status_lists1(L1,L2,_) :-
 	flora_abort(['FLORA-2 internal bug (please report): ',
 		     'merge_status_lists/3 with an invalid argument:\n',
 		     L1,'\n',L2]).
@@ -3510,7 +3518,7 @@ util_compiler_warn([warning(Indx,_Msg)|_L],WarnNum,SkippedWarns) :-
 	!,
 	(SkippedWarns > 0 ->
 	    (flora_compile_filename_by_token(Indx,FileName) ->
-		flora_warning_line('[~w] <Compiler> ~w (or more) warnings were skipped',
+		flora_warning_line('[~w] <Compiler> ~w (or more) warnings skipped',
 				   [FileName,SkippedWarns])
 	    ; flora_warning_line('<Compiler> ~w warnings skipped',
 				 [SkippedWarns])

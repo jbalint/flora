@@ -134,6 +134,7 @@ is_fldefeasible_rule_default(FLDEFEASIBLE_RULE_DEFAULT).
 is_flstrict_rule_default(FLSTRICT_RULE_DEFAULT).
 
 is_verbatim(FLVERBATIM(Instruction),Instruction).
+is_suppress_rulesigns(FLSUPPRESS_RULESIGNS).
 
 is_flprefixdef(FLPREFIXDEF(PrefixName,PrefixStr),PrefixName,PrefixStr).
 
@@ -267,7 +268,6 @@ is_flp2h(FLP2H(Prolog,Hilog),Prolog,Hilog).
 
 is_flnewoidop(FLNEWOIDOP(Var),Var).
 
-%% Op is needed for newmodule only because of its position information 
 is_flcallermodule(FLCALLERMODULE(Op,Var),Op,Var).
 %% Op needed for newmodule/erasemodule only because of its position information 
 is_flnewmodule(FLNEWMODULE(Op,Module),Op,Module).
@@ -410,7 +410,7 @@ approx_flindex(FLTOKEN(_Token,I),I)            :- !.
 approx_flindex(FLTOKEN(_Token,_Suffix,I),I)    :- !.
 approx_flindex(FLVAR(_Name,I),I)               :- !.
 approx_flindex(FLTRANSACTIONALVAR(_Var,I),I)   :- !.
-approx_flindex(FLLIST(_List,_T,I),I)           :- !.
+approx_prindex(FLLIST(List,_T,I),J)  :- !, (I>0 -> I=J; approx_flindex(List,J)).
 approx_flindex(FLTERM(F,_,_),I)                :- !, approx_flindex(F,I).
 approx_flindex(FLTRANSACTIONALTERM(F,_,_),I)   :- !, approx_flindex(F,I).
 
@@ -510,7 +510,7 @@ approx_prindex(PRTRANSACTIONALNUMBER(_N,I),I)      :- !.
 approx_prindex(PRSTRING(_String,I),I)              :- !.
 approx_prindex(PRVARIABLE(_Name,I),I)              :- !.
 approx_prindex(PRTRANSACTIONALVARIABLE(_Var,I),I)  :- !.
-approx_prindex(PRLIST(_List,_T,I),I)               :- !.
+approx_prindex(PRLIST(List,_T,I),J)  :- !, (I>0 -> I=J; approx_prindex(List,J)).
 approx_prindex(PRNEWOID(_,I),I)                    :- !.
 approx_prindex(PRCUT(I),I)                         :- !.
 approx_prindex(PRMODULARIZEDATOM(_Form,I),I)       :- !.
@@ -952,6 +952,7 @@ transactionalatomlit_struct(Context,Atomspec,PRTRANSACTIONALATOMLIT([Atomspec,Ca
 
 numobj_struct(FLNUMBER(Number,I),PRNUMBER(Number,I)) :- !.
 numobj_struct(Number,PRNUMBER(Number,NO_INDEX)) :- number(Number).
+numobj_struct(Number,Idx,PRNUMBER(Number,Idx)) :- number(Number).
 
 %% transactional numbers are used only in :- index %arity-argument
 transactionalnumobj_struct(FLTRANSACTIONALNUMBER(Number,I),PRTRANSACTIONALNUMBER(Number,I)).
@@ -1090,6 +1091,7 @@ callermod_var_structure(Struct) :- caller_var_struct(Struct).
 
 caller_var_struct(PRCALLERVAR(PRCALLERVAR)).
 dyn_caller_var_struct(PRDYNCALLERVAR(PRDYNCALLERVAR)).
+filename_in_ruleid_struct(PRFILENAMEINRULEIDVAR(PRFILENAMEINRULEIDVAR)).
 
 %% Context =  head/body/vars
 caller_tracing_code(Context,TracingCode) :-
@@ -1502,7 +1504,12 @@ clause_struct(Id,DescrVarTerm,MetaFacts,Mode,HeadList,Body,Code) :-
 
 insert_rulesig_struct(HeadList,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,DefeatCond),Newpred,Code) :-
 	thismodule_struct(WS),
-	florasyslib_struct(FLLIBINSRULESIG,9,[DescrIdCode,DescrVarsTerm,WS,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],Code).
+	get_current_compile_file(File),
+	(approx_prindex(DescrIdCode,Idx), Idx > 0 -> true
+	; approx_prindex(HeadList,Idx)
+	),
+	flrcomposer:flora_token_rulenum(Idx,RuleNum), %% rulenum within file
+	florasyslib_struct(FLLIBINSRULESIG,11,[DescrIdCode,File,DescrVarsTerm,WS,RuleNum,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],Code).
 
 insert_syslib(FL_INSERT,FLLIBINSERT) :- !.
 insert_syslib(FL_INSERTALL,FLLIBINSERTALL) :- !.
@@ -1846,6 +1853,7 @@ new_predicate(Name) :-
   reset_default_ruleid/0
   current_default_ruleid(-Name)
 ****************************************************************************/
+/*
 reset_default_ruleid :- flora_set_counter(DEFAULT_RULE_ID,1).
 
 increment_default_ruleid :-
@@ -1854,7 +1862,6 @@ current_default_ruleid(Name) :-
 	flora_get_counter(DEFAULT_RULE_ID,RuleId),
 	flora_concat_items([DEFAULT_RULE_ID,RuleId],Name).
 
-/*
 is_default_ruleid(LabObj) :-
 	is_pratom(LabObj,LabName),
 	str_sub(DEFAULT_RULE_ID,LabName).
@@ -2607,12 +2614,14 @@ prepare_to_compile_rule :-
 
   Purpose: file/shell
 ****************************************************************************/
-flora_reset_compiler(Purpose) :-
+flora_reset_compiler(_Purpose) :-
 	reset_newpredicate,
 	reset_rulenum,
+	/*
 	(Purpose == file -> reset_default_ruleid
 	; true
 	),
+	*/
 	clear_compilation_liboptions,
 	flora_clear_compiletime_uriprefixes,
 	flora_clear_compilation_symbols,
@@ -2945,6 +2954,15 @@ compile_direct(DirectTerm,_DirIdx,[Code],[]) :-
 	atomobj_struct(Instruction,InstrCode),
 	verbatim_struct(InstrCode,Direct),
 	directive_struct(Direct,Code).
+
+compile_direct(DirectTerm,_DirIdx,[],[]) :-
+	is_suppress_rulesigns(DirectTerm),
+	!,
+	%% Right now this DOESN'T affect dynamic rules (neither _add
+	%% nor insertrule{...}).
+	%% But given this is intended for libraries, we don't need to extend
+	%% this option to dynamic rules.
+	set_permaoption(FLSUPPRESS_RULESIGNS_OPTION).
 
 compile_direct(DirectTerm,DirIdx,[Code],[]) :-
 	is_fldefeasible(DirectTerm,Module),
@@ -3644,7 +3662,7 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
 		member(FLDESCRIPTOR(IdParserTerm,FLRULEID,Idx),FlatDescrList),
 		IdParserTermList),
 	!,
-	increment_default_ruleid,
+	%%increment_default_ruleid,
 	set_context(no_symbol_check),
 	set_context(compiling_descriptors(Mode)),
 	(length(IdParserTermList,Len), Len > 1
@@ -3861,16 +3879,25 @@ compile_ruleid_descriptor(IdDescriptorWithFrame,DescrIdCode,FrameCode,ExplicitMo
         'dynrule' is for dynamic rules inserted at run time by insertrule.
         'addrule' is for dynamic rules inserted by _add.
         'udfrule' is for rules created as part of the UDF encoding
+
+     Now we just use the rule number generated by the lexer as rule Id
+     for static and UDF rules.
+     This is because previously we used long atoms 20 chars and longer,
+     and this takes a huge amount of space on the heap.
 */
 construct_default_ruleid_descriptor(rule,Idx,RuleIdCode) :-
 	!,
-	current_default_ruleid(RuleId),
-	atomobj_struct(RuleId,Idx,RuleIdCode).
+	%%current_default_ruleid(RuleId),
+	%%atomobj_struct(RuleId,Idx,RuleIdCode).
+	flrcomposer:flora_token_rulenum(Idx,RuleId),
+	numobj_struct(RuleId,Idx,RuleIdCode).
 construct_default_ruleid_descriptor(udfrule,Idx,RuleIdCode) :-
 	!,
-	current_default_ruleid(RuleId1),
-	flora_concat_atoms(['udf_',RuleId1],RuleId),
-	atomobj_struct(RuleId,Idx,RuleIdCode).
+	%%current_default_ruleid(RuleId1),
+	%%flora_concat_atoms(['udf_',RuleId1],RuleId),
+	%%atomobj_struct(RuleId,Idx,RuleIdCode).
+	flrcomposer:flora_token_rulenum(Idx,RuleId),
+	numobj_struct(RuleId,Idx,RuleIdCode).
 construct_default_ruleid_descriptor(addrule,Idx,RuleIdCode) :-
 	!,
 	new_prvariable(Idx,RuleIdCode).
@@ -3885,16 +3912,20 @@ construct_default_ruleid_descriptor(query,Idx,RuleIdCode) :-
 %% construct_tag_descriptor_facts(+DescrIdCode,+Mode,+DescrVarsTerm,+DescrContent,-MetaFactDiffList,-Stat)
 %% construct_bool_descriptor_facts(+DescrIdCode,+Mode,+DescrVarsTerm,+DescrContent,-MetaFactDiffList,-Stat)
 construct_tag_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[TagIdMetaFact|Tail]-Tail,Status) :-
-	compile_simple_descriptor(DescrContents,DescrCode,Status),
-	construct_tag_descriptor_fact1(DescrIdCode,NULL,Mode,DescrVarsTerm,DescrCode,TagIdMetaFact).
+	compile_simple_descriptor(DescrContents,DescrContentsCode,Status),
+	construct_tag_descriptor_fact1(DescrIdCode,NULL,Mode,DescrVarsTerm,DescrContentsCode,TagIdMetaFact).
 
-%% Like construct_tag_descriptor_facts/7, but uses DescrCode (pr-obj) instead of
-%% DescrContents (fl-obj)
+%% Like construct_tag_descriptor_facts/7, but uses DescrContentsCode (pr-obj)
+%% instead of %% DescrContents (fl-obj)
 %% Also takes ExplicitModule
-construct_tag_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,DescrCode,TagIdMetaFact) :-
+construct_tag_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,DescrContentsCode,TagIdMetaFact) :-
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
+	get_current_compile_file_for_descriptor(CurrFileName,Mode),
 	get_descriptor_module(ExplicitModule,Mode,DescrModule),
-	generate_prolog_liblit(PredCode,4,[DescrIdCode,DescrModule,DescrCode,DescrVarsTerm], TagIdMetaTerm),
+	%% we attach rule number within the file. It may be equal the
+	%% default rule id. Together with the file name, this can be used
+	%% to retrieve textual information about the rules.
+	generate_prolog_liblit(PredCode,5,[DescrIdCode,CurrFileName,DescrModule,DescrContentsCode,DescrVarsTerm], TagIdMetaTerm),
 	(Mode == rule -> fact_struct(TagIdMetaTerm,TagIdMetaFact)
 	; %% Mode = clause_construct/query/dynrule/addrule/udfrule
 	    TagIdMetaTerm = TagIdMetaFact
@@ -3902,14 +3933,15 @@ construct_tag_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Des
 
 
 construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[BoolIdMetaFact|Tail]-Tail,Status) :-
-	compile_simple_descriptor(DescrContents,DescrCode,Status),
-	construct_bool_descriptor_fact1(DescrIdCode,NULL,Mode,DescrVarsTerm,DescrCode,BoolIdMetaFact).
-%% Like construct_tag_descriptor_facts, but uses DescrCode (pr-obj) instead of
-%% DescrContents (fl-obj)
-construct_bool_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,DescrCode,BoolIdMetaFact) :-
+	compile_simple_descriptor(DescrContents,DescrContentsCode,Status),
+	construct_bool_descriptor_fact1(DescrIdCode,NULL,Mode,DescrVarsTerm,DescrContentsCode,BoolIdMetaFact).
+%% Like construct_tag_descriptor_facts, but uses DescrContentsCode (pr-obj)
+%% instead of DescrContents (fl-obj)
+construct_bool_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,DescrContentsCode,BoolIdMetaFact) :-
 	PredCode = FL_BOOL_DESCRIPTOR_META_PREDICATE,
+	get_current_compile_file_for_descriptor(CurrFileName,Mode),
 	get_descriptor_module(ExplicitModule,Mode,DescrModule),
-	generate_prolog_liblit(PredCode,4,[DescrIdCode,DescrModule,DescrCode,DescrVarsTerm], BoolIdMetaTerm),
+	generate_prolog_liblit(PredCode,5,[DescrIdCode,CurrFileName,DescrModule,DescrContentsCode,DescrVarsTerm], BoolIdMetaTerm),
 	(Mode == rule -> fact_struct(BoolIdMetaTerm,BoolIdMetaFact)
 	; %% Mode = clause_construct/query/dynrule/addrule/udfrule
 	    BoolIdMetaTerm = BoolIdMetaFact
@@ -3972,8 +4004,9 @@ construct_prop_descriptor_facts(_DescrIdCode,_ExplicitModule,_Mode,_DescrVarsTer
 %% constructs meta facts for 1 attr-value pair
 construct_prop_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Prop,Val,MetaFact) :-
 	PredCode = FL_PROP_DESCRIPTOR_META_PREDICATE,
+	get_current_compile_file_for_descriptor(CurrFileName,Mode),
 	get_descriptor_module(ExplicitModule,Mode,DescrModule),
-	generate_prolog_liblit(PredCode,5,[DescrIdCode,DescrModule,Prop,Val,DescrVarsTerm], MetaTerm),
+	generate_prolog_liblit(PredCode,6,[DescrIdCode,CurrFileName,DescrModule,Prop,Val,DescrVarsTerm], MetaTerm),
 	(Mode == rule -> fact_struct(MetaTerm,MetaFact)
 	; %% Mode = clause_construct/query/dynrule/addrule/udfrule
 	    MetaTerm = MetaFact
@@ -4030,15 +4063,16 @@ compile_complex_descriptor(DescrContentsWS,FramesOK,Object,FrameCode,ExplicitMod
 construct_rule_enabling_fact(_DescrIdCode,clause_construct,NULL) :- !.
 construct_rule_enabling_fact(_DescrIdCode,query,NULL) :- !.
 construct_rule_enabling_fact(DescrIdCode,Mode,RuleEnablerMetaFact) :-
-	construct_rule_enabling_test(DescrIdCode,RuleEnablerMetaTerm),
+	construct_rule_enabling_test(DescrIdCode,Mode,RuleEnablerMetaTerm,_FileName),
 	(Mode == rule -> fact_struct(RuleEnablerMetaTerm,RuleEnablerMetaFact)
 	; %% clause_construct/query/dynrule/addrule/udfrule
 	    RuleEnablerMetaTerm = RuleEnablerMetaFact
 	).
 
-construct_rule_enabling_test(DescrIdCode,RuleEnablerMetaTerm) :-
+construct_rule_enabling_test(DescrIdCode,Mode,RuleEnablerMetaTerm,CurrFileName) :-
 	modularized_pratom_struct(FL_RULE_ENABLER,NO_INDEX,PredCode),
-	generate_prolog_liblit(PredCode,1,[DescrIdCode],RuleEnablerMetaTerm).
+	get_current_compile_file_for_descriptor(CurrFileName,Mode),
+	generate_prolog_liblit(PredCode,2,[DescrIdCode,CurrFileName],RuleEnablerMetaTerm).
 
 construct_tag_descriptor_fact_from_id(DescrIdCode,Mode,ExplicitModule,DescrVarsTerm,TagIdMetaFact) :-
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
@@ -4057,7 +4091,8 @@ construct_tag_descriptor_fact_from_id(DescrIdCode,Mode,ExplicitModule,DescrVarsT
 	    thismodule_struct(Module),
 	    Tag = DescrIdCode
 	),
-	generate_prolog_liblit(PredCode,4,[DescrIdCode,Module,Tag,DescrVarsTerm], TagIdMetaTerm),
+	get_current_compile_file_for_descriptor(CurrFileName,Mode),
+	generate_prolog_liblit(PredCode,5,[DescrIdCode,CurrFileName,Module,Tag,DescrVarsTerm],TagIdMetaTerm),
 	(Mode == rule -> fact_struct(TagIdMetaTerm,TagIdMetaFact)
 	; %% Mode = clause_construct/query/dynrule/addrule/udfrule
 	    TagIdMetaTerm = TagIdMetaFact
@@ -4499,7 +4534,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	    ; delay_literals_checking_code(Head,Body,DescrVarsTerm,DelayCheckCode)
 	    ),
 	    (has_context(compiling_udf_definition) -> RuleEnablerTest = true
-	    ; construct_rule_enabling_test(DescriptorIdCode,RuleEnablerTest)
+	    ; construct_rule_enabling_test(DescriptorIdCode,rule,RuleEnablerTest,_)
 	    ),
 	    PreBody = RuleEnablerTest,
 	    PostBody = DelayCheckCode,
@@ -4512,7 +4547,6 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 		split_ruleheads_add_rulesig(HeadCodeList,
 					    PureBodyCode,PreBody,RealPostBody,
 					    DescriptorIdCode,DescrVarsTerm,
-					    %%Tail-RuleTail, Status1),
 					    RuleList-RuleTail,
 					    SigDiffList,
 					    Status1),
@@ -4582,10 +4616,20 @@ rule_difflist([H|L],B,PreB,PostB,IdCode,DescrVarsTerm,[HC|LC]-T,Status) :-
 	rule_struct(H,NewB,HC),
 	rule_difflist(L,B,PreB,PostB,IdCode,DescrVarsTerm,LC-T,Status).
 
+insert_rule_signature_onehead(_Head,_Body,_PreBody,_PostBody,_,NULL) :-
+	(has_context(compiling_udf_definition)
+	; has_permaoption(FLSUPPRESS_RULESIGNS_OPTION)
+	),
+	!.
 insert_rule_signature_onehead(Head,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,DefeatCond),Code) :-
         insert_rulesig_struct(Head,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,DefeatCond),NULL,CCode),
         query_struct(CCode,Code).
 
+insert_rule_signature_multihead(_HeadList,_Body,_PreBody,_PostBody,_,_Newpred,NULL) :-
+	(has_context(compiling_udf_definition)
+	; has_permaoption(FLSUPPRESS_RULESIGNS_OPTION)
+	),
+	!.
 insert_rule_signature_multihead(HeadList,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm),Newpred,Code) :-
         list_struct(HeadList,[],HeadListCode),
 	construct_defeasible_condition_for_signature_or_dynrule(HeadList,DescrIdCode,DescrVarsTerm,DefeatCond),
@@ -4597,7 +4641,7 @@ insert_rule_signature_multihead(HeadList,Body,PreBody,PostBody,(DescrIdCode,Desc
 add_defeasible_condition_to_body(DefeatCondCode,BodyCode,PreBody,PostBody,NewBodyCode) :-
 	conjunct_code([PreBody,BodyCode,DefeatCondCode,PostBody],NewBodyCode).
 
-%% DefeatCondCode = FL_UNDEFEATED(DescrIdCode,VarsCode,NewVar,ThisModule)
+%% DefeatCondCode = FL_UNDEFEATED(DescrIdCode,FileName,VarsCode,NewVar,ThisModule)
 %% FL_UNDEFEATED is modularized Prolog predicate
 %% NewVar is used because this type of defeasible condition is used in rule
 %% signatures and dynamic rules; NewVar is bound to the head at run time.
@@ -4611,13 +4655,14 @@ construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVa
 	    %% So, we cannot determine the rule head statically here.
 	    new_prvariable(NO_INDEX,DummyVarObj4Head),
 	    thismodule_struct(ThisModule),
-	    %% create FL_UNDEFEATED(DescrIdCode,DescrVarsTerm,NewVar,ThisModule)
+	    %% create FL_UNDEFEATED(DescrIdCode,FileName,DescrVarsTerm,NewVar,ThisModule)
 	    %% this code makes FL_UNDEFEATED into Prolog predicate
 	    %% It is faster, saves table space
 	    modularized_pratom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
 	    var_caller_info_structure(ThisModule,CallerInfo),
-	    prologterm_struct(UnDefeatFunCode,5,
-			      [DescrIdCode,DescrVarsTerm,DummyVarObj4Head,ThisModule,CallerInfo],
+	    get_current_compile_file_for_descriptor(FileName,dynrule),
+	    prologterm_struct(UnDefeatFunCode,6,
+			      [DescrIdCode,FileName,DescrVarsTerm,DummyVarObj4Head,ThisModule,CallerInfo],
 			      DefeatCondCode),
 	    %% wrap up for delaying the defeasible condition
 	    list_struct([],[],EmptyListObj), %% empty list
@@ -4633,7 +4678,7 @@ construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVa
 	),
 	!.
 
-%% DefeatCondCode = FL_UNDEFEATED(DescrIdCode,DescrVarsTerm,HeadCode,ThisModule)
+%% DefeatCondCode = FL_UNDEFEATED(DescrIdCode,FileName,DescrVarsTerm,HeadCode,ThisModule)
 %%                  or true.
 %% FL_UNDEFEATED is a modularized Prolog predicate
 %% The difference is that instead of NewVar we insert head code at compile time.
@@ -4648,8 +4693,9 @@ construct_static_defeasible_condition(HeadCode,DescrIdCode,DescrVarsTerm,Delayed
 	    %% It is faster, saves table space
 	    modularized_pratom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
 	    var_caller_info_structure(ThisModule,CallerInfo),
-	    prologterm_struct(UnDefeatFunCode,5,
-			      [DescrIdCode,DescrVarsTerm,HeadCode,ThisModule,CallerInfo],
+	    get_current_compile_file(FileName),
+	    prologterm_struct(UnDefeatFunCode,6,
+			      [DescrIdCode,FileName,DescrVarsTerm,HeadCode,ThisModule,CallerInfo],
 			      DefeatCondCode),
 	    %% wrap up for delaying the defeasible condition
 	    collect_prvars(HeadCode,HeadCodeVars1),
@@ -5828,8 +5874,18 @@ compile_head_fltoken(Token,Suffix,Index,Object,Status) :-
         ( Token == FL_NEWOID ->
 	    new_oidobj(Suffix,Index,Object),
 	    Status = NO_ERRORS
+	; %% _@F, _@L
+	    Token == FL_SPECIAL_CONST_TOKEN, Suffix == FL_SPECIAL_FILE_TOKEN ->
+	    get_current_compile_file(FileName),
+	    atomobj_struct(FileName,Index,Object),
+	    Status = NO_ERRORS
+	; %% _@F, _@L
+	    Token == FL_SPECIAL_CONST_TOKEN, Suffix == FL_SPECIAL_LINE_TOKEN ->
+	    flora_token_index_to_line(Index,Line),
+	    numobj_struct(Line,Index,Object),
+	    Status = NO_ERRORS
 	;  %% _@!, the rule id
-	    Token == FL_RULEID_TOKEN_PREFIX, Suffix == FL_RULEID_SYM ->
+	    Token == FL_SPECIAL_CONST_TOKEN, Suffix == FL_RULEID_SYM ->
 	    ( has_context(compiling_descriptors(Mode))
 	    -> construct_default_ruleid_descriptor(Mode,Index,DescrIdCode),
 		Object = DescrIdCode,
@@ -6106,9 +6162,9 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
 
 	; is_flcallermodule(ParserTerm,Op,Module) ->
 	    is_flatom(Op,_OpAtom,Index),
-	    BodyHeadList = [],
 	    compile_atomvar(Module,ModCode),
 	    caller_binding_code(ModCode,WSCode),
+	    BodyHeadList = [],
 	    Status = NO_ERRORS,
 	    OidCode=NULL
 
@@ -6466,8 +6522,22 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status)
 	    Status = NO_ERRORS,
 	    BodyHeadList=[]
 
+	; is_fltoken(ParserTerm,FL_SPECIAL_CONST_TOKEN,FL_SPECIAL_FILE_TOKEN,Index) ->
+	    get_current_compile_file(FileName),
+	    Code = NULL,
+	    OidCode = NULL,
+	    atomobj_struct(FileName,Index,Object),
+	    Status = NO_ERRORS,
+	    BodyHeadList=[]
+	; is_fltoken(ParserTerm,FL_SPECIAL_CONST_TOKEN,FL_SPECIAL_LINE_TOKEN,Index) ->
+	    flora_token_index_to_line(Index,Line),
+	    Code = NULL,
+	    OidCode = NULL,
+	    numobj_struct(Line,Index,Object),
+	    Status = NO_ERRORS,
+	    BodyHeadList=[]
 	%% _@! - rule id token
-	; is_fltoken(ParserTerm,FL_RULEID_TOKEN_PREFIX,FL_RULEID_SYM,Index) ->
+	; is_fltoken(ParserTerm,FL_SPECIAL_CONST_TOKEN,FL_RULEID_SYM,Index) ->
 	    BodyHeadList=[],
 	    OidCode = NULL,
 	    Code = NULL,
@@ -6490,13 +6560,19 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status)
 	    )
 
 	; is_fltoken(ParserTerm,FL_SPECIAL_VAR_TOKEN,Suffix,Index) ->
-	    Code = NULL,
 	    OidCode = NULL,
 	    (memberchk(Suffix, [FL_SPECIAL_FILE_TOKEN,FL_SPECIAL_LINE_TOKEN])
 	    ->
+		special_variable_struct(Suffix,Object),
+		Code = NULL,
 		Status = NO_ERRORS,
-		BodyHeadList=[],
-		special_variable_struct(Suffix,Object)
+		BodyHeadList=[]
+	    ; Suffix == FL_SPECIAL_CALLER_TOKEN
+	    ->
+		new_prvariable(NO_INDEX,Object),
+		caller_binding_code(Object,Code),
+		Status = NO_ERRORS,
+		BodyHeadList=[]
 	    ; 
 		compiling_error(Index,UNSUPPORTED_SPECIAL_TOKEN,TokenErr),
 		Status = [TokenErr]
@@ -8582,12 +8658,14 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 		conjunct_code([H2BCodeHead,H2BCodeTail],H2BCode),
 		%% only the vars in the fact-term are to be checked
 		delay_literals_checking_code([],H,DescrVarsTerm,DelayCheckCode),
-		construct_rule_enabling_test(DescrIdCode,RuleEnablerTest),
+		construct_rule_enabling_test(DescrIdCode,dynrule,RuleEnablerTest,FileName),
 		PreBody = RuleEnablerTest,
 		PostBody = DelayCheckCode,
+		%%get_current_compile_file_for_descriptor(FileName,dynrule),
 		dynrule_struct(HeadCodeList,H2BCode,HVL,BVL,PreBody,PostBody,
-			       (DescrIdCode,
+			       (DescrIdCode,FileName,
 				   DescrVarsTerm,
+				   NULL, %% RuleNum
 				   DefaultMetaFactDiffList,
 				   FL_TRUE),  %% default defeat condition
 			       HDynruleCode),
@@ -8859,15 +8937,20 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 		construct_defeasible_condition_for_signature_or_dynrule(HeadCode,DescrIdCode,DescrVarsTerm,DefeatCondCode),
 		%% Note: Head cannot contain sensors, so no need to check
 		%% multi-headed rules if sensors mix with non-sensors
-		(has_context(compiling_udf_definition) -> RuleEnablerTest = true
-		; construct_rule_enabling_test(DescrIdCode,RuleEnablerTest)
+		(has_context(compiling_udf_definition)
+		-> RuleEnablerTest = true, FileName = NULL
+		; construct_rule_enabling_test(DescrIdCode,dynrule,RuleEnablerTest,FileName)
 		),
 		delay_literals_checking_code(Head,Body,DescrVarsTerm,DelayCheckCode),
 		PreBody = RuleEnablerTest,
 		PostBody = DelayCheckCode,
+		%%get_current_compile_file_for_descriptor(FileName,dynrule),
 		dynrule_struct(HeadCodeList,PureBodyCode,HVL,BVL,
 			       PreBody,PostBody,
-			       (DescrIdCode,DescrVarsTerm,MetaFactDiffList,DefeatCondCode),
+			       (DescrIdCode,FileName,
+				   DescrVarsTerm,
+				   NULL, %% RuleNum,
+				   MetaFactDiffList,DefeatCondCode),
 			       RuleCode),
 		( is_fldeleteruleop(Op)
 		->  true
@@ -9300,7 +9383,7 @@ delay_literals_checking_code(Head,Body,DescrVarsTerm,Code) :-
 	%% needed for that rule. Instead, we put a var in place of the delay
 	%% checker. In static & dynamic code, this var is ignored in generating
 	%% the corresponding rules. However, dynamic rules are encoded as
-	%% FLSYSRULEUPDATE(Id,DescrVarTerm,DescrMetaFacts,Head,Body,Hvars,Bvars,PreBody,PostBody,Defeat)
+	%% FLSYSRULEUPDATE(Id,FileName,DescrVarTerm,DescrMetaFacts,Head,Body,Hvars,Bvars,PreBody,PostBody,Defeat)
 	%% To match reified rules, we make DelayCheckCode into a new var
 	%% If there will be other stuff in PostBody, we'll have to integrate it.
 	(vars_contains(HeadVars,BodyVars) ->
@@ -9383,8 +9466,21 @@ commalist2list((A,L), [A|LL]) :- commalist2list(L,LL).
 get_current_compile_file(CurrFileName) :-
 	flora_current_compile_filename(CurrFileName)->true
 	; CurrFileName = '(interactive)'.
-
 compiling_flrshell_command :- \+ flora_current_compile_filename(_).
+
+get_current_compile_file_for_descriptor(CurrFileName,_Mode) :-
+	has_context(rule_reification),
+	filename_in_ruleid_struct(CurrFileName).
+get_current_compile_file_for_descriptor(CurrFileName,Mode) :-
+	memberchk(Mode,[clause_construct,query]),
+	!,
+	new_prvariable(NO_INDEX,CurrFileName).
+get_current_compile_file_for_descriptor(FL_DYNRULE_FICTITIOUS_FILENAME,dynrule) :-
+	\+ has_context(compiling_for_addition),
+	!.
+
+get_current_compile_file_for_descriptor(CurrFileName,_Mode) :-
+	get_current_compile_file(CurrFileName).
 
 
 

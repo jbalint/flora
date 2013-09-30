@@ -839,6 +839,7 @@ fldefeasible_rule_default_struct(FLDEFEASIBLE_RULE_DEFAULT).
 flstrict_rule_default_struct(FLSTRICT_RULE_DEFAULT).
 
 flverbatim_struct(Instruction,FLVERBATIM(Instruction)).
+flsuppress_rule_signatures_struct(FLSUPPRESS_RULESIGNS).
 
 flnewoidop_struct(Var,FLNEWOIDOP(Var)).
 
@@ -1380,6 +1381,7 @@ parse_directive(CanoniTerm,Code,Status) :-
 	; defeasible_rule_default_directive(CanoniTerm,CodeList,Status)
 	; strict_rule_default_directive(CanoniTerm,CodeList,Status)
 	; verbatim_directive(CanoniTerm,CodeList,Status)
+	; suppress_rule_signatures_directive(CanoniTerm,CodeList,Status)
 	; symbol_context_directive(CanoniTerm,CodeList,Status)
         ),
 	fldirective_struct(CodeList,If,Code),
@@ -2437,6 +2439,7 @@ strict_rule_default_directive(CanoniTerm,[Code],[]) :-
 ****************************************************************************/
 verbatim_directive(CANOTERM(Funct,1,_,[Arg],_If,Ip),[Code],Status) :-
 	get_name(Funct,FL_VERBATIM),
+	!,
 	fixup_object(Arg,ArgAtmObj),
 	(get_atom(ArgAtmObj,Atom,Index) ->
 	    flatom_struct(Atom,Index,ArgCode),
@@ -2447,6 +2450,25 @@ verbatim_directive(CANOTERM(Funct,1,_,[Arg],_If,Ip),[Code],Status) :-
 	).
 
 
+/****************************************************************************
+   suppress_rule_signatures_directive(+CanoniTerm,-CodeList,-Status)
+
+       :- suppress_rule_signatures.
+
+   Tells the compiler to not output rule signatures.
+   This is used for builtin libraries, since in most cases the rules in those
+   libraries are neither deleted nor queried. So, outputting signatures delays
+   the load time and hogs the main memory.
+
+   Right now this DOESN'T affect dynamic rules (_add or insertrule{...}).
+   But given this is intended for libraries, we don't need to extend this
+   option to dynamic rules.
+****************************************************************************/
+suppress_rule_signatures_directive(CanoniTerm,[Code],NO_ERRORS) :-
+	is_obj_identifier_struct(CanoniTerm,FL_SUPPRESS_RULE_SIGNATURES,_),
+	!,
+	flsuppress_rule_signatures_struct(Code).
+
 
 /****************************************************************************
   cmpopt_directive(+CanoniTerm,-CodeList,-Status)
@@ -2454,6 +2476,7 @@ verbatim_directive(CANOTERM(Funct,1,_,[Arg],_If,Ip),[Code],Status) :-
 ****************************************************************************/
 cmpopt_directive(CANOTERM(Funct,1,FL_PARENTHESIS,[T],_If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_CMPOPT),
+	!,
 	( T=CANOLIST(List,[],_N,_I,_Ib) ->
 	    parse_cmpoptlist(List,TCode,Status),
 	    ( Status == NO_ERRORS ->
