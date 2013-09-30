@@ -90,6 +90,7 @@
    from flrstoragebase.
 
 :- import
+	storage_find_fact/2,
 	storage_insert_fact/3
    from storage.
 
@@ -137,8 +138,8 @@
 	flora_clear_compilation_permaoptions/0,
 	flora_reset_compiler/1,
 	flora_compile_pathexp/3,
-	flora_compile/7,
-        flora_compile_add/5,
+	flora_compile/8,
+        flora_compile_add/6,
 	flora_get_compilation_liboptions/1,
 	symbol/7,
 	nowarn_symbol/5,
@@ -147,11 +148,15 @@
 	make_symbol_context_status/12,
 	symbol_warnings_flag/1,
 	compiling_error/3,
+	is_fldirective/3,
 	is_flvariable/3
    from flrcompiler.
 
 :- import
 	%%flora_divide_program/3,
+	is_prquery/2,
+	is_prologliblit/4,
+	is_prologliblit/5,
 	flora_coder_write_prolog_bridge_rule/3,
 	flora_coder_write_conditional_prolog_bridge_rule/2,
 	flora_extern_code/2,
@@ -247,7 +252,8 @@
    from flrwhen.
 
 :- import
-        matching_rule_signature/6
+	rule_signature_member/3,
+        matching_rule_signature/7
    from flrcanon.
 
 :- import check_for_dependencies/2 from flrdependency.
@@ -345,6 +351,8 @@
 	reset_modules_for_file/1,
 	reset_modules_for_load/1,
 	reset_modules_for_add/1,
+
+	flora_get_textual_info/4,
 
 	flora_warnings_level/1,
         flora_coder_error/1.

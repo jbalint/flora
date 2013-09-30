@@ -71,6 +71,7 @@ ALLOBJS =  flranswer$(OBJEXT) \
 	   flrwhen$(OBJEXT) \
 	   flrunify_handlers$(OBJEXT) \
 	   flrtesting$(OBJEXT) \
+	   flrgateway$(OBJEXT) \
 	   flrprefixdef$(OBJEXT)
 
 OPTIONS = [optimize,ti_all]

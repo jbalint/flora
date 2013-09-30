@@ -94,6 +94,7 @@
 	flora_coder_write_conditional_prolog_bridge_rule/2,
 	is_prrule/3,
 	is_prfact/2,
+	is_prquery/2,
 	is_prdirective/2,
 	%%is_prlabeled_construct/3,
         is_prignoredep/2,

@@ -88,9 +88,9 @@ rm -f $basedir/exporttest/.flora_aux_files/*
 rm -f $basedir/functions/.flora_aux_files/*
 rm -f $basedir/functions/*/.flora_aux_files/*
 rm -f $basedir/general_tests/.flora_aux_files/*
-rm -f $basedir/general_tests/prolog/*${OBJEXT}
 rm -f $basedir/symbols/.flora_aux_files/*
 rm -f $basedir/symbols/*/.flora_aux_files/*
+rm -f $basedir/general_tests/prolog/*${OBJEXT}
 
 
 # run the tests

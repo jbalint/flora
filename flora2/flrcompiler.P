@@ -686,6 +686,11 @@ neg_struct(PRAND(Goal1,Goal2),Idx,PRAND(Goal1,Struct2),Status) :-
 	!,
 	neg_struct(Goal2,Idx,Struct2,Status).
 
+neg_struct(PRAND(Goal1,Goal2),Idx,PRAND(Struct1,Goal2),Status) :-
+	is_body_neg_passthrough_literal(Goal2),
+	!,
+	neg_struct(Goal1,Idx,Struct1,Status).
+
 %% unlike naf, neg can appear in the head
 neg_struct(PRAND(Goal1,Goal2),Idx,PROR(Struct1,Struct2),Status) :-
 	neg_struct(Goal1,Idx,Struct1,S),
@@ -1508,7 +1513,7 @@ insert_rulesig_struct(HeadList,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,
 	(approx_prindex(DescrIdCode,Idx), Idx > 0 -> true
 	; approx_prindex(HeadList,Idx)
 	),
-	flrcomposer:flora_token_rulenum(Idx,RuleNum), %% rulenum within file
+	flora_token_rulenum(Idx,RuleNum), %% rulenum within file
 	florasyslib_struct(FLLIBINSRULESIG,11,[DescrIdCode,File,DescrVarsTerm,WS,RuleNum,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],Code).
 
 insert_syslib(FL_INSERT,FLLIBINSERT) :- !.
@@ -2629,7 +2634,7 @@ flora_reset_compiler(_Purpose) :-
 
 
 /****************************************************************************
-  flora_compile_add(+ParserTerm,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-Status)
+  flora_compile_add(+ParserTerm,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-RuleNum+RuleFileName,-Status)
 
   This is the top level predicate that is called to compile code for
   adding code to module.
@@ -2639,9 +2644,9 @@ flora_reset_compiler(_Purpose) :-
   FactDiffList is the same for facts
   UDFPredsDiffList is the same for the list of tabled predicates
 ****************************************************************************/
-flora_compile_add(NULL,R-R,F-F,U-U,[]) :- !.
+flora_compile_add(NULL,R-R,F-F,U-U,_,[]) :- !.
 	
-flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,Status) :-
+flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,RuleNum+FileName,Status) :-
 #ifdef SHOW_COMPILE_ADD_INPUT
 	DBGOUTLN('------------result of parsing-----------------'),
 	DBGOUTLN(ParserTerm),
@@ -2650,6 +2655,10 @@ flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,Status) 
 	prepare_to_compile_rule,
 	increment_rule_number,
 	approx_flindex(ParserTerm,RuleIdx),
+	(RuleIdx > 0 -> flora_token_rulenum(RuleIdx,RuleNum)
+	; RuleNum = -1
+	),
+	get_current_compile_file(FileName),
         compile_descriptor_list([]-RuleIdx,addrule,DescriptorIdCode,DescrVarsTerm,MetaFactDiffList,_),
 	compile_add_internal(ParserTerm,
 			     DescriptorIdCode,DescrVarsTerm,
@@ -2668,10 +2677,10 @@ flora_compile_add(ParserTerm,RuleDiffList,FactDiffList,UDFPredsDiffList,Status) 
 	!.
 	
 %% This rule is for debugging.
-flora_compile_add(ParserTerm,[],[],[],Status) :-
-	    approx_flindex(ParserTerm,ErrIdx),
-	    compiling_error(ErrIdx,[UNKNOWN_ERROR,'\n\t\t Details: in flora_compile_add'],Err),
-	    Status = [Err].
+flora_compile_add(ParserTerm,[],[],[],_,Status) :-
+	approx_flindex(ParserTerm,ErrIdx),
+	compiling_error(ErrIdx,[UNKNOWN_ERROR,'\n\t\t Details: in flora_compile_add'],Err),
+	Status = [Err].
 
 compile_add_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
 	set_context(compiling_for_addition),
@@ -2788,7 +2797,7 @@ compile_annotated_construct_add(DescriptorList,MainPartOfRule,RuleDiffList,FactD
 
 
 /****************************************************************************
-  flora_compile(+ParserTerm,-RuleDiffList,-SigDiffList,-FactDiffList,-MetaFactDiffList,-UDFPredsDiffList,-Status)
+  flora_compile(+ParserTerm,-RuleDiffList,-SigDiffList,-FactDiffList,-MetaFactDiffList,-UDFPredsDiffList,-RuleNum+RuleFileName,-Status)
 
   This is the top level procedure that is called to compile code.
 
@@ -2799,9 +2808,9 @@ compile_annotated_construct_add(DescriptorList,MainPartOfRule,RuleDiffList,FactD
   MetaFactDiffList is a list of meta facts generated from annotations
   UDFPredsDiffList is the same for the list of tabled predicates
 ****************************************************************************/
-flora_compile(NULL,R-R,S-S,F-F,M-M,U-U,[]) :- !.
+flora_compile(NULL,R-R,S-S,F-F,M-M,U-U,_,[]) :- !.
 
-flora_compile(ParserTerm,RuleDiffList,SigDiffList,FactDiffList,MetaFactDiffList,UDFPredsDiffList,Status) :-
+flora_compile(ParserTerm,RuleDiffList,SigDiffList,FactDiffList,MetaFactDiffList,UDFPredsDiffList,RuleNum+FileName,Status) :-
 #ifdef SHOW_COMPILE_INPUT
 	DBGOUTLN('------------result of parsing-----------------'),
 	DBGOUTLN(ParserTerm),
@@ -2809,6 +2818,11 @@ flora_compile(ParserTerm,RuleDiffList,SigDiffList,FactDiffList,MetaFactDiffList,
 #endif
 	prepare_to_compile_rule,
 	increment_rule_number,
+	approx_flindex(ParserTerm,RuleIdx),
+	(RuleIdx > 0 -> flora_token_rulenum(RuleIdx,RuleNum)
+	; RuleNum = -1
+	),
+	get_current_compile_file(FileName),
 	compile_internal(ParserTerm,
 			 _DescrIdCode,_DescrVarsTerm,
 			 RuleDiffList,SigDiffList,
@@ -2828,7 +2842,7 @@ flora_compile(ParserTerm,RuleDiffList,SigDiffList,FactDiffList,MetaFactDiffList,
 	!.
 	
 %% This rule is for debugging.
-flora_compile(ParserTerm,[],[],[],[],[],Status) :-
+flora_compile(ParserTerm,[],[],[],[],[],_,Status) :-
 	    approx_flindex(ParserTerm,ErrIdx),
 	    compiling_error(ErrIdx,[UNKNOWN_ERROR,'\n\t\t Details: in flora_compile'],Err),
 	    Status = [Err].
@@ -3889,14 +3903,14 @@ construct_default_ruleid_descriptor(rule,Idx,RuleIdCode) :-
 	!,
 	%%current_default_ruleid(RuleId),
 	%%atomobj_struct(RuleId,Idx,RuleIdCode).
-	flrcomposer:flora_token_rulenum(Idx,RuleId),
+	flora_token_rulenum(Idx,RuleId),
 	numobj_struct(RuleId,Idx,RuleIdCode).
 construct_default_ruleid_descriptor(udfrule,Idx,RuleIdCode) :-
 	!,
 	%%current_default_ruleid(RuleId1),
 	%%flora_concat_atoms(['udf_',RuleId1],RuleId),
 	%%atomobj_struct(RuleId,Idx,RuleIdCode).
-	flrcomposer:flora_token_rulenum(Idx,RuleId),
+	flora_token_rulenum(Idx,RuleId),
 	numobj_struct(RuleId,Idx,RuleIdCode).
 construct_default_ruleid_descriptor(addrule,Idx,RuleIdCode) :-
 	!,
@@ -8665,7 +8679,7 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 		dynrule_struct(HeadCodeList,H2BCode,HVL,BVL,PreBody,PostBody,
 			       (DescrIdCode,FileName,
 				   DescrVarsTerm,
-				   NULL, %% RuleNum
+				   -1, %% RuleNum
 				   DefaultMetaFactDiffList,
 				   FL_TRUE),  %% default defeat condition
 			       HDynruleCode),
@@ -8949,7 +8963,7 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 			       PreBody,PostBody,
 			       (DescrIdCode,FileName,
 				   DescrVarsTerm,
-				   NULL, %% RuleNum,
+				   -1, %% RuleNum,
 				   MetaFactDiffList,DefeatCondCode),
 			       RuleCode),
 		( is_fldeleteruleop(Op)
@@ -9352,6 +9366,12 @@ is_body_neg_negatable_literal(X) :-
 is_body_neg_passthrough_literal(X) :-
 	is_prologterm(X,Struct,5,_Args),
 	is_pratom(Struct,UDFHILOGPREDICATENAME,_),
+	!.
+is_body_neg_passthrough_literal(X) :-
+	is_prologterm(X,Struct,1,_Args,_),
+	(Struct = FL_SKOLEM
+	; is_pratom(Struct,UDFHILOGPREDICATENAME,_)
+	),
 	!.
 /*
 is_unimplemented_neg_negatable_literal(X) :-
