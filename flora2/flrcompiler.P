@@ -55,8 +55,6 @@
 #define PERMAOPTION	         permaoption
 #define COMPILATION_CONTEXT	 compcontext
 #define DYNRULE_VARLIST          dynrule_varlist
-#define BODYVARS_PREDICATE       FLORA_SYMBOL('bodyvars')
-#define HEADVARS_PREDICATE       FLORA_SYMBOL('headvars')
 
 #define BODYLITERAL         	 1
 #define HEADLITERAL         	 2
@@ -80,10 +78,6 @@
 :- dynamic DYNRULE_VARLIST(_,_).
 :- dynamic symbol(_,_,_,_,_,_,_).
 :- dynamic nowarn_symbol(_,_,_,_,_).
-:- dynamic BODYVARS_PREDICATE/1.
-:- dynamic HEADVARS_PREDICATE/1.
-:- index(BODYVARS_PREDICATE/1,0).
-:- index(HEADVARS_PREDICATE/1,0).
 :- dynamic symbol_warnings_flag(_).
 
 
@@ -2609,8 +2603,6 @@ prepare_to_compile_rule :-
 	flora_reset_newvar,
 	%%clear_directive,
 	%%clear_compilation_liboptions,
-	flora_retractall_substitute(BODYVARS_PREDICATE(_)),
-	flora_retractall_substitute(HEADVARS_PREDICATE(_)),
 	clear_contextall(_),  %% maybe delete?
         clear_dynrule_varlist.
 
@@ -3936,14 +3928,33 @@ construct_tag_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Des
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
 	get_current_compile_file_for_descriptor(CurrFileName,Mode),
 	get_descriptor_module(ExplicitModule,Mode,DescrModule),
-	%% we attach rule number within the file. It may be equal the
-	%% default rule id. Together with the file name, this can be used
-	%% to retrieve textual information about the rules.
 	generate_prolog_liblit(PredCode,5,[DescrIdCode,CurrFileName,DescrModule,DescrContentsCode,DescrVarsTerm], TagIdMetaTerm),
 	(Mode == rule -> fact_struct(TagIdMetaTerm,TagIdMetaFact)
 	; %% Mode = clause_construct/query/dynrule/addrule/udfrule
 	    TagIdMetaTerm = TagIdMetaFact
 	).
+
+construct_file_descriptor_fact1(DescrIdCode,DescrVarsTerm,DescrContentsCode,MetaTerm,NO_ERRORS) :-
+	has_context(compiling_body(_)),
+	!,
+	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
+	new_prvariable(NO_INDEX,Module),
+	new_dontcare_prvariable(NO_INDEX,SomeVar),
+	generate_prolog_liblit(PredCode,5,[DescrIdCode,DescrContentsCode,Module,SomeVar,DescrVarsTerm], MetaTerm).
+construct_file_descriptor_fact1(DescrIdCode,_,_,_,[Err]) :-
+	approx_prindex(DescrIdCode,Idx),
+	compiling_error(Idx,INVALID_FILE_DESCRIPTOR_PROP,Err).
+
+construct_module_descriptor_fact1(DescrIdCode,DescrVarsTerm,DescrContentsCode,MetaTerm,NO_ERRORS) :-
+	has_context(compiling_body(_)),
+	!,
+	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
+	new_prvariable(NO_INDEX,FileN),
+	new_dontcare_prvariable(NO_INDEX,SomeVar),
+	generate_prolog_liblit(PredCode,5,[DescrIdCode,FileN,DescrContentsCode,SomeVar,DescrVarsTerm], MetaTerm).
+construct_module_descriptor_fact1(DescrIdCode,_,_,_,[Err]) :-
+	approx_prindex(DescrIdCode,Idx),
+	compiling_error(Idx,INVALID_MODULE_DESCRIPTOR_PROP,Err).
 
 
 construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[BoolIdMetaFact|Tail]-Tail,Status) :-
@@ -3991,14 +4002,22 @@ construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,RuleidFrameCode,M
 
 
 %% construct_prop_descriptor_facts/7 for attr-val pairs
-construct_prop_descriptor_facts(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,PRMVD(DescrIdCode,Prop,Val,_),[MetaFact|Tail]-Tail,NO_ERRORS) :-
+construct_prop_descriptor_facts(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,PRMVD(DescrIdCode,Prop,Val,_),[MetaFact|Tail]-Tail,Status) :-
 	!,
 	%% if property=tag: construct a tag metafact; else - property metafact
 	(is_pratom(Prop,FL_TAG_PROPERTY)
 	-> 
-	    construct_tag_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Val,MetaFact)
+	    construct_tag_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Val,MetaFact),
+	    Status = NO_ERRORS
+	; is_pratom(Prop,FL_FILE_PROPERTY)
+	->  %% this is used only in rule/query bodies
+	    construct_file_descriptor_fact1(DescrIdCode,DescrVarsTerm,Val,MetaFact,Status)
+	; is_pratom(Prop,FL_MODULE_PROPERTY)
+	->  %% this is used only in rule/query bodies
+	    construct_module_descriptor_fact1(DescrIdCode,DescrVarsTerm,Val,MetaFact,Status)
 	;
-	    construct_prop_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Prop,Val,MetaFact)
+	    construct_prop_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Prop,Val,MetaFact),
+	    Status = NO_ERRORS
 	).
 
 %% construct_prop_descriptor_facts/7 for Boolean properties
@@ -4762,9 +4781,9 @@ compile_head_top(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	%% TODO: pass FlVars to compile_head as a parameter
 	%%       Then pass it also to compile_body_top, compile_body,
 	%%       compile_stop_delay
-	asserta(HEADVARS_PREDICATE(FlVars)),
+	set_context(compiling_head(FlVars)),
 	compile_head(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status),
-	retract(HEADVARS_PREDICATE(FlVars)),
+	clear_context(compiling_head(FlVars)),
 	!.
 compile_head([],NULL,NULL,NULL,[]) :- !.
 
@@ -4800,9 +4819,9 @@ compile_body_top(ParserTerm,Code,Status) :-
 	collect_flvars(ParserTerm,FlVars),
 	%% TODO: pass FlVars to compile_body as a parameter
 	%%       Then pass it to compile_body_literal, compile_stop_delay
-	asserta(BODYVARS_PREDICATE(FlVars)),
+	set_context(compiling_body(FlVars)),
 	compile_body(ParserTerm,Code,Status),
-	retract(BODYVARS_PREDICATE(FlVars)),
+	clear_context(compiling_body(FlVars)),
 	!.
 
 
@@ -4922,6 +4941,7 @@ compile_body(ParserTerm,Code,Status) :-
 	).
 
 
+%% a descriptor query in rule/query body like ... :- ..., @!{...}
 compile_body(ParserTerm,Code,Status) :-
 	is_fldescriptor(ParserTerm,_,FLRULEID,_),
 	!,
@@ -9005,8 +9025,8 @@ compile_stop_delay(_VarList,Idx,_Code,[Err]) :-
 compile_stop_delay(VarList,_Idx,Code,Status) :-
 	(var(VarList)
 	->
-	    (BODYVARS_PREDICATE(BVarList) -> true ; BVarList = []),
-	    (HEADVARS_PREDICATE(HVarList) -> true ; HVarList = []),
+	    (has_context(compiling_body(BVarList)) -> true ; BVarList = []),
+	    (has_context(compiling_head(HVarList)) -> true ; HVarList = []),
 	    append(HVarList,BVarList,VarList)
 	; true
 	),
