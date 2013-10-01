@@ -75,6 +75,8 @@
 
 	disable_rule_by_id/3,
 	enable_rule_by_id/3,
+	disable_rule_by_id_trans/3,
+	enable_rule_by_id_trans/3,
 	is_enabled_rule/3,
 	is_disabled_rule/3,
 
@@ -267,6 +269,10 @@ make_rule_strict(Id,FileName,Mod) :-
    disable_rule_by_id/3 fails if the rule is already disabled
 *************************************************************************/
 enable_rule_by_id(Id,FileName,Mod) :-
+	enable_rule_by_id(Id,FileName,Mod,_).
+%% GotEnabled = true, if the rule got enabled
+%% GotEnabled = false, if it was enabled before, so enable{...} was a noop.
+enable_rule_by_id(Id,FileName,Mod,GotEnabled) :-
 	findall(Head,
 		show_rule_signature(Id,FileName,_DescrVarTerm,_Prefix,Mod,_RuleNum,
 				    Head,
@@ -277,11 +283,16 @@ enable_rule_by_id(Id,FileName,Mod) :-
 	refresh_head_list(HeadList),
 	flora_modularize_atom(FL_RULE_ENABLER,Mod,ModularEnabler),
 	EnablerPred =.. [ModularEnabler,Id,FileName],
-	(EnablerPred -> true  % idempotent
-	; flora_adaptive_assert(EnablerPred)
+	(EnablerPred -> GotEnabled = false  % idempotent
+	; flora_adaptive_assert(EnablerPred),
+	    GotEnabled = true
 	).
 
 disable_rule_by_id(Id,FileName,Mod) :-
+	disable_rule_by_id(Id,FileName,Mod,_).
+%% GotDisabled = true, if the rule got disabled
+%% GotDisabled = false, if it was disabled before, so disable{...} was a noop.
+disable_rule_by_id(Id,FileName,Mod,GotDisabled) :-
 	findall(Head,
 	        show_rule_signature(Id,FileName,_DescrVarTerm,_Prefix,Mod,_RuleNum,
 				    Head,
@@ -292,8 +303,32 @@ disable_rule_by_id(Id,FileName,Mod) :-
 	refresh_head_list(HeadList),
 	flora_modularize_atom(FL_RULE_ENABLER,Mod,ModularEnabler),
 	EnablerPred =.. [ModularEnabler,Id,FileName],
-	(\+EnablerPred -> true
-	; flora_adaptive_retract(EnablerPred)
+	(\+EnablerPred -> GotDisabled = false
+	; flora_adaptive_retract(EnablerPred),
+	    GotDisabled = true
+	).
+
+%% transactional version
+enable_rule_by_id_trans(Id,FileName,Mod) :-
+	enable_rule_by_id(Id,FileName,Mod,GotEnabled),
+	(GotEnabled %% if the rule got enabled
+	-> (true
+	   ; disable_rule_by_id(Id,FileName,Mod),
+	       fail
+	   )
+	%% if rule was enabled prior to enabling then noop
+	; true
+	).
+%% transactional version
+disable_rule_by_id_trans(Id,FileName,Mod) :-
+	disable_rule_by_id(Id,FileName,Mod,GotDisabled),
+	(GotDisabled %% if the rule got disabled
+	-> (true
+	   ; enable_rule_by_id(Id,FileName,Mod),
+	       fail
+	   )
+	%% if rule was disabled prior to enabling then noop
+	; true
 	).
 
 refresh_head_list([]) :- !.
