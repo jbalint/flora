@@ -4951,9 +4951,9 @@ compile_body(ParserTerm,Code,Status) :-
 
 compile_body(ParserTerm,Code,Status) :-
 	detach_flworkspace(ParserTerm,P,WS),
-	compile_body_literal(P,WS,OidCode,SpecCode,BodyHeadList,Status),
+	compile_body_literal(P,WS,OidCode,SpecCode,BodyFrontList,Status),
 	conjunct_code([OidCode,SpecCode],LitCode),
-	append(BodyHeadList,[LitCode],CodeList), 
+	append(BodyFrontList,[LitCode],CodeList), 
 	conjunct_code(CodeList,Code).
 
 
@@ -5553,24 +5553,24 @@ compile_var_list([Var|Rest],[PrVar|PrRest]) :-
 	compile_var_list(Rest,PrRest).
 
 /****************************************************************************
-  compile_atomobj(+ParserTerm,-Object,?BodyHeadList,-Status)
+  compile_atomobj(+ParserTerm,-Object,?BodyFrontList,-Status)
 
-  ?BodyHeadList - code to add at the beginning of the body
+  ?BodyFrontList - code to add at the beginning of the body
                   (mostly for user defined fnctions),
 		  it is output argument, but if it is initialized to empty ([])
 		  ignores user defined functions
 ****************************************************************************/
-compile_atomobj(ParserTerm,Object,BodyHeadList,Status):-
-	var(BodyHeadList),
+compile_atomobj(ParserTerm,Object,BodyFrontList,Status):-
+	var(BodyFrontList),
 	%% NO cut here!
 	\+ has_context(compiling_arithmetics),
 	has_UDF(ParserTerm,0,[],Predicate,Object /* return value */,_,_),
 	!,
 	verify_symbol_context(ParserTerm,0,UDF_SYMBOL,
 			      NONTRANSACTIONAL_SYMBOL,SymStatus),
-	compile_udf_body_literal(ParserTerm,Predicate,PCode,PBodyHeadList,S),
+	compile_udf_body_literal(ParserTerm,Predicate,PCode,PBodyFrontList,S),
 	( no_errors_found(S) -> 
-	    append(PBodyHeadList,[PCode],BodyHeadList),
+	    append(PBodyFrontList,[PCode],BodyFrontList),
 	    append(S,SymStatus,Status)
 	;
 	    approx_flindex(ParserTerm,Index),
@@ -5585,11 +5585,11 @@ compile_atomobj(ParserTerm,Object,[],Status):-
 
 
 /****************************************************************************
-  compile_udf_body_literal(+Funct,+Predicate,-PCode,-PBodyHeadList,-Status)
+  compile_udf_body_literal(+Funct,+Predicate,-PCode,-PBodyFrontList,-Status)
 
   Compile a UDF literal in the body.
 ****************************************************************************/
-compile_udf_body_literal(Funct,Predicate,PCode,PBodyHeadList,Status) :-
+compile_udf_body_literal(Funct,Predicate,PCode,PBodyFrontList,Status) :-
 	%% If we set no_symbol_check here then clear it out at the end.
 	%% If inherited no_symbol_check from the caller - do not do
 	%% clear out the context
@@ -5597,7 +5597,7 @@ compile_udf_body_literal(Funct,Predicate,PCode,PBodyHeadList,Status) :-
 	; set_context(no_symbol_check), Clear = yes
 	),
 	set_context(compiling_udf_hilog(Funct)),
-	compile_body_literal(Predicate,FL_THISMODULE,OidCode,SpecCode,PBodyHeadList,Status),
+	compile_body_literal(Predicate,FL_THISMODULE,OidCode,SpecCode,PBodyFrontList,Status),
 	conjunct_code([OidCode,SpecCode],PCode),
 	clear_context(compiling_udf_hilog(Funct)),
 	(Clear == yes -> clear_context(no_symbol_check)
@@ -5618,7 +5618,7 @@ find_UDF(BaseName,N,UDFCode,Predicate) :-
 	!.
 
 /****************************************************************************
-  has_UDF(+Funct,+N,-Predicate,-ReturnValue,-BodyHeadList,-Status) 
+  has_UDF(+Funct,+N,-Predicate,-ReturnValue,-BodyFrontList,-Status) 
 
   Tells if there is an active UDF with this Funct/N
 
@@ -5627,7 +5627,7 @@ find_UDF(BaseName,N,UDFCode,Predicate) :-
   Predicate - the new_udf_predicate_XXX that computes this UDF
   ReturnValue - the variable representing the return value of this UDF;
                 it appears in Predicate as Arg 1.
-  BodyHeadList - a list of literals to be added to rule body where udf appears
+  BodyFrontList - a list of literals to be added to rule body where udf appears
                  (again for cases when udf functor is a term)
   Example:
      head :- q(?x(a,b)(?x))
@@ -5713,15 +5713,15 @@ get_udf_hilog_predicate_funct(Funct):-
 
 
 /****************************************************************************
-  compile_delayquant(+Quant,+Condition,+Goal,+Index,-SpecCode,-BodyHeadList,-Status)
+  compile_delayquant(+Quant,+Condition,+Goal,+Index,-SpecCode,-BodyFrontList,-Status)
 ****************************************************************************/
-compile_delayquant(Quant,ConditionWS,Goal,Index,SpecCode,BodyHeadList,Status):-
+compile_delayquant(Quant,ConditionWS,Goal,Index,SpecCode,BodyFrontList,Status):-
 	collect_flvars(ConditionWS,CondVarList),
 	vars_to_var_names(CondVarList,CondVarNames),
 	collect_flvars(Goal,GoalVarList),
 	vars_to_var_names(GoalVarList,GoalVarNames),
 	detach_flworkspace(ConditionWS,Condition,WS),
-	compile_body_literal(Condition,WS,OidCode,WSCode,BodyHeadList,S1),
+	compile_body_literal(Condition,WS,OidCode,WSCode,BodyFrontList,S1),
 	conjunct_code([OidCode,WSCode],ConditionCode),
 	(subset(CondVarNames,GoalVarNames) ->
 	    ( no_errors_found(S1) ->
@@ -5942,16 +5942,16 @@ compile_head_fltoken(Token,Suffix,Index,Object,Status) :-
 
 
 /****************************************************************************
-  compile_floraliblit(+ParserTerm,+Workspace,-OidCode,-Code,?BodyHeadList,-Status)
+  compile_floraliblit(+ParserTerm,+Workspace,-OidCode,-Code,?BodyFrontList,-Status)
 
   This procedure compiles a literal that is associated with a Flora system
   module specification.
- ?BodyHeadList - code to add at the beginning of the body
+ ?BodyFrontList - code to add at the beginning of the body
                  (mostly for user defined fnctions),
 		 it is output argument, but if it is initialized to
 		 empty ([]) ignores user defined functions
 ****************************************************************************/
-compile_floraliblit(ParserTerm,WS,OidCode,Code,BodyHeadList,Status) :-
+compile_floraliblit(ParserTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	%% Flora system modules are like normal user modules except that
 	%% users cannot load files into them
 	is_flatom(WS,WSName,Index),
@@ -5959,26 +5959,26 @@ compile_floraliblit(ParserTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	atomobj_struct(WSName,Index,WSNameCode),
 	floralib_struct(WSNameCode,WSCode),
 	compile_body_literal(ParserTerm,WSCode,OidCode,Code,
-			     BodyHeadList,Status).
+			     BodyFrontList,Status).
 
 
 /****************************************************************************
-  compile_body_literal(+ParserTerm,+Workspace,-OidCode,-Code,?BodyHeadList,-Status)
-  ?BodyHeadList - code to add at the beginning of the body
+  compile_body_literal(+ParserTerm,+Workspace,-OidCode,-Code,?BodyFrontList,-Status)
+  ?BodyFrontList - code to add at the beginning of the body
                   (mostly for user defined fnctions),
 		  it is output argument, but if it is initialized to
 		  empty ([]) ignores user defined functions
 ****************************************************************************/
 %% TODO: no need for separate OidCode+WSCode. This is used only in
 %% compile_floraliblit, but compile_floraliblit does not need it either!!!
-compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
+compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyFrontList,Status) :-
 	( is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_body_transactional_termlit(Funct,N,Args,WS,OidCode,
-					       WSCode,BodyHeadList,Status)
+					       WSCode,BodyFrontList,Status)
 
 	; is_flterm(ParserTerm,Funct,N,Args) ->
 	    compile_body_termlit(Funct,N,Args,WS,OidCode,
-				 WSCode,BodyHeadList,Status)
+				 WSCode,BodyFrontList,Status)
 
 	%% Literal variable without @module
 	; is_flvariable(ParserTerm,VName,VIndex), WS == FL_THISMODULE ->
@@ -6000,7 +6000,7 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
                 atomobj_struct(FL_INVALIDMODULE,Module),
                 florasyslib_struct(VIndex,FLLIBMODLIT,3,[V,Module,CallerInfo],WSCode)
             ),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
             OidCode=NULL,
             Status = NO_ERRORS
 
@@ -6008,11 +6008,11 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
 	; is_flvariable(ParserTerm,VarName,Index) ->
 	    compile_var(VarName,Index,VarCode),
 	    attach_workspace(VarCode,WS,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode = NULL
 
 	; is_fldelayquant(ParserTerm,Quant,Condition,Goal,Idx) ->
-		compile_delayquant(Quant,Condition,Goal,Idx,WSCode,BodyHeadList,Status),
+		compile_delayquant(Quant,Condition,Goal,Idx,WSCode,BodyFrontList,Status),
 	    OidCode = NULL
 
 	%% %?X@module. E.g., ?- ?X = p, %?X@pp.
@@ -6020,30 +6020,30 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
 	; is_fltransactionalvariable(ParserTerm,VarName,Index) ->
 	    compile_transactionalvar(VarName,Index,VarCode),
 	    attach_workspace(VarCode,WS,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode = NULL
 
 	; is_flbirelate(ParserTerm,ObjTerm1,RelType,ObjTerm2) ->
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    compile_body_bin_relation(ObjTerm1,RelType,ObjTerm2,WS,_Obj,OidCode,
 				      WSCode,Status)
 
 	; is_flobjspec(ParserTerm,ObjTerm,Spec) ->
 	    compile_body_objspec(ObjTerm,Spec,WS,_Obj,OidCode,WSCode,
-				 BodyHeadList,Status)
+				 BodyFrontList,Status)
 
 	; is_flobjeql(ParserTerm,O1,O2) ->
 	    compile_body_objeql(O1,O2,WS,OidCode,WSCode,Status),
-	    BodyHeadList = []
+	    BodyFrontList = []
 
 	; is_fldirective(ParserTerm,DirectList,_Idx) ->
 	    compile_exec_directive(DirectList,WS,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flload(ParserTerm,LoadList) ->
 	    compile_load(LoadList,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flconstraint(ParserTerm,ConstrBody) ->
@@ -6053,117 +6053,117 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
 	    clear_context(compiling_constraint),
 	    clear_context(compiling_arithmetics),
 	    constraint_struct(ConstrBodyCode,WSCode),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	%% prolog call withOUT prolog module
 	; is_flplib(ParserTerm,P) ->
-	    compile_prologliblit(P,OidCode,WSCode,BodyHeadList,Status)
+	    compile_prologliblit(P,OidCode,WSCode,BodyFrontList,Status)
 
 	%% prolog call WITH prolog module
 	; is_flplib(ParserTerm,P,Module) ->
-	    compile_prologliblit(P,Module,OidCode,WSCode,BodyHeadList,Status)
+	    compile_prologliblit(P,Module,OidCode,WSCode,BodyFrontList,Status)
 
 	%% prologALL call withOUT prolog module
 	; is_flpliball(ParserTerm,P) ->
-	    compile_prologallliblit(P,OidCode,WSCode,BodyHeadList,Status)
+	    compile_prologallliblit(P,OidCode,WSCode,BodyFrontList,Status)
 
 	%% prologALL call WITH prolog module
 	; is_flpliball(ParserTerm,P,Module) ->
-	    compile_prologallliblit(P,Module,OidCode,WSCode,BodyHeadList,Status)
+	    compile_prologallliblit(P,Module,OidCode,WSCode,BodyFrontList,Status)
 
 	; is_flfloralib(ParserTerm,P,Module) ->
-	    compile_floraliblit(P,Module,OidCode,WSCode,BodyHeadList,Status)
+	    compile_floraliblit(P,Module,OidCode,WSCode,BodyFrontList,Status)
 
 	%% Not attaching workspace: it is propagated inwards by the parser
 	; is_flinsert(ParserTerm,Op,List,Cond) ->
 	    compile_insert(Op,List,Cond,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flinsert(ParserTerm,Op,List) ->
 	    compile_insert(Op,List,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	%% Not attaching workspace: it is propagated inwards by the parser
 	; is_fldelete(ParserTerm,Op,List,Cond) ->
 	    compile_delete(Op,List,Cond,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_fldelete(ParserTerm,Op,List) ->
 	    compile_delete(Op,List,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flneg(ParserTerm,_,_) ->
 	    compile_body(ParserTerm,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_fldelayedliteral(ParserTerm,Op,Args) ->
-	    compile_delayed_literal(Op,Args,WSCode,OidCode,BodyHeadList,Status)
+	    compile_delayed_literal(Op,Args,WSCode,OidCode,BodyFrontList,Status)
 	; is_fldelayedliteral(ParserTerm,Op,Args,Mod) ->
-	    compile_delayed_literal(Op,Args,Mod,WSCode,OidCode,BodyHeadList,Status)
+	    compile_delayed_literal(Op,Args,Mod,WSCode,OidCode,BodyFrontList,Status)
 
 	%% Rule: can occur only inside reify_op as a top-level literal
 	; ParserTerm = [ReifiedRule|_],
 	    is_fldynrule(ReifiedRule,_H,_B,_Descr) ->
 	    compile_reifyop(ParserTerm,WSCode,OidCode,Status),
-	    BodyHeadList = []
+	    BodyFrontList = []
 
 	%% Rule: can occur inside reify_op
 	; ParserTerm = [ReifiedRule|_],
 	    is_flruleworkspace(ReifiedRule,_RealRule,_WS) ->
 	    compile_reifyop(ParserTerm,WSCode,OidCode,Status),
-	    BodyHeadList = []
+	    BodyFrontList = []
 
 	; is_fltablerefresh(ParserTerm,List) ->
 	    compile_refresh(List,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	%% !!{Vars}
 	; is_flstopdelay(ParserTerm,VarList,Idx) ->
 	    compile_stop_delay(VarList,Idx,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	%% !! without the vars
 	; is_flstopdelay(ParserTerm,Idx) ->
 	    compile_stop_delay(_,Idx,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_fltruthvalue(ParserTerm,Formula,Atom) ->
 	    compile_truthvalue(Formula,Atom,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_fltag_primitive(ParserTerm,Descriptor,HeadList) ->
 	    compile_tag_primitive(Descriptor,HeadList,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flprefixprimitive(ParserTerm,Prefix,Expansion,Module) ->
 	    compile_prefixprimitive(Prefix,Expansion,Module,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flcatch(ParserTerm,Goal,Error,Handler) ->
 	    compile_catch(Goal,Error,Handler,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flthrow(ParserTerm,Error) ->
 	    compile_throw(Error,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flp2h(ParserTerm,Prolog,Hilog) ->
 	    compile_p2h(Prolog,Hilog,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flnewoidop(ParserTerm,VarTerm) ->
@@ -6171,7 +6171,7 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
 	    compile_var(Name,Index,VarCode),
 	    newoidop_struct(VarCode,WSCode),
 	    Status = NO_ERRORS,
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flnewmodule(ParserTerm,Op,Module) ->
@@ -6181,7 +6181,7 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
 	    florasyslib_struct(Index,FLLIBNEWMODULE,2,[ThisModuleName,ModCode],
 			       WSCode),
 	    Status = NO_ERRORS,
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flerasemodule(ParserTerm,Op,Module) ->
@@ -6191,14 +6191,14 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
 	    florasyslib_struct(Index,FLLIBERASEMODULE,2,
 			       [ThisModuleName,ModCode],WSCode),
 	    Status = NO_ERRORS,
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flcallermodule(ParserTerm,Op,Module) ->
 	    is_flatom(Op,_OpAtom,Index),
 	    compile_atomvar(Module,ModCode),
 	    caller_binding_code(ModCode,WSCode),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    Status = NO_ERRORS,
 	    OidCode=NULL
 
@@ -6210,61 +6210,61 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
 
 	; is_flupdaterule(ParserTerm,Op,List) ->
 	    compile_updaterule(Op,List,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 		
         ; is_flclause(ParserTerm,Head,Body) ->
             compile_clause([],NULL,Head,Body,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
             OidCode=NULL
 
         ; is_flclause(ParserTerm,Mode,Head,Body) ->
             compile_clause([],Mode,Head,Body,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
             OidCode=NULL
 
         ; is_flannotated_clause_stmt(ParserTerm,Descriptor,Mode,Head,Body) ->
             compile_clause(Descriptor,Mode,Head,Body,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
             OidCode=NULL
 
 	; is_flannotated_clause_stmt(ParserTerm,Descriptor,Head,Body) ->
             compile_clause(Descriptor,NULL,Head,Body,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
             OidCode=NULL
 
 	; is_flifthenelse(ParserTerm,Cond,Then,Else) ->
 	    compile_ifthenelse(Cond,Then,Else,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flifthen(ParserTerm,Cond,Then) ->
 	    compile_ifthen(Cond,Then,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_fluniveqform(ParserTerm,Left,Right) ->
 	    compile_univeqform(Left,Right,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flmetauniv(ParserTerm,Left,Right) ->
 	    compile_metauniv(Left,Right,OidCode,WSCode,Status),
-	    BodyHeadList = []
+	    BodyFrontList = []
 
 	; is_flprologifthen(ParserTerm,Left,Right) ->
 	    compile_prologifthen(Left,Right,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flcontrolconstruct(ParserTerm,Wrapper,Cond,Action) ->
 	    compile_controlconstruct(Cond,Action,Wrapper,WSCode,Status),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode = NULL
 	
 	; is_flcut(ParserTerm,I) ->
 	    cut_struct(I,WSCode),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL,
 	    Status = NO_ERRORS
 
@@ -6276,7 +6276,7 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
 	    (WSStatus == NO_ERRORS -> Status = SymbolStatus
 	    ; Status = WSStatus
 	    ),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_flbuiltin_identifier(ParserTerm,_A) ->
@@ -6287,7 +6287,7 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
 	    (WSStatus == NO_ERRORS -> Status = SymbolStatus
 	    ; Status = WSStatus
 	    ),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_fltransactionalatom(ParserTerm,_A) ->
@@ -6298,19 +6298,19 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyHeadList,Status) :-
 	    (WSStatus == NO_ERRORS -> Status = SymbolStatus
 	    ; Status = WSStatus
 	    ),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_fldatatype(ParserTerm,_Sort,_Lit,_Index) ->
 	    datatypeobj_struct(ParserTerm,Code1,Status),
 	    atomlit_struct(BODYLITERAL,Code1,WSCode),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	; is_fltransactionaldatatype(ParserTerm,_Sort,_Lit,_Index) ->
 	    datatypeobj_struct(ParserTerm,Code1,Status),
 	    transactionalatomlit_struct(BODYLITERAL,Code1,WSCode),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    OidCode=NULL
 
 	;
@@ -6333,22 +6333,22 @@ compile_floralibobj(ParserTerm,WS,Object,OidCode,Code,Status) :-
 
 
 /****************************************************************************
-  compile_body_pathexplist(+ParserTermList,+Workspace,-ObjectList,-OidCode,-Code,?BodyHeadList,-Status)
-  ?BodyHeadList - code to add at the beginning of the body
+  compile_body_pathexplist(+ParserTermList,+Workspace,-ObjectList,-OidCode,-Code,?BodyFrontList,-Status)
+  ?BodyFrontList - code to add at the beginning of the body
                   (mostly for user defined fnctions),
 		  it is normally an output parameter, but if bound to []
 		  then ignores user defined functions
 ****************************************************************************/
 compile_body_pathexplist([],_WS,[],NULL,NULL,[],[]).
 
-compile_body_pathexplist([T|L],WS,[TObj|LObj],OidCode,Code,BodyHeadList,Status) :-
-	(var(BodyHeadList) -> true ; BodyHeadList1=[],BodyHeadList2=[]),
-	compile_body_pathexp(T,WS,TObj,OidCodeHead,TCode,BodyHeadList1,S),
+compile_body_pathexplist([T|L],WS,[TObj|LObj],OidCode,Code,BodyFrontList,Status) :-
+	(var(BodyFrontList) -> true ; BodyFrontList1=[],BodyFrontList2=[]),
+	compile_body_pathexp(T,WS,TObj,OidCodeHead,TCode,BodyFrontList1,S),
 	clear_context(compiling_term_name),
 	( no_errors_found(S) -> 
-	    compile_body_pathexplist(L,WS,LObj,OidCodeTail,LCode,BodyHeadList2,S2),
-	    ( var(BodyHeadList) ->
-		append(BodyHeadList1,BodyHeadList2,BodyHeadList)
+	    compile_body_pathexplist(L,WS,LObj,OidCodeTail,LCode,BodyFrontList2,S2),
+	    ( var(BodyFrontList) ->
+		append(BodyFrontList1,BodyFrontList2,BodyFrontList)
 	    ;
 		true
 	    ),
@@ -6365,7 +6365,7 @@ compile_body_pathexplist([T|L],WS,[TObj|LObj],OidCode,Code,BodyHeadList,Status) 
 
 
 /****************************************************************************
-  compile_body_pathexp(+ParserTerm,+Workspace,-Object,-OidCode,-Code,?BodyHeadList,-Status)
+  compile_body_pathexp(+ParserTerm,+Workspace,-Object,-OidCode,-Code,?BodyFrontList,-Status)
 
   Handles pathexps that are atoms, numbers, special tokens, like _#, _#123, _@,
   vars, strings
@@ -6392,34 +6392,34 @@ compile_body_pathexplist([T|L],WS,[TObj|LObj],OidCode,Code,BodyHeadList,Status) 
 		    OidCode(for_c.d,Object(for_c.d)),
 		      obj[attr->Object(for_c.d)],
 		        Code(for_c.d)
-  BodyHeadList - code to add at the beginning of the body
+  BodyFrontList - code to add at the beginning of the body
                  (mostly for user defined fnctions),
 		 it is output argument, but if it is initialized to empty ([])
 		 ignores user defined functions
 ****************************************************************************/
 %% ParserTerm is a primitive object -- no oid code and no spec code results
-compile_body_pathexp(ParserTerm,WS,Object,OidCode,Code,BodyHeadList,Status) :-
+compile_body_pathexp(ParserTerm,WS,Object,OidCode,Code,BodyFrontList,Status) :-
 	set_context(compiling_body_pathexp),
 	( is_flobjref(ParserTerm,ObjTerm,RefType,AttTerm) ->
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    compile_body_objref(ObjTerm,RefType,AttTerm,WS,Object,
 			   OidCode,Code,Status)
 
 	; is_flobjspec(ParserTerm,ObjTerm,Spec) ->
 	    compile_body_objspec(ObjTerm,Spec,WS,Object,OidCode,Code,
-				 BodyHeadList,Status)
+				 BodyFrontList,Status)
 
 	; is_flbirelate(ParserTerm,ObjTerm1,RelType,ObjTerm2) ->
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    compile_body_bin_relation(ObjTerm1,RelType,ObjTerm2,WS,Object,OidCode,Code,Status)
 
 	; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_body_termobj(Funct,N,Args,WS,Object,OidCode,Code,
-			    BodyHeadList,TRANSACTIONAL_SYMBOL,Status)
+			    BodyFrontList,TRANSACTIONAL_SYMBOL,Status)
 
 	; is_flterm(ParserTerm,Funct,N,Args) ->
 	    compile_body_termobj(Funct,N,Args,WS,Object,OidCode,Code,
-			    BodyHeadList,NONTRANSACTIONAL_SYMBOL,Status)
+			    BodyFrontList,NONTRANSACTIONAL_SYMBOL,Status)
 
 	; is_flarith(ParserTerm,StrippdParseTerm) ->
 	    set_context(compiling_arithmetics),
@@ -6428,7 +6428,7 @@ compile_body_pathexp(ParserTerm,WS,Object,OidCode,Code,BodyHeadList,Status) :-
 
 	; is_fllist(ParserTerm,L,T,I) ->
 	    compile_body_list_obj(L,T,I,WS,Object,OidCode,Code,
-				  BodyHeadList,Status)
+				  BodyFrontList,Status)
 
 	%% Case like this: pred(?X@...)
 	%% ?X@Mod is treated separately from other ...@Mod cases because
@@ -6439,25 +6439,25 @@ compile_body_pathexp(ParserTerm,WS,Object,OidCode,Code,BodyHeadList,Status) :-
 	    is_flvariable(P,VarName,VarIndex) ->
 	    compile_var(VarName,VarIndex,VarCode),
 	    workspaceobj_struct(VarCode,NestedWS,Object,OidCode),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    Code=NULL,
 	    Status = NO_ERRORS
 
 	; is_flworkspace(ParserTerm,P,NestedWS) ->
-	    compile_pathexp_with_explicit_workspace(P,NestedWS,Object,OidCode,Code,BodyHeadList,Status)
+	    compile_pathexp_with_explicit_workspace(P,NestedWS,Object,OidCode,Code,BodyFrontList,Status)
 
 	;
-	  compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status)
+	  compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status)
         ),
 	!,
 	clear_context(compiling_body_pathexp).
 
-%% compile_pathexp_with_explicit_workspace(+ParserTerm,-Object,-OidCode,-Code,?BodyHeadList,-Status)
-compile_pathexp_with_explicit_workspace(ParserTerm,WS,Object,OidCode,Code,BodyHeadList,Status) :-
+%% compile_pathexp_with_explicit_workspace(+ParserTerm,-Object,-OidCode,-Code,?BodyFrontList,-Status)
+compile_pathexp_with_explicit_workspace(ParserTerm,WS,Object,OidCode,Code,BodyFrontList,Status) :-
 	(is_flvariable(ParserTerm,VarName,VarIndex) ->
 	    compile_var(VarName,VarIndex,VarCode),
 	    workspaceobj_struct(VarCode,WS,Object,OidCode),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    Code=NULL,
 	    Status = NO_ERRORS
 	; (atomlit_struct(BODYLITERAL,ParserTerm,_)
@@ -6467,19 +6467,19 @@ compile_pathexp_with_explicit_workspace(ParserTerm,WS,Object,OidCode,Code,BodyHe
 	    compiling_error(Index,NO_WORKSPACE,Err),
 	    Status = [Err]
 	; compile_body_pathexp(ParserTerm,WS,Object,OidCode,Code,
-			       BodyHeadList,Status)
+			       BodyFrontList,Status)
 	).
 
-%% compile_pathexp_no_workspace(+ParserTerm,-Object,-OidCode,-Code,?BodyHeadList,-Status)
-compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status) :-
+%% compile_pathexp_no_workspace(+ParserTerm,-Object,-OidCode,-Code,?BodyFrontList,-Status)
+compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status) :-
 	( is_flatom(ParserTerm,_A) ->
 	    Code = NULL,
 	    OidCode = NULL,
-	    compile_atomobj(ParserTerm,Object,BodyHeadList,Status)
+	    compile_atomobj(ParserTerm,Object,BodyFrontList,Status)
 
 	; is_modularized_pratom(ParserTerm,Atm,Idx) ->
 	    modularized_pratom_struct(Atm,Idx,Object),
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    Code = NULL,
 	    OidCode = NULL,
 	    Status = NO_ERRORS
@@ -6487,7 +6487,7 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status)
 	; is_fltransactionalatom(ParserTerm,_A) ->
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  TRANSACTIONAL_SYMBOL,Status),
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    Code = NULL,
 	    OidCode = NULL,
 	    transactionalatomobj_struct(ParserTerm,Object)
@@ -6498,7 +6498,7 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status)
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
 	    Status = NO_ERRORS,
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    Code = NULL,
 	    OidCode = NULL,
 	    thismodule_struct(Object)
@@ -6529,7 +6529,7 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status)
 		prologterm_struct(FL_SKOLEM,1,[Object],flrnewoid,Code)
 	    ),
 	    Status = NO_ERRORS,
-	    BodyHeadList=[]
+	    BodyFrontList=[]
 
 	%% A numbered OID, which appears in a reified formula in rule body
 	; is_fltoken(ParserTerm,FL_NEWOID,Num,Index) ->
@@ -6554,7 +6554,7 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status)
 		prologterm_struct(FL_SKOLEM,1,[Object],flrnewoid,Code)
 	    ),
 	    Status = NO_ERRORS,
-	    BodyHeadList=[]
+	    BodyFrontList=[]
 
 	; is_fltoken(ParserTerm,FL_SPECIAL_CONST_TOKEN,FL_SPECIAL_FILE_TOKEN,Index) ->
 	    get_current_compile_file(FileName),
@@ -6562,17 +6562,17 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status)
 	    OidCode = NULL,
 	    atomobj_struct(FileName,Index,Object),
 	    Status = NO_ERRORS,
-	    BodyHeadList=[]
+	    BodyFrontList=[]
 	; is_fltoken(ParserTerm,FL_SPECIAL_CONST_TOKEN,FL_SPECIAL_LINE_TOKEN,Index) ->
 	    flora_token_index_to_line(Index,Line),
 	    Code = NULL,
 	    OidCode = NULL,
 	    numobj_struct(Line,Index,Object),
 	    Status = NO_ERRORS,
-	    BodyHeadList=[]
+	    BodyFrontList=[]
 	%% _@! - rule id token
 	; is_fltoken(ParserTerm,FL_SPECIAL_CONST_TOKEN,FL_RULEID_SYM,Index) ->
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    OidCode = NULL,
 	    Code = NULL,
 	    ( has_context(compiling_descriptors(Mode))
@@ -6600,13 +6600,13 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status)
 		special_variable_struct(Suffix,Object),
 		Code = NULL,
 		Status = NO_ERRORS,
-		BodyHeadList=[]
+		BodyFrontList=[]
 	    ; Suffix == FL_SPECIAL_CALLER_TOKEN
 	    ->
 		new_prvariable(NO_INDEX,Object),
 		caller_binding_code(Object,Code),
 		Status = NO_ERRORS,
-		BodyHeadList=[]
+		BodyFrontList=[]
 	    ; 
 		compiling_error(Index,UNSUPPORTED_SPECIAL_TOKEN,TokenErr),
 		Status = [TokenErr]
@@ -6614,7 +6614,7 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status)
 
 	; (is_flnumber(ParserTerm,_N) ; number(ParserTerm)) ->
 	    numobj_struct(ParserTerm,Object),
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    OidCode = NULL,
 	    Code = NULL,
 	    Status = NO_ERRORS
@@ -6622,20 +6622,20 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status)
 	; is_flvariable(ParserTerm,Name,Index) ->
 	    compile_var(Name,Index,Object),
 	    OidCode = NULL,
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    Code = NULL,
 	    Status = NO_ERRORS
 
 	; is_fltransactionalvariable(ParserTerm,Name,Index) ->
 	    compile_transactionalvar_without_trans(Name,Index,Object),
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    OidCode = NULL,
 	    Code = NULL,
 	    Status = NO_ERRORS
 
 	; is_flstring(ParserTerm,_S) ->
 	    strobj_struct(ParserTerm,Object),
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    OidCode = NULL,
 	    Code = NULL,
 	    Status = NO_ERRORS
@@ -6644,82 +6644,82 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status)
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    builtin_identifier_struct(ParserTerm,Object),
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    OidCode = NULL,
 	    Code = NULL
 
 	; is_fldatatype(ParserTerm,_Sort,_Lit,_Index) ->
 	    datatypeobj_struct(ParserTerm,Object,Status),
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    OidCode = NULL,
 	    Code = NULL
 
 	; is_fltransactionalstring(ParserTerm,_S) ->
 	    transactionalstrobj_struct(ParserTerm,Object),
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    OidCode = NULL,
 	    Code = NULL,
 	    Status = NO_ERRORS
 	),
 	!.
 
-compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyHeadList,Status) :-
+compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status) :-
         ( is_fldelayquant(ParserTerm,Quant,Condition,Goal,Idx) ->
-	    compile_delayquant(Quant,Condition,Goal,Idx,OidCode,BodyHeadList,Status)
+	    compile_delayquant(Quant,Condition,Goal,Idx,OidCode,BodyFrontList,Status)
 
 	; is_flaggregate(ParserTerm,Op,V,GV,SortSpec,B) ->
 	    %% Aggregates are treated as OID, so its code would come
 	    %% ahead of the code of the literal it occurs in
 	    compile_aggregate(Op,V,GV,SortSpec,B,Object,OidCode,Status),
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    Code=NULL
 
 	; is_reifyop(ParserTerm,Formula) ->
 	    compile_reifyop(Formula,Object,OidCode,Status),
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    Code=NULL
 
 	; is_flplib(ParserTerm,P) ->
-	    compile_prologlibobj(P,Object,OidCode,Code,BodyHeadList,Status)
+	    compile_prologlibobj(P,Object,OidCode,Code,BodyFrontList,Status)
 	; is_flplib(ParserTerm,P,Module) ->
-	    compile_prologlibobj(P,Module,Object,OidCode,Code,BodyHeadList,Status)
+	    compile_prologlibobj(P,Module,Object,OidCode,Code,BodyFrontList,Status)
 
 	; is_flpliball(ParserTerm,P) ->
-	    compile_prologalllibobj(P,Object,OidCode,Code,BodyHeadList,Status)
+	    compile_prologalllibobj(P,Object,OidCode,Code,BodyFrontList,Status)
 	; is_flpliball(ParserTerm,P,Module) ->
-	    compile_prologalllibobj(P,Module,Object,OidCode,Code,BodyHeadList,Status)
+	    compile_prologalllibobj(P,Module,Object,OidCode,Code,BodyFrontList,Status)
 	
 	; is_flfloralib(ParserTerm,P,Module) ->
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    compile_floralibobj(P,Module,Object,OidCode,Code,Status)
 	),
 	!.
 
 
 /****************************************************************************
-  compile_body_termobj(+FunctorTerm,+Arity,+ArgList,+Workspace,-Object,-OidCode,-Code,?BodyHeadList,Transactional,-Status)
+  compile_body_termobj(+FunctorTerm,+Arity,+ArgList,+Workspace,-Object,-OidCode,-Code,?BodyFrontList,+Transactional,-Status)
 
-  ?BodyHeadList - code to add at the beginning of the body
+  BodyFrontList - code to add at the beginning of the body
                   (mostly for user defined fnctions),
 		  it is output argument, but if it is initialized to
 		  empty ([]) ignores user defined functions
   Transactional - flag if Funct is transactional
 			can be TRANSACTIONAL_SYMBOL or NONTRANSACTIONAL_SYMBOL
 ****************************************************************************/
-compile_body_termobj(Funct,N,Args,WS,Object,OidCode,Code,BodyHeadList,Transactional,CompileStatus) :-
-	var(BodyHeadList),
+compile_body_termobj(Funct,N,Args,WS,Object,OidCode,Code,BodyFrontList,Transactional,CompileStatus) :-
+	var(BodyFrontList),
 	!,
         ( \+ has_context(compiling_arithmetics),
-	    has_UDF(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
+	    has_UDF(Funct,N,Args,Predicate,Object /* return value */,FunctBodyFrontList,S1)
 	->
 	    ( no_errors_found(S1) -> 
 		OidCode=NULL,
 		Code=NULL,
-		compile_udf_body_literal(Funct,Predicate,PCode,PBodyHeadList,S),
+		compile_udf_body_literal(Funct,Predicate,PCode,PBodyFrontList,S),
 		SymbolContext = UDF_SYMBOL,
 		( no_errors_found(S) -> 
-		    append(FunctBodyHeadList,PBodyHeadList,BodyHeadList1),
-		    append(BodyHeadList1,[PCode],BodyHeadList),
+		    append(FunctBodyFrontList,PBodyFrontList,BodyFrontList1),
+		    append(BodyFrontList1,[PCode],BodyFrontList),
 		    Status = NO_ERRORS
 		;
 		    approx_flindex(Funct,Index),
@@ -6733,7 +6733,7 @@ compile_body_termobj(Funct,N,Args,WS,Object,OidCode,Code,BodyHeadList,Transactio
 	    )
         ;
 	    set_context(compiling_term_name),
-	    compile_body_pathexplist([Funct|Args],WS,[FObj|AObj],OidCode,Code,BodyHeadList,Status),
+	    compile_body_pathexplist([Funct|Args],WS,[FObj|AObj],OidCode,Code,BodyFrontList,Status),
 	    SymbolContext = FUNCTION_SYMBOL,
 	    ( no_errors_found(Status) -> 
 		termobj_struct(FObj,N,AObj,Object)
@@ -6749,7 +6749,7 @@ compile_body_termobj(Funct,N,Args,WS,Object,OidCode,Code,[],Transactional,Compil
 	verify_symbol_context(Funct,N,WS,FUNCTION_SYMBOL,
 			      Transactional,SymbolStatus),
 	set_context(compiling_term_name),
-	compile_body_pathexplist([Funct|Args],WS,[FObj|AObj],OidCode,Code,_BodyHeadList,Status),
+	compile_body_pathexplist([Funct|Args],WS,[FObj|AObj],OidCode,Code,_BodyFrontList,Status),
 	!,
 	( no_errors_found(Status) -> termobj_struct(FObj,N,AObj,Object)
 	; true
@@ -6757,14 +6757,14 @@ compile_body_termobj(Funct,N,Args,WS,Object,OidCode,Code,[],Transactional,Compil
 	append(SymbolStatus,Status,CompileStatus).
 
 /****************************************************************************
-  compile_body_termlit(+FunctorTerm,+Arity,+ArgList,+Workspace,-OidCode,-Code,?BodyHeadList,-Status)
-  ?BodyHeadList - code to add at the beginning of the body
+  compile_body_termlit(+FunctorTerm,+Arity,+ArgList,+Workspace,-OidCode,-Code,?BodyFrontList,-Status)
+  BodyFrontList - code to add at the beginning of the body
                   (mostly for user defined fnctions),
 		  it is output argument, but if it is initialized to
 		  empty ([]) ignores user defined functions
 ****************************************************************************/
 %% Terms declared with :- usesensor are treated here
-compile_body_termlit(Funct,N,Args,_WS,OidCode,Code,BodyHeadList,CompileStatus) :-
+compile_body_termlit(Funct,N,Args,_WS,OidCode,Code,BodyFrontList,CompileStatus) :-
 	is_flatom(Funct, FAtom, FunctIdx),
 	(has_permaoption(usesensor(FAtom,N))
 	; has_permaoption(usesensor((FAtom,PlMod),N))
@@ -6781,22 +6781,22 @@ compile_body_termlit(Funct,N,Args,_WS,OidCode,Code,BodyHeadList,CompileStatus) :
 	(atom(PlMod)
 	->
 	    is_flatom(ModParserTerm,PlMod,NO_INDEX),
-	    compile_delayed_literal(Funct,ArgsList,ModParserTerm,Code,OidCode,BodyHeadList,Status)
+	    compile_delayed_literal(Funct,ArgsList,ModParserTerm,Code,OidCode,BodyFrontList,Status)
 	;
 	    %% if it is a sensor defined in a .flr file, scramble its
 	    %% name by adding FLORA_PREFIX
 	    flora_scramble_atom(FAtom,ScrambledAtom),
 	    is_flatom(ScrambledFunct,ScrambledAtom,FunctIdx),
-	    compile_delayed_literal(ScrambledFunct,ArgsList,Code,OidCode,BodyHeadList,Status)
+	    compile_delayed_literal(ScrambledFunct,ArgsList,Code,OidCode,BodyFrontList,Status)
 	),
 	!,
 	append(SymbolStatus,Status,CompileStatus).
 
-compile_body_termlit(Funct,N,Args,WS,OidCode,Code,BodyHeadList,CompileStatus) :-
+compile_body_termlit(Funct,N,Args,WS,OidCode,Code,BodyFrontList,CompileStatus) :-
 	verify_symbol_context(Funct,N,WS,PREDICATE_SYMBOL,
 			      NONTRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
-	compile_body_pathexplist([Funct|Args],WS,[FObj|AObj],OidCode,ObjCode,BodyHeadList,PathexpStatus),
+	compile_body_pathexplist([Funct|Args],WS,[FObj|AObj],OidCode,ObjCode,BodyFrontList,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    termlit_struct(BODYLITERAL,FObj,N,AObj,TCode),
 	    attach_workspace(TCode,WS,WSCode,WSStatus),
@@ -6809,11 +6809,11 @@ compile_body_termlit(Funct,N,Args,WS,OidCode,Code,BodyHeadList,CompileStatus) :-
 	; CompileStatus = WSStatus
 	).
 
-compile_body_transactional_termlit(Funct,N,Args,WS,OidCode,Code,BodyHeadList,CompileStatus) :-
+compile_body_transactional_termlit(Funct,N,Args,WS,OidCode,Code,BodyFrontList,CompileStatus) :-
 	verify_symbol_context(Funct,N,WS,PREDICATE_SYMBOL,
 			      TRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
-	compile_body_pathexplist([Funct|Args],WS,[FObj|AObj],OidCode,ObjCode,BodyHeadList,PathexpStatus),
+	compile_body_pathexplist([Funct|Args],WS,[FObj|AObj],OidCode,ObjCode,BodyFrontList,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    transactionaltermlit_struct(BODYLITERAL,FObj,N,AObj,TCode),
 	    attach_workspace(TCode,WS,WSCode,WSStatus),
@@ -6827,28 +6827,28 @@ compile_body_transactional_termlit(Funct,N,Args,WS,OidCode,Code,BodyHeadList,Com
 	).
 
 /****************************************************************************
-  compile_body_list_obj(+ObjTermList,+ObjTerm,+Index,+WS,-Object,-OidCode,-Code,?BodyHeadList,-Status)
+  compile_body_list_obj(+ObjTermList,+ObjTerm,+Index,+WS,-Object,-OidCode,-Code,?BodyFrontList,-Status)
     Lists are like this: [a,b,c|rest]
     ObjTermList refers to the list [a,b,c] and ObjTerm to rest.
 
- ?BodyHeadList - code to add at the beginning of the body
+ BodyFrontList - code to add at the beginning of the body
                  (mostly for user defined fnctions),
 		 it is output argument, but if it is initialized to empty ([]) ignores user defined functions
 ****************************************************************************/
-compile_body_list_obj(ObjTermList,ObjTerm,Index,WS,Object,OidCode,Code,BodyHeadList,Status) :-
-	(var(BodyHeadList) -> true; BodyHeadList1=[],BodyHeadList2=[]),
-	compile_body_pathexplist(ObjTermList,WS,ObjList,OidCodeList,ObjListCode,BodyHeadList1,S),
+compile_body_list_obj(ObjTermList,ObjTerm,Index,WS,Object,OidCode,Code,BodyFrontList,Status) :-
+	(var(BodyFrontList) -> true; BodyFrontList1=[],BodyFrontList2=[]),
+	compile_body_pathexplist(ObjTermList,WS,ObjList,OidCodeList,ObjListCode,BodyFrontList1,S),
 	( no_errors_found(S) -> 
 	    ( ObjTerm == [] ->
-		BodyHeadList=BodyHeadList1,
+		BodyFrontList=BodyFrontList1,
 		Obj=[],
 		OidCodeObj=NULL,
 		ObjCode=NULL,
 		Status = NO_ERRORS
 	    ;
-	      compile_body_pathexp(ObjTerm,WS,Obj,OidCodeObj,ObjCode,BodyHeadList2,Status),
-	      ( var(BodyHeadList) ->
-		append(BodyHeadList1,BodyHeadList2,BodyHeadList)
+	      compile_body_pathexp(ObjTerm,WS,Obj,OidCodeObj,ObjCode,BodyFrontList2,Status),
+	      ( var(BodyFrontList) ->
+		append(BodyFrontList1,BodyFrontList2,BodyFrontList)
 	      ;
 		true
 	      )
@@ -6909,23 +6909,24 @@ compile_body_bin_relation(ObjTerm1,RelType,ObjTerm2,WS,Obj1,OidCode,Code,Status)
 
 
 /****************************************************************************
-  compile_body_objspec(+ObjTerm,+SpecBody,+Workspace,-Object,-OidCode,-Code,-BodyHeadList,-Status)
+  compile_body_objspec(+ObjTerm,+SpecBody,+Workspace,-Object,-OidCode,-Code,-BodyFrontList,-Status)
 
   Code produced by this and similar predicates is divided into
   OidCode and Code. 
   OidCode is the code needed to compute the attribute of molecule
-  and the oid, and the oid of the value part (in ->, *->, etc.)
+  and the oid of the value part (in ->, *->, etc.)
   Code represents the code needed to compute the the attribute specification.
   For instance, in  a.b[c.d->e.f],
       OidCode will represent the computation of a.b, c.d, and e.f:
 	 prand(prmvd(a,b,_newvar1),prand(prmvd(c,d,_newvar2),prmvd(e,f,_newvar3)))
       Code will represent the -> part:
                  prmvd(_newvar1,_newvar2,_newvar3)
+      Object is the code for restricting
 ****************************************************************************/
-compile_body_objspec(ObjTerm,SpecBody,WS,Object,OidCode,Code,BodyHeadList,Status) :-
+compile_body_objspec(ObjTerm,SpecBody,WS,Object,OidCode,Code,BodyFrontList,Status) :-
 	( SpecBody == [] ->
 	    ( is_flobjref(ObjTerm,OTerm,RefType,ATerm) ->
-		compile_body_pathexplist([OTerm,ATerm],WS,[OObj,AObj],OidCode,ObjCode,BodyHeadList,PathexpStatus),
+		compile_body_pathexplist([OTerm,ATerm],WS,[OObj,AObj],OidCode,ObjCode,BodyFrontList,PathexpStatus),
 		( no_errors_found(PathexpStatus) ->
 		    approx_flindex(ATerm,Index),
 		    body_objref_struct(OObj,RefType,AObj,Index,Object,TCode),
@@ -6939,7 +6940,7 @@ compile_body_objspec(ObjTerm,SpecBody,WS,Object,OidCode,Code,BodyHeadList,Status
 		)
 	    ;
 		%% object exists test: a.b.c[]@module
-		compile_body_pathexp(ObjTerm,WS,Object,OidCode,ObjCode,BodyHeadList,PathexpStatus),
+		compile_body_pathexp(ObjTerm,WS,Object,OidCode,ObjCode,BodyFrontList,PathexpStatus),
 		( no_errors_found(PathexpStatus) -> 
 		    objexists_struct(BODYLITERAL,Object,ECode),
 		    attach_workspace(ECode,WS,WSECode,WSStatus),
@@ -6953,19 +6954,24 @@ compile_body_objspec(ObjTerm,SpecBody,WS,Object,OidCode,Code,BodyHeadList,Status
 	    )
 	; % oid spec plus object spec. something like a.b[c->d]@module
 	  compile_body_pathexp(ObjTerm,WS,Object,ObjOidCode,ObjCode,
-			       BodyHeadList1,S),
+			       BodyFrontList1,S),
 	  ( no_errors_found(S) -> 
 	      compile_body_specbody(Object,SpecBody,WS,SpecOidCode,SpecCode,
-			       BodyHeadList2,Status),
+				    BodyFrontList2,Status),
 	      ( no_errors_found(Status) -> 
-		  conjunct_code([ObjCode,SpecCode],Code),
+		  %% Because ObjCode contains : and ::, we put it after
+		  %% the code for molecule --- a heuristic that assumes that
+		  %% computing a:b  (or a::b)when a or b are vars, is expensive.
+		  %% Ideally we should check the type of ObjCode or used
+		  %% delay for ObjCode
+		  conjunct_code([SpecCode,ObjCode],Code),
 		  conjunct_code([ObjOidCode,SpecOidCode],OidCode)
 	      ; 
 		  true
 	      ),
-	      append(BodyHeadList1,BodyHeadList2,BodyHeadList)
+	      append(BodyFrontList1,BodyFrontList2,BodyFrontList)
 	  ;
-	    BodyHeadList = BodyHeadList1,
+	    BodyFrontList = BodyFrontList1,
 	    Status=S
           )
         ),
@@ -6973,45 +6979,52 @@ compile_body_objspec(ObjTerm,SpecBody,WS,Object,OidCode,Code,BodyHeadList,Status
 
 
 /****************************************************************************
-  compile_body_specbody(+Object,+SpecTerm,+Workspace,-OidCode,-Code,-BodyHeadList,-Status)
+  compile_body_specbody(+Object,+SpecTerm,+Workspace,-OidCode,-Code,-BodyFrontList,-Status)
+
+     SpecTerm here represents the inner part of a molecule.
+     Object represents the molecule's oid.
+
+     For instance, in a[c->d,e->f], Object will be pratom(a,4) and SpecTerm
+     flconjunct(flmvdattspec(flatom(c,8),->,[flatom(d,10)]),
+                flmvdattspec(flatom(e,12),->,[flatom(f,14)]))
 ****************************************************************************/
-compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	is_flconjunct(SpecTerm,L,R),
 	!,
-	compile_body_specbody(Object,L,WS,OidCode,LCode,BodyHeadList1,S),
+	compile_body_specbody(Object,L,WS,OidCode,LCode,BodyFrontList1,S),
 	( no_errors_found(S) -> 
-	    compile_body_specbody(Object,R,WS,OidCode,RCode,BodyHeadList2,Status),
+	    compile_body_specbody(Object,R,WS,OidCode,RCode,BodyFrontList2,Status),
 	    ( no_errors_found(Status) -> 
 		conjunct_code([LCode,RCode],Code)
 	    ; true
 	    ),
-	    append(BodyHeadList1,BodyHeadList2,BodyHeadList)
+	    append(BodyFrontList1,BodyFrontList2,BodyFrontList)
 	;
 	  Status=S
         ),
 	!.
 
-compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	is_fldisjunct(SpecTerm,L,R),
 	!,
-	compile_body_specbody(Object,L,WS,OidCode,LCode,BodyHeadList1,S),
+	compile_body_specbody(Object,L,WS,OidCode,LCode,BodyFrontList1,S),
 	( no_errors_found(S) -> 
-	    compile_body_specbody(Object,R,WS,OidCode,RCode,BodyHeadList2,Status),
+	    compile_body_specbody(Object,R,WS,OidCode,RCode,BodyFrontList2,Status),
 	    ( no_errors_found(Status) -> 
 		disjunct_struct(LCode,RCode,Code)
 	    ; true
 	    ),
-	    append(BodyHeadList1,BodyHeadList2,BodyHeadList)
+	    append(BodyFrontList1,BodyFrontList2,BodyFrontList)
 	;
 	  Status=S
         ),
 	!.
 
-compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	is_default_negation(SpecTerm,G,NAFType),
 	!,
 	set_context(compiling_default_negation),
-	compile_body_specbody(Object,G,WS,OidCode,GCode,BodyHeadList,Status),
+	compile_body_specbody(Object,G,WS,OidCode,GCode,BodyFrontList,Status),
 	( no_errors_found(Status) -> 
 	    (is_prquantifier(GCode,_Quant,FormCode,FreeVarObjList)
 	    -> list_struct(FreeVarObjList,[],FreeVarObjs)
@@ -7032,10 +7045,10 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	),
 	clear_context(compiling_default_negation).
 
-compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	is_flneg(SpecTerm,G,Idx),
 	!,
-	compile_body_specbody(Object,G,WS,OidCode,GCode,BodyHeadList,Status1),
+	compile_body_specbody(Object,G,WS,OidCode,GCode,BodyFrontList,Status1),
 	( no_errors_found(Status1) -> 
 	    conjunct_code([OidCode,GCode],CombinedGCode),
 	    neg_struct(CombinedGCode,Idx,Code,Status)
@@ -7044,7 +7057,7 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	!.
 
 %% Quantification under default negation
-compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	is_fllogicquantifier(SpecTerm,FL_EXISTS,QuantVarNames,Formula,Idx),
 	has_context(compiling_default_negation),
 	!,
@@ -7055,7 +7068,7 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 	; S1 = NO_ERRORS
 	),
 
-	compile_body_specbody(Object,Formula,WS,OidCode,FormCode,BodyHeadList,S2),
+	compile_body_specbody(Object,Formula,WS,OidCode,FormCode,BodyFrontList,S2),
 	%% We use prvars so that newly introduced vars will be accounted for
 	collect_prvars([Object,OidCode,FormCode],AllVarList),
 	vars_to_var_names(AllVarList,AllVarList_names),
@@ -7091,10 +7104,10 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyHeadList,Status) :-
 %% NULL means that we don't pass OID code out, because we use it right here.
 
 %% No OidCode is passed outside: we consume it here
-compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 	is_flmvdattspec(SpecTerm,AttTerm,RefType,ValTermList),
 	!,
-	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList1,S),
+	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyFrontList1,S),
 	( no_errors_found(S) -> 
 	    ( ValTermList == [] ->
 		mvdattdef_struct(BODYLITERAL,Object,AttObj,RefType,SCode),
@@ -7102,7 +7115,7 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 		%% Fold OidCode in front of molecule
 		conjunct_code([AOidCode,ACode,WSCode],Code)
 	    ;
-	      compile_body_mvd_attspec(Object,AttObj,RefType,ValTermList,WS,VOidCode,WSCode,BodyHeadList2,Status),
+	      compile_body_mvd_attspec(Object,AttObj,RefType,ValTermList,WS,VOidCode,WSCode,BodyFrontList2,Status),
 	      ( no_errors_found(Status) -> 
 		  %% ACode: Code to produce attribute
 		  %% WSCode: code to produce pure attr specs and 
@@ -7111,27 +7124,27 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	      ; true
 	      )
 	    ),
-	    append(BodyHeadList1,BodyHeadList2,BodyHeadList)
+	    append(BodyFrontList1,BodyFrontList2,BodyFrontList)
         ;
-	  BodyHeadList = BodyHeadList1,
+	  BodyFrontList = BodyFrontList1,
 	  Status=S
         ),
 	!.
 
 %% signatures: =>, *=>, etc.
-compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 	is_flsigattspec(SpecTerm,AttTerm,RefType,ValTerm),
 	!,
-	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList1,S),
+	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyFrontList1,S),
 	( no_errors_found(S) -> 
 	    (is_flemptyterm(ValTerm) ->
 		%% This is SIGDEF: occurs when we have a[b=> ()]
 		sigattdef_struct(BODYLITERAL,Object,AttObj,RefType,SCode),
 		attach_workspace(SCode,WS,WSCode,Status),
 		conjunct_code([AOidCode,ACode,WSCode],Code),
-		BodyHeadList = BodyHeadList1
+		BodyFrontList = BodyFrontList1
 	    ;
-		compile_body_pathexp(ValTerm,WS,ValObj,VOidCode,VCode,BodyHeadList2,PathexpStatus),
+		compile_body_pathexp(ValTerm,WS,ValObj,VOidCode,VCode,BodyFrontList2,PathexpStatus),
 		( no_errors_found(PathexpStatus) -> 
 		    sigattspec_struct(BODYLITERAL,Object,AttObj,RefType,ValObj,SCode),
 		    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -7142,30 +7155,30 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 		(WSStatus == NO_ERRORS -> Status = PathexpStatus
 		; Status = WSStatus
 		),
-		append(BodyHeadList1,BodyHeadList2,BodyHeadList)
+		append(BodyFrontList1,BodyFrontList2,BodyFrontList)
 	    )
 	;
-	    BodyHeadList = BodyHeadList1,
+	    BodyFrontList = BodyFrontList1,
 	    Status = S
         ),
 	!.
 
-compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 	is_flsigattconspec(SpecTerm,AttTerm,ConstrTerm,RefType,ValTerm),
 	!,
-	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList1,S),
+	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyFrontList1,S),
 	( no_errors_found(S) -> 
 	    (is_flemptyterm(ValTerm) ->
 		%% This is SIGDEF: occurs when we have a[b=> ()]
 		sigattdef_struct(BODYLITERAL,Object,AttObj,RefType,SCode),
 		attach_workspace(SCode,WS,WSCode,Status),
 		conjunct_code([AOidCode,ACode,WSCode],Code),
-		BodyHeadList = BodyHeadList1
+		BodyFrontList = BodyFrontList1
 	    ;
 		is_flsigconstr(ConstrTerm,Lower,Upper),
-		compile_body_pathexplist([Lower,Upper],WS,[OLower,OUpper],COidCode,CCode,BodyHeadList2,S_C),
+		compile_body_pathexplist([Lower,Upper],WS,[OLower,OUpper],COidCode,CCode,BodyFrontList2,S_C),
 		( no_errors_found(S_C) -> 
-		    compile_body_pathexp(ValTerm,WS,ValObj,VOidCode,VCode,BodyHeadList3,PathexpStatus),
+		    compile_body_pathexp(ValTerm,WS,ValObj,VOidCode,VCode,BodyFrontList3,PathexpStatus),
 		    ( no_errors_found(PathexpStatus) -> 
 			sigattspec_struct(BODYLITERAL,Object,AttObj,RefType,ValObj,SCode),
 			attach_workspace(SCode,WS,WSCode,WSStatus1),
@@ -7181,20 +7194,20 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 		;
 		    Status = S_C
 		),
-		append(BodyHeadList1,BodyHeadList2,BodyHeadList4),
-		append(BodyHeadList4,BodyHeadList3,BodyHeadList)
+		append(BodyFrontList1,BodyFrontList2,BodyFrontList4),
+		append(BodyFrontList4,BodyFrontList3,BodyFrontList)
 	    )
 	;
-	    BodyHeadList = BodyHeadList1,
+	    BodyFrontList = BodyFrontList1,
 	    Status = S
         ),
 	!.
 
 %% boolean signatures: =>.
-compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 	is_flboolsig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList,PathexpStatus),
+	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyFrontList,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    boolsig_struct(BODYLITERAL,Object,AttObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -7208,10 +7221,10 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	!.
 
 %% boolean signatures: *=>.
-compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 	is_fliboolsig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList,PathexpStatus),
+	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyFrontList,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    iboolsig_struct(BODYLITERAL,Object,AttObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -7225,10 +7238,10 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	!.
 
 %% boolean signatures: =>% for transactional method
-compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 	is_fltransig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList,PathexpStatus),
+	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyFrontList,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    transig_struct(BODYLITERAL,Object,AttObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -7242,10 +7255,10 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	!.
 
 %% boolean signatures: *=>% for transactional method
-compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 	is_flitransig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyHeadList,PathexpStatus),
+	compile_body_pathexp(AttTerm,WS,AttObj,AOidCode,ACode,BodyFrontList,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    itransig_struct(BODYLITERAL,Object,AttObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -7260,10 +7273,10 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 
 %% +>>, *+>>@module
 %% NULL means: consume OidCode for attr and val here -- don't pass up the chain
-compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 	is_flincattspec(SpecTerm,AttTerm,RefType,ValTerm),
 	!,
-	compile_body_pathexplist([AttTerm,ValTerm],WS,[AttObj,ValObj],OidCode,OCode,BodyHeadList,PathexpStatus),
+	compile_body_pathexplist([AttTerm,ValTerm],WS,[AttObj,ValObj],OidCode,OCode,BodyFrontList,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    incattspec_struct(Object,AttObj,RefType,ValObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -7279,10 +7292,10 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 
 %% same for ->->@module
 %% NULL means: consume OidCode for attr and val here -- don't pass up the chain
-compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 	is_fltolistattspec(SpecTerm,AttTerm,RefType,ValTerm),
 	!,
-	compile_body_pathexplist([AttTerm,ValTerm],WS,[AttObj,ValObj],OidCode,OCode,BodyHeadList,PathexpStatus),
+	compile_body_pathexplist([AttTerm,ValTerm],WS,[AttObj,ValObj],OidCode,OCode,BodyFrontList,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    tolistattspec_struct(Object,AttObj,RefType,ValObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -7306,23 +7319,23 @@ compile_body_specbody(_Object,SpecTerm,_WS,NULL,Code,[],Status) :-
 	Status = NO_ERRORS.
 
 %% Obj[X>Y], Obj[X=Y], etc.
-compile_body_specbody(_Object,SpecTerm,_WS,NULL,Code,BodyHeadList,Status) :-
+compile_body_specbody(_Object,SpecTerm,_WS,NULL,Code,BodyFrontList,Status) :-
 	is_flpassthru(SpecTerm,P),
 	is_flterm(P, Funct, N, Args),
 	!,
 	compile_prlgterm(Funct,N,Args,
-			 TCode,_OidCode,ACode,BodyHeadList,Status),
+			 TCode,_OidCode,ACode,BodyFrontList,Status),
 	( no_errors_found(Status) -> conjunct_code([ACode,TCode],Code)
 	; true
 	).
 
 %% for O[BoolMeth]@module
 %% NULL means: consume OidCode for attr and val here -- don't pass up the chain
-compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 	is_flmethspec(SpecTerm,MethTerm),
 	!,
 	compile_body_pathexp(MethTerm,WS,MethObj,OidCode,MCode,
-			    BodyHeadList,PathexpStatus),
+			    BodyFrontList,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    methspec_struct(BODYLITERAL,Object,MethObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -7337,11 +7350,11 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 
 %% for O[*BoolMeth]@module
 %% NULL means: consume OidCode for attr and val here -- don't pass up the chain
-compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 	is_flimethspec(SpecTerm,IMethTerm),
 	!,
 	compile_body_pathexp(IMethTerm,WS,IMethObj,OidCode,IMCode,
-			    BodyHeadList,PathexpStatus),
+			    BodyFrontList,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    imethspec_struct(BODYLITERAL,Object,IMethObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -7356,11 +7369,11 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 	!.
 
 %% O[%M]@module
-compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
+compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 	is_fltranspec(SpecTerm,TranTerm),
 	!,
 	compile_body_pathexp(TranTerm,WS,TranObj,OidCode,TCode,
-			    BodyHeadList,PathexpStatus),
+			    BodyFrontList,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    transpec_struct(BODYLITERAL,Object,TranObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -7375,13 +7388,13 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyHeadList,Status) :-
 
 
 /****************************************************************************
-  compile_body_mvd_attspec(+Object,+AttObj,+RefType,+ValTermList,+Workspace,-OidCode,-Code,?BodyHeadList,-Status)
+  compile_body_mvd_attspec(+Object,+AttObj,+RefType,+ValTermList,+Workspace,-OidCode,-Code,?BodyFrontList,-Status)
 
   Compiles ->, *->, etc., when they have one or more value terms
 ****************************************************************************/
-compile_body_mvd_attspec(Object,AttObj,RefType,[T],WS,OidCode,Code,BodyHeadList,Status) :-
+compile_body_mvd_attspec(Object,AttObj,RefType,[T],WS,OidCode,Code,BodyFrontList,Status) :-
 	!,
-	compile_body_pathexp(T,WS,TObj,OidCode,TCode,BodyHeadList,PathexpStatus),
+	compile_body_pathexp(T,WS,TObj,OidCode,TCode,BodyFrontList,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    mvdattspec_struct(BODYLITERAL,Object,AttObj,RefType,TObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -7394,17 +7407,17 @@ compile_body_mvd_attspec(Object,AttObj,RefType,[T],WS,OidCode,Code,BodyHeadList,
 	),
 	!.
 
-compile_body_mvd_attspec(Object,AttObj,RefType,[T|L],WS,OidCode,Code,BodyHeadList,Status) :-
+compile_body_mvd_attspec(Object,AttObj,RefType,[T|L],WS,OidCode,Code,BodyFrontList,Status) :-
 	!,
-	compile_body_mvd_attspec(Object,AttObj,RefType,[T],WS,OidCodeHead,WTCode,BodyHeadList1,S),
+	compile_body_mvd_attspec(Object,AttObj,RefType,[T],WS,OidCodeHead,WTCode,BodyFrontList1,S),
 	( no_errors_found(S) -> 
-	    compile_body_mvd_attspec(Object,AttObj,RefType,L,WS,OidCodeTail,WLCode,BodyHeadList2,Status),
+	    compile_body_mvd_attspec(Object,AttObj,RefType,L,WS,OidCodeTail,WLCode,BodyFrontList2,Status),
 	    ( no_errors_found(Status) -> 
 		conjunct_code([WTCode,WLCode],Code),
 		conjunct_code([OidCodeHead,OidCodeTail],OidCode)
 	    ; true
 	    ),
-	    append(BodyHeadList1,BodyHeadList2,BodyHeadList)
+	    append(BodyFrontList1,BodyFrontList2,BodyFrontList)
 	;
 	  Status=S
         ),
@@ -7537,14 +7550,14 @@ compile_prefixprimitive(Prefix,Expansion,Module,Code,Status) :-
 
 
 /****************************************************************************
-  compile_prologliblit(+ParserTerm,-OidCode,-Code,?BodyHeadList,-Status)
+  compile_prologliblit(+ParserTerm,-OidCode,-Code,?BodyFrontList,-Status)
 
   Compiles Prolog library call @_prolog
 ****************************************************************************/
-compile_prologliblit(ParserTerm,OidCode,Code,BodyHeadList,Status) :-
+compile_prologliblit(ParserTerm,OidCode,Code,BodyFrontList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
 	    compile_prlgterm(Funct,N,Args,
-			     TCode,OidCode,ACode,BodyHeadList,Status),
+			     TCode,OidCode,ACode,BodyFrontList,Status),
 	    ( no_errors_found(Status) -> 
 		conjunct_code([ACode,TCode],Code)
 	    ; true
@@ -7560,16 +7573,16 @@ compile_prologliblit(ParserTerm,OidCode,Code,BodyHeadList,Status) :-
 
 
 /****************************************************************************
-  compile_prologliblit(+ParserTerm,+Module,-OidCode,-Code,?BodyHeadList,-Status)
+  compile_prologliblit(+ParserTerm,+Module,-OidCode,-Code,?BodyFrontList,-Status)
 
   Compiles Prolog library call @_prolog(module)
 ****************************************************************************/
-compile_prologliblit(ParserTerm,Module,OidCode,Code,BodyHeadList,Status) :-
+compile_prologliblit(ParserTerm,Module,OidCode,Code,BodyFrontList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
 	    get_flatom_name(Funct,FAtom),
 	    %%compile_prlgterm(Funct,N,Args, %% Module,
 	    compile_prlgterm(Funct,N,Args,Module,
-			     TCode,OidCode,ACode,BodyHeadList,Status)
+			     TCode,OidCode,ACode,BodyFrontList,Status)
 	;
 	    get_flatom_name(ParserTerm,FAtom),
 	    atomobj_struct(ParserTerm,FObj),
@@ -7577,7 +7590,7 @@ compile_prologliblit(ParserTerm,Module,OidCode,Code,BodyHeadList,Status) :-
 	    prologterm_struct(FObj,0,[],Module,TCode),
 	    ACode=NULL,
 	    OidCode=NULL,
-	    BodyHeadList = [],
+	    BodyFrontList = [],
 	    Status = NO_ERRORS
 	),
 	( no_errors_found(Status) -> 
@@ -7600,12 +7613,12 @@ compile_prologliblit(ParserTerm,Module,OidCode,Code,BodyHeadList,Status) :-
 
 
 /****************************************************************************
-  compile_prologallliblit(+ParserTerm,-OidCode,-Code,-BodyHeadList,-Status)
+  compile_prologallliblit(+ParserTerm,-OidCode,-Code,-BodyFrontList,-Status)
 
   Compiles Prolog library call @_prologall
 ****************************************************************************/
-compile_prologallliblit(ParserTerm,OidCode,Code,BodyHeadList,Status) :-
-	compile_prologliblit(ParserTerm,OidCode,PrelimCode,BodyHeadList,Status),
+compile_prologallliblit(ParserTerm,OidCode,Code,BodyFrontList,Status) :-
+	compile_prologliblit(ParserTerm,OidCode,PrelimCode,BodyFrontList,Status),
 	( % here PrelimCode is bound and we decompose it
 	  conjunct_struct(ACode,PrelimTermCode,PrelimCode), !
 	; PrelimCode = PrelimTermCode, ACode=NULL
@@ -7621,12 +7634,12 @@ compile_prologallliblit(ParserTerm,OidCode,Code,BodyHeadList,Status) :-
 
 
 /****************************************************************************
-  compile_prologallliblit(+ParserTerm,+Module,-OidCode,-Code,-BodyHeadList,-Status)
+  compile_prologallliblit(+ParserTerm,+Module,-OidCode,-Code,-BodyFrontList,-Status)
 
   Compiles Prolog library call @_prologall(module)
 ****************************************************************************/
-compile_prologallliblit(ParserTerm,Module,OidCode,Code,BodyHeadList,Status) :-
-	compile_prologliblit(ParserTerm,Module,OidCode,PrelimCode,BodyHeadList,Status),
+compile_prologallliblit(ParserTerm,Module,OidCode,Code,BodyFrontList,Status) :-
+	compile_prologliblit(ParserTerm,Module,OidCode,PrelimCode,BodyFrontList,Status),
 	( % here PrelimCode is bound and we decompose it
 	  conjunct_struct(ACode,PrelimTermLitCode,PrelimCode), !
 	; PrelimCode = PrelimTermLitCode, ACode=NULL
@@ -7647,39 +7660,39 @@ compile_prologallliblit(ParserTerm,Module,OidCode,Code,BodyHeadList,Status) :-
 
 
 /****************************************************************************
-  compile_prologlibobj(+ParserTerm,-Object,-OidCode,-Code,?BodyHeadList,-Status)
+  compile_prologlibobj(+ParserTerm,-Object,-OidCode,-Code,?BodyFrontList,-Status)
 
   Compiles Prolog library call @_prolog in the arguments position
   E.g., f(member(X,[a])@_prolog)
   This feature might be useful for meta-programming.  
 ****************************************************************************/
-compile_prologlibobj(ParserTerm,Object,OidCode,Code,BodyHeadList,Status) :-
+compile_prologlibobj(ParserTerm,Object,OidCode,Code,BodyFrontList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
 	    compile_prlgterm(Funct,N,Args,
-			     Object,OidCode,Code,BodyHeadList,Status)
+			     Object,OidCode,Code,BodyFrontList,Status)
 	;
 	    atomobj_struct(ParserTerm,FObj),
 	    N=0,
 	    prologterm_struct(FObj,0,[],Object),
 	    Code=NULL,
 	    OidCode=NULL,
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    Status = NO_ERRORS
 	),
 	!.
 
 
 /****************************************************************************
-  compile_prologlibobj(+ParserTerm,+Module,-Object,-OidCode,-Code,?BodyHeadList,-Status)
+  compile_prologlibobj(+ParserTerm,+Module,-Object,-OidCode,-Code,?BodyFrontList,-Status)
 
   Compiles Prolog library call @_prolog(module) in the arguments position
 ****************************************************************************/
-compile_prologlibobj(ParserTerm,Module,Object,OidCode,Code,BodyHeadList,Status) :-
+compile_prologlibobj(ParserTerm,Module,Object,OidCode,Code,BodyFrontList,Status) :-
 	( is_flterm(ParserTerm,Funct,N,Args) ->
 	    get_flatom_name(Funct,FAtom),
 	    %%compile_prlgterm(Funct,N,Args, %%Module,
 	    compile_prlgterm(Funct,N,Args,Module,
-			     Object,OidCode,Code,BodyHeadList,Status)
+			     Object,OidCode,Code,BodyFrontList,Status)
 	;
 	    get_flatom_name(ParserTerm,FAtom),
 	    atomobj_struct(ParserTerm,FObj),
@@ -7687,7 +7700,7 @@ compile_prologlibobj(ParserTerm,Module,Object,OidCode,Code,BodyHeadList,Status) 
 	    prologterm_struct(FObj,0,[],Module,Object),
 	    Code=NULL,
 	    OidCode=NULL,
-	    BodyHeadList=[],
+	    BodyFrontList=[],
 	    Status = NO_ERRORS
 	),
 	/*
@@ -7705,12 +7718,12 @@ compile_prologlibobj(ParserTerm,Module,Object,OidCode,Code,BodyHeadList,Status) 
 
 
 /****************************************************************************
-  compile_prologalllibobj(+ParserTerm,-Object,-OidCode,-Code-,?BodyHeadList,-Status)
+  compile_prologalllibobj(+ParserTerm,-Object,-OidCode,-Code-,?BodyFrontList,-Status)
 
   Compiles @_prologall in argument position, e.g., foo(f(...)@_prologall
 ***************************************************************************/
-compile_prologalllibobj(ParserTerm,Object,OidCode,Code,BodyHeadList,Status) :-
-	compile_prologlibobj(ParserTerm,PrelimObject,PrelimOidCode,PrelimCode,BodyHeadList,Status),
+compile_prologalllibobj(ParserTerm,Object,OidCode,Code,BodyFrontList,Status) :-
+	compile_prologlibobj(ParserTerm,PrelimObject,PrelimOidCode,PrelimCode,BodyFrontList,Status),
 	%% PrelimObject is bound and we decompose it
 	prologterm_struct(FunctCode,N,ArgsCode,PrelimObject),
 	new_prvarlist(N,NewVarList),
@@ -7721,13 +7734,13 @@ compile_prologalllibobj(ParserTerm,Object,OidCode,Code,BodyHeadList,Status) :-
 	conjunct_code([FromPrologCode,PrelimCode],Code).
 
 /****************************************************************************
-  compile_prologalllibobj(+ParserTerm,+Module,-Object,-OidCode,-Code,?BodyHeadList,-Status)
+  compile_prologalllibobj(+ParserTerm,+Module,-Object,-OidCode,-Code,?BodyFrontList,-Status)
 
   Compiles @_prologall(module) in argument position,
   e.g., foo(f(...)@_prologall(module)
 ***************************************************************************/
-compile_prologalllibobj(ParserTerm,Module,Object,OidCode,Code,BodyHeadList,Status) :-
-	compile_prologlibobj(ParserTerm,Module,PrelimObject,PrelimOidCode,PrelimCode,BodyHeadList,Status),
+compile_prologalllibobj(ParserTerm,Module,Object,OidCode,Code,BodyFrontList,Status) :-
+	compile_prologlibobj(ParserTerm,Module,PrelimObject,PrelimOidCode,PrelimCode,BodyFrontList,Status),
 	%% PrelimObject is bound and we decompose it
 	prologterm_struct(FunctCode,N,ArgsCode,PrelimObject),
 	new_prvarlist(N,NewVarList),
@@ -7739,32 +7752,32 @@ compile_prologalllibobj(ParserTerm,Module,Object,OidCode,Code,BodyHeadList,Statu
 
 
 /****************************************************************************
-  compile_prlgterm(+FunctTerm,+Arity,+ArgList,-Object,-OidCode,-Code,?BodyHeadList,-Status)
-  compile_prlgterm(+FunctTerm,+Arity,+ArgList,+PlgModule,-Object,-OidCode,-Code,?BodyHeadList,-Status)
+  compile_prlgterm(+FunctTerm,+Arity,+ArgList,-Object,-OidCode,-Code,?BodyFrontList,-Status)
+  compile_prlgterm(+FunctTerm,+Arity,+ArgList,+PlgModule,-Object,-OidCode,-Code,?BodyFrontList,-Status)
   
- ?BodyHeadList - code to add at the beginning of the body
+ BodyFrontList - code to add at the beginning of the body
                  (mostly for user defined fnctions),
 		 it is output argument, but if it is initialized to
 		 empty ([]) ignores user defined functions
 ****************************************************************************/
-compile_prlgterm(Funct,N,Args,Object,OidCode,Code,BodyHeadList,Status) :-
+compile_prlgterm(Funct,N,Args,Object,OidCode,Code,BodyFrontList,Status) :-
 	atomobj_struct(Funct,FObj),
 	prologterm_struct(FObj,N,AObj,Object),
 	(has_context(no_symbol_check) -> Clear = no
 	; set_context(no_symbol_check), Clear = yes
 	),
-	compile_body_pathexplist(Args,FL_THISMODULE,AObj,OidCode,Code,BodyHeadList,Status),
+	compile_body_pathexplist(Args,FL_THISMODULE,AObj,OidCode,Code,BodyFrontList,Status),
 	(Clear == yes -> clear_context(no_symbol_check)
 	; true
 	),
 	!.
 
 %% Generate prolog term with module prefix
-compile_prlgterm(Funct,N,Args,Module,Object,OidCode,Code,BodyHeadList,Status) :-
+compile_prlgterm(Funct,N,Args,Module,Object,OidCode,Code,BodyFrontList,Status) :-
 	atomobj_struct(Funct,FObj),
 	prologterm_struct(FObj,N,AObj,Module,Object),
 	set_context(no_symbol_check),
-	compile_body_pathexplist(Args,FL_THISMODULE,AObj,OidCode,Code,BodyHeadList,Status),
+	compile_body_pathexplist(Args,FL_THISMODULE,AObj,OidCode,Code,BodyFrontList,Status),
 	clear_context(no_symbol_check),
 	!.
 
@@ -8017,10 +8030,10 @@ compile_head_pathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :
 	; is_flatom(ParserTerm,_A) ->
 	    Code=NULL,
 	    H2BCodeTail=NULL,
-	    compile_atomobj(ParserTerm,Object,BodyHeadList,Status),
-	    (BodyHeadList==[] -> H2BCodeHead=NULL
+	    compile_atomobj(ParserTerm,Object,BodyFrontList,Status),
+	    (BodyFrontList==[] -> H2BCodeHead=NULL
 	    ;
-		conjunct_code(BodyHeadList,H2BCodeHead)
+		conjunct_code(BodyFrontList,H2BCodeHead)
 	    )
 
 	; is_reifyop(ParserTerm,Formula) ->
@@ -8054,7 +8067,7 @@ compile_head_pathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :
 ****************************************************************************/
 compile_head_termobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
         ( \+ has_context(compiling_arithmetics),
-	    has_UDF(Funct,N,Args,Predicate,Object /* return value */,FunctBodyHeadList,S1)
+	    has_UDF(Funct,N,Args,Predicate,Object /* return value */,FunctBodyFrontList,S1)
 	->
 	    ( no_errors_found(S1) -> 
 	    	H2BCodeTail=NULL,
@@ -8062,7 +8075,7 @@ compile_head_termobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Compile
 	    	compile_udf_body_literal(Funct,Predicate,PCode,PH2BCodeHead,S),
 	    	SymbolContext = UDF_SYMBOL,
 	    	( no_errors_found(S) -> 
-		    append(FunctBodyHeadList,PH2BCodeHead,List1),
+		    append(FunctBodyFrontList,PH2BCodeHead,List1),
 		    append(List1,[PCode],List),
 		    conjunct_code(List,H2BCodeHead),
 		    Status = NO_ERRORS
@@ -9263,11 +9276,11 @@ compile_execdirect(DirectTerm,WS,Code,Status) :-
 
 
 /*******************************************************************************
-compile_delayed_literal(+Op,+Args,-SpecCode,-OidCode,-BodyHeadList,-Status)
-compile_delayed_literal(+Op,+Args,+Mod,-SpecCode,-OidCode,-BodyHeadList,-Status)
+compile_delayed_literal(+Op,+Args,-SpecCode,-OidCode,-BodyFrontList,-Status)
+compile_delayed_literal(+Op,+Args,+Mod,-SpecCode,-OidCode,-BodyFrontList,-Status)
   Args are expected to be FLLIST
 *******************************************************************************/
-compile_delayed_literal(Op,Args,SpecCode,OidCode,BodyHeadList,Status) :-
+compile_delayed_literal(Op,Args,SpecCode,OidCode,BodyFrontList,Status) :-
 	is_flatom(Op,_,Index),
 	code_line_and_file_by_index(Index,Line,CurrFileName),
 	%% Normally, CurrFileName is an atom. But can be flvar, if reification
@@ -9277,8 +9290,8 @@ compile_delayed_literal(Op,Args,SpecCode,OidCode,BodyHeadList,Status) :-
 	    CurrFileParserObj = CurrFileName
 	),
 	compile_prlgterm(FLLIBDELAYEDLITERAL,4,[Op,CurrFileParserObj,Line,Args],
-			 SpecCode,OidCode,_ACode,BodyHeadList,Status).
-compile_delayed_literal(Op,Args,Mod,SpecCode,OidCode,BodyHeadList,Status) :-
+			 SpecCode,OidCode,_ACode,BodyFrontList,Status).
+compile_delayed_literal(Op,Args,Mod,SpecCode,OidCode,BodyFrontList,Status) :-
 	is_flatom(Op,_,Index),
 	code_line_and_file_by_index(Index,Line,CurrFileName),
 	%% Normally, CurrFileName is an atom. But can be flvar, if reification
@@ -9289,7 +9302,7 @@ compile_delayed_literal(Op,Args,Mod,SpecCode,OidCode,BodyHeadList,Status) :-
 	),
 	is_flplib(OpModTerm,Op,Mod),
 	compile_prlgterm(FLLIBDELAYEDLITERAL,4,[OpModTerm,CurrFileParserObj,Line,Args],
-			 SpecCode,OidCode,_ACode,BodyHeadList,Status).
+			 SpecCode,OidCode,_ACode,BodyFrontList,Status).
 
 
 /*******************************************************************************
