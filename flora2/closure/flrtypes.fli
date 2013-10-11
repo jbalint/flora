@@ -25,6 +25,7 @@
 #define ground_and_acyclic(X)  (ground(X),is_acyclic(X))
 
 #define FL_TYPE_GUARD          FLORA_SYMBOL('type_guard')
+#define FL_TYPE_ESCAPE         FLORA_SYMBOL('type_escape')
 
 :- import flora_when/2 from flrwhen.
 
@@ -94,10 +95,12 @@ FLTRAILERPREFIX(WRAP_ISA)(X,FL_DURATION,_Caller) :- flora_datatype_name(X,FL_DUR
 FLTRAILERPREFIX(WRAP_ISA)(X, (C1,C2),[Caller|_]) :-
 	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
 	;
-	    FL_TYPE_GUARD(C1),
-	    FL_TYPE_GUARD(C2),
-	    WRAP_ISA(X,C1,[Caller|_]),
-	    WRAP_ISA(X,C2,[Caller|_])
+	    (FL_TYPE_GUARD(C1), FL_TYPE_GUARD(C2)
+	    ->
+		WRAP_ISA(X,C1,[Caller|_]),
+	    	WRAP_ISA(X,C2,[Caller|_])
+	    ; FL_TYPE_ESCAPE
+	    )
 	).
 
 %% The glb rule
@@ -105,27 +108,31 @@ FLTRAILERPREFIX(WRAP_SUB)(X, (C1,C2),[Caller|_]) :-
 	X \== FL_TOPTYPE,
 	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
 	;
-	    FL_TYPE_GUARD(C1),
-	    FL_TYPE_GUARD(C2),
-	    WRAP_SUB(X,C1,[Caller|_]),
-	    WRAP_SUB(X,C2,[Caller|_]),
-	    X \= (C1,C2), X \= (C2,C1)
+	    (FL_TYPE_GUARD(C1), FL_TYPE_GUARD(C2)
+	    ->
+		WRAP_SUB(X,C1,[Caller|_]),
+	    	WRAP_SUB(X,C2,[Caller|_]),
+	    	X \= (C1,C2), X \= (C2,C1)
+	    ; FL_TYPE_ESCAPE
+	    )
 	).
 
 FLTRAILERPREFIX(WRAP_SUB)((C11,C2),C1,_Caller) :-
 	C2 \== FL_TOPTYPE,
 	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
 	;
-	    FL_TYPE_GUARD(C1,C11),
-	    C1 = C11
+	    (FL_TYPE_GUARD(C1,C11) -> C1 = C11
+	    ; FL_TYPE_ESCAPE
+	    )
 	).
 
 FLTRAILERPREFIX(WRAP_SUB)((C1,C22),C2,_Caller) :-
         C1 \== FL_TOPTYPE,
 	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
 	;
-	    FL_TYPE_GUARD(C2,C22),
-	    C2 = C22
+	    (FL_TYPE_GUARD(C2,C22) -> C2 = C22
+	    ; FL_TYPE_ESCAPE
+	    )
 	).
 
 %% Restrictions on C1, C2 are precautions against infinite loops
@@ -133,12 +140,9 @@ FLTRAILERPREFIX(WRAP_SUB)((C1,C22),C2,_Caller) :-
 FLTRAILERPREFIX(WRAP_ISA)(X, (C1;C2),[Caller|_]) :-
 	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
 	;
-	    (
-		FL_TYPE_GUARD(C1),
-	  	WRAP_ISA(X,C1,[Caller|_])
-	    ;
-		FL_TYPE_GUARD(C2),
-	  	WRAP_ISA(X,C2,[Caller|_])
+	    ( \+FL_TYPE_GUARD(C1), \+FL_TYPE_GUARD(C2) -> FL_TYPE_ESCAPE
+	    ; FL_TYPE_GUARD(C1), WRAP_ISA(X,C1,[Caller|_])
+	    ; FL_TYPE_GUARD(C2), WRAP_ISA(X,C2,[Caller|_])
 	    )
 	).
 
@@ -146,27 +150,31 @@ FLTRAILERPREFIX(WRAP_ISA)(X, (C1;C2),[Caller|_]) :-
 FLTRAILERPREFIX(WRAP_SUB)((C1;C2),X,[Caller|_]) :-
 	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
 	;
-	    FL_TYPE_GUARD(C1),
-	    FL_TYPE_GUARD(C2),
-	    WRAP_SUB(C1,X,[Caller|_]),
-	    WRAP_SUB(C2,X,[Caller|_]),
-	    X \= (C1;C2), X \= (C2;C1)
+	    (FL_TYPE_GUARD(C1), FL_TYPE_GUARD(C2)
+	    ->
+		WRAP_SUB(C1,X,[Caller|_]),
+		WRAP_SUB(C2,X,[Caller|_]),
+		X \= (C1;C2), X \= (C2;C1)
+	    ; FL_TYPE_ESCAPE
+	    )
 	).
 
 FLTRAILERPREFIX(WRAP_SUB)(C1,(C11;C2),_Caller) :-
 	C1 \== FL_TOPTYPE,
 	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
 	;
-	    FL_TYPE_GUARD(C1,C11),
-	    C1 = C11
+	    (FL_TYPE_GUARD(C1,C11) -> C1 = C11
+	    ; FL_TYPE_ESCAPE
+	    )
 	).
 
 FLTRAILERPREFIX(WRAP_SUB)(C2,(C1;C22),_Caller) :-
 	C2 \== FL_TOPTYPE,
 	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
 	;
-	    FL_TYPE_GUARD(C2,C22),
-	    C2 = C22
+	    (FL_TYPE_GUARD(C2,C22) -> C2 = C22
+	    ; FL_TYPE_ESCAPE
+	    )
 	).
 
 
@@ -183,8 +191,9 @@ FLTRAILERPREFIX(WRAP_ISA)(X, (C1-C2),[Caller|_]) :-
 FLTRAILERPREFIX(WRAP_SUB)((C11-C2),C1,_Caller) :-
 	(flora_optimizer_registry(FLORA_CLASS_EXPRESSIONS,'FLORA_THIS_MODULE_NAME')->fail
 	;
-	    FL_TYPE_GUARD(C1,C11),
-	    C1 = C11
+	    (FL_TYPE_GUARD(C1,C11) -> C1 = C11
+	    ; FL_TYPE_ESCAPE
+	    )
 	).
 
 FL_TYPE_GUARD(Call) :-
@@ -195,6 +204,8 @@ FL_TYPE_GUARD(Call1,Call2) :-
 	    (Call1 \= (_,_), Call1 \= (_;_), Call1 \= (_-_) -> true
 	    ; ground_and_acyclic(Call2)
 	    ).
+
+FL_TYPE_ESCAPE :- fail.
 
 /********************* End of standard type definitions *******************/
 #undef ground_and_acyclic

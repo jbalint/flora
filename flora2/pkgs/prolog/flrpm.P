@@ -153,7 +153,7 @@ db_findfact_and_load_to_memory(Module,_Term):-
 
 db_findfact_and_load_to_memory(Module,Term):-
         flora_dbmodule_registry(Module,_,_,_,_),
-	aux_consruct_query_string(Term,N,_Module,Wrapper,_,ColValList),
+	aux_construct_query_string(Term,N,_Module,Wrapper,_,ColValList),
 	make_db_table_name(Module,Wrapper,N,TableName),
 	SQLSelQuery = [SELECT_STATEMENT_PREFIX, TableName,' '|ColValList],
 	aux_retrieve_db_info(Module,Wrapper,N,SQLSelQuery),
@@ -462,7 +462,7 @@ insert_hook(_Module,Term) :-
 
 insert_hook_internal(Term) :-
 	!,
-	aux_consruct_query_string(Term,N,ModuleName,Wrapper,ValueList,ColValList),
+	aux_construct_query_string(Term,N,ModuleName,Wrapper,ValueList,ColValList),
 	aux_get_db_handle(ModuleName,DBHandle),
 	make_column_string(N,ColString),
 	aux_insert_quotes(ValueList,ValueListQuoted),
@@ -560,7 +560,7 @@ delete_hook(_Module,Term) :-
 	delete_hook_internal(Term).
 
 delete_hook_internal(Term) :-
-	aux_consruct_query_string(Term,N,ModuleName,Wrapper,_,ColValList),
+	aux_construct_query_string(Term,N,ModuleName,Wrapper,_,ColValList),
 	aux_get_db_handle(ModuleName,DBHandle),
 	make_db_table_name(ModuleName,Wrapper,N,TableName),
 	SQLDelQuery = [DELETE_TABLE_PREFIX,TableName,' '|ColValList],
@@ -568,12 +568,13 @@ delete_hook_internal(Term) :-
 	db_statement_close_internal(flrdb_qa_del).
 
 /****************************************************************************
- aux_consruct_query_string(+Term,-N,-ModuleName,-Wrapper,-ValueList,-ColValList)
+ aux_construct_query_string(+Term,-N,-ModuleName,-Wrapper,-ValueList,-ColValList)
 
  Is a generic predicate that parses a term and extracts information.
 ****************************************************************************/
-aux_consruct_query_string(Term,N,ModuleName,Wrapper,ValueList,ColValList):-
+aux_construct_query_string(Term,N,ModuleName,CleanedUpWrapper,ValueList,ColValList):-
 	flora_decode_predicate(Term,_PredicateType,ModuleName,Wrapper,_WrapPrefix,_PredicateSymbol,ArgsList),	
+	aux_cleanup_name(Wrapper,CleanedUpWrapper),
 	ValueList = ArgsList,
 	length(ValueList,N),
 	aux_create_col_val_pairs(ValueList,ColValList1),
@@ -582,6 +583,24 @@ aux_consruct_query_string(Term,N,ModuleName,Wrapper,ValueList,ColValList):-
 	;
 	    ColValList = [' WHERE ' | ColValList1]
 	).
+
+%% eliminate ^ and ' from table names. Other symbols will be removed if found
+aux_cleanup_name(String,CleanStr) :-
+	atom_codes(String,List),
+	aux_cleanup_name_list(List,CleanLst),
+	atom_codes(CleanStr,CleanLst).
+aux_cleanup_name_list([],[]) :- !.
+aux_cleanup_name_list([CH_HAT|List],[CH_UNDERSCORE|CleanLst]) :-
+	!,
+	aux_cleanup_name_list(List,CleanLst).
+aux_cleanup_name_list([CH_QUOTE|List],[CH_UNDERSCORE|CleanLst]) :-
+	!,
+	aux_cleanup_name_list(List,CleanLst).
+aux_cleanup_name_list([CH_BACKQUOTE|List],[CH_UNDERSCORE|CleanLst]) :-
+	!,
+	aux_cleanup_name_list(List,CleanLst).
+aux_cleanup_name_list([Ch|List],[Ch|CleanLst]) :-
+	aux_cleanup_name_list(List,CleanLst).
 
 
 /****************************************************************************
