@@ -33,7 +33,7 @@ CALL ..\..\flora_settings.bat
 CALL %1%\floraVariables.bat
 
 
-CALL ..\..\..\runflora.bat -e "_load('%FLORA_FILE%'>>example),_load(javaAPI),%%%%write('%FLORA_CLASS%',example,'%JAVA_FILE%'),_halt."
+CALL ..\..\..\runflora.bat -e "_load('%FLORA_FILE%'>>example),_load(javaAPI),write('%FLORA_CLASS%',example,'%JAVA_FILE%'),_halt."
 
 echo Compiling files
 %JAVA_BIN%\javac -classpath ..\javaAPI\src;..\javaAPI\util;..\..\interprolog.jar %1%\*.java

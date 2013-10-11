@@ -37,7 +37,7 @@ fi
 
 touch ${1}/*.flr
 
-../../../runflora -e "_load('${FLORA_FILE}'>>example),_load(javaAPI),%write(${FLORA_CLASS},example,'${JAVA_FILE}'),_halt." 
+../../../runflora -e "_load('${FLORA_FILE}'>>example),_load(javaAPI),write(${FLORA_CLASS},example,'${JAVA_FILE}'),_halt." 
  
 # add -Xlint after convertion to Java 1.5
 ${JAVA_BIN}/javac -deprecation -Xlint:unchecked -Xlint -classpath ../javaAPI/src:../javaAPI/util:../../interprolog.jar ${1}/*.java 
