@@ -27,31 +27,37 @@
 #include "flora_terms.flh"
 
 :- suppress_rule_signatures.
-:- symbol_context %check(?), %check(?,?,?).
+:- symbol_context check(?), check(?,?,?).
 
-:- prolog boundViolated/5.
+:- prolog boundViolated/5, generalize_method/4,
+	not_complies_with_type_list/3, checkBounds/2.
+:- prolog is_native/1, typeCheckInternal/7, typeCheckBoolInternal/7.
 
 :- export
-       ?[%check(?,?)],
-       ?[%check(?)].
+       ?[check(?,?)],
+       ?[check(?)].
 
-Cardinality[%check(?Atom)] :-
+Cardinality[check(?Atom)] :-
 	?Atom !~ ?Obj[?Meth => ?]@?Mod,
 	?Atom !~ ?Obj[?Meth {?LowBound:?HighBound} => ?]@?Mod,
 	?Atom !~ ?Obj[?Meth *=> ?]@?Mod,
 	?Atom !~ ?Obj[?Meth {?LowBound:?HighBound} *=> ?]@?Mod,
 	flora_decode_goal_as_atom(?Atom,?AtmString)@_prolog(flrdecode),
-	abort(['Cardinality[%check(',
+	abort(['Cardinality[check(',
 		 ?AtmString,
 		 ')]@_typecheck: Invalid signature argument'])@_sys.
 
-Cardinality[%check(?Atom)] :-
-	( ?Atom ~ ?Obj[?Meth => ?]@?Mod, !
+Cardinality[check(?Atom)] :-
+	( ?Atom ~ ?Obj[?Meth => ?]@?Mod
         ; ?Atom ~ ?Obj[?Meth {?LowBound:?HighBound} => ?]@?Mod
         ),
 	// ?Mod==FLSYSMODTYPECHECK, if module wasn't specified
 	if ?Mod == FLSYSMODTYPECHECK then caller{?RealMod} else ?RealMod=?Mod,
-	%checkBounds(?LowBound,?HighBound),
+	checkBounds(?LowBound,?HighBound),
+	(is_native(${?[?Meth->?]@?RealMod})
+         ; is_native(${?[?Meth=>?]@?RealMod})
+         ; is_native(${?[?Meth*=>?]@?RealMod})
+        ),
 	?Obj[?Meth {?Low:?High}  => ?]@?RealMod,
 	?Count = count{?V | ?Obj[?Meth -> ?V]@?RealMod},
 	// use @> to compare ?Count and ?High since ?High may be '*'
@@ -59,13 +65,16 @@ Cardinality[%check(?Atom)] :-
 	boundViolated(?Count,?Low,?High,?LowBound,?HighBound).
 	
 
-Cardinality[%check(?Atom)] :-
-	( ?Atom ~ ?Obj[?Meth *=> ?]@?Mod, !
+Cardinality[check(?Atom)] :-
+	( ?Atom ~ ?Obj[?Meth *=> ?]@?Mod
         ; ?Atom ~ ?Obj[?Meth {?LowBound:?HighBound} *=> ?]@?Mod
         ),
 	// ?Mod==FLSYSMODTYPECHECK, if module wasn't specified
 	if ?Mod == FLSYSMODTYPECHECK then caller{?RealMod} else ?RealMod=?Mod,
-	%checkBounds(?LowBound,?HighBound),
+	checkBounds(?LowBound,?HighBound),
+	(is_native(${?[?Meth*->?]@?RealMod})
+	 ; is_native(${?[?Meth*=>?]@?RealMod})
+        ),
 	?Obj[?Meth {?Low:?High} *=> ?]@?RealMod,
 	?Count = count{?V | ?Obj[?Meth *-> ?V]@?RealMod},
 	// use @> to compare ?Count and ?High since ?High may be '*'
@@ -77,18 +86,18 @@ Cardinality[%check(?Atom)] :-
 *****************************************************************************/
 
 /*****************************************************************************
-	    %checkBounds(-LowBound,-HighBound)
+	    checkBounds(-LowBound,-HighBound)
 
   Verify that ?LowBound and ?HighBound should be unbound variables,
   and should not be equal.
 *****************************************************************************/
-%checkBounds(?LowBound,?HighBound) :-
+checkBounds(?LowBound,?HighBound) :-
 	if ?HighBound == ?LowBound  then
-	    abort('Error in Cardinality[%check(?[?Method {?Low:?High} => ?])]@_typecheck: Low and high bounds must be different')@_sys,
+	    abort('Error in Cardinality[check(?[?Method {?Low:?High} => ?])]@_typecheck: Low and high bounds must be different')@_sys,
 	if _isnonvar(?LowBound) then  
-	    abort('Error in Cardinality[%check(?[?Method {?Low:?High} => ?])]@_typecheck: ?Low must be an unbound variable')@_sys,
+	    abort('Error in Cardinality[check(?[?Method {?Low:?High} => ?])]@_typecheck: ?Low must be an unbound variable')@_sys,
 	if _isnonvar(?HighBound) then 
-	    abort('Error in Cardinality[%check(?[?Method {?Low:?High} => ?])]@_typecheck: ?High must be an unbound variable')@_sys.
+	    abort('Error in Cardinality[check(?[?Method {?Low:?High} => ?])]@_typecheck: ?High must be an unbound variable')@_sys.
 
 
 /*****************************************************************************
@@ -111,7 +120,7 @@ boundViolated(?Count,?Low,?High,?LowBound,?HighBound) :-
 
 /******************************************************************************
    Type checking;
-	  Type[%typeCheck(+?Atom,-?Result)
+	  Type[typeCheck(+?Atom,-?Result)
           If ?Atom = -> then both -> and *-> are checked. Missing types flagged
              ?Atom = *-> then only *-> are checked. Missing types not flagged
              ?Atom = => then ->, *-> are checked. Missing types not flagged
@@ -119,89 +128,106 @@ boundViolated(?Count,?Low,?High,?LowBound,?HighBound) :-
              ?Atom = *=> then only *-> are checked. Missing types not flagged
 ******************************************************************************/
 
-Type[%check(?Atom,?Result)] :-
+Type[check(?Atom,?Result)] :-
 	caller{?CallerMod},
         Method[mustDefine(?Stat(?CallerMod))]@_sys,
         Method[mustDefine(off(?CallerMod))]@_sys,
-	?Result = collectset{?Res|true{Type[%check(?Atom,?CallerMod,?Res)]}},
+	?Result = collectset{?Res|true{Type[check(?Atom,?CallerMod,?Res)]}},
         Method[mustDefine(?Stat(?CallerMod))]@_sys.
 
-// %check/3 - internal
-Type[%check(?Atom,?CallerMod,?Result)] :-
+// check/3 - internal
+Type[check(?Atom,?CallerMod,?Result)] :-
 	?Atom ~ ?Class[?Meth -> ?]@?,
+	_isloaded(?CallerMod),
 	!,
-	Type[%typeCheckInternal(?,?)(?Class,?Meth,?CallerMod,?Result)].
+	typeCheckInternal(?,?,Type,?Class,?Meth,?CallerMod,?Result).
 
-Type[%check(?Atom,?CallerMod,?Result)] :-
+Type[check(?Atom,?CallerMod,?Result)] :-
 	?Atom ~ ?Class[?Meth *-> ?]@?,
+	_isloaded(?CallerMod),
 	!,
-	Type[%typeCheckInternal(defaultonly,?)(?Class,?Meth,?CallerMod,?Result)].
+	typeCheckInternal(defaultonly,?,Type,?Class,?Meth,?CallerMod,?Result).
 
-Type[%check(?Atom,?CallerMod,?Result)] :-
+Type[check(?Atom,?CallerMod,?Result)] :-
 	?Atom ~ ?Class[?Meth => ?]@?,
+	_isloaded(?CallerMod),
 	!,
-	Type[%typeCheckInternal(?,nonstrict)(?Class,?Meth,?CallerMod,?Result)].
+	typeCheckInternal(?,nonstrict,Type,?Class,?Meth,?CallerMod,?Result).
 
-Type[%check(?Atom,?CallerMod,?Result)] :-
+Type[check(?Atom,?CallerMod,?Result)] :-
 	?Atom ~ ?Class[?Meth *=> ?]@?,
+	_isloaded(?CallerMod),
 	!,
-	Type[%typeCheckInternal(defaultonly,nonstrict)(?Class,?Meth,?CallerMod,?Result)].
+	typeCheckInternal(defaultonly,nonstrict,Type,?Class,?Meth,?CallerMod,?Result).
 
 // For Boolean methods
-Type[%check(?Atom,?CallerMod,?Result)] :-
+Type[check(?Atom,?CallerMod,?Result)] :-
 	?Atom ~ ?Class[?Meth]@?,
+	_isloaded(?CallerMod),
 	!,
-	Type[%typeCheckBoolInternal(?,?)(?Class,?Meth,?CallerMod,?Result)].
+	typeCheckBoolInternal(?,?,Type,?Class,?Meth,?CallerMod,?Result).
 
-Type[%check(?Atom,?CallerMod,?Result)] :-
+Type[check(?Atom,?CallerMod,?Result)] :-
 	?Atom ~ ?Class[*?Meth]@?,
+	_isloaded(?CallerMod),
 	!,
-	Type[%typeCheckBoolInternal(defaultonly,?)(?Class,?Meth,?CallerMod,?Result)].
+	typeCheckBoolInternal(defaultonly,?,Type,?Class,?Meth,?CallerMod,?Result).
 
-Type[%check(?Atom,?CallerMod,?Result)] :-
+Type[check(?Atom,?CallerMod,?Result)] :-
 	?Atom ~ ?Class[=>?Meth]@?,
+	_isloaded(?CallerMod),
 	!,
-	Type[%typeCheckBoolInternal(?,nonstrict)(?Class,?Meth,?CallerMod,?Result)].
+	typeCheckBoolInternal(?,nonstrict,Type,?Class,?Meth,?CallerMod,?Result).
 
-Type[%check(?Atom,?CallerMod,?Result)] :-
+Type[check(?Atom,?CallerMod,?Result)] :-
 	?Atom ~ ?Class[*=>?Meth]@?,
+	_isloaded(?CallerMod),
 	!,
-	Type[%typeCheckBoolInternal(defaultonly,nonstrict)(?Class,?Meth,?CallerMod,?Result)].
+	typeCheckBoolInternal(defaultonly,nonstrict,Type,?Class,?Meth,?CallerMod,?Result).
 
-Type[%check(?Atom,?_Mod,?_Result)] :-
+Type[check(?Atom,?_Mod,?_Result)] :-
+	writeln(ppp=?_Mod)@_io,
 	flora_decode_goal_as_atom(?Atom,?AtmString)@_prolog(flrdecode),
-	abort(['Type[%check(',
+	abort(['Type[check(',
 		 ?AtmString,',?Result',
 		 ')]@_typecheck: Invalid first argument'])@_sys.
 
 
 	
 // wrong type, nondefault, nonstrict
-Type[%typeCheckInternal(allsigns,?)(?Class,?Method,?Module,?Result)] :- 
-	\+ flora_system_module(?Module)@_prolog(flrlibman),
+typeCheckInternal(allsigns,?,Type,?Class,?Method,?Module,?Result) :- 
+	_isloaded(?Module),
+	(is_native(${?[?Method->?]@?Module})
+	; is_native(${?[?Method*->?]@?Module})
+        ),
 	?O[?Method->?Val, ?Method=>?Type]@?Module,
 	if _isnonvar(?Class) then ?O:?Class@?Module,
 	naf ?Val:?Type@?Module,
 	?Result ~ ?O[?Method->?Val, ?Method=>?Type]@?Module.
 
 // missing type, nondefault sign, strict
-Type[%typeCheckInternal(allsigns,strict)(?Class,?Method,?Module,?Result)] :-
-	\+ flora_system_module(?Module)@_prolog(flrlibman),
+typeCheckInternal(allsigns,strict,Type,?Class,?Method,?Module,?Result) :-
+	_isloaded(?Module),
+	(is_native(${?[?Method->?]@?Module})
+	; is_native(${?[?Method*->?]@?Module})
+        ),
         (?O[?Method -> ?Val], naf ?O[?Method => ?])@?Module,
 	if _isnonvar(?Class) then ?O:?Class@?Module,
 	?Result ~ ?O[?Method -> ?Val]@?Module.
 
 // wrong type, default sign, nonstrict
-Type[%typeCheckInternal(?,?)(?Class,?Method,?Module,?Result)] :- 
-	\+ flora_system_module(?Module)@_prolog(flrlibman),
+typeCheckInternal(?,?,Type,?Class,?Method,?Module,?Result) :- 
+	_isloaded(?Module),
+	is_native(${?[?Method*->?]@?Module}),
 	?O[?Method*->?Val, ?Method*=>?Type]@?Module,
 	if _isnonvar(?Class) then ?O:?Class@?Module,
 	naf ?Val:?Type@?Module,
 	?Result ~ ?O[?Method*->?Val, ?Method*=>?Type]@?Module.
 
 // missing type, default sign, strict (not checked if nonstrict)
-Type[%typeCheckInternal(?,strict)(?Class,?Method,?Module,?Result)] :-
-	\+ flora_system_module(?Module)@_prolog(flrlibman),
+typeCheckInternal(?,strict,Type,?Class,?Method,?Module,?Result) :-
+	_isloaded(?Module),
+	is_native(${?[?Method*->?]@?Module}),
         (?O[?Method *-> ?Val], naf ?O[?Method *=> ?])@?Module,
 	if _isnonvar(?Class) then ?O:?Class@?Module,
 	?Result ~ ?O[?Method *-> ?Val]@?Module.
@@ -210,8 +236,11 @@ Type[%typeCheckInternal(?,strict)(?Class,?Method,?Module,?Result)] :-
 
 // Same for Boolean methods
 // wrong type, nondefault, nonstrict
-Type[%typeCheckBoolInternal(allsigns,?)(?Class,?Method,?Module,?Result)] :- 
-	\+ flora_system_module(?Module)@_prolog(flrlibman),
+typeCheckBoolInternal(allsigns,?,Type,?Class,?Method,?Module,?Result) :- 
+	_isloaded(?Module),
+	(is_native(${?[?Method]@?Module})
+	; is_native(${?[*?Method]@?Module})
+        ),
 	?O[?Method]@?Module,
 	generalize_method(?Method,?MethodType,?MethArgs,?Types),
 	?O[=>?MethodType]@?Module,
@@ -220,8 +249,11 @@ Type[%typeCheckBoolInternal(allsigns,?)(?Class,?Method,?Module,?Result)] :-
 	?Result ~ ?O[?Method, =>?MethodType]@?Module.
 
 // missing type, nondefault sign, strict
-Type[%typeCheckBoolInternal(allsigns,strict)(?Class,?Method,?Module,?Result)] :-
-	\+ flora_system_module(?Module)@_prolog(flrlibman),
+typeCheckBoolInternal(allsigns,strict,Type,?Class,?Method,?Module,?Result) :-
+	_isloaded(?Module),
+	(is_native(${?[?Method]@?Module})
+	; is_native(${?[*?Method]@?Module})
+        ),
         ?O[?Method]@?Module,
 	generalize_method(?Method,?MethodType,?,?),
 	naf ?O[=>?MethodType]@?Module,
@@ -229,8 +261,9 @@ Type[%typeCheckBoolInternal(allsigns,strict)(?Class,?Method,?Module,?Result)] :-
 	?Result ~ ?O[?Method]@?Module.
 
 // wrong type, default sign, nonstrict
-Type[%typeCheckBoolInternal(?,?)(?Class,?Method,?Module,?Result)] :- 
-	\+ flora_system_module(?Module)@_prolog(flrlibman),
+typeCheckBoolInternal(?,?,Type,?Class,?Method,?Module,?Result) :- 
+	_isloaded(?Module),
+	is_native(${?[*?Method]@?Module}),
 	?O[*?Method]@?Module,
 	generalize_method(?Method,?MethodType,?MethArgs,?Types),
 	?O[*=>?MethodType]@?Module,
@@ -239,8 +272,9 @@ Type[%typeCheckBoolInternal(?,?)(?Class,?Method,?Module,?Result)] :-
 	?Result ~ ?O[*?Method, *=>?MethodType]@?Module.
 
 // missing type, default sign, strict (not checked if nonstrict)
-Type[%typeCheckBoolInternal(?,strict)(?Class,?Method,?Module,?Result)] :-
-	\+ flora_system_module(?Module)@_prolog(flrlibman),
+typeCheckBoolInternal(?,strict,Type,?Class,?Method,?Module,?Result) :-
+	_isloaded(?Module),
+	is_native(${?[*?Method]@?Module}),
         ?O[*?Method]@?Module,
 	generalize_method(?Method,?MethodType,?,?),
 	naf ?O[*=>?MethodType]@?Module,
@@ -268,3 +302,10 @@ not_complies_with_type_list([?Arg|?], [?Type|?], ?Module) :-
 not_complies_with_type_list([?Arg|?ArgList], [?Type|?TypeList], ?Module) :-
 	?Arg : ?Type@?Module,
 	not_complies_with_type_list(?ArgList,?TypeList,?Module).
+
+// tests if ?Call has been defined in its module
+// this blocks out various imported modules
+is_native(?Call) :-
+	clause{?Call,?},
+	!.
+is_native(?Call) :- _isbasefact(?Call).
