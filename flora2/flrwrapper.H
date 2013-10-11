@@ -41,6 +41,7 @@
 :- import
 	flora_storage_registry/1,
 	flora_fld_storage_registry/1,
+	flora_user_module_registry/1,
 	flora_module_registry/1
    from flrregistry.
 
