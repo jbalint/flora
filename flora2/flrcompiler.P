@@ -470,6 +470,8 @@ approx_flindex(FLFLORALIB(P,_M),I)            :- !, approx_flindex(P,I).
 approx_flindex(FLWORKSPACE(P,_WS),I)          :- !, approx_flindex(P,I).
 approx_flindex(FLCONSTRAINT(C),I)             :- !, approx_flindex(C,I).
 
+approx_flindex(FLIC(C),I)                     :- !, approx_flindex(C,I).
+
 approx_flindex(FLUDF(Fun,_,_),I)              :- !, approx_flindex(Fun,I).
 approx_flindex(FLUDFFACT(Fun,_),I)            :- !, approx_flindex(Fun,I).
 
@@ -3745,7 +3747,9 @@ compile_integrity_constraint(DescrIdCode,MetaFactDiffList,Body,Mode,IClist-TCtai
 	    %% Note: we do not add delay-checker code FLORA_DELAY_CHECKER
 	    %% in constraints, since it is explicit in FLLIBANSWER
 	    florasyslib_struct(FLLIBINSICSIG,6,[DescrIdCode,File,ThisMod,RuleNum,MetaFactCode,AugmentedBodyCode],Goal),
-	    query_struct(Goal,ICcode),
+	    (has_context(goal_reification) -> ICcode = Goal
+	    ; query_struct(Goal,ICcode)
+	    ),
 	    IClist = [ICcode|TCtail]
 	;
 	  true
@@ -3867,8 +3871,9 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
           Otherwise: assume strict.
 */
 %% If Mode=clause_construct/query then don't produce defeasibility fact
-determine_defeasibility(_Features,clause_construct,_DescrIdCode,_DescrVarsTerm,NULL,[]) :- !.
-determine_defeasibility(_Features,query,_DescrIdCode,_DescrVarsTerm,NULL,[]) :- !.
+determine_defeasibility(_Features,Mode,_DescrIdCode,_DescrVarsTerm,NULL,[]) :-
+	memberchk(Mode,[clause_construct,query,ic,addic]),
+	!.
 determine_defeasibility(DescrFeatures,Mode,DescrIdCode,DescrVarsTerm,DefeatMetaFact,Status) :-
 	memberchk(Mode,[rule,dynrule,addrule]),
 	!,
@@ -5077,6 +5082,20 @@ compile_body(ParserTerm,Code,Status) :-
 	;
 	    true
 	).
+
+compile_body(ParserTerm,Code,Status) :-
+	is_flannotated_construct(ParserTerm,Descriptor,Statement),
+	is_flic(Statement,Body),
+	!,
+	approx_flindex(Statement,RuleIdx),
+	compile_descriptor_list(Descriptor-RuleIdx,addic,DescrIdCode,_DescrVarsTerm,MetaFacts,Status1),
+	(no_errors_found(Status1) ->
+	    compile_integrity_constraint(DescrIdCode,MetaFacts,Body,addic,CodeList-[],Status),
+	    conjunct_code(CodeList,Code)
+	; Status = Status1
+	).
+	%%compile_annotated_construct_add(Descriptor,MainPartOfRule,RuleDiffList,FactDiffList,QueryList,IClist,Status),
+	%%lists:append_lists([RuleDiffList,FactDiffList,QueryList,IClist],Code).
 
 
 %% a descriptor query in rule/query body like ... :- ..., @!{...}

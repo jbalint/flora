@@ -170,13 +170,19 @@ FLLIBUNIVEQFORM(X,Y) :-
         !,
         X = Y.
 
-%% We ignore pre-and-post body and rule Ids and meta info in such unification
-FLLIBUNIVEQFORM(FLSYSRULEUPDATE(_Id,_FileName,_DescrVarTerm,_RuleNum,_DescrMetaFacts,H1,B1,HV,BV,_PreBody,_PostBody,_DefeatCond),
-		FLSYSRULEUPDATE(_Id2,_FileName,_DescrVarTerm2,_RuleNum,_DescrMetaFacts2,H2,B2,HV,BV,_PreBody2,_PostBody2,_DefeatCond)) :-
+%% We ignore pre-and-post body and meta info in such unification
+FLLIBUNIVEQFORM(FLSYSRULEUPDATE(Id,_FileName,_DescrVarTerm,_RuleNum,_DescrMetaFacts,H1,B1,HV,BV,_PreBody,_PostBody,_DefeatCond),
+		FLSYSRULEUPDATE(Id,_FileName2,_DescrVarTerm2,_RuleNum,_DescrMetaFacts2,H2,B2,HV,BV,_PreBody2,_PostBody2,_DefeatCond)) :-
 	!,
 	flora_list2conjunct(H1,H1C),
 	flora_list2conjunct(H2,H2C),
 	FLLIBUNIVEQFORM(H1C,H2C),
+	FLLIBUNIVEQFORM(B1,B2).
+
+%% We ignore pre-and-post body and info in such unification
+FLLIBUNIVEQFORM(FLLIBINSICSIG(Id,_FileName,_,_Mod,_DescrMetaFacts,B1),
+		FLLIBINSICSIG(Id,_FileName2,_Mod2,_,_DescrMetaFacts2,B2)) :-
+	!,
 	FLLIBUNIVEQFORM(B1,B2).
 
 FLLIBUNIVEQFORM(X,Y) :-
@@ -522,8 +528,13 @@ FLLIBMETAUNIV(X,Y) :-
 	   ;   %% FLSYSRULEUPDATE(....) - a reified rule
 	       rule_wrapper(FullWrapper,WrapName)
 	   ->
-	       Args = [Id,FileName,_DescrVarTerm,_RuleNum,DescrMetaFacts,H1,B1,_HV,_BV,_PreBody,_PostBody,_DefeatCond],
-	       Y = [WRAP_HILOG(WrapName,Id,FileName),DescrMetaFacts,H1,B1]
+	       Args = [Id,FileName,_DescrVarTerm,_RuleNum,DescrMetaFacts,RuleHd,RuleBody,_HV,_BV,_PreBody,_PostBody,_DefeatCond],
+	       Y = [WRAP_HILOG(WrapName,Id,FileName),DescrMetaFacts,RuleHd,RuleBody]
+	   ;   %% FLLIBINSICSIG(....) - a reified IC (integrity constraint)
+	       ic_wrapper(FullWrapper,WrapName)
+	   ->
+	       Args = [Id,FileName,Mod,_RuleNum,DescrMetaFacts,IC_Body],
+	       Y = [WRAP_HILOG(WrapName,Id,FileName,Mod),DescrMetaFacts,IC_Body]
 	   ; Y = [BaseWrap|Args]
 	   )
 	;
@@ -696,6 +707,7 @@ control_wrapper(FLLIBTHROW,throw).
 control_wrapper(FLLIBNEWOID,newoid).
 
 rule_wrapper(FLSYSRULEUPDATE,rule).
+ic_wrapper(FLLIBINSICSIG,ic).
 
 
 is_negation(FLORA_NAF_PREDICATE, FL_RULELOGNAF).
