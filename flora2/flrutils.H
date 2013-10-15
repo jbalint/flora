@@ -63,6 +63,10 @@
 	member/2,
 	append/3
    from basics.
+:- import
+	last/2,
+	append_lists/2
+   from lists.
 
 :- import
 	file_open/3,
@@ -138,8 +142,8 @@
 	flora_clear_compilation_permaoptions/0,
 	flora_reset_compiler/1,
 	flora_compile_pathexp/3,
-	flora_compile/8,
-        flora_compile_add/6,
+	flora_compile/10,
+        flora_compile_add/8,
 	flora_get_compilation_liboptions/1,
 	symbol/7,
 	nowarn_symbol/5,
@@ -252,6 +256,8 @@
    from flrwhen.
 
 :- import
+	ic_signature_member/3,
+	matching_IC_signature/4,
 	rule_signature_member/3,
         matching_rule_signature/7
    from flrcanon.
@@ -335,8 +341,8 @@
 	flora_read_parse_compile_build_term_list/3,
 	flora_read_parse_compile_build_loop/3,
 
-	util_read_parse_compile/8,
-	util_read_parse_compile_add/6,
+	util_read_parse_compile/11,
+	util_read_parse_compile_add/9,
 
 	flora_patch_full_filename/1,
 

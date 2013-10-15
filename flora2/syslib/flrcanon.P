@@ -38,7 +38,8 @@
 #define INDEXED_ARG                 1
 
 :- dynamic 
-        flora_rule_signature(_,_,_,_,_,_,_,_,_,_,_,_,_)
+        flora_rule_signature(_,_,_,_,_,_,_,_,_,_,_,_,_),
+	flora_IC_signature(_,_,_,_,_)
    as FLORA_DYNAMICS_TYPE.
 
 %% Indexing is arranged so that first indexing is done on rule id,
@@ -46,6 +47,7 @@
 %% Indexing on Head (arg 5) helps ~20%, but star-indexing on Head
 %% slows things down.
 :- index(flora_rule_signature/13,[1,6]).
+:- index(flora_IC_signature/5,[1,3]).
 
 :- dynamic
 	flora_body_to_head_conversion_cache(_,_),
@@ -87,7 +89,6 @@
         flora_concat_atoms/2
    from flrporting.
 
-
 :- import
 	FLSYSRULEUPDATE/10,
 	FLLIBMODOBJ/6,
@@ -109,13 +110,16 @@
 	show_rule_by_id/5,  % fast version of clause{...}
 	show_rule_by_tag/4, % same, but by tag
         show_rule_signature/13,
+	matching_IC_signature/4,
 	rule_signature_member/3,
+	ic_signature_member/3,
 	get_canonical_form/2,
 	convert_to_body_literal/2,
 	convert_to_head_literal/2,
 	convert_to_signature/3,
 	convert_to_value_atom/3,
         flora_record_rule_signature/13,
+	flora_record_IC_signature/5,
         flora_retract_signatures/9,
         flora_build_pred_signature/2,
         flora_preprocess_headlist/2,
@@ -565,9 +569,34 @@ flora_record_rule_signature(RuleId,FileName,DescriptorVarsTerm,HPrefix,Module,Ru
 			   CONSERVE_REGISTERS,
 			   INDEXED_ARG),
 	      _,
-	      (nl,flora_decode_goal_as_atom(Head,HeadAtm),flora_warning_line('The body of the rule with the head ~w is too large. This rule be neither accessed with clause{...} nor used for defeasible reasoning. Try to split this rule into smaller pieces.',[HeadAtm]),nl)
+	      (flora_decode_goal_as_atom(Head,HeadAtm),flora_warning_line('~nThe body of the rule with the head ~w is too large. This rule will be neither accessible with clause{...} nor used for defeasible reasoning. Try to split this rule into smaller pieces.~n',[HeadAtm]))
 	     ).
 
+
+/*******************************************************************************
+    flora_record_IC_signature(+RuleId,+FileName,+Module,+RuleNum,+IC)
+    matching_IC_signature(+RuleId,+FileName,+Module,+RuleNum,+IC)
+    Record/show signature for an IC
+*******************************************************************************/
+flora_record_IC_signature(RuleId,FileName,Module,RuleNum,IC) :-
+	catch(flora_assert(flora_IC_signature(RuleId,FileName,
+					      Module,RuleNum,
+					      IC),
+			   CONSERVE_REGISTERS,
+			   INDEXED_ARG),
+	      _,
+	      flora_warning_line('~nThe integrity constraint ~w is too large. You will not be able to test this constraint. Try to split it into smaller pieces.~n',[RuleId])
+	     ).
+
+matching_IC_signature(RuleId,FileName,Module,(RuleId,FileName,Module,RuleNum,IC)) :-
+	flora_IC_signature(RuleId,FileName,Module,RuleNum,IC).
+
+ic_signature_member(id,Sig,Val) :- Sig = (Val,_,_,_,_).
+ic_signature_member(file,Sig,Val) :- Sig = (_,Val,_,_,_).
+ic_signature_member(module,Sig,Val) :- Sig = (_,_,Val,_,_).
+ic_signature_member(rulenumber,Sig,Val) :- Sig = (_,_,_,Val,_).
+ic_signature_member(constraint,Sig,Val) :- Sig = (_,_,_,_,Val).
+	
 
 /***********************************************************************
  flora_retract_signatures(+RuleId,+FileName,+DescriptorVarsTerm,

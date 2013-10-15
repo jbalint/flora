@@ -655,7 +655,18 @@ is_directive(CANOTERM(Funct,1,FL_PARENTHESIS,[Directive],_If,_Ip),Directive) :-
 is_query(CANOTERM(Funct,1,FL_PARENTHESIS,[Query],_If,_Ip),Query) :-
 	get_name(Funct,FL_QUERYOP).
 
-is_rule_or_fact(CanoTerm) :- \+is_query(CanoTerm,_), \+is_directive(CanoTerm,_).
+%% integrity constraint
+is_ic(CANOTERM(Funct,1,FL_PARENTHESIS,[IC],_If,_Ip),IC) :-
+	get_name(Funct,FL_ICOP).
+
+is_rule_or_fact(CanoTerm) :-
+	\+is_query(CanoTerm,_),
+	\+is_ic(CanoTerm,_),
+	\+is_directive(CanoTerm,_).
+
+is_annotatable(CanoTerm) :-
+	\+is_query(CanoTerm,_),
+	\+is_directive(CanoTerm,_).
 
 is_annotated_statement(CANOTERM(Funct,2,FL_PARENTHESIS,[Descriptor,Statement],_If,_Ip),Descriptor,Statement) :-
 	get_name(Funct,FL_DESCRIPTORFUNC).
@@ -796,6 +807,8 @@ emptyterm_struct(Index,FLEMPTYTERM(Index)).
 flrule_struct(Head,Body,FLRULE(Head,Body)).
 flfact_struct(Head,FLFACT(Head)).
 flquery_struct(Body,FLQUERY(Body)).
+%% integrity constraint !-
+flic_struct(Body,FLIC(Body)).
 fldirective_struct(Direct,Index,FLDIRECTIVE(Direct,Index)).
 fludf_struct(Function,Body,ReturnValue,FLUDF(Function,Body,ReturnValue)).
 fludffact_struct(Function,ReturnValue,FLUDFFACT(Function,ReturnValue)).
@@ -1340,6 +1353,10 @@ parse_canonical(CanoniTerm,Code,Status) :-
 	; get_statement_descriptors(CanoniTerm,Descriptors,Statement),
 	    Descriptors \== [] ->
 	    parse_toplevel_annotated_statement(Descriptors,Statement,Code,Status)
+
+	%% integrity constraint
+	; is_ic(CanoniTerm,IC) ->
+	    flora_parse_ic(IC,Code,Status)
 
 	; is_user_defined_function(CanoniTerm,Function,Body,ReturnValue) ->
 	    flora_parse_user_defined_function(Function,Body,ReturnValue,Code,Status)
@@ -2748,6 +2765,7 @@ flora_parse_fact(CanoniTerm,Code,Status) :-
 
 /****************************************************************************
   flora_parse_query(+CanoniTerm,-Code,-Status)
+  flora_parse_ic(+CanoniTerm,-Code,-Status)
 ****************************************************************************/
 flora_parse_query(CanoniTerm,Code,Status) :-
         set_context(parsing_query),
@@ -2755,6 +2773,20 @@ flora_parse_query(CanoniTerm,Code,Status) :-
 	flquery_struct(Goal,Code),
 	clear_context(parsing_query).
 
+%% we do a minimal job checking if there is an IC descriptor.
+%% we don't check if the descriptor actually has a rule id. If not, the user
+%% won't be able to invoke the IC easily and will eventually
+%% figure if he needs an id or not.
+flora_parse_ic(CanoniTerm,Code,Status) :-
+	has_context(parsing_annotated_construct),
+	!,
+        set_context(parsing_ic),
+	parse_rule_body(CanoniTerm,Goal,Status),
+	flic_struct(Goal,Code),
+	clear_context(parsing_ic).
+flora_parse_ic(CanoniTerm,_Code,Status) :-
+	get_index(CanoniTerm,Idx),
+	parsing_error(Idx,MISSING_DESCRIPTOR_IN_IC,Status).
 
 /****************************************************************************
   flora_parse_rule(+Head,+Body,-Code,-Status)
@@ -2807,12 +2839,14 @@ flora_parse_user_defined_function_fact(Function,Value,Code,Status) :-
    parse_toplevel_annotated_statement(+Descriptors,+Statement,-Code,-Status)
 ****************************************************************************/
 parse_toplevel_annotated_statement(Descriptors,Statement,Code,Status) :-
-	(is_rule_or_fact(Statement)
+	(is_annotatable(Statement)
 	->
+	    set_context(parsing_annotated_construct),
 	    parse_canonical(Statement,Code1,Status1),
+	    clear_context(parsing_annotated_construct),
 	    (Status1 == NO_ERRORS
 	    ->
-		(is_rule(Statement,_,_)
+		( (is_rule(Statement,_,_) ; is_ic(Statement,_))
 		-> CodeConstr = Code1
 		; %% if annotated fact, convert it to a rule:  fact :- true.
 		    flfact_struct(Head,Code1), % unwrap flfact
