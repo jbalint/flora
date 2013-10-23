@@ -235,7 +235,7 @@ less_than([Head|Tail], A) :-
       True if principal functor of Term is an infix operator.
 ***********************************************************************/
 infix_op(Priority,Assoc,Op) :-
-	current_op(Priority,Assoc,Op),
+	guarded_operator(Priority,Assoc,Op),
 	(Assoc == xfx; Assoc == xfy; Assoc == yfx).
 infix_term(Term) :-
         functor(Term,Op,_), 
@@ -248,9 +248,11 @@ infix_term(Term) :-
       True if principal functor of Term is a prefix operator.
 ***********************************************************************/
 prefix_op(Priority,Assoc,Op) :-
-	current_op(Priority,Assoc,Op), (Assoc == fx; Assoc == fy).
+	atom(Op),
+	guarded_operator(Priority,Assoc,Op), (Assoc == fx; Assoc == fy).
 prefix_term(Term) :-
 	functor(Term,Op,_),
+	atom(Op),
 	prefix_op(_,_,Op).
 	
 /***********************************************************************
@@ -260,10 +262,17 @@ prefix_term(Term) :-
       True if principal functor of Term is a postfix operator.
 ***********************************************************************/
 postfix_op(Priority,Assoc,Op) :-
-	current_op(Priority,Assoc,Op), (Assoc == xf; Assoc == yf).
+	atom(Op),
+	guarded_operator(Priority,Assoc,Op), (Assoc == xf; Assoc == yf).
 postfix_term(Term) :-
         functor(Term,Op,_), 
+	atom(Op),
 	postfix_op(_,_,Op).
+
+%% a guarded version of current_op
+guarded_operator(Priority,Assoc,Op) :-
+	atom(Op),
+	current_op(Priority,Assoc,Op).
 
 /***********************************************************************
  arith_exp(+Term)
@@ -363,7 +372,7 @@ term_len(Term,Vars,Length) :-
 	term_len(Op,Vars,LenOfOp),
 	list_len(Args,LenOfArgs,Vars),
 	
-        (current_op(_,Opa,Op), (Opa==fx; Opa==fy) 
+        (guarded_operator(_,Opa,Op), (Opa==fx; Opa==fy) 
          -> Length is LenOfOp + LenOfArgs + 1  % +1 due to empty space after op
 	 ;  Length is LenOfOp + LenOfArgs + 2  % +2 due to '()'
         ).
@@ -485,7 +494,8 @@ prettyprint_with_indent(Indent,Term,Vars) :-
 	-> write(Name)  		         % Term is a named variable
 	;  var(Term) 
 	-> write('?') 			         % Term is anonymous var
-	;  current_op(_,_,Term)                  % Term is an operator  
+	;
+	  guarded_operator(_,_,Term)	% Term is an operator  
         -> writeq(Term)     	     	     	 % Term is an atom
         ;  write_canonical(Term)    	
 	).
@@ -557,6 +567,17 @@ prettyprint_with_indent(Indent,Term,Vars) :-
 prettyprint_with_indent(Indent,Term,Vars) :-
    	infix_term(Term), 
    	Term =.. [Op,Lhs,Rhs],
+	(Op == '/' ; Op == '^'),
+	!, 
+	set_nl_flag(Indent,Term,Vars,Flag_nl),
+  	prettyprint_lhs(Indent,Flag_nl,Op,Lhs,Vars),
+   	write(Op),
+	(Flag_nl -> RealIndent = Indent ; RealIndent = 0),
+	prettyprint_rhs(0,Flag_nl,Op,Rhs,Vars).
+
+prettyprint_with_indent(Indent,Term,Vars) :-
+   	infix_term(Term), 
+   	Term =.. [Op,Lhs,Rhs],
 	!, 
 	set_nl_flag(Indent,Term,Vars,Flag_nl),
   	prettyprint_lhs(Indent,Flag_nl,Op,Lhs,Vars),
@@ -592,7 +613,7 @@ prettyprint_with_indent(Indent,Term,Vars) :-
 	(Flag_nl -> NewIndent is Indent + PREFIX_INDENT ; NewIndent = 0),
 	pp_newline(Flag_nl),
 	
-        (  current_op(_,_,OpArg) 
+        (  guarded_operator(_,_,OpArg) 
 	-> ( can_strip_parens_prefix(Op, OpArg)
 	   -> prettyprint_with_indent(NewIndent,Arg,Vars) 
 	   ;  prettyprint_parens(NewIndent,Flag_nl,
@@ -619,7 +640,7 @@ prettyprint_with_indent(Indent,Term,Vars) :-
 	!,
 	set_nl_flag(Indent,Term,Vars,Flag_nl),
 	functor(Arg, OpArg, _), % case: (...OpArg...) Op
-        (  current_op(_,_,OpArg) 
+        (  guarded_operator(_,_,OpArg) 
 	-> ( can_strip_parens_post(Op, OpArg)
 	     ->  prettyprint_with_indent(Indent,Arg,Vars), tab(1) 
 	     %% Meta predicate
@@ -627,7 +648,8 @@ prettyprint_with_indent(Indent,Term,Vars) :-
 				    prettyprint_with_indent(_,Arg,Vars))
            )
 	;  prettyprint_with_indent(Indent,Arg,Vars), tab(1)
-	), write(Op).   
+	),
+	write(Op).   
 
 /****************************************************************************
   Handle terms whose principal functor is NOT an operator.
@@ -816,7 +838,7 @@ prettyprint_arithexp_lhs(Indent,_Flag_nl,_Op,Lhs,Vars) :-
 %% Lhs has its own operator. 
 prettyprint_arithexp_lhs(Indent,Flag_nl,Op,Lhs,Vars) :-
 	functor(Lhs,OpLhs,_),
-        (  current_op(_,_,OpLhs)
+        (  guarded_operator(_,_,OpLhs)
 	-> (  %% Cases we can strip '()'.
                can_strip_parens_binary_left(Op,OpLhs) % syntactic consideration
             -> prettyprint_arithexp_with_indent(Indent,Lhs,Vars)
@@ -857,7 +879,7 @@ prettyprint_arithexp_rhs(Indent,_Flag_nl,_Op,Rhs,Vars) :-
 %% Rhs has its own operator.
 prettyprint_arithexp_rhs(Indent,Flag_nl,Op,Rhs,Vars) :-
 	functor(Rhs,OpRhs,_),
-        ( current_op(_,_,OpRhs)   
+        ( guarded_operator(_,_,OpRhs)   
         -> (  %% Cases we can strip '()'.
 	      ( can_strip_parens_binary_right(Op,OpRhs); % syntactic consideration
                 Op == ('+'), OpRhs == ('+');             % semantic consideration
@@ -899,7 +921,7 @@ prettyprint_lhs(Indent, _Flag_nl, _, Lhs, Vars) :-
 %% Lhs has its own operator. 
 prettyprint_lhs(Indent, Flag_nl, Op, Lhs, Vars) :-
 	functor(Lhs,OpLhs,_),
-        (  current_op(_,_,OpLhs)
+        (  guarded_operator(_,_,OpLhs)
 	-> (  %% Cases we can strip '()'.
               can_strip_parens_binary_left(Op,OpLhs) % syntactic consideration
             -> prettyprint_with_indent(Indent,Lhs,Vars)
@@ -931,14 +953,16 @@ prettyprint_lhs(Indent, Flag_nl, Op, Lhs, Vars) :-
 ******************************************************************************/
 %% Rhs is a variable.
 prettyprint_rhs(Indent, _Flag_nl, _, Rhs, Vars) :-
-	var(Rhs), !, 
+	var(Rhs),
+	!, 
      	prettyprint_with_indent(Indent, Rhs, Vars).
 
 %% Rhs is a 0-ary term which is an operator by itself.
 %% We need to put parens around so XSB won't issue a syntax error
 prettyprint_rhs(Indent, _Flag_nl, _, Rhs, Vars) :-
      	functor(Rhs,OpRhs,0),  
-     	current_op(_,_,OpRhs), !,
+     	guarded_operator(_,_,OpRhs),
+	!,
      	write('('), 
      	prettyprint_with_indent(Indent, Rhs, Vars),
      	write(')').
@@ -946,7 +970,7 @@ prettyprint_rhs(Indent, _Flag_nl, _, Rhs, Vars) :-
 %% Rhs has its own operator.
 prettyprint_rhs(Indent, Flag_nl, Op, Rhs, Vars) :-
 	functor(Rhs,OpRhs,_),
-        ( current_op(_,_,OpRhs)   
+        ( guarded_operator(_,_,OpRhs)   
         -> (  %% Cases we can strip '()'.
 	      can_strip_parens_binary_right(Op,OpRhs) % syntactic consideration
             -> prettyprint_with_indent(Indent,Rhs,Vars)
@@ -981,11 +1005,11 @@ prettyprint_rhs(Indent, Flag_nl, Op, Rhs, Vars) :-
 can_strip_parens_binary_left(Op1,Op2) :-  
 	flora_set_counter(can_strip_parens,0),
 	setof(Opp1, Opa1 ^ infix_op(Opp1,Opa1,Op1), Pre_Op1),
-	setof(Opp2, Opa2 ^ current_op(Opp2,Opa2,Op2), Pre_Op2),
+	setof(Opp2, Opa2 ^ guarded_operator(Opp2,Opa2,Op2), Pre_Op2),
 	
 	( Pre_Op1 = [A], Pre_Op2 = [A]  % All priorities of Op1,Op2 are equal
 	-> findall([Opp1,Opa1,Op1], infix_op(Opp1,Opa1,Op1), Def_Op1),
-	    findall([Opp2,Opa2,Op2], current_op(Opp2,Opa2,Op2), Def_Op2),
+	    findall([Opp2,Opa2,Op2], guarded_operator(Opp2,Opa2,Op2), Def_Op2),
 	    %% The list version of same function
 	    catch(strip_parens_binary_left(Def_Op1,Def_Op2),
 		  quit(_),
@@ -1047,11 +1071,11 @@ strip_parens_binary_left(L1,L2) :-
 can_strip_parens_binary_right(Op1,Op2) :-  
 	flora_set_counter(can_strip_parens,0),
 	setof(Opp1, Opa1 ^ infix_op(Opp1,Opa1,Op1), Pre_Op1),
-	setof(Opp2, Opa2 ^ current_op(Opp2,Opa2,Op2), Pre_Op2),
+	setof(Opp2, Opa2 ^ guarded_operator(Opp2,Opa2,Op2), Pre_Op2),
 	
 	( Pre_Op1 = [A], Pre_Op2 = [A]  % all priorities are equal
 	-> findall([Opp1,Opa1,Op1], infix_op(Opp1,Opa1,Op1), Def_Op1),
-	   findall([Opp2,Opa2,Op2], current_op(Opp2,Opa2,Op2), Def_Op2),
+	   findall([Opp2,Opa2,Op2], guarded_operator(Opp2,Opa2,Op2), Def_Op2),
 	   catch(strip_parens_binary_right(Def_Op1,Def_Op2),
 		 quit(_),
 		 true)
@@ -1112,11 +1136,11 @@ strip_parens_binary_right(L1,L2) :-
 can_strip_parens_prefix(Op1,Op2) :-  
 	flora_set_counter(can_strip_parens,0),
 	setof(Opp1, Opa1 ^ prefix_op(Opp1,Opa1,Op1), Pre_Op1),
-	setof(Opp2, Opa2 ^ current_op(Opp2,Opa2,Op2), Pre_Op2),
+	setof(Opp2, Opa2 ^ guarded_operator(Opp2,Opa2,Op2), Pre_Op2),
 	
 	( Pre_Op1 = [A], Pre_Op2 = [A]  % all priorities are equal
 	-> findall([Opp1,Opa1,Op1], prefix_op(Opp1,Opa1,Op1), Def_Op1),
-	   findall([Opp2,Opa2,Op2], current_op(Opp2,Opa2,Op2), Def_Op2),
+	   findall([Opp2,Opa2,Op2], guarded_operator(Opp2,Opa2,Op2), Def_Op2),
 	   catch(strip_parens_prefix(Def_Op1,Def_Op2),
 		 quit(_),
 		 true)
@@ -1175,11 +1199,11 @@ strip_parens_prefix(L1,L2) :-
 can_strip_parens_post(Op1,Op2) :-  
 	flora_set_counter(can_strip_parens,0),
 	setof(Opp1, Opa1 ^ postfix_op(Opp1,Opa1,Op1), Pre_Op1),
-	setof(Opp2, Opa2 ^ current_op(Opp2,Opa2,Op2), Pre_Op2),
+	setof(Opp2, Opa2 ^ guarded_operator(Opp2,Opa2,Op2), Pre_Op2),
 	
 	( Pre_Op1 = [A], Pre_Op2 = [A]  % all priorities equal
 	-> findall([Opp1,Opa1,Op1], postfix_op(Opp1,Opa1,Op1), Def_Op1),
-	   findall([Opp2,Opa2,Op2], current_op(Opp2,Opa2,Op2), Def_Op2),
+	   findall([Opp2,Opa2,Op2], guarded_operator(Opp2,Opa2,Op2), Def_Op2),
 	   catch(strip_parens_post(Def_Op1,Def_Op2),
 		 quit(_),
 		 true)

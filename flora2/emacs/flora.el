@@ -99,14 +99,24 @@
 ;; If font-lock is not installed, there should be no problem
 
 (make-face 'flora-font-lock-system-face)
+(copy-face 'default 'flora-font-lock-system-face)
+(make-face-bold 'flora-font-lock-system-face)
+(set-face-foreground 'flora-font-lock-system-face "violet")
+;;------------------
 (make-face 'flora-font-lock-arrow-face)
 (copy-face 'default 'flora-font-lock-arrow-face)
 (set-face-foreground 'flora-font-lock-arrow-face "Maroon")
-(copy-face 'default 'flora-font-lock-system-face)
-(set-face-foreground 'flora-font-lock-system-face "violet")
-(make-face-bold 'flora-font-lock-system-face)
 (make-face-bold 'flora-font-lock-arrow-face)
-
+;;--------------------------
+(make-face 'flora-font-lock-signature-face)
+;;(copy-face 'default 'flora-font-lock-signature-face)
+(set-face-foreground 'flora-font-lock-signature-face "green")
+(make-face-bold 'flora-font-lock-signature-face)
+;;-----------------------------------------
+(make-face 'flora-font-lock-bold-keyword-face)
+(copy-face 'font-lock-keyword-face 'flora-font-lock-bold-keyword-face)
+(make-face-bold 'flora-font-lock-bold-keyword-face)
+;;-----------------------------------------
 (make-face 'flora-font-lock-query-face)
 (set-face-foreground 'flora-font-lock-query-face "darkgreen")
 
@@ -118,15 +128,19 @@
    (list
     '("\\(\\(flora\\)? +\\?-\\|:-\\|\\.[ \t\n]*$\\)"
       1 'flora-font-lock-query-face)
-    '("\\(\\*?->\\|\\*?->\\|\\*?=>\\|*?->->\\|\\*?=>\\)"
+    '("\\(\\*?[^-]->\\|\\*?=>\\|\\*?->->\\|\\*?=>\\)"
       1 'flora-font-lock-arrow-face)
     ;; for objects
     '("\\([A-Za-z0-9_][A-Za-z0-9_!.]*\\) *\\["
       1 'font-lock-variable-name-face)
-    '("\\b\\(\\\+\\|naf\\|avg\\|max\\|min\\|sum\\|count\\|setof\\|bagof\\|insert\\|delete\\|b?t_?insert\\|b?t_?delete\\|insertall\\|b?t_?insertall\\|deleteall\\|b?t_?deleteall\\|erase\\|eraseall\\|b?t_?erase\\|b?t_?eraseall\\|insertrule_?[az]?\\|if\\|then\\|else\\|while\\|do\\|until\\|unless\\|p2h\\|semantics\||setsemantics\\|udf\\|caller\\|newoid\\|fl[A-Z][a-zA-Z]*\\)\\b"
+    '("\\b\\(\\\+\\|naf\\|avg\\|max\\|min\\|sum\\|count\\|setof\\|bagof\\|insert\\|delete\\|b?t_?insert\\|b?t_?delete\\|insertall\\|b?t_?insertall\\|deleteall\\|b?t_?deleteall\\|erase\\|eraseall\\|b?t_?erase\\|b?t_?eraseall\\|insertrule_?[az]?\\|if\\|then\\|else\\|while\\|do\\|until\\|unless\\|p2h\\|semantics\||setsemantics\\|udf\\|caller\\|newoid\\|test\\|catch\\|clause\\|must\\|wish\\|exists?\\|forall\\|udf\\|t?enable\\|t?disable\\|fl[A-Z][a-zA-Z]*\\)\\b"
       1 'font-lock-keyword-face)
-    '("\\(:\\||\\)" 
+    '("\\(@!\\|-->\\|@\\|@@\\)"
+      1 'flora-font-lock-bold-keyword-face)
+    '("\\(:\\|[^[(]|[^])]\\)" 
       1 'font-lock-type-face)
+    '("\\(\\[|\\||\\]\\|(|\\||)\\)"
+      1 'flora-font-lock-signature-face)
     '("\\(\\[\\|\\]\\|{\\|}\\)"
       1 'bold)
     (list (format "\\b\\(%s\\|^#[a-z]\\)\\b" flora-directives-regexp)
