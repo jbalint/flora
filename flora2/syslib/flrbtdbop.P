@@ -35,7 +35,6 @@
 :- import
 	flora_fdb_storage_name/2,
 	flora_check_module_name/1,
-	flora_storage_module/2,
 	flora_decode_module_name/2,
 	flora_is_flogic_wrapper/3,
 	flora_setup_flogic_fact_wrapper/1,
@@ -64,18 +63,14 @@
    from flrstoragebase.
 
 :- import
-	flora_trailer_registry/2,
 	flora_module_registry/1
    from flrregistry.
-
 
 :- import 
 	get_canonical_form/2,
 	convert_to_head_literal/2,
         flora_check_dynmod_type_consistency/1
    from flrcanon.
-
-:- import flora_refresh_tables/1 from flrtables.
 
 :- import flora_abort/0, flora_abort/1 from flrporting.
 :- import flora_decode_goal_as_atom/2 from flrdecode.
@@ -117,7 +112,7 @@ flora_storage_insertfacts_bt(_ThisModuleName,[]) :- !.
 flora_storage_insertfacts_bt(_ThisModuleName,[P|_T]) :-
 	var(P),
 	!,
-	flora_abort(['Uninstantiated argument in ',FL_BTINSERT,'{...}']).
+	flora_abort(['uninstantiated argument in ',FL_BTINSERT,'{...}']).
 
 flora_storage_insertfacts_bt(ThisModuleName,[FLSYSDBUPDATE(P,StorageName,Module)|T]) :-
 	!,
@@ -132,7 +127,7 @@ flora_storage_insertfacts_bt(_ThisModuleName,[FLLIBMODLIT(Wrap,Var,_ModuleName1,
         var(Var),
 	(Wrap == FL_LIBMOD ; Wrap == FL_NEGLIBMOD ; Wrap == FL_TRANSLIBMOD),
         !,
-	flora_abort(['Uninstantiated argument in ',FL_BTINSERT,'{...}']).
+	flora_abort(['uninstantiated argument in ',FL_BTINSERT,'{...}']).
 
 flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,(First,Rest),ModuleName1,Caller)|T]) :-
 	(Wrap == FL_LIBMOD ; Wrap == FL_NEGLIBMOD ; Wrap == FL_TRANSLIBMOD),
@@ -141,7 +136,7 @@ flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,(First,Rest),Modul
         ( First = FLLIBMODOBJ(_Ctxt,_F,_A,_MN,_C,O) ->
             First,
             ( O=FLLIBMODLIT(_,_,_,_) ->
-                flora_abort(['Uninstantiated predicate in an argument positition in ',FL_BTINSERT,'{...}'])
+                flora_abort(['uninstantiated predicate in an argument positition in ',FL_BTINSERT,'{...}'])
             ;
                 flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,Rest,ModuleName1,Caller)])
             )
@@ -149,7 +144,7 @@ flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,(First,Rest),Modul
             First = FL_COMMA(FLLIBMODOBJ(Ctxt,F,A,MN,C,O),MoreObj) ->
             FLLIBMODOBJ(Ctxt,F,A,MN,C,O),
             ( O=FLLIBMODLIT(_,_,_,_) ->
-                flora_abort(['Uninstantiated predicate in an argument positition in ',FL_BTINSERT,'{...}'])
+                flora_abort(['uninstantiated predicate in an argument positition in ',FL_BTINSERT,'{...}'])
             ;
                 flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,(MoreObj,Rest),ModuleName1,Caller)])
             )
@@ -165,7 +160,7 @@ flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(F,Args,ModuleName1,Call
 	    flora_storage_check_module_name(NewMod)
 	;
 	    flora_decode_goal_as_atom(Args,AtomArgs),
-	    flora_abort(['A non-fact argument in ',FL_BTINSERT,'{...}, ', AtomArgs])
+	    flora_abort(['a non-fact argument in ',FL_BTINSERT,'{...}, ', AtomArgs])
 	),
         ((F == FL_LIBMOD ; F == FL_NEGLIBMOD ; F == FL_TRANSLIBMOD)
 	-> 
@@ -174,7 +169,7 @@ flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(F,Args,ModuleName1,Call
             HeadP = P
         ),
 	( var(HeadP) ->
-	    flora_abort(['Uninstantiated module name in ',FL_BTINSERT,'{...}'])
+	    flora_abort(['uninstantiated module name in ',FL_BTINSERT,'{...}'])
 	 ;
 	flora_fdb_storage_name(NewMod,StorageName),
 	flora_internal_db_insert_bt(StorageName,HeadP),
@@ -186,7 +181,7 @@ flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODOBJ(Ctxt,F,Args,ModuleName1
 	P2H_CONVERSION(ModuleName,ModuleName1),
 	FLLIBMODOBJ(Ctxt,F,Args,ModuleName,Caller,O),
         ( O=FLLIBMODLIT(_,_,_,_) ->
-            flora_abort(['Uninstantiated predicate in an argument positition in ',FL_BTINSERT,'{...}'])
+            flora_abort(['uninstantiated predicate in an argument positition in ',FL_BTINSERT,'{...}'])
         ;
 	    flora_storage_insertfacts_bt(ThisModuleName,T)
         ).
@@ -209,22 +204,26 @@ flora_storage_insertfacts_bt(ThisModuleName,[P|T]) :-
 	    flora_internal_db_insert_bt(StorageName,HeadP),
 	    flora_storage_insertfacts_bt(ThisModuleName,T)
 
+	; F == FLLIBINSICSIG ->
+	    call(P),
+	    flora_storage_insertfacts(ThisModuleName,T)
+
 	; N == 2, F == FL_SEMICOLON ->
 	    flora_decode_goal_as_atom(P,PA),
-	    flora_abort(['Insertion of disjunctive information is not allowed, ',
+	    flora_abort(['insertion of disjunctive information is not allowed, ',
 			 PA])
 
 	; number(N), flora_storage_is_negation_symbol(F/N) ->
 	    flora_decode_goal_as_atom(P,PA),
-	    flora_abort(['Insertion of negative information is not allowed, ',
+	    flora_abort(['insertion of negative information is not allowed, ',
 			 PA])
 	;
 	    flora_decode_goal_as_atom(P,PA),
 	    ( F == WRAP_HILOG ->
-		flora_abort(['Attempt to ',FL_BTINSERT,' a HiLog term (a non-fact), ',
+		flora_abort(['attempt to ',FL_BTINSERT,' a HiLog term (a non-fact), ',
 			     PA])
 	    ;
-		flora_abort(['Attempt to ',FL_BTINSERT,' a Prolog term (non-fact), ',
+		flora_abort(['attempt to ',FL_BTINSERT,' a Prolog term (non-fact), ',
 			     PA])
 	    )
 	).

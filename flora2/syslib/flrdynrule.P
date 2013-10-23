@@ -101,6 +101,8 @@
 	convert_to_head_literal/2,
 	bind_head_in_defeat_condition/2,
         flora_record_rule_signature/13,
+	flora_record_IC_signature/6,
+	flora_delete_IC_signature/4,
         flora_retract_signatures/9,
 	rule_signature_member/3
    from flrcanon.
@@ -127,9 +129,7 @@
 
 :- import
 	get_module_from_metafacts/2,
-	clear_bool_metafacts_by_ruleid/3,
-	clear_prop_metafacts_by_ruleid/3,
-	clear_tag_metafacts_by_ruleid/3
+	flora_clear_all_metafacts_by_ruleid/3
    from flrdescriptor_support.
 
 
@@ -149,7 +149,7 @@ FLLIBNEWMODULE(_ThisModuleName,Module) :-
 FLLIBNEWMODULE(_ThisModuleName,Module) :-
 	flora_module_registry(Module),
 	!,
-	flora_abort([Module,': Module already loaded'],FLORA_ABORT_NOTRACE).
+	flora_abort([Module,': module already loaded'],FLORA_ABORT_NOTRACE).
 
 FLLIBNEWMODULE(_ThisModuleName,Module) :-
 	flloadtrailer([],Module).
@@ -171,7 +171,7 @@ FLLIBERASEMODULE(_ThisModuleName,Module) :-
 FLLIBERASEMODULE(_ThisModuleName,Module) :-
 	\+ flora_module_registry(Module),
 	!,
-	flora_abort([Module,': Module is not registered'],FLORA_ABORT_NOTRACE).
+	flora_abort([Module,': module is not registered'],FLORA_ABORT_NOTRACE).
 
 FLLIBERASEMODULE(_ThisModuleName,Module) :-
 	retract(flora_module_registry(Module)),
@@ -193,6 +193,21 @@ FLLIBINSERTRULE_A(_ThisModuleName,RuleList) :-
 FLLIBINSERTRULE_Z(_ThisModuleName,RuleList) :-
         flora_bind_libmodobj(RuleList,NewRuleList),
 	flora_insert_rules(FLLIBINSERTRULE_Z,NewRuleList).
+
+/******************************************************************************
+     FLLIBINSICSIG(+Descr,+File,+Module,+RuleNum,+MetaFacts,+PreIC,+IC)
+     FLLIBDELICSIG(+Descr,+File,+Module,+MetaFacts,+IC)
+     Insert/delete signature for integrity constraints
+     PreIC is the stuff that compiler inserts before the IC body.
+     Currently this is the rule enabling fact.
+******************************************************************************/
+FLLIBINSICSIG(Descr,File,Module,RuleNum,MetaFacts,PreIC,IC) :-
+	flora_assert_metafact_list(MetaFacts,File,Module),
+	flora_record_IC_signature(Descr,File,Module,RuleNum,PreIC,IC).
+
+FLLIBDELICSIG(Descr,File,Module,_MetaFacts,IC) :-
+	flora_clear_all_metafacts_by_ruleid(Descr,File,Module),
+	flora_delete_IC_signature(Descr,File,Module,IC).
 
 /***********************************************************************
  flora_insert_rules(+InsOp,+RuleList)
@@ -224,6 +239,10 @@ flora_insert_rules(InsOp,[FLSYSRULEUPDATE(RuleId,FileName,DescrVarTerm,RuleNum,D
 	),
 	flora_expand_and_ins_rules(RuleId,FileName,DescrVarTerm,RuleNum,InsOp,HeadList,InstBody,PreBody,PostBody,DefeatCond,ModName),
 	flora_assert_metafact_list(DescrMetaFacts,FileName,ModName),
+	flora_insert_rules(InsOp,L).
+
+flora_insert_rules(InsOp,[FLLIBINSICSIG(RuleId,FileName,Module,RuleNum,DescrMetaFacts,PreBody,Body)|L]) :-
+	FLLIBINSICSIG(RuleId,FileName,Module,RuleNum,DescrMetaFacts,PreBody,Body),
 	flora_insert_rules(InsOp,L).
 
 %% conjunct of rules - convert to list
@@ -473,6 +492,18 @@ flora_select_rules_for_deletion(DelOp,CallerMod,[FLSYSRULEUPDATE(Id,FileName,_De
 	flora_select_rules_for_deletion(DelOp,CallerMod,L,LSigList,LHL),
 	append(HSigList,LSigList,SigList),
 	append(HHL,LHL,HL).
+
+%% here we delete IC sigs right away and don't select any rules by adding
+%% to SigList and HL
+/*
+flora_select_rules_for_deletion(DelOp,CallerMod,[FLLIBDELICSIG(Id,_FN,_Mod,DescrMetaFacts,IC)|L],SigList,HL) :-
+	!,
+	%% Match the metafacts before deciding to delete
+	call_metafact_list(DescrMetaFacts,FileName,RuleMod),
+	FLLIBDELICSIG(Id,FileName,RuleMod,DescrMetaFacts,IC),
+	flora_select_rules_for_deletion(DelOp,CallerMod,L,SigList,HL).
+*/
+
 %% conjunction of rules - convert to list
 flora_select_rules_for_deletion(DelOp,CallerMod,[(R,L)|Rules],SigList,HL) :-
 	!,
@@ -533,9 +564,7 @@ flora_delete_rules([(Id,FileName,DescrVarTerm,DynPrefix,Mod,RuleNum,Head,Body,_P
             )
         ),
 	%% Delete metafacts associated with the rule
-	clear_tag_metafacts_by_ruleid(Id,FileName,Mod),
-	clear_bool_metafacts_by_ruleid(Id,FileName,Mod),
-	clear_prop_metafacts_by_ruleid(Id,FileName,Mod),
+	flora_clear_all_metafacts_by_ruleid(Id,FileName,Mod),
         flora_delete_rules(L).
 
 flora_retract_rulelist(FL_COMMA(RL1,RL2)) :-
@@ -741,7 +770,7 @@ flora_assert_metafact_list([H|T],FileName,Module) :-
 	(is_duplicate_rule_id(H)
 	-> arg(1,H,RuleId),
 	    arg(2,H,RFN),
-	    flora_abort(['A rule with Id (',
+	    flora_abort(['a rule with Id (',
 			 RuleId,',',RFN,',',Module,
 			 ') already exists'],
 			FLORA_ABORT_NOTRACE)
@@ -754,7 +783,7 @@ is_duplicate_rule_id(H) :-
 	functor(H,Fun,2),
 	flrporting:flora_match_substring(FL_RULE_ENABLER,Fun,_),
 	!,
-	H.
+	call(H).
 
 call_metafact_list([],_,_) :- !.
 call_metafact_list([NULL|Rest],FileName,Mod) :-
