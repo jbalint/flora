@@ -3823,28 +3823,23 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
 	%% Generate a var in this case
 	;   new_prvariable(NO_INDEX,DescrVarsTermOut)
 	),
+	get_current_compile_file_for_descriptor(CurrFileName,Mode),
+	get_descriptor_module(ExplicitModule,Mode,DescrModule),
 	(IdStatus == NO_ERRORS, Mode \== udfrule
 	->
 	    extract_features_from_descriptor_list(FlatDescrList,DescrFeatures),
-	    determine_defeasibility(DescrFeatures,Mode,DescrIdCode,DescrVarsTermOut,DefeatMetaFact,StatDefeat),
+	    determine_defeasibility(DescrFeatures,Mode,DescrIdCode,CurrFileName,DescrModule,DescrVarsTermOut,DefeatMetaFact,StatDefeat),
 	    (StatDefeat = NO_ERRORS ->
-		compile_descriptor_list1(FlatDescrList,Mode,DescrIdCode,RuleidFrameCode,DescrVarsTermOut,MetaFacts1-MetaFactsTail,Status),
-		construct_rule_enabling_fact(DescrIdCode,Mode,RuleEnablerFact),
+		compile_descriptor_list1(FlatDescrList,Mode,DescrIdCode,CurrFileName,DescrModule,RuleidFrameCode,DescrVarsTermOut,MetaFacts1-MetaFactsTail,Status),
+		construct_rule_enabling_fact(DescrIdCode,CurrFileName,Mode,RuleEnablerFact),
 		%% make the rule id into its tag as well, if no explicit tag
 		(memberchk(FLTAG_FEATURE,DescrFeatures) -> TagIdMetaFact = NULL
-		; construct_tag_descriptor_fact_from_id(DescrIdCode,Mode,ExplicitModule,DescrVarsTermOut,TagIdMetaFact)
+		; construct_tag_descriptor_fact_from_id(DescrIdCode,CurrFileName,DescrModule,Mode,DescrVarsTermOut,TagIdMetaFact)
 		),
 		%% mandatory facts that are always there
-		construct_type_descriptor_fact(DescrIdCode,ExplicitModule,Mode,DescrVarsTermOut,TypeMetaFact),
-		(DefeatMetaFact == NULL, RuleEnablerFact == NULL ->
-		    MetaFacts = [TypeMetaFact,TagIdMetaFact|MetaFacts1]
-		; DefeatMetaFact == NULL -> 
-		    MetaFacts = [TypeMetaFact,TagIdMetaFact,RuleEnablerFact|MetaFacts1]
-		; RuleEnablerFact == NULL ->
-		    MetaFacts = [TypeMetaFact,TagIdMetaFact,DefeatMetaFact|MetaFacts1]
-		;
-		    MetaFacts = [TypeMetaFact,TagIdMetaFact,RuleEnablerFact,DefeatMetaFact|MetaFacts1]
-		)
+		construct_type_descriptor_fact(DescrIdCode,CurrFileName,DescrModule,Mode,DescrVarsTermOut,TypeMetaFact),
+		MetaFacts_pre = [TypeMetaFact,TagIdMetaFact,RuleEnablerFact,DefeatMetaFact|MetaFacts1],
+		remove_all(NULL,MetaFacts_pre,MetaFacts)
 	    ; Status = StatDefeat
 	    )
 	%% either status of Id is bad or it is udfrule,
@@ -3858,7 +3853,7 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
 
 
 /*
-    determine_defeasibility(+FlatDescrList,+Mode,+DescrIdCode,+DescrVarsTerm,-DefeatMetaFact,-Status)
+    determine_defeasibility(+FlatDescrList,+Mode,+DescrIdCode,+CurrFileName,+DescrModule,+DescrVarsTerm,-DefeatMetaFact,-Status)
 
     If more than one defeasibility descriptor - error
     If exactly one defeasibility descriptor - noop.
@@ -3869,10 +3864,10 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
           Otherwise: assume strict.
 */
 %% If Mode=clause_construct/query then don't produce defeasibility fact
-determine_defeasibility(_Features,Mode,_DescrIdCode,_DescrVarsTerm,NULL,[]) :-
+determine_defeasibility(_Features,Mode,_DescrIdCode,_FileName,_Module,_DescrVarsTerm,NULL,[]) :-
 	memberchk(Mode,[clause_construct,query,ic,addic]),
 	!.
-determine_defeasibility(DescrFeatures,Mode,DescrIdCode,DescrVarsTerm,DefeatMetaFact,Status) :-
+determine_defeasibility(DescrFeatures,Mode,DescrIdCode,FileName,Module,DescrVarsTerm,DefeatMetaFact,Status) :-
 	memberchk(Mode,[rule,dynrule,addrule]),
 	!,
 	(memberchk(FL_DEFEASIBLE,DescrFeatures),
@@ -3895,10 +3890,10 @@ determine_defeasibility(DescrFeatures,Mode,DescrIdCode,DescrVarsTerm,DefeatMetaF
 	    %% If TAG is given, assume rule is defeasible by default
 	    %% If rules are defeasible by default, also assume defeasible rule
 	    flatom_struct(FL_DEFEASIBLE,NO_INDEX,DefeasibleDescr),
-	    construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DefeasibleDescr,[DefeatMetaFact|Tail]-Tail,Status)
+	    construct_bool_descriptor_facts(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,DefeasibleDescr,[DefeatMetaFact|Tail]-Tail,Status)
 	;  %% otherwise, assume rule is strict
 	    flatom_struct(FL_STRICT,NO_INDEX,StrictDescr),
-	    construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,StrictDescr,[DefeatMetaFact|Tail]-Tail,Status)
+	    construct_bool_descriptor_facts(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,StrictDescr,[DefeatMetaFact|Tail]-Tail,Status)
 	).
 
 
@@ -3959,19 +3954,19 @@ extract_features_from_objspec(_Spec, []).
 
 
 /*
-   compile_descriptor_list1(+DescriptorList,+Mode,+DescrIdCode,+RuleidFrameCode,+DescrVarsTerm,-MetaFactDiffList,-Status)
+   compile_descriptor_list1(+DescriptorList,+Mode,+DescrIdCode,+CurrFileName,+DescrModule,+RuleidFrameCode,+DescrVarsTerm,-MetaFactDiffList,-Status)
    Mode - rule/clause_construct/query/dynrule/addrule/ic/addic/udfrule
         'clause_construct' is used for the clause{...} construct.
         `query' is used for @!{...} queries to metainfo in rule bodies.
         'dynrule' is for dynamic rules.
 	etc.
 */
-compile_descriptor_list1([],_Mode,_DescrIdCode,_RuleidFrameCode,_DescrVarsTerm,M-M,[]).
-compile_descriptor_list1([Descriptor|RestDescr],Mode,DescrIdCode,RuleidFrameCode,DescrVarsTerm,MetaFacts-MetaTail,Status) :-
-	compile_descriptor(Descriptor,Mode,DescrIdCode,RuleidFrameCode,DescrVarsTerm,MetaFacts-Tail,S1),
+compile_descriptor_list1([],_Mode,_DescrIdCode,_FileName,_Module,_RuleidFrameCode,_DescrVarsTerm,M-M,[]) :- !.
+compile_descriptor_list1([Descriptor|RestDescr],Mode,DescrIdCode,FileName,Module,RuleidFrameCode,DescrVarsTerm,MetaFacts-MetaTail,Status) :-
+	compile_descriptor(Descriptor,Mode,DescrIdCode,FileName,Module,RuleidFrameCode,DescrVarsTerm,MetaFacts-Tail,S1),
 	(no_errors_found(S1)
 	->  
-	    compile_descriptor_list1(RestDescr,Mode,DescrIdCode,RuleidFrameCode,DescrVarsTerm,Tail-MetaTail,Status)
+	    compile_descriptor_list1(RestDescr,Mode,DescrIdCode,FileName,Module,RuleidFrameCode,DescrVarsTerm,Tail-MetaTail,Status)
 	; Status = S1
 	).
 
@@ -3985,19 +3980,19 @@ compile_descriptor_list1([Descriptor|RestDescr],Mode,DescrIdCode,RuleidFrameCode
         'dynrule' is for dynamic rules.
 	etc.
 */
-compile_descriptor(Descriptor,Mode,DescrIdCode,RuleidFrameCode,DescrVarsTerm,MetaFactDiffList,Status) :-
+compile_descriptor(Descriptor,Mode,DescrIdCode,FileName,Module,RuleidFrameCode,DescrVarsTerm,MetaFactDiffList,Status) :-
 	is_fldescriptor(Descriptor,DescrContents,Type,_Index),
 	(Type == FLTAG
-	-> construct_tag_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,MetaFactDiffList,Status)
+	-> construct_tag_descriptor_facts(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,DescrContents,MetaFactDiffList,Status)
 	; Type == FLBOOLDESCRIPTOR
-	-> construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,MetaFactDiffList,Status)
+	-> construct_bool_descriptor_facts(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,DescrContents,MetaFactDiffList,Status)
 	; Type == FLRULEID 
 	-> 
-	    construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,RuleidFrameCode,MetaFactDiffList,Status)
+	    construct_prop_descriptor_facts(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,RuleidFrameCode,MetaFactDiffList,Status)
 	),
 	!.
 %% already compiled
-compile_descriptor(Descriptor,_Mode,_DescrIdCode,_RuleidFrameCode,_DescrVarsTerm,Descriptor,[]) :- !.
+compile_descriptor(Descriptor,_Mode,_DescrIdCode,_FileName,_Module,_RuleidFrameCode,_DescrVarsTerm,Descriptor,[]) :- !.
 
 compile_ruleid_descriptor(IdDescriptorWithFrame,DescrIdCode,FrameCode,ExplicitModule,Status) :-
 	compile_complex_descriptor(IdDescriptorWithFrame,
@@ -4051,157 +4046,155 @@ construct_default_ruleid_descriptor(clause_construct,Idx,RuleIdCode) :-
 construct_default_ruleid_descriptor(query,Idx,RuleIdCode) :-
 	new_prvariable(Idx,RuleIdCode).
 
-%% construct_tag_descriptor_facts(+DescrIdCode,+Mode,+DescrVarsTerm,+DescrContent,-MetaFactDiffList,-Stat)
-%% construct_bool_descriptor_facts(+DescrIdCode,+Mode,+DescrVarsTerm,+DescrContent,-MetaFactDiffList,-Stat)
-construct_tag_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[TagIdMetaFact|Tail]-Tail,Status) :-
+%% construct_tag_descriptor_facts(+DescrIdCode,+FileName,+Module,+Mode,+DescrVarsTerm,+DescrContent,-MetaFactDiffList,-Stat)
+%% construct_bool_descriptor_facts(+DescrIdCode,+File,+Module,+Mode,+DescrVarsTerm,+DescrContent,-MetaFactDiffList,-Stat)
+construct_tag_descriptor_facts(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,DescrContents,[TagIdMetaFact|Tail]-Tail,Status) :-
 	compile_simple_descriptor(DescrContents,DescrContentsCode,Status),
-	construct_tag_descriptor_fact1(DescrIdCode,NULL,Mode,DescrVarsTerm,DescrContentsCode,TagIdMetaFact).
+	construct_tag_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,DescrContentsCode,TagIdMetaFact).
 
 %% Like construct_tag_descriptor_facts/7, but uses DescrContentsCode (pr-obj)
 %% instead of %% DescrContents (fl-obj)
 %% Also takes ExplicitModule
-construct_tag_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,DescrContentsCode,TagIdMetaFact) :-
+construct_tag_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,DescrContentsCode,TagIdMetaFact) :-
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
-	get_current_compile_file_for_descriptor(CurrFileName,Mode),
-	get_descriptor_module(ExplicitModule,Mode,DescrModule),
-	generate_prolog_liblit(PredCode,5,[DescrIdCode,CurrFileName,DescrModule,DescrContentsCode,DescrVarsTerm], TagIdMetaTerm),
+	generate_prolog_liblit(PredCode,5,[DescrIdCode,FileName,Module,DescrContentsCode,DescrVarsTerm], TagIdMetaTerm),
 	((Mode == rule ; Mode == ic)
 	 -> fact_struct(TagIdMetaTerm,TagIdMetaFact)
 	; %% Mode = clause_construct/query/dynrule/addrule/addic/udfrule
 	    TagIdMetaTerm = TagIdMetaFact
 	).
 
-construct_file_descriptor_query(DescrIdCode,DescrVarsTerm,DescrContentsCode,MetaTerm,NO_ERRORS) :-
+construct_file_descriptor_query(DescrIdCode,Module,DescrVarsTerm,FileVal,MetaTerm,NO_ERRORS) :-
 	has_context(compiling_body(_)),
 	!,
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
-	new_prvariable(NO_INDEX,Module),
-	new_dontcare_prvariable(NO_INDEX,SomeVar),
-	generate_prolog_liblit(PredCode,5,[DescrIdCode,DescrContentsCode,Module,SomeVar,DescrVarsTerm], MetaTerm).
-construct_file_descriptor_query(DescrIdCode,_,_,_,[Err]) :-
+	new_dontcare_prvariable(NO_INDEX,SomeTagVar),
+	generate_prolog_liblit(PredCode,5,[DescrIdCode,FileVal,Module,SomeTagVar,DescrVarsTerm], MetaTerm).
+construct_file_descriptor_query(DescrIdCode,_,_,_,_,[Err]) :-
 	approx_prindex(DescrIdCode,Idx),
 	compiling_error(Idx,INVALID_FILE_DESCRIPTOR_PROP,Err).
 
-construct_module_descriptor_query(DescrIdCode,DescrVarsTerm,DescrContentsCode,MetaTerm,NO_ERRORS) :-
+construct_module_descriptor_query(DescrIdCode,FileName,DescrVarsTerm,ModuleVal,MetaTerm,NO_ERRORS) :-
 	has_context(compiling_body(_)),
 	!,
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
-	new_prvariable(NO_INDEX,FileN),
-	new_dontcare_prvariable(NO_INDEX,SomeVar),
-	generate_prolog_liblit(PredCode,5,[DescrIdCode,FileN,DescrContentsCode,SomeVar,DescrVarsTerm], MetaTerm).
-construct_module_descriptor_query(DescrIdCode,_,_,_,[Err]) :-
+	new_dontcare_prvariable(NO_INDEX,SomeTagVar),
+	generate_prolog_liblit(PredCode,5,[DescrIdCode,FileName,ModuleVal,SomeTagVar,DescrVarsTerm], MetaTerm).
+construct_module_descriptor_query(DescrIdCode,_,_,_,_,[Err]) :-
 	approx_prindex(DescrIdCode,Idx),
 	compiling_error(Idx,INVALID_MODULE_DESCRIPTOR_PROP,Err).
 
-construct_type_descriptor_query(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Prop,Val,MetaFact,NO_ERRORS) :-
+construct_type_descriptor_query(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,Prop,Val,MetaFact,NO_ERRORS) :-
 	has_context(compiling_body(_)),
 	!,
-	construct_prop_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Prop,Val,MetaFact).
-construct_type_descriptor_query(DescrIdCode,_,_,_,_,_,_,[Err]) :-
+	construct_prop_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,Prop,Val,MetaFact).
+construct_type_descriptor_query(DescrIdCode,_,_,_,_,_,_,_,[Err]) :-
 	approx_prindex(DescrIdCode,Idx),
 	compiling_error(Idx,INVALID_TYPE_DESCRIPTOR_PROP,Err).
 
 %% this constructs the meta fact for the type property: @!{id[type->rule/ic]}
-construct_type_descriptor_fact(_DescrIdCode,_ExplicitModule,_Mode,_DescrVarsTerm,NULL) :-
+construct_type_descriptor_fact(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,MetaFact) :-
 	has_context(compiling_body(_)),
-	!.
-construct_type_descriptor_fact(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,MetaFact) :-
+	!,
+	atomobj_struct(FL_TYPE_PROPERTY,Prop),
+	(memberchk(Mode,[addic,ic]) -> atomobj_struct(ic,Val)
+	; memberchk(Mode,[rule,addrule,dynrule]) -> atomobj_struct(rule,Val)
+	%% query/clause_construct
+	; new_prvariable(NO_INDEX,Val)
+	),
+	construct_prop_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,Prop,Val,MetaFact).
+construct_type_descriptor_fact(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,MetaFact) :-
 	atomobj_struct(FL_TYPE_PROPERTY,Prop),
 	(memberchk(Mode,[addic,ic]) -> atomobj_struct(ic,Val)
 	; memberchk(Mode,[rule,addrule,dynrule]) -> atomobj_struct(rule,Val)
 	;  %% this should be unreachable
 	    flora_abort(['Compiler bug!!! construct_type_descriptor_fact: unreachable statement'], FLORA_ABORT_NOTRACE)
 	),
-	construct_prop_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Prop,Val,MetaFact).
+	construct_prop_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,Prop,Val,MetaFact).
 
 
-construct_bool_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,DescrContents,[BoolIdMetaFact|Tail]-Tail,Status) :-
+construct_bool_descriptor_facts(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,DescrContents,[BoolIdMetaFact|Tail]-Tail,Status) :-
 	compile_simple_descriptor(DescrContents,DescrContentsCode,Status),
-	construct_bool_descriptor_fact1(DescrIdCode,NULL,Mode,DescrVarsTerm,DescrContentsCode,BoolIdMetaFact).
+	construct_bool_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,DescrContentsCode,BoolIdMetaFact).
 %% Like construct_tag_descriptor_facts, but uses DescrContentsCode (pr-obj)
 %% instead of DescrContents (fl-obj)
-construct_bool_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,DescrContentsCode,BoolIdMetaFact) :-
+construct_bool_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,DescrContentsCode,BoolIdMetaFact) :-
 	PredCode = FL_BOOL_DESCRIPTOR_META_PREDICATE,
-	get_current_compile_file_for_descriptor(CurrFileName,Mode),
-	get_descriptor_module(ExplicitModule,Mode,DescrModule),
-	generate_prolog_liblit(PredCode,5,[DescrIdCode,CurrFileName,DescrModule,DescrContentsCode,DescrVarsTerm], BoolIdMetaTerm),
+	generate_prolog_liblit(PredCode,5,[DescrIdCode,FileName,Module,DescrContentsCode,DescrVarsTerm], BoolIdMetaTerm),
 	((Mode == rule ; Mode == ic)
 	-> fact_struct(BoolIdMetaTerm,BoolIdMetaFact)
 	; %% Mode = clause_construct/query/dynrule/addrule/addic/udfrule
 	    BoolIdMetaTerm = BoolIdMetaFact
 	).
 
-construct_prop_descriptor_facts(_,_,_,NULL,Meta-Meta,[]) :- !.
-construct_prop_descriptor_facts(_,_,_,FL_TRUE,Meta-Meta,[]) :- !.
+%% construct_prop_descriptor_facts/8
+construct_prop_descriptor_facts(_,_,_,_,_,NULL,Meta-Meta,[]) :- !.
+construct_prop_descriptor_facts(_,_,_,_,_,FL_TRUE,Meta-Meta,[]) :- !.
 
-%% construct_prop_descriptor_facts/6
-construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,RuleidFrameCode,LeftMeta-RightTail,Status) :-
+construct_prop_descriptor_facts(DescrIdCode,File,Module,Mode,DescrVarsTerm,RuleidFrameCode,LeftMeta-RightTail,Status) :-
 	is_prconjunct(RuleidFrameCode,Left,Right),
 	!,
-	construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,Left,LeftMeta-LeftTail,S1),
+	construct_prop_descriptor_facts(DescrIdCode,File,Module,Mode,DescrVarsTerm,Left,LeftMeta-LeftTail,S1),
 	(S1 == NO_ERRORS ->
-	    construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,Right,LeftTail-RightTail,Status)
+	    construct_prop_descriptor_facts(DescrIdCode,File,Module,Mode,DescrVarsTerm,Right,LeftTail-RightTail,Status)
 	; Status =S1
 	).
 %% this should be unreachable due to the parser, but just in case
-construct_prop_descriptor_facts(_,Mode,_,RuleidFrameCode,_,[Err]) :-
+construct_prop_descriptor_facts(_,_,_,Mode,_,RuleidFrameCode,_,[Err]) :-
 	is_prdisjunct(RuleidFrameCode,_,_),
 	memberchk(Mode,[rule,dynrule,addrule,ic,addic,udfrule]),
 	!,
 	approx_prindex(RuleidFrameCode,Idx),
 	compiling_error(Idx,NO_DISJUNCTS_DESCRIPTOR_FRAME,Err).
 
-%% construct_prop_descriptor_facts/6
-construct_prop_descriptor_facts(DescrIdCode,Mode,DescrVarsTerm,RuleidFrameCode,Metafacts,Status) :-
+construct_prop_descriptor_facts(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,RuleidFrameCode,Metafacts,Status) :-
 	(is_prworkspace(RuleidFrameCode,RealCode,ExplicitModule) -> true
-	; RealCode = RuleidFrameCode, ExplicitModule = NULL
+	; RealCode = RuleidFrameCode, ExplicitModule = Module
 	),
-	%% construct_prop_descriptor_facts/7
-	construct_prop_descriptor_facts(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,RealCode,Metafacts,Status).
+	%% change module
+	construct_attrval_descriptor_facts(DescrIdCode,FileName,ExplicitModule,Mode,DescrVarsTerm,RealCode,Metafacts,Status).
 
 
-%% construct_prop_descriptor_facts/7 for attr-val pairs
-construct_prop_descriptor_facts(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,PRMVD(DescrIdCode,Prop,Val,_),[MetaFact|Tail]-Tail,Status) :-
+%% construct_attrval_descriptor_facts/8 for attr-val pairs
+construct_attrval_descriptor_facts(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,PRMVD(DescrIdCode,Prop,Val,_),[MetaFact|Tail]-Tail,Status) :-
 	!,
 	%% if property=tag: construct a tag metafact; else - property metafact
 	(is_pratom(Prop,FL_TAG_PROPERTY)
 	-> 
-	    construct_tag_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Val,MetaFact),
+	    construct_tag_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,Val,MetaFact),
 	    Status = NO_ERRORS
 	; is_pratom(Prop,FL_FILE_PROPERTY)
 	->  %% this is used only in rule/query bodies
-	    construct_file_descriptor_query(DescrIdCode,DescrVarsTerm,Val,MetaFact,Status)
+	    construct_file_descriptor_query(DescrIdCode,Module,DescrVarsTerm,Val,MetaFact,Status)
 	; is_pratom(Prop,FL_MODULE_PROPERTY)
 	->  %% this is used only in rule/query bodies
-	    construct_module_descriptor_query(DescrIdCode,DescrVarsTerm,Val,MetaFact,Status)
+	    construct_module_descriptor_query(DescrIdCode,FileName,DescrVarsTerm,Val,MetaFact,Status)
 	; is_pratom(Prop,FL_TYPE_PROPERTY)
 	->  %% this is used only in rule/query bodies
-	    construct_type_descriptor_query(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Prop,Val,MetaFact,Status)
+	    construct_type_descriptor_query(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,Prop,Val,MetaFact,Status)
 	;
-	    construct_prop_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Prop,Val,MetaFact),
+	    construct_prop_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,Prop,Val,MetaFact),
 	    Status = NO_ERRORS
 	).
 
-%% construct_prop_descriptor_facts/7 for Boolean properties
-construct_prop_descriptor_facts(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,PRMETH(DescrIdCode,Val,_),[MetaFact|Tail]-Tail,NO_ERRORS) :-
+%% construct_attrval_descriptor_facts/8 for Boolean properties
+construct_attrval_descriptor_facts(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,PRMETH(DescrIdCode,Val,_),[MetaFact|Tail]-Tail,NO_ERRORS) :-
 	!,
-	construct_bool_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Val,MetaFact).
+	construct_bool_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,Val,MetaFact).
 
-%% construct_prop_descriptor_facts/7 for empty frames: empty metafacts
-construct_prop_descriptor_facts(DescrIdCode,_,_,_,PREXISTS(DescrIdCode,_),Meta-Meta,NO_ERRORS) :-
+%% construct_attrval_descriptor_facts/8 for empty frames: empty metafacts
+construct_attrval_descriptor_facts(DescrIdCode,_,_,_,_,PREXISTS(DescrIdCode,_),Meta-Meta,NO_ERRORS) :-
 	!.
 
-%% construct_prop_descriptor_facts/7
-construct_prop_descriptor_facts(_DescrIdCode,_ExplicitModule,_Mode,_DescrVarsTerm,RuleidFrameCode,_DiffList,[Err]) :-
+%% construct_attrval_descriptor_facts/8
+construct_attrval_descriptor_facts(_DescrIdCode,_FileName,_Module,_Mode,_DescrVarsTerm,RuleidFrameCode,_DiffList,[Err]) :-
 	approx_prindex(RuleidFrameCode,Idx),
 	compiling_error(Idx,NO_NESTED_DESCRIPTOR_FRAME,Err).
 
 %% constructs meta facts for 1 attr-value pair
-construct_prop_descriptor_fact1(DescrIdCode,ExplicitModule,Mode,DescrVarsTerm,Prop,Val,MetaFact) :-
+construct_prop_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,Prop,Val,MetaFact) :-
 	PredCode = FL_PROP_DESCRIPTOR_META_PREDICATE,
-	get_current_compile_file_for_descriptor(CurrFileName,Mode),
-	get_descriptor_module(ExplicitModule,Mode,DescrModule),
-	generate_prolog_liblit(PredCode,6,[DescrIdCode,CurrFileName,DescrModule,Prop,Val,DescrVarsTerm], MetaTerm),
+	generate_prolog_liblit(PredCode,6,[DescrIdCode,FileName,Module,Prop,Val,DescrVarsTerm], MetaTerm),
 	((Mode == rule ; Mode == ic)
 	-> fact_struct(MetaTerm,MetaFact)
 	; %% Mode = clause_construct/query/dynrule/addrule/addic/udfrule
@@ -4256,40 +4249,38 @@ compile_complex_descriptor(DescrContentsWS,FramesOK,Object,FrameCode,ExplicitMod
 	
 %% construct_rule_enabling_fact(+DescrIdCode,+Mode,-RuleEnablerMetaFact)
 %% For clause{...} and the @!{...} query, don't construct the rule-enabling fact
-construct_rule_enabling_fact(_DescrIdCode,clause_construct,NULL) :- !.
-construct_rule_enabling_fact(_DescrIdCode,query,NULL) :- !.
-construct_rule_enabling_fact(DescrIdCode,Mode,RuleEnablerMetaFact) :-
-	construct_rule_enabling_test(DescrIdCode,Mode,RuleEnablerMetaTerm,_FileName),
+construct_rule_enabling_fact(_DescrIdCode,_FileName,clause_construct,NULL) :- !.
+construct_rule_enabling_fact(_DescrIdCode,_FileName,query,NULL) :- !.
+construct_rule_enabling_fact(DescrIdCode,FileName,Mode,RuleEnablerMetaFact) :-
+	construct_rule_enabling_query(DescrIdCode,FileName,RuleEnablerMetaTerm),
 	((Mode == rule ; Mode == ic)
 	-> fact_struct(RuleEnablerMetaTerm,RuleEnablerMetaFact)
 	; %% clause_construct/query/dynrule/addrule/addic/udfrule
 	    RuleEnablerMetaTerm = RuleEnablerMetaFact
 	).
 
-construct_rule_enabling_test(DescrIdCode,Mode,RuleEnablerMetaTerm,CurrFileName) :-
+construct_rule_enabling_query(DescrIdCode,FileName,RuleEnablerMetaTerm) :-
 	modularized_pratom_struct(FL_RULE_ENABLER,NO_INDEX,PredCode),
-	get_current_compile_file_for_descriptor(CurrFileName,Mode),
-	generate_prolog_liblit(PredCode,2,[DescrIdCode,CurrFileName],RuleEnablerMetaTerm).
+	generate_prolog_liblit(PredCode,2,[DescrIdCode,FileName],RuleEnablerMetaTerm).
 
-construct_tag_descriptor_fact_from_id(DescrIdCode,Mode,ExplicitModule,DescrVarsTerm,TagIdMetaFact) :-
+%% like construct_rule_enabling_query/3 but generates file name for itself
+%% used as the first subgoal in rules, queries, ICs
+construct_rule_enabling_test(DescrIdCode,Mode,RuleEnablerMetaTerm,FileName) :-
+	get_current_compile_file_for_descriptor(FileName,Mode),
+	construct_rule_enabling_query(DescrIdCode,FileName,RuleEnablerMetaTerm).
+
+construct_tag_descriptor_fact_from_id(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,TagIdMetaFact) :-
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
 	(Mode == dynrule ->
-	    new_prvariable(NO_INDEX,Module),
 	    Tag = DescrIdCode
 	; Mode == clause_construct ->
-	    new_prvariable(NO_INDEX,Module),
 	    new_prvariable(NO_INDEX,Tag)
 	; Mode == query ->
-	    (ExplicitModule == NULL -> thismodule_struct(Module)
-	    ; Module = ExplicitModule
-	    ),
 	    new_prvariable(NO_INDEX,Tag)
 	;
-	    thismodule_struct(Module),
 	    Tag = DescrIdCode
 	),
-	get_current_compile_file_for_descriptor(CurrFileName,Mode),
-	generate_prolog_liblit(PredCode,5,[DescrIdCode,CurrFileName,Module,Tag,DescrVarsTerm],TagIdMetaTerm),
+	generate_prolog_liblit(PredCode,5,[DescrIdCode,FileName,Module,Tag,DescrVarsTerm],TagIdMetaTerm),
 	((Mode == rule ; Mode == ic)
 	-> fact_struct(TagIdMetaTerm,TagIdMetaFact)
 	; %% Mode = clause_construct/query/dynrule/addrule/addic/udfrule
@@ -8894,7 +8885,6 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 		construct_rule_enabling_test(DescrIdCode,dynrule,RuleEnablerTest,FileName),
 		PreBody = RuleEnablerTest,
 		PostBody = DelayCheckCode,
-		%%get_current_compile_file_for_descriptor(FileName,dynrule),
 		dynrule_struct(HeadCodeList,H2BCode,HVL,BVL,PreBody,PostBody,
 			       (DescrIdCode,FileName,
 				   DescrVarsTerm,
@@ -9177,7 +9167,6 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 		delay_literals_checking_code(Head,Body,DescrVarsTerm,DelayCheckCode),
 		PreBody = RuleEnablerTest,
 		PostBody = DelayCheckCode,
-		%%get_current_compile_file_for_descriptor(FileName,dynrule),
 		dynrule_struct(HeadCodeList,PureBodyCode,HVL,BVL,
 			       PreBody,PostBody,
 			       (DescrIdCode,FileName,
@@ -9211,6 +9200,18 @@ remove_empty_list([[]|L],NL) :-
 	remove_empty_list(L,NL).
 remove_empty_list([H|L],[H|NL]) :- 
 	remove_empty_list(L,NL).
+
+%% remove all occurrences of Elt from List.
+%% this is a stop clause for var-terminated lists
+remove_all(_Elt,Tail,Tail) :-
+	var(Tail),
+	!.
+remove_all(_Elt,[],[]) :- !.
+remove_all(Elt,[Elt|List],List2) :-
+	!,
+	remove_all(Elt,List,List2).
+remove_all(Elt,[H|List],[H|List2]) :-
+	remove_all(Elt,List,List2).
 
 
 /****************************************************************************
