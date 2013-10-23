@@ -406,6 +406,9 @@ flora_insert_rule(InsOp,Id,FileName,DescrVarTerm,RuleNum,Head,Body,OrigBody,PreB
         ;
             flora_abort(['internal error: invalid head in a dynamically inserted rule, ', InstHead, ' :- ', OrigBody])
 	),
+	%% the following line to bind FileName is needed for reified rules
+	(var(FileName) -> FileName = FL_DYNRULE_FICTITIOUS_FILENAME ; true),
+	bind_rule_enabler(PreBody,FileName,Module),
 	flora_concat_atoms([RealPrefix,BaseWrap],Wrapper),
 	flora_module_predicate(Wrapper,Args,Module,NewHead),
 	%% check if a module name is valid during the update
@@ -423,8 +426,6 @@ flora_insert_rule(InsOp,Id,FileName,DescrVarTerm,RuleNum,Head,Body,OrigBody,PreB
 	%% would be different from the variables in the head/bridge rules.
 	copy_term(NewRule,NewRule1),
 	convert_to_body_literal(InstHead,InstHeadB),
-	%% the following line to bind FileName does not seem to be necessary
-	%%(var(FileName) -> FileName = FL_DYNRULE_FICTITIOUS_FILENAME ; true),
         ( InsOp == FLLIBINSERTRULE_A ->
             flora_record_rule_signature(Id,FileName,DescrVarTerm,FL_DYNAPREFIX,Module,RuleNum,InstHeadB,OrigBody,PreBody,PostBody,DefeatCond,[NewRule1],BridgeRule)
         ;
@@ -434,7 +435,7 @@ flora_insert_rule(InsOp,Id,FileName,DescrVarTerm,RuleNum,Head,Body,OrigBody,PreB
 	flora_refresh_tables(InstHead),
 	incr_flora_update_counter,
 	(BaseWrap==WRAP_OBJEQL ->
-	    ( flloadtrailer([FLOBJEQLDEF],Module), ! ; flora_abort)
+	    (flloadtrailer([FLOBJEQLDEF],Module), ! ; flora_abort)
 	;
 	    true
 	),
@@ -765,7 +766,7 @@ flora_assert_metafact_list([H|T],FileName,Module) :-
 	(H = FL_TAG_DESCRIPTOR_META_PREDICATE(_,FileName,Module,_,_), !
 	; H = FL_BOOL_DESCRIPTOR_META_PREDICATE(_,FileName,Module,_,_), !
 	; H = FL_PROP_DESCRIPTOR_META_PREDICATE(_,FileName,Module,_,_,_), !
-	; arg(2,H,FileName)
+	; H = FL_RULE_ENABLER(_,FileName,Module)
 	),
 	(is_duplicate_rule_id(H)
 	-> arg(1,H,RuleId),
@@ -779,9 +780,15 @@ flora_assert_metafact_list([H|T],FileName,Module) :-
 	    flora_assert_metafact_list(T,FileName,Module)
 	).
 
+%% we assume that the rule enabler is always first in the prebody
+bind_rule_enabler((Enabler,_),File,Module) :-
+	!,
+	Enabler = FL_RULE_ENABLER(_,File,Module).
+bind_rule_enabler(Enabler,File,Module) :-
+	Enabler = FL_RULE_ENABLER(_,File,Module).
+
 is_duplicate_rule_id(H) :-
-	functor(H,Fun,2),
-	flrporting:flora_match_substring(FL_RULE_ENABLER,Fun,_),
+	H = FL_RULE_ENABLER(_,_,_),
 	!,
 	call(H).
 
@@ -790,12 +797,7 @@ call_metafact_list([NULL|Rest],FileName,Mod) :-
 	!,
 	call_metafact_list(Rest,FileName,Mod).
 call_metafact_list([Head|Rest],FileName,Mod) :-
-	functor(Head,_,Arity),
-	%% We don't extract the module from FL_RULE_ENABLER/2 here. 
-	%% This is the only metafact of arity 2; others are > 2.
-	(Arity > 2 -> get_module_from_metafacts(Head,Mod)
-	; true
-	),
+	get_module_from_metafacts(Head,Mod),
 	arg(2,Head,FileName),
 	call(Head),
 	call_metafact_list(Rest,FileName,Mod).

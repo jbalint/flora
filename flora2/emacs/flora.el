@@ -128,15 +128,15 @@
    (list
     '("\\(\\(flora\\)? +\\?-\\|:-\\|\\.[ \t\n]*$\\)"
       1 'flora-font-lock-query-face)
-    '("\\(\\*?[^-]->\\|\\*?=>\\|\\*?->->\\|\\*?=>\\)"
-      1 'flora-font-lock-arrow-face)
     ;; for objects
     '("\\([A-Za-z0-9_][A-Za-z0-9_!.]*\\) *\\["
       1 'font-lock-variable-name-face)
-    '("\\b\\(\\\+\\|naf\\|avg\\|max\\|min\\|sum\\|count\\|setof\\|bagof\\|insert\\|delete\\|b?t_?insert\\|b?t_?delete\\|insertall\\|b?t_?insertall\\|deleteall\\|b?t_?deleteall\\|erase\\|eraseall\\|b?t_?erase\\|b?t_?eraseall\\|insertrule_?[az]?\\|if\\|then\\|else\\|while\\|do\\|until\\|unless\\|p2h\\|semantics\||setsemantics\\|udf\\|caller\\|newoid\\|test\\|catch\\|clause\\|must\\|wish\\|exists?\\|forall\\|udf\\|t?enable\\|t?disable\\|fl[A-Z][a-zA-Z]*\\)\\b"
+    '("\\b\\(\\\+\\|naf\\|avg\\|max\\|min\\|sum\\|count\\|setof\\|bagof\\|insert\\|delete\\|b?t_?insert\\|b?t_?delete\\|insertall\\|b?t_?insertall\\|deleteall\\|b?t_?deleteall\\|erase\\|eraseall\\|b?t_?erase\\|b?t_?eraseall\\|insertrule_?[az]?\\|if\\|then\\|else\\|while\\|do\\|loop\\|until\\|unless\\|p2h\\|semantics\||setsemantics\\|udf\\|caller\\|newoid\\|test\\|catch\\|clause\\|must\\|wish\\|exists?\\|forall\\|udf\\|t?enable\\|t?disable\\|fl[A-Z][a-zA-Z]*\\)\\b"
       1 'font-lock-keyword-face)
     '("\\(@!\\|-->\\|@\\|@@\\)"
       1 'flora-font-lock-bold-keyword-face)
+    '("\\(\\*?->\\|\\*?=>\\|\\*?->->\\|\\*?=>\\)"
+      1 'flora-font-lock-arrow-face)
     '("\\(:\\|[^[(]|[^])]\\)" 
       1 'font-lock-type-face)
     '("\\(\\[|\\||\\]\\|(|\\||)\\)"

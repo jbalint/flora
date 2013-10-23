@@ -189,6 +189,7 @@ Source: "{#XSBBaseDir}\README"; Excludes: ".*,CVS"; DestDir: "{#xsbapp}\"; Compo
 Source: "{#XSBBaseDir}\LICENSE"; Excludes: ".*,CVS"; DestDir: "{#xsbapp}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#XSBBaseDir}\bin\*"; Excludes: ".*,CVS"; DestDir: "{#xsbapp}\bin"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#XSBBaseDir}\build\*"; Excludes: ".*,CVS,*.cache"; DestDir: "{#xsbapp}\build"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#XSBBaseDir}\config\*"; Excludes: ".*,CVS"; DestDir: "{#xsbapp}\config"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#XSBBaseDir}\pthreads\Pre-built\lib\pthreadVSE1.dll"; Excludes: ".*,CVS"; DestDir: "{#xsbapp}\config\i686-pc-cygwin-mt\bin"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 

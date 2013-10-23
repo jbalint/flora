@@ -389,9 +389,9 @@ replace_synonyms(X,X).
 /****************************************************************************
   comma_separated_list(+ComposerTerm,-ListOfCommaSeparatedArguments,-Arity)
 
-  This procedure produces a list of comma separated terms. Note
+  Produce a list of comma separated terms out of a composer term. Note
   that `,' is defined as right associative. Only the top level commas
-  are considered as separating the list.
+  are considered to be separating the list.
 ****************************************************************************/
 comma_separated_list(INFIX(FL_COMMA,Left,Right,_I),[LL|RList],N) :-
 	!,
@@ -402,6 +402,19 @@ comma_separated_list(INFIX(FL_COMMA,Left,Right,_I),[LL|RList],N) :-
 comma_separated_list(ComposerTerm,[CanoniTerm],1) :-
 	!,
 	canonical_form(ComposerTerm,CanoniTerm,_Index).
+
+/****************************************************************************
+  comma_separated_canoterm_to_list(+CanoniTerm,-CanoniTermList)
+  Converts a comma-separated list into a normal list
+****************************************************************************/
+comma_separated_canoterm_to_list(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),[L|RList]) :-
+	%% Comma as an operator is right associative.
+	get_atom(Funct,FL_COMMA),
+	!,
+	comma_separated_canoterm_to_list(R,RList).
+
+comma_separated_canoterm_to_list(CanoniTerm,[CanoniTerm]) :- !.
+
 
 
 /****************************************************************************
@@ -646,6 +659,9 @@ get_spectoken(OBJECT(SPECIAL_TOKEN(Atom),_I),Atom) :- !.
 get_spectoken(OBJECT(SPECIAL_TOKEN(Atom,_Suffix),_I),Atom) :- !.
 
 
+is_conjunction(CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],_,_),Left,Right) :-
+	get_name(Funct,FL_AND_CONNECTIVE).
+
 is_rule(CANOTERM(Funct,2,FL_PARENTHESIS,[Head,Body],_If,_Ip),Head,Body) :-
 	get_name(Funct,FL_IMPLYOP).
 
@@ -692,7 +708,7 @@ is_user_defined_function_typo(CANOTERM(Funct,1,FL_PARENTHESIS,[CANOTERM(Funct2,2
 is_user_defined_function_typo(CANOTERM(Funct,1,FL_PARENTHESIS,[CANOTERM(Funct2,_N,_P,_Args,_,_)],_If,_Ip),_Function,_Body,_ReturnValue,Funct2) :-
 	get_name(Funct,FL_UDFF).
 
-%% Error: definition of UDF but the first functor is not fucntion
+%% Error: definition of UDF but the first functor is not "udf"
 %% and one of the arguments functor is function 
 %% Can be due to operators priorities
 is_user_defined_function_inside_typo(CANOTERM(Funct,_,_,[CANOTERM(Funct2,_,_P,_Args,_,_)|_],_If,_Ip),_Function,_Body,_ReturnValue,Funct) :-
@@ -707,14 +723,14 @@ is_user_defined_function_inside_typo(CANOTERM(Funct,_,_,[CANOTERM(Funct2,2,_,[_,
 	get_name(Funct,FL_UDFF),
 	get_name(Funct2,FL_UDFEQ),
 	(
-		get_name(Funct3,FL_LEFTNAFIMPLY) ;
-		get_name(Funct3,FL_RIGHTNAFIMPLY) ;
-		get_name(Funct3,FL_LEFTNEGIMPLY) ;
-		get_name(Funct3,FL_RIGHTNEGIMPLY) ;
-		get_name(Funct3,FL_MVDSIGARROW) ;
-		get_name(Funct3,FL_MVDARROW) ;
-		get_name(Funct3,FL_LT) ;
-		get_name(Funct3,FL_GT) 
+	  get_name(Funct3,FL_LEFTNAFIMPLY) ;
+	  get_name(Funct3,FL_RIGHTNAFIMPLY) ;
+	  get_name(Funct3,FL_LEFTNEGIMPLY) ;
+	  get_name(Funct3,FL_RIGHTNEGIMPLY) ;
+	  get_name(Funct3,FL_MVDSIGARROW) ;
+	  get_name(Funct3,FL_MVDARROW) ;
+	  get_name(Funct3,FL_LT) ;
+	  get_name(Funct3,FL_GT) 
 	).
 
 is_user_defined_function_fact(CANOTERM(Funct,1,FL_PARENTHESIS,[CANOTERM(Funct2,2,FL_PARENTHESIS,[Function,Value],_,_)],_If,_Ip),Function,Value) :-
@@ -729,6 +745,8 @@ is_reification(CANOTERM(Funct,N,FL_BRACE,Args,_If,Ip),Args,N,Ip) :-
 annotated_construct_struct(DescriptorsCode,ContentCode,FLANNOTATEDCONSTRUCT(DescriptorsCode,ContentCode)).
 
 annotation_struct(IdConstruct,Type,Idx,FLDESCRIPTOR(IdConstruct,Type,Idx)).
+
+flcallmetafacts_struct(MetaFacts,Idx,FLCALLMETAFACTS(MetaFacts,Idx)).
 
 %% Binary relationship, like : or ::
 is_birelop(FL_ISA)    :- !.
@@ -1323,12 +1341,13 @@ parsing_error(CanoniTerm,ErrorMessage,Status) :-
   flora_parse(+ComposerTerm,-Code,-Status)
   is the top level dispatcher.
 ****************************************************************************/
-flora_parse(NULL,NULL,[]) :- !.
+flora_parse(NULL,[NULL],[]) :- !.
 
 flora_parse(ComposerTerm,Code,Status) :-
 	prepare_for_parsing_rule,
 	canonical_form(ComposerTerm,CanoniTerm),
-	parse_canonical(CanoniTerm,Code,Status),
+	parse_canonical(CanoniTerm,Code1,Status),
+	commalist2list(Code1,Code),
 	!.
 
 %% This rule is for debugging.
@@ -1367,6 +1386,14 @@ parse_canonical(CanoniTerm,Code,Status) :-
 
 	; is_user_defined_function_typo(CanoniTerm,_Function,_Body,_ReturnValue,ErrorTerm) ->
 	    parsing_error(ErrorTerm,ERROR_UDF,Status)
+
+	; is_conjunction(CanoniTerm,Left,Right) ->
+	    parse_canonical(Left,LCode,LStatus),
+	    (LStatus == NO_ERRORS ->
+		parse_canonical(Right,RCode,Status),
+		Code = (LCode,RCode)
+	    ; Status = LStatus
+	    )
 
 	; %% flora_parse_fact must be the last one to call.
 	  flora_parse_fact(CanoniTerm,Code,Status)
@@ -1446,40 +1473,41 @@ exec_directive(CanoniTerm,FloraModSpec,Code,Status) :-
 	!.
 
 
-/****************************************************************************
-  comma_separated_list(+CanoniTerm,-CanoniTermList)
-  Converts a comma-separated list into a normal list
-****************************************************************************/
-comma_separated_list(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),[L|RList]) :-
-	%% Comma as an operator is right associative.
-	get_atom(Funct,FL_COMMA),
-	!,
-	comma_separated_list(R,RList).
-
-comma_separated_list(CanoniTerm,[CanoniTerm]) :- !.
-
-
 /***************************************************************************
-   list_to_conjunct(+ListOfCanoniTerms,-ConjunctOfCanoniTerms,+If,+Ip)
-   Converts list of terms into a comma-separated list
+   list_to_canoterm_conjunct(+ListOfCanoniTerms,-ConjunctOfCanoniTerms,+If,+Ip)
+   Converts lists of canonical terms to comma-separated lists of canonical terms
 ***************************************************************************/
 
-list_to_conjunct([H],H,_If,_Ip) :- !.
-list_to_conjunct([H|Tail],
+%% comma_separated_canoterm_to_list/2 dose the opposite conversion
+list_to_canoterm_conjunct([H],H,_If,_Ip) :- !.
+list_to_canoterm_conjunct([H|Tail],
 		 CANOTERM(Funct,2,FL_PARENTHESIS,[H,TailConj],If,Ip),
 		 If, Ip) :-
 	get_name(Funct,FL_COMMA),
-	list_to_conjunct(Tail,TailConj,If,Ip).
+	list_to_canoterm_conjunct(Tail,TailConj,If,Ip).
 
-/*
-%% And back: canonical terms that are conjuncts into lists
-conjunct_to_list(CANOTERM(Funct,2,FL_PARENTHESIS,[H,TailConj],_If,_Ip),[H|TailCode]) :-
-	get_name(Funct,FL_AND_CONNECTIVE),
+/***************************************************************************
+        commalist2list(+CommaList,-List)
+	convert a comma list to list
+
+	list2commalist(+List,-Commalist)
+	converts list to commalist
+
+  These two operate on flterms
+***************************************************************************/
+commalist2list(A,[]) :-
+	var(A),
+	!.
+commalist2list((A,L), [A|LL]) :-
 	!,
-	conjunct_to_list(TailConj,TailCode).
-conjunct_to_list(H,[H]).
-*/
+	commalist2list(L,LL).
+commalist2list(A,[A]).
 
+
+list2commalist([A],A) :- !.
+list2commalist([A|L], Code) :-
+	list2commalist(L,LL),
+	flconjunct_struct(A,LL,Code).
 
 /*************************************************************************
    Import module directive
@@ -1489,7 +1517,7 @@ conjunct_to_list(H,[H]).
 importmodule_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Modules],_If,_Ip),Code,Status) :-
 	%% check directive name.
 	get_name(Funct,FL_IMPORTMODULE),
-	comma_separated_list(Modules,TermList),
+	comma_separated_canoterm_to_list(Modules,TermList),
 	importmodule_parse_termlist(TermList,Code,Status),
 	!.
 %% error
@@ -1607,7 +1635,7 @@ regularize_export_spec([CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip)],WS,ListCode
 	get_name(Funct,FL_COMMA),
 	!,
 	%% convert a comma-separated list into a normal list
-	comma_separated_list(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),List),
+	comma_separated_canoterm_to_list(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),List),
 	%% regularize to a list
 	export_compose_term_list(List,[],WS,_IsUpd,ListCode).
 
@@ -1755,7 +1783,7 @@ export_compose_term([OBJECT(TRANSACTIONAL_VARIABLE(Term),N)],WS,IsUpdatable,Code
 export_wrap_multiple_terms(WS,CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),Modules,IsUpdatable,Code) :-
 	get_name(Funct,FL_COMMA),
 	%% convert a comma-separated list into a normal list
-	comma_separated_list(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),List),
+	comma_separated_canoterm_to_list(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),List),
 	export_wrap_termlist(List,[],WS,Modules,IsUpdatable,Code).
 
 
@@ -1846,7 +1874,7 @@ export_parse_body_term(Term,WS,Code,Status) :-
 export_parse_modules([CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip)],OtherModuleList,Status) :-
         get_name(Funct,FL_COMMA),
         !,
-	comma_separated_list(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),ModuleList),
+	comma_separated_canoterm_to_list(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),ModuleList),
 	parse_body_pathexplist(ModuleList,NULL,OtherModuleList,Status).
 	
 %% general case, term>>m1,m2,m3...mn. Modules NOT enclosed within parentheses.
@@ -2264,7 +2292,7 @@ minus_var_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Arity,Pos) :-
 prolog_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_PROLOG_INTERNAL),
 	!,
-	comma_separated_list(Args,ArgList),
+	comma_separated_canoterm_to_list(Args,ArgList),
 	make_pred_arity_pair_list(ArgList,ArgCode,Status),
 	flprologdirect_struct(ArgCode,If,Code).
 
@@ -2276,7 +2304,7 @@ exec_prolog_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[_Args],If,_Ip),[_Code],S
 table_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_TABLE_INTERNAL),
 	!,
-	comma_separated_list(Args,ArgList),
+	comma_separated_canoterm_to_list(Args,ArgList),
 	make_pred_arity_slash_list(ArgList,ArgCode,Status),
 	fltabledirect_struct(ArgCode,If,Code).
 
@@ -2293,7 +2321,7 @@ nontabled_module_directive(CanoniTerm,[Code],[]) :-
 usesensor_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_USESENSOR),
 	!,
-	comma_separated_list(Args,ArgList),
+	comma_separated_canoterm_to_list(Args,ArgList),
 	set_context(parsing_usesensor_directive),
 	make_pred_arity_slash_list(ArgList,ArgCode,Status),
 	clear_context(parsing_usesensor_directive),
@@ -2302,7 +2330,7 @@ usesensor_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Statu
 usefunction_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_USEUDF),
 	!,
-	comma_separated_list(Args,ArgList),
+	comma_separated_canoterm_to_list(Args,ArgList),
 	make_pred_arity_slash_list(ArgList,ArgCode,Status),
 	flusefunctiondirect_struct(ArgCode,If,Code).
 	
@@ -2532,7 +2560,7 @@ parse_cmpoptlist([H|T],[HCode|TCode],Status) :-
 ****************************************************************************/
 prefixdef_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[T],_If,_Ip),Code,Status) :-
 	get_name(Funct,FL_PREFIXDEF),
-	comma_separated_list(T,TermList),
+	comma_separated_canoterm_to_list(T,TermList),
 	prefixdef_parse_term_list(TermList,Code,Status),
 	!.
 
@@ -2596,7 +2624,7 @@ prefixdef_parse_term(CANOTERM(_Funct,_N,_FL_PARENTHESIS,_Args,If,_Ip),[],Status)
 ****************************************************************************/
 ignoredep_directive(CANOTERM(Funct,1,FL_PARENTHESIS,[T],_If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_IGNOREDEP),
-        ( comma_separated_list(T,PreList) ->
+        ( comma_separated_canoterm_to_list(T,PreList) ->
             parse_body_template_list(PreList,LCode,Status),
             flignoredepdirect_struct(LCode,Code)
 	;
@@ -2609,7 +2637,7 @@ ignoredep_directive(CANOTERM(Funct,1,FL_PARENTHESIS,[T],_If,_Ip),[Code],Status) 
 ****************************************************************************/
 symbol_context_directive(CANOTERM(Funct,1,FL_PARENTHESIS,[T],_If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_SYMBOL_CONTEXT),
-        ( comma_separated_list(T,PreList) ->
+        ( comma_separated_canoterm_to_list(T,PreList) ->
             parse_body_symbol_list(PreList,LCode,Status),
             flsymbolcontextdirect_struct(LCode,Code)
 	;
@@ -3287,7 +3315,7 @@ parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) 
 	get_atom(Funct,F),
 	is_hypothetical(F),
 	!, %% Module name is distributive over hypothetical.
-	(N > 1 -> list_to_conjunct(Args, HypoBody, If, Ip)
+	(N > 1 -> list_to_canoterm_conjunct(Args, HypoBody, If, Ip)
 	; Args = [HypoBody]
 	),
 	set_context(parsing_hypothetical),
@@ -3324,7 +3352,7 @@ parse_rule_body(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),WS,DWS,Code,Status) :-
 	is_reifyop(Atom),
 	!,
 	(N > 1
-	-> list_to_conjunct(Args, Conjunct, If, Ip),
+	-> list_to_canoterm_conjunct(Args, Conjunct, If, Ip),
 	    parse_rule_body(Conjunct,WS,DWS,Code,Status)
 	;  Args = [Arg] -> parse_rule_body(Arg,WS,DWS,Code,Status)
 	;  parsing_error(Ip,EXP_ARGS,Status)
@@ -3390,7 +3418,9 @@ parse_rule_body(CANOTERM(Funct,1,FL_BRACE,Arg,If,_Ip),_WS,_DWS,Code,Status) :-
 	get_atom(Funct,FL_RULEID_OP),
 	!,
 	%% Here Arg is the descriptor; VarsOK = true
-	parse_descriptor_aux(FL_RULEID_OP,Arg,If,true,[Code],Status).
+	parse_descriptor_aux(FL_RULEID_OP,Arg,If,true,MetafactCodeLst,Status),
+	list2commalist(MetafactCodeLst,MetafactCode),
+	flcallmetafacts_struct(MetafactCode,If,Code).
 %% @!{...} query in the rule body
 %% Should not be reachable - used only if FL_RULEID_OP is declared as
 %% an operator. Disabled currently
@@ -3399,7 +3429,9 @@ parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[Arg],If,_Ip),_WS,_DWS,Code,Stat
 	Arg = CANOBRACE(Descr,_,_),
 	!,
 	%% VarsOK = true
-	parse_descriptor_aux(FL_RULEID_OP,Descr,If,true,[Code],Status).
+	parse_descriptor_aux(FL_RULEID_OP,Descr,If,true,MetafactCodeLst,Status),
+	list2commalist(MetafactCodeLst,MetafactCode),
+	flcallmetafacts_struct(MetafactCode,If,Code).
 
 %% Parse the a<~~b form of if-then
 parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[ThenPart,IfPart],_If,_Ip),WS,DWS,Code,Status) :-
@@ -4268,7 +4300,7 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	    )
         ; N==2 ->
             Args = [Head,Body],
-	    comma_separated_list(Head,HeadList),
+	    comma_separated_canoterm_to_list(Head,HeadList),
 	    parse_dbliteral_list(FLCLS,HeadList,DWS,HeadCodeList,S1),
 	    ( S1 == NO_ERRORS ->
 		parse_rule_body(Body,DWS,DWS,BodyCode,Status),
@@ -4286,7 +4318,7 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	    ( is_flatom_struct(ModeCode,ModeAtom),
 		valid_clause_mode(ModeAtom)
 	    ->
-	        comma_separated_list(Head,HeadList),
+	        comma_separated_canoterm_to_list(Head,HeadList),
 	        parse_dbliteral_list(FLCLS,HeadList,DWS,HeadCodeList,S1),
                 ( S1 == NO_ERRORS
 		->
@@ -4560,7 +4592,7 @@ parse_body_literal_template(CANOTERM(Funct,N,FL_BRACE,Args,_If,_Ip),Code,Status)
 	    Args = [CANOTERM(Bar,2,FL_PARENTHESIS,[L,R],_Ifb,_Ipb)],
 	    get_atom(Bar,FL_BAR)
 	->
-	    comma_separated_list(L,LList),
+	    comma_separated_canoterm_to_list(L,LList),
             anonymous_varlist(LList,LCode,Status),
             (Status == NO_ERRORS ->
 	        ( get_flvar_struct(R,RCode), is_anonymous_flvar_struct(RCode) ->
@@ -5264,7 +5296,7 @@ parse_pure_term(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	is_reifyop(Atom),
 	!,
 	(N > 1
-	-> list_to_conjunct(Args,Conjunct,If,Ip),
+	-> list_to_canoterm_conjunct(Args,Conjunct,If,Ip),
 	    parse_reify(Conjunct,DWS,Code,Status)
 	;  Args = [Arg] -> parse_reify(Arg,DWS,Code,Status)
 	;  parsing_error(Ip,EXP_ARGS,Status)
@@ -5629,7 +5661,7 @@ parse_body_pathexp(CANOTERM(Funct,N,FL_BRACE,[Arg|Rest],If,Ip),_TransFlag,DWS,Co
 	is_reifyop(Atom),
 	!,
 	(N > 1 
-	-> list_to_conjunct([Arg|Rest], Conjunct, If, Ip),
+	-> list_to_canoterm_conjunct([Arg|Rest], Conjunct, If, Ip),
 	    parse_reify(Conjunct,DWS,Code,Status)
 	;
 	    parse_reify(Arg,DWS,Code,Status)
@@ -6365,7 +6397,7 @@ parse_head_pathexp(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code,Sta
 	is_reifyop(Atom),
 	!,
 	(N > 1
-	-> list_to_conjunct(Args,Conjunct,If,Ip),
+	-> list_to_canoterm_conjunct(Args,Conjunct,If,Ip),
 	    parse_reify(Conjunct,DWS,Code,Status)
 	;  Args = [Arg] -> parse_reify(Arg,DWS,Code,Status)
 	;  parsing_error(Ip,EXP_ARGS,Status)
@@ -6605,7 +6637,7 @@ parse_tablerefresh(Args,DWS,Code,Status) :-
 parse_dbinsert(OpCode,1,[CANOTERM(Bar,2,FL_PARENTHESIS,[L,R],_If,_Ip)],DWS,Code,Status) :-
 	get_atom(Bar,FL_BAR),
 	!,
-	comma_separated_list(L,LList),
+	comma_separated_canoterm_to_list(L,LList),
 	parse_dbliteral_list(FLINS,LList,DWS,LCodeList,S),
 	( S == NO_ERRORS ->
 	    parse_rule_body(R,DWS,DWS,RCode,Status),
@@ -6631,7 +6663,7 @@ parse_dbinsert(OpCode,_N,Args,DWS,Code,Status) :-
 parse_dbdelete(OpCode,1,[CANOTERM(Bar,2,FL_PARENTHESIS,[L,R],_If,_Ip)],DWS,Code,Status) :-
 	get_atom(Bar,FL_BAR),
 	!,
-	comma_separated_list(L,LList),
+	comma_separated_canoterm_to_list(L,LList),
 	parse_dbliteral_list(FLDEL,LList,DWS,LCodeList,S),
 	( S == NO_ERRORS ->
 	    parse_rule_body(R,DWS,DWS,RCode,Status),
@@ -6687,7 +6719,7 @@ parse_dbliteral(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),_DWS,CodeLis
 	    ; flora_get_module_from_spec(RCode,FLORASYSMOD,_)
 	    )
 	->
-	    comma_separated_list(L,LList),
+	    comma_separated_canoterm_to_list(L,LList),
 	    parse_dbliteral_list(Mode,LList,RCode,CodeList,Status)
 	; % illegal module name
 	  parsing_error(R,ERROR_WSNAME,Status)
@@ -7155,7 +7187,7 @@ parse_db_pathexp(_Mode,CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code
 	is_reifyop(Atom),
 	!,
 	(N > 1
-	-> list_to_conjunct(Args,Conjunct,If,Ip),
+	-> list_to_canoterm_conjunct(Args,Conjunct,If,Ip),
 	    parse_reify(Conjunct,DWS,Code,Status)
 	;  Args = [Arg] -> parse_reify(Arg,DWS,Code,Status)
 	;  parsing_error(Ip,EXP_ARGS,Status)
@@ -7442,7 +7474,7 @@ parse_dynrule(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),_DWS,CodeList,Statu
 	    ; flora_get_module_from_spec(RCode,FLORASYSMOD,_)
 	    )
 	->
-	    comma_separated_list(L,LList),
+	    comma_separated_canoterm_to_list(L,LList),
 	    parse_dynrule_list(LList,RCode,CodeList,Status)
 	; % illegal module name
 	  parsing_error(R,ERROR_WSNAME,Status)

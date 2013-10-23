@@ -32,7 +32,7 @@
 	FL_BOOL_DESCRIPTOR_META_PREDICATE/5,
 	FL_PROP_DESCRIPTOR_META_PREDICATE/6,
 	FL_FORCED_DEFEASIBILITY_UNION/4,
-	FL_RULE_ENABLER_UNION/3
+	FL_RULE_ENABLER/3
    from usermod.
 
 :- import term_arg/3 from machine.
@@ -76,6 +76,7 @@
 	make_rule_strict/3,
 
 	test_integrity_constraint/3,
+	call_metafacts/1,
 
 	disable_rule_by_id/3,
 	enable_rule_by_id/3,
@@ -286,8 +287,7 @@ enable_rule_by_id(Id,FileName,Mod,GotEnabled) :-
 		HeadList),
 	%% refreshing all heads in a multiheaded rule
 	refresh_head_list(HeadList),
-	flora_modularize_atom(FL_RULE_ENABLER,Mod,ModularEnabler),
-	EnablerPred =.. [ModularEnabler,Id,FileName],
+	EnablerPred = FL_RULE_ENABLER(Id,FileName,Mod),
 	(EnablerPred -> GotEnabled = false  % idempotent
 	; flora_adaptive_assert(EnablerPred),
 	    GotEnabled = true
@@ -306,8 +306,7 @@ disable_rule_by_id(Id,FileName,Mod,GotDisabled) :-
 		HeadList),
 	%% refreshing all heads in a multiheaded rule
 	refresh_head_list(HeadList),
-	flora_modularize_atom(FL_RULE_ENABLER,Mod,ModularEnabler),
-	EnablerPred =.. [ModularEnabler,Id,FileName],
+	EnablerPred = FL_RULE_ENABLER(Id,FileName,Mod),
 	(\+EnablerPred -> GotDisabled = false
 	; flora_adaptive_retract(EnablerPred),
 	    GotDisabled = true
@@ -361,12 +360,11 @@ is_enabled_rule(Id,FileName,Mod) :-
 			    _Head,
 			    _Body,_PreBody,_PostBody,
 			    _DefeatCond,_RuleList,_BridgeRule),
-	(FL_RULE_ENABLER_UNION(Id,FileName,Mod) -> true
+	(FL_RULE_ENABLER(Id,FileName,Mod) -> true
 	; fail
 	).
 is_enabled_rule(Id,FileName,Mod) :-
-	flora_modularize_atom(FL_RULE_ENABLER,Mod,ModularEnabler),
-	EnablerPred =.. [ModularEnabler,Id,FileName],
+	EnablerPred = FL_RULE_ENABLER(Id,FileName,Mod),
 	show_rule_signature(Id,FileName,_DescrVarTerm,_Prefix,Mod,_RuleNum,
 			    _Head,
 			    _Body,_PreBody,_PostBody,
@@ -382,12 +380,11 @@ is_disabled_rule(Id,FileName,Mod) :-
 			    _Head,
 			    _Body,_PreBody,_PostBody,
 			    _DefeatCond,_RuleList,_BridgeRule),
-	(FL_RULE_ENABLER_UNION(Id,FileName,Mod) -> fail
+	(FL_RULE_ENABLER(Id,FileName,Mod) -> fail
 	; true
 	).
 is_disabled_rule(Id,FileName,Mod) :-
-	flora_modularize_atom(FL_RULE_ENABLER,Mod,ModularEnabler),
-	EnablerPred =.. [ModularEnabler,Id,FileName],
+	EnablerPred = FL_RULE_ENABLER(Id,FileName,Mod),
 	show_rule_signature(Id,FileName,_DescrVarTerm,_Prefix,Mod,_RuleNum,
 			    _Head,
 			    _Body,_PreBody,_PostBody,
@@ -405,9 +402,7 @@ flora_reset_descriptor_meta_predicates(Mod) :-
 	retractall(FL_TAG_DESCRIPTOR_META_PREDICATE(_,_,Mod,_,_)),
 	retractall(FL_BOOL_DESCRIPTOR_META_PREDICATE(_,_,Mod,_,_)),
 	retractall(FL_PROP_DESCRIPTOR_META_PREDICATE(_,_,Mod,_,_,_)),
-	flora_modularize_atom(FL_RULE_ENABLER,Mod,RuleEnablerPredName),
-	RuleEnabler =.. [RuleEnablerPredName,_,_],
-	retractall(RuleEnabler).
+	retractall(FL_RULE_ENABLER(_,_,Mod)).
 
 /**************************************************************************
 	clear_bool_metafacts_by_ruleid(+RuleId,+FileName,+Mod)
@@ -485,3 +480,25 @@ test_integrity_constraint(Id,File,Mod) :-
 	ic_signature_member(preconstraint,Sig,PreBody),
 	ic_signature_member(constraint,Sig,IC),
 	call((PreBody,IC)).
+
+call_metafacts(MetaFacts) :-
+	call_metafacts(MetaFacts,FL_TAG_DESCRIPTOR_META_PREDICATE(_,_,_,_,_)).
+
+call_metafacts((MetaFact,Rest),TagPred) :-
+	!,
+	filter_tag_metafact(MetaFact,TagPred),
+	call_metafacts(Rest,TagPred).
+
+call_metafacts(MetaFact,TagPred) :-
+	filter_tag_metafact(MetaFact,TagPred).
+
+%% Here we are matching all tag-metafacts on the key: Id, File, Module
+%% (and VarTerm - arg5, for good measure). This ensures that all tag
+%% queries refer to the same rule.
+filter_tag_metafact(MetaFact,TagPred) :-
+	(functor(MetaFact,FL_TAG_DESCRIPTOR_META_PREDICATE,5)
+	-> TagPred = FL_TAG_DESCRIPTOR_META_PREDICATE(Id,File,Mod,_,Vars),
+	    MetaFact = FL_TAG_DESCRIPTOR_META_PREDICATE(Id,File,Mod,_,Vars),
+	    call(MetaFact)
+	; call(MetaFact)
+	).
