@@ -2290,10 +2290,12 @@ For instance,
 \index{Skolem constant}
 \index{constant!Skolem}
 %
-For applications where oids are not important, \FLORA provides the
+For applications where the particular names for
+oids are not important, \FLORA provides the
 quazi-constants \verb|_#| and \verb|_#1|, \verb|_#2|, etc.,
 to automatically generate a new
-\emph{Skolem constant} or to test for such automatically generated
+\emph{Skolem constant} or a \emph{Skolem function symbol}
+to test for such automatically generated
 constants. We call such symbols \emph{Skolem symbols}.   Skolem symbols are
 interpreted \emph{differently}
 in the rule heads and bodies.
@@ -2330,15 +2332,19 @@ the compiler will generate unique oids for each occurrence of {\tt \_\#}.
 Note that, in the second clause, only one oid is generated and it serves as
 a method name.
 
+
 \index{numbered Skolem constant}
 \index{constant!Skolem!numbered}
+\paragraph{Co-reference of Skolem symbols.}
 %%
 In some situations, it is necessary to be able to create a new oid and use it
-within the same rule head or a fact. Since such an oid 
+within the same rule head or a fact multiple times. Sometimes the \emph{same}
+Skolem might need to be used across \emph{several} different rules and facts.
+Since such an oid 
 needs to be referenced inside the same program clause, it is no longer
 possible to use \verb|_#|, because each occurrence of \verb|_#| causes the
-compiler to generate a new oid. To solve this problem, \FLORA allows 
-\emph{numbered Skolem constants}, which are of the form \verb|_#132|, {\it
+compiler to generate a new Skolem symbol. To solve this problem, \FLORA allows 
+\emph{numbered Skolem symbols}, which are of the form \verb|_#132|, {\it
   i.e.}, \verb|_#| with a number attached to it. For instance, 
 %%
 \begin{quote}
@@ -2356,25 +2362,64 @@ occurrences of \verb|_#1| in \emph{different} clauses are substituted with
 different oids. Thus, the occurrences of \verb|_#1| in the first and second
 clauses above refer to different objects.
 
-\index{generated oid}
+The same numbered Skolem can be co-referenced in \emph{different} facts and
+rules.  The general rule is that the scope of a numbered Skolem is a \FLORA
+sentence terminated with a period. For instance, in the following
+%% 
+\begin{verbatim}
+(h1(?X,_#1) :- b1(?X),c1(?X)),
+p(a,_#1),
+q(b(_#1)),
+(h2(?X,_#1,?Y) :- b2(?X,?Y)).
+\end{verbatim}
+%% 
+the four occurrences of \texttt{\_\#1} represent the same Skolem constant.
+Note that the first and the last statement above are rules, while the two
+middle statements are facts. The reason why \texttt{\_\#1} is because all
+four statements are withing the same scope: all four are terminated by the
+same period. Note also that each rule must be enclosed in parentheses or
+else ambiguity arises. For instance,
+%% 
+\begin{verbatim}
+h1(?X,_#1) :- b1(?X),c1(?X),
+p(a,_#1),
+q(b(_#1)).
+\end{verbatim}
+%% 
+would be interpreted as a single rule whose body has four literals,
+\emph{not} as a statement that contains a rule
+\verb|h1(?X,_#1) :- b1(?X),c1(?X)|
+and two additional, separate facts.
+Also note that it is not necessary to put each of the four sub-statement above 
+on a separate line---this was done for readability.
+
+\index{runtime Skolem symbol}
 \index{newoid{...}}
-\index{oid!generated}
+\index{skolem{...}}
+\index{oid!generated at run time}
+\index{Skolem!generated at run time}
+\paragraph{Generating Skolems at run time.}
 Normally,
 Skolem constants are generated at compile time without regard for the oids
 that might exist at run time. Sometimes it is necessary to generate a
 Skolem constant at \emph{run time}. This can be accomplished with the
-{\tt newoid\{...\}} built-in. For instance, 
+{\tt newoid\{...\}} (or, equivalently, {\tt skolem\{...\}}) built-in. For instance, 
 %%
 \begin{verbatim}
 flora2 ?- newoid{?X}.
  
-?X = _$_$_flora'dyn_newoid308
+?X = _$_$_flora'dyn_newoid308   (_#)
  
 1 solution(s) in 0.0000 seconds 
  
 Yes
+
+flora2 ?- skolem{?X}.
+
+?X = _$_$_flora'dyn_newoid309  (_#)
 \end{verbatim}
 %%
+etc.
 
 \paragraph{Skolems in subgoals of rule bodies outside of the reification operator.}
 In a body subgoal outside of the reification operator, a Skolem
@@ -2410,6 +2455,17 @@ Skolem functions. For instance, the query
 %% 
 succeeds because \verb|_#(a,b)| is a term obtained from an application of a
 Skolem function, \verb|_#|, to its arguments.
+
+Note that, since Skolems have a different semantics in the rule head and in
+the body, the following, somewhat counter-intuitive situation might occur:
+%% 
+\begin{verbatim}
+    p(_#1) :- q(_#1).
+\end{verbatim}
+%% 
+Here \texttt{\_\#1} inside \texttt{p(...)}  is a constant, while in 
+inside \texttt{q(...)} it is a check that the argument of \texttt{q/1} is
+bound to a Skolem term.  
 
 \paragraph{Skolems in reified rules.}
 If a reified rule, $R$,
