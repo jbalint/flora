@@ -9047,6 +9047,7 @@ use, so \texttt{'(dynrule)'} is used in this case.
   will generate one.
 
 \item \texttt{Tag descriptor}:
+\index{tag!descriptor property}
   The property \texttt{tag} indicates that the values of that property are
   rule tags, which are used in defeasible reasoning
   (Section~\ref{sec-defeasible}). For instance,
@@ -9070,6 +9071,8 @@ use, so \texttt{'(dynrule)'} is used in this case.
 \end{verbatim}
   %% 
 \item \emph{Defeasibility descriptor}:
+\index{defeasible!descriptor property}
+\index{strict!descriptor property}
   Defeasibility descriptors are used for defeasible
   reasoning, as described in Section~\ref{sec-defeasible}. The descriptor
   \texttt{strict} means that the rule cannot be defeated by a
@@ -9176,6 +9179,12 @@ specify the local Id of the rule in question, the file name of the rule,
 and its module. For dynamic rules, the file name is \texttt{'(dynrule)'}.
 The following
 primitives are provided:
+\index{enable\{...\}}
+\index{tenable\{...\}}
+\index{disable\{...\}}
+\index{tdisable\{...\}}
+\index{isdisabled\{...\}}
+\index{isenabled\{...\}}
 %% 
 \begin{itemize}
 \item \texttt{enable\{}\emph{LocalId,File,Module}\texttt{\}} 
@@ -9212,6 +9221,12 @@ idempotent: they always succeed and applying \texttt{enable} to an enabled
 rule or \texttt{disable} to a disabled rule has no effect.  
 If a rule with the specified Id and module does not exist in the system,
 both \texttt{enable} and disable fail and so do both of the above queries.
+
+All of the above primitives have a one-argument form, which is a
+shortcut for the three-argument version, where argument 2 is \texttt{\_@F}
+and argument 3 is \texttt{\_@}. For instance,
+\texttt{tenable\{foo\}} instead of
+\texttt{tenable\{foo,\_@F,\_@\}}. 
 
 \paragraph{The difference between disabling and deleting a rule.}
 It is important to realize that disabling a rule, as described here,
@@ -9260,12 +9275,16 @@ The major differences are:
 \subsection{Changing Defeasibility at Run Time}
 The defeasibility status of a rule can be changed via the following
 statements:
+\index{makedefeasible\{...\}}
+\index{makestrict\{...\}}
+\index{isdefeasible\{...\}}
+\index{isstrict\{...\}}
 %% 
 \begin{itemize}
-\item  makedefeasible\{Id,Module\}
-\item  makestrict\{Id,Module\}
-\item  isdefeasible\{Id,Module\}
-\item  isstrict\{Id,Module\}
+\item  makedefeasible\{Id,File,Module\}
+\item  makestrict\{Id,File,Module\}
+\item  isdefeasible\{Id,File,Module\}
+\item  isstrict\{Id,File,Module\}
 \end{itemize}
 %% 
 The last two primitives are queries. The primitive \texttt{makedefeasible}
@@ -9275,10 +9294,16 @@ question is currently defeasible or strict.
 If the rule with the given Id does not exist in the given module, both of
 these queries fail.
 
+All of these primitives have a short, one-argument form, which is a
+shortcut for the three-argument version, where argument 2 is \texttt{\_@F}
+and argument 3 is \texttt{\_@}. For instance,
+\texttt{makedefeasible\{foo\}} instead of
+\texttt{makedefeasible\{foo,\_@F,\_@\}}. 
+
 \subsection{Querying Rule Descriptors}\label{sec-descr-queries}
 
 \index{clause\{...\}}
-\index{@!\{...\} descriptor-query}
+\index{@!\{...\} descriptor query}
 Rule Ids and other rule descriptor
 data can be queried using the  \texttt{clause\{...\}}
 and \texttt{@!\{...\}} constructs. The  \texttt{clause\{...\}}
@@ -9339,6 +9364,8 @@ another module. For instance,
    ?- @!{?R[tag->high,strict,author->Bob]@foo}.
 \end{verbatim}
 %% 
+\index{module!descriptor property}
+\index{file!descriptor property}
 Recall that in all the above examples, only the local part of the rule Ids was
 queried (cf. \texttt{?R} in the queries above). To enable querying the file
 name and the module components of rule Ids, \FLORA also provides the
@@ -9350,19 +9377,27 @@ name and the module components of rule Ids, \FLORA also provides the
    ?- @!{?R[tag->high,strict,author->Bob, file->?F, module->?M]@foo}.
 \end{verbatim}
 %% 
-In addition, the type property can be used to find out whether a particular
-annotated statement is a rule or an integrity constraint:
+\index{type!descriptor property}
+In addition, the \texttt{type}  property can be used to find out whether a particular
+annotated statement is a rule or a latent query (see
+Section~\ref{sec-latent-query}):
 %% 
 \begin{verbatim}
    ?- @!{statement43[type->?T, module->main]}.
 \end{verbatim}
 %% 
 If the statement is a rule then \texttt{?T} will get bound to
-\texttt{rule}; if it is an integrity constraint then this variable gets
-bound to \texttt{ic}.   
+\texttt{rule}; if it is a latent query then this variable gets
+bound to \texttt{query}. 
 
 \subsection{Reserved Properties in Rule Descriptors}
 
+\index{type!descriptor property}
+\index{module!descriptor property}
+\index{file!descriptor property}
+\index{tag!descriptor property}
+\index{defeasible!descriptor property}
+\index{strict!descriptor property}
 The following property names in rule descriptors or in rule descriptor
 queries (described in Section~\ref{sec-descr-queries}) are reserved:
 %% 
@@ -9379,6 +9414,114 @@ The properties \texttt{module}, \texttt{file}, and \texttt{type}  are not allowe
 descriptors (i.e., in \texttt{@!\{...\}} in rule heads)---only in rule descriptor queries (i.e.,
 in \texttt{@!\{...\}} and \texttt{clause\{...\}} in rule bodies)---because they are assigned
 at compile or load time.  
+
+
+\section{Latent Queries}
+\label{sec-latent-query}
+
+\index{latent query}
+\index{query!latent}
+\emph{Latent queries} are a cross between queries and rules. From queries  
+they borrow the main purpose: to query the knowledge base. From rules
+they borrow the ability to use descriptors (so, latent queries have Ids and,
+possibly, other meta information) and the fact that such queries are not
+executed immediately. Instead, they are saved to be called on-demand some
+other time. Like rules, latent queries can also be inserted, deleted,
+enabled, disabled, and queries.
+Latent queries are useful as integrity constraints and also in GUI
+development, but because these queries can have arbitrary properties
+attached to them via descriptors, they can be used for various other,
+specialized needs (e.g., as standing queries that are called periodically
+to update user views).
+
+A latent query has the following form:
+%% 
+\begin{alltt}
+   \textnormal{\em descriptor}  !- \textnormal{\emph{query-body}}.
+\end{alltt}
+%% 
+The descriptor part is mandatory and has the same form as the rule descriptors
+introduced in Section~\ref{sec-rule-id}.
+The \emph{query-body} part is the same as the body of a query. Thus, from
+regular queries the latent queries differ in that they have descriptors and
+they use \texttt{!-} instead of \texttt{?-}. From rules, this new type of
+queries differs in that they have no heads and use \texttt{!-} instead of
+\texttt{:-}.
+
+\index{query\{...\} primitive}
+The main difference with queries, however, is the fact that latent queries,
+when they appear in a file,
+are not executed right away. Instead, they are saved and must be called
+explicitly by their query Id using the \texttt{query\{...\}} primitive. In
+order to get results from such a query,
+the query Id must have variables. For instance,
+%% 
+\begin{verbatim}
+  p(1,2), p(2,3), p(3,4), p(2,4).
+  @!{test(?X,?Y)} !- p(?X,?Z), p(?Z,?Y).
+  ?- query{test(?X,4),_@F,_@}.
+
+  ?X = 1
+
+  ?X = 2
+\end{verbatim}
+%%
+Observe that latent queries are executed using their Ids. This is different
+from rule invocation, which is done using the rule-head as a query. In the
+above, \texttt{test(?X,4)} is \emph{not} a predicate and it does not
+interfere with any other rule (even with the ones that have \texttt{test(?X,?Y)}
+as head- or body-predicates!).
+
+The following two forms are equivalent:
+%% 
+\begin{verbatim}
+   ?- query{test(?X,4),_@F,_@}.
+   ?- query{test(?X,4)}.
+\end{verbatim}
+%% 
+
+\index{latent query!insertion and deletion}
+\index{query!latent; insertion and deletion}
+Latent queries can be inserted, deleted, enabled, and disabled using the
+same primitives as the ones used for rules:
+%% 
+\begin{verbatim}
+ ?- insertrule{@!{rr2(?X)[bar->4]} !- q(?X), ?X<4}.
+ ?- deleterule{@!{rr2(?)[bar->?X]} !- ?}.
+ ?- enable{qq1(?),'foobar.flr',_@}.
+ ?- tenable{qq1(?),?F,?M}.
+ ?- disable{qq2(?),_@F,_@}.
+ ?- tdisable{qq2(?)}.
+\end{verbatim}
+%% 
+
+\index{latent query!meta-querying}
+\index{query!latent; meta-querying}
+Finally, like rules, latent queries can be themselves queried using the
+primitive \texttt{clause{...}}  and the meta-query @!{...}. In the
+clause{...} primitive, the head part is ignored.
+%% 
+\begin{verbatim}
+  ?- clause{@!{?X[type->query]} ?,?B}.
+
+  ?X = rr1(?_h4115)
+  ?B = (${p(?_h4115)@main}, ?_h4115 < 3)
+
+  ?X = rr2(?_h4156)
+  ?B = (${q(?_h4156)@main}, ?_h4156 < 4)
+
+  flora2 ?- @!{?X[type->query]}.
+
+  ?X = rr1(?_h3033)
+
+  ?X = rr2(?_h3046)
+\end{verbatim}
+%% 
+\index{type!descriptor property}
+Note the use of the \texttt{type} property in the descriptors of the above
+two queries. This is a special builtin descriptor property, which can be
+used only in rule bodies. The value of that property is \texttt{query} for
+latent queries and \texttt{rule} for rules.  
 
 
 \section{Defeasible Reasoning}

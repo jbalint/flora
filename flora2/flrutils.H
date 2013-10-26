@@ -256,8 +256,8 @@
    from flrwhen.
 
 :- import
-	ic_signature_member/3,
-	matching_IC_signature/4,
+	query_signature_member/3,
+	matching_query_signature/4,
 	rule_signature_member/3,
         matching_rule_signature/7
    from flrcanon.

@@ -672,13 +672,13 @@ is_directive(CANOTERM(Funct,1,FL_PARENTHESIS,[Directive],_If,_Ip),Directive) :-
 is_query(CANOTERM(Funct,1,FL_PARENTHESIS,[Query],_If,_Ip),Query) :-
 	get_name(Funct,FL_QUERYOP).
 
-%% integrity constraint
-is_ic(CANOTERM(Funct,1,FL_PARENTHESIS,[IC],_If,_Ip),IC) :-
-	get_name(Funct,FL_ICOP).
+%% latent query
+is_latent_query(CANOTERM(Funct,1,FL_PARENTHESIS,[IC],_If,_Ip),IC) :-
+	get_name(Funct,FL_LATENT_QUERYOP).
 
 is_rule_or_fact(CanoTerm) :-
 	\+is_query(CanoTerm,_),
-	\+is_ic(CanoTerm,_),
+	\+is_latent_query(CanoTerm,_),
 	\+is_directive(CanoTerm,_).
 
 is_annotatable(CanoTerm) :-
@@ -826,8 +826,8 @@ emptyterm_struct(Index,FLEMPTYTERM(Index)).
 flrule_struct(Head,Body,FLRULE(Head,Body)).
 flfact_struct(Head,FLFACT(Head)).
 flquery_struct(Body,FLQUERY(Body)).
-%% integrity constraint !-
-flic_struct(Body,FLIC(Body)).
+%% latent query !-
+fllatent_query_struct(Body,FLLATENTQUERY(Body)).
 fldirective_struct(Direct,Index,FLDIRECTIVE(Direct,Index)).
 fludf_struct(Function,Body,ReturnValue,FLUDF(Function,Body,ReturnValue)).
 fludffact_struct(Function,ReturnValue,FLUDFFACT(Function,ReturnValue)).
@@ -1371,8 +1371,8 @@ parse_canonical(CanoniTerm,Code,Status) :-
 	    %% false means: no vars in descriptor Id
 	    parse_toplevel_annotated_statement(Descriptors,Statement,false,Code,Status)
 
-	%% integrity constraint
-	; is_ic(CanoniTerm,IC) ->
+	%% latent query
+	; is_latent_query(CanoniTerm,IC) ->
 	    flora_parse_ic(IC,Code,Status)
 
 	; is_user_defined_function(CanoniTerm,Function,Body,ReturnValue) ->
@@ -2808,11 +2808,11 @@ flora_parse_ic(CanoniTerm,Code,Status) :-
 	!,
         set_context(parsing_ic),
 	parse_rule_body(CanoniTerm,Goal,Status),
-	flic_struct(Goal,Code),
+	fllatent_query_struct(Goal,Code),
 	clear_context(parsing_ic).
 flora_parse_ic(CanoniTerm,_Code,Status) :-
 	get_index(CanoniTerm,Idx),
-	parsing_error(Idx,MISSING_DESCRIPTOR_IN_IC,Status).
+	parsing_error(Idx,MISSING_DESCRIPTOR_IN_LATENT_QUERY,Status).
 
 /****************************************************************************
   flora_parse_rule(+Head,+Body,-Code,-Status)
@@ -2873,7 +2873,7 @@ parse_toplevel_annotated_statement(Descriptors,Statement,VarsOK,Code,Status) :-
 	    clear_context(parsing_annotated_construct),
 	    (Status1 == NO_ERRORS
 	    ->
-		( (is_rule(Statement,_,_) ; is_ic(Statement,_))
+		( (is_rule(Statement,_,_) ; is_latent_query(Statement,_))
 		-> CodeConstr = Code1
 		; %% if annotated fact, convert it to a rule:  fact :- true.
 		    flfact_struct(Head,Code1), % unwrap flfact
@@ -3546,7 +3546,7 @@ parse_rule_body(CanoniTerm,WS,_DWS,Code,Status) :-
 parse_rule_body(CanoniTerm,_WS,_DWS,Code,Status) :-
 	is_annotated_statement(CanoniTerm,_Descriptors,Statement),
 	has_context(reifying),
-	is_ic(Statement,_),
+	is_latent_query(Statement,_),
 	!,
 	get_statement_descriptors(CanoniTerm,Descriptors1,Statement),
 	parse_toplevel_annotated_statement(Descriptors1,Statement,true,Code,Status).
@@ -4220,7 +4220,10 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,Code,Status) :-
 %% simple generic primitive like primName{Args}
 parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,_Ip),DWS,Code,Status) :-
 	get_name(Funct,PrimitiveName),
-	flora_simple_primitive(PrimitiveName,N,_,_),
+	flora_simple_primitive(PrimitiveName,N1,_,_),
+	%% this test for N is a hack to allow rule-manipulation primitives,
+	%% like FL_RULEENABLE, to loose the two last arguments _@F and _@
+	(N == N1 ; N is N1-2),
 	!,
 	parse_body_pathexplist(Args,DWS,ArgCode,Status),
 	flsimpleprimitive_struct(PrimitiveName,ArgCode,Code).
@@ -7501,7 +7504,7 @@ parse_dynrule_no_module(CanoniTerm,DWS,Descriptors,Code,Status) :-
 		true
             )
 
-	; is_ic(CanoniTerm,IC) ->
+	; is_latent_query(CanoniTerm,IC) ->
 	    flora_parse_ic(IC,ICCode,Status),
 	    fldynrule_struct(NULL,ICCode,Descriptors,RuleCode),
 	    %% add default workspace, if any

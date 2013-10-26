@@ -41,7 +41,13 @@
    from flrlibman.
 
 :- import
-	flora_abort/1
+	flora_replace_last/3,
+	flora_bind_last/2
+   from flrtrim.
+
+:- import
+	flora_match_substring/3,
+	flora_abort/2
    from flrporting.
 
 :- import flora_handle_notrace/0 from flrdebugger.
@@ -59,6 +65,7 @@
 	flora_good_command/1,
 	flora_bad_command/1,
 	flora_noop_command/1,
+	traced_call/2,
 	flora_string_command_line/4,
 	flora_call_string_command/5.
 
@@ -191,7 +198,13 @@ bind_q_variables(['?'=Var|RestUserVars],ResultVars) :-
 bind_q_variables([Name=Var|RestUserVars],ResultVars) :-
 	( atom(Name) -> AtomicName = Name
 	; is_charlist(Name) -> atom_codes(AtomicName,Name)
-	; flora_abort(['Bad variable specification in flora_query/5: ', Name])
+	; flora_abort(['Bad variable specification in flora_query/5: ', Name],
+		      FLORA_ABORT_NOTRACE)
+	),
+	(flora_match_substring('?_',Name,0) ->
+	    flora_abort(['in flora_query/5: silent variable ''', Name, '''=Var in the binding list makes no sense; use a normal variable'],
+			FLORA_ABORT_NOTRACE)
+	; true
 	),
 	(member(AtomicName=Var, ResultVars) -> true ; true),
 	bind_q_variables(RestUserVars,ResultVars).
@@ -242,3 +255,32 @@ store_query_in_cache(QString,QCode,QArgs) :-
 	),
 	retract(last_cached_query_index(Idx)),
 	assert(last_cached_query_index(NextIdx)).
+
+
+/******************************************************************************
+                    traced_call(+Goal,-CalledRuleId)
+
+   Calls a Flora-2 **primitive** subgoal and returns the Id of the rule
+   that matched. The tracing parameters of Goal remain unbound.
+   This can be further extended to add module (which can be obtained from Goal).
+
+   But getting the file name is tricky. We can only find one of the possible
+   file names that has a rule with the same head and local Id. The problem is
+   that even the current tracing info slows XSB by a factor. So, adding file
+   names to FL_TRACING/2 would further slow it down.
+******************************************************************************/
+traced_call(Goal,CalledRuleId) :-
+	flora_bind_last(Goal,CallerInfo),
+	CallerInfo = [Module|_],
+	NewCallerInfo = [Module|_],
+	flora_replace_last(Goal,NewCallerInfo,OutGoal),
+	call(OutGoal),
+	get_goal_caller_id(OutGoal,CalledRuleId).
+
+%% gets goal's rule id, if available, and the called-rule id
+get_goal_caller_id(Goal,CalledId) :-
+	flora_bind_last(Goal,CallerInfo),
+	(CallerInfo = [_Module,FL_TRACING(CalledId,_)] -> true
+	; true
+	).
+

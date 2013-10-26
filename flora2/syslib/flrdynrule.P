@@ -101,8 +101,8 @@
 	convert_to_head_literal/2,
 	bind_head_in_defeat_condition/2,
         flora_record_rule_signature/13,
-	flora_record_IC_signature/6,
-	flora_delete_IC_signature/4,
+	flora_record_query_signature/6,
+	flora_delete_query_signature/4,
         flora_retract_signatures/9,
 	rule_signature_member/3
    from flrcanon.
@@ -119,7 +119,10 @@
 :- import flora_decode_goal_as_atom/2 from flrdecode.
 
 :- import flora_reset_export_registries/1 from flrexport.
-:- import flora_reset_rule_signature/1 from flrcanon.
+:- import
+	flora_reset_query_signature/1,
+	flora_reset_rule_signature/1
+   from flrcanon.
 :- import flora_delete_all_hooks/1 from flrhooks.
 
 :- import
@@ -179,6 +182,7 @@ FLLIBERASEMODULE(_ThisModuleName,Module) :-
 	flora_cleanup_udf(Module),
 	flora_reset_export_registries(Module),
 	flora_reset_rule_signature(Module),
+	flora_reset_query_signature(Module),
 	flora_delete_all_hooks(Module),
 	flloadtrailer([],Module),
 	catch(abolish_all_tables, _, flora_warning_line(WARN_TABLED_FLLOAD,[FLLIBERASEMODULE])).
@@ -195,19 +199,19 @@ FLLIBINSERTRULE_Z(_ThisModuleName,RuleList) :-
 	flora_insert_rules(FLLIBINSERTRULE_Z,NewRuleList).
 
 /******************************************************************************
-     FLLIBINSICSIG(+Descr,+File,+Module,+RuleNum,+MetaFacts,+PreIC,+IC)
-     FLLIBDELICSIG(+Descr,+File,+Module,+MetaFacts,+IC)
-     Insert/delete signature for integrity constraints
-     PreIC is the stuff that compiler inserts before the IC body.
+     FLLIBINSQUERYSIG(+Descr,+File,+Module,+RuleNum,+MetaFacts,+PreLatentQuery,+LatentQuery)
+     FLLIBDELQUERYSIG(+Descr,+File,+Module,+MetaFacts,+LatentQuery)
+     Insert/delete signature for latent queries
+     PreLatentQuery is the stuff that compiler inserts before the LatentQuery body.
      Currently this is the rule enabling fact.
 ******************************************************************************/
-FLLIBINSICSIG(Descr,File,Module,RuleNum,MetaFacts,PreIC,IC) :-
+FLLIBINSQUERYSIG(Descr,File,Module,RuleNum,MetaFacts,PreLatentQuery,LatentQuery) :-
 	flora_assert_metafact_list(MetaFacts,File,Module),
-	flora_record_IC_signature(Descr,File,Module,RuleNum,PreIC,IC).
+	flora_record_query_signature(Descr,File,Module,RuleNum,PreLatentQuery,LatentQuery).
 
-FLLIBDELICSIG(Descr,File,Module,_MetaFacts,IC) :-
+FLLIBDELQUERYSIG(Descr,File,Module,_MetaFacts,LatentQuery) :-
 	flora_clear_all_metafacts_by_ruleid(Descr,File,Module),
-	flora_delete_IC_signature(Descr,File,Module,IC).
+	flora_delete_query_signature(Descr,File,Module,LatentQuery).
 
 /***********************************************************************
  flora_insert_rules(+InsOp,+RuleList)
@@ -241,8 +245,9 @@ flora_insert_rules(InsOp,[FLSYSRULEUPDATE(RuleId,FileName,DescrVarTerm,RuleNum,D
 	flora_assert_metafact_list(DescrMetaFacts,FileName,ModName),
 	flora_insert_rules(InsOp,L).
 
-flora_insert_rules(InsOp,[FLLIBINSICSIG(RuleId,FileName,Module,RuleNum,DescrMetaFacts,PreBody,Body)|L]) :-
-	FLLIBINSICSIG(RuleId,FileName,Module,RuleNum,DescrMetaFacts,PreBody,Body),
+flora_insert_rules(InsOp,[FLLIBINSQUERYSIG(RuleId,FileName,Module,RuleNum,DescrMetaFacts,PreBody,Body)|L]) :-
+	!,
+	FLLIBINSQUERYSIG(RuleId,FileName,Module,RuleNum,DescrMetaFacts,PreBody,Body),
 	flora_insert_rules(InsOp,L).
 
 %% conjunct of rules - convert to list
@@ -494,16 +499,14 @@ flora_select_rules_for_deletion(DelOp,CallerMod,[FLSYSRULEUPDATE(Id,FileName,_De
 	append(HSigList,LSigList,SigList),
 	append(HHL,LHL,HL).
 
-%% here we delete IC sigs right away and don't select any rules by adding
-%% to SigList and HL
-/*
-flora_select_rules_for_deletion(DelOp,CallerMod,[FLLIBDELICSIG(Id,_FN,_Mod,DescrMetaFacts,IC)|L],SigList,HL) :-
+%% here we delete latent query sigs right away and don't select any rules
+%% by adding to SigList and HL
+flora_select_rules_for_deletion(DelOp,CallerMod,[FLLIBDELQUERYSIG(Id,_FN,_Mod,DescrMetaFacts,LatentQuery)|L],SigList,HL) :-
 	!,
 	%% Match the metafacts before deciding to delete
 	call_metafact_list(DescrMetaFacts,FileName,RuleMod),
-	FLLIBDELICSIG(Id,FileName,RuleMod,DescrMetaFacts,IC),
+	FLLIBDELQUERYSIG(Id,FileName,RuleMod,DescrMetaFacts,LatentQuery),
 	flora_select_rules_for_deletion(DelOp,CallerMod,L,SigList,HL).
-*/
 
 %% conjunction of rules - convert to list
 flora_select_rules_for_deletion(DelOp,CallerMod,[(R,L)|Rules],SigList,HL) :-

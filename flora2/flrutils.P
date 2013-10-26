@@ -888,7 +888,7 @@ flora_locate_file(FL_URL(InFile),ExtType,ExtFile) :-
 	    fail
 	;   ExtFileTime =< WebTime 
 	->
-	    %% test: [url('http://www.cs.sunysb.edu/~kifer/test/test.flr')].
+	    %% test: [url('http://www.cs.stonybrook.edu/~kifer/test/test.flr')].
 	    open(ExtFile,write,Stream),
 	    write(Stream,Document),
 	    close(Stream)
@@ -1615,7 +1615,7 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,Que
 		insert_code_for_loaddyn_data(FLDFile),
 		insert_code_for_loaddyn_data(FLSFile),
 		flora_extern_code(RuleList,CoderStatus1),
-		util_save_integrity_constraints(IClist,ICstatus),
+		util_save_latent_query_signatures(IClist,ICstatus),
 		util_save_query_code(QueryList,QueryStatus),
 		%% FLS2File contains symbols to be checked AFTER loading
 		%% (to allow any relevant declarations to be taken into account)
@@ -1882,11 +1882,13 @@ generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,SigList,FactList
 		),
 		insert_code_for_loaddyn_data(FLDFile),
 		insert_code_for_loaddyn_data(FLSFile),
-		flora_current_out_line('~n%%%%%%% Rule Signatures %%%%%%%~n'),
+		flora_current_out_line('~n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Rule signatures %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'),
+		flora_current_out_line('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%~n'),
 		flora_extern_code(SigList,CoderStatus1),
-		flora_current_out_line('~n%%%%%%% Rules %%%%%%%~n'),
+		flora_current_out_line('~n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Rules %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'),
+		flora_current_out_line('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%~n'),
 		flora_extern_code(RuleList,CoderStatus2),
-		util_save_integrity_constraints(IClist,ICstatus),
+		util_save_latent_query_signatures(IClist,ICstatus),
 		util_save_query_code(QueryList,QueryStatus),
 		%% FLS2File has symbol declarations to be checked AFTER loading
 		%% (to allow any relevant declarations to be taken into account)
@@ -2101,15 +2103,14 @@ flora_read_descriptor_metafacts_canonical_and_insert(File,ErrNumFinal) :-
 	repeat,
 	read_canonical(Term),
 	( Term == end_of_file, !
-	; functor(Term,Fun,2),
-	    flora_match_substring(FL_RULE_ENABLER,Fun,_),
+	; functor(Term,FL_RULE_ENABLER,3),
 	    call(Term)
 	->
 	    arg(1,Term,RuleId),
 	    arg(2,Term,RFN),
+	    arg(3,Term,Module),
 	    parse_filename(File,_,Base,_),
 	    flora_concat_atoms([Base,FLORA_FILE_EXT],ErrFile),
-	    flrwrapper:flora_get_symbol_module(Fun,Module),
 	    flora_concat_atoms(['a rule with Id (',
 				RuleId,',',RFN,',',Module,
 				') already exists'],
@@ -3093,7 +3094,7 @@ flora_shell_command_line(Code,Options,Status) :-
 	reset_modules_for_shell,
 	util_read_parse_compile(FLORA_COMMANDLINE,Tokens,
 				Rules-[],Signatures-[],Facts-[],
-				Queries-[],_ICs-[],
+				Queries-[],_LQs-[],
 				_MetaFacts-[],
 				_UDFPredsCode,
 				_TextualInfo,
@@ -4810,13 +4811,15 @@ util_write_textual_info([TextInfo|TextualInfoList]) :-
 	util_write_textual_info(TextualInfoList).
 
 util_save_query_code(QueryList,Status) :-
-	flora_current_out_line('~n~n%% Queries found in the source file~n~n'),
+	flora_current_out_line('~n~n%%%%%%%%%%%%%%%%%%%%%%% Queries found in the source file %%%%%%%%%%%%%%%%%%%%%%%'),
+	flora_current_out_line('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%~n'),
 	flora_extern_code(QueryList,Status),
 	nl.
 
-util_save_integrity_constraints(IClist,Status) :-
-	flora_current_out_line('~n~n%% Code to insert signatures for integrity constraints~n'),
-	flora_extern_code(IClist,Status),
+util_save_latent_query_signatures(LatentQueryList,Status) :-
+	flora_current_out_line('~n~n%%%%%%%%%%%%%%%%%%%%%%%%% Signatures for latent queries %%%%%%%%%%%%%%%%%%%%%%%%'),
+	flora_current_out_line('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%~n'),
+	flora_extern_code(LatentQueryList,Status),
 	nl.
 
 /******************************************************************************
@@ -4836,17 +4839,17 @@ flora_get_textual_info(RuleId,RuleFile,Mode,Info) :-
 	),
 	parse_filename(RuleFile,_Dir,Base,Extension),
 	flora_concat_atoms([Base,'.',Extension],RuleFileName),
-	get_rule_or_IC_number(RuleId,RuleFileName,RuleNum),
+	get_rule_or_query_number(RuleId,RuleFileName,RuleNum),
 	Info = FL_TEXTUAL_INFO_PRED(RuleNum,RuleFileName,_,_,_,_),
 	storage_find_fact(flora_textual_info_trie,Info).
 
-get_rule_or_IC_number(RuleId,RuleFileName,RuleNum) :-
+get_rule_or_query_number(RuleId,RuleFileName,RuleNum) :-
 	matching_rule_signature(RuleId,RuleFileName,_DescrVarTerm,_Prefix,_Head,_Body,Signature),
 	rule_signature_member(rulenumber,Signature,RuleNum),
 	!.
-get_rule_or_IC_number(RuleId,RuleFileName,RuleNum) :-
-	matching_IC_signature(RuleId,RuleFileName,_Mod,Signature),
-	ic_signature_member(rulenumber,Signature,RuleNum).
+get_rule_or_query_number(RuleId,RuleFileName,RuleNum) :-
+	matching_query_signature(RuleId,RuleFileName,_Mod,Signature),
+	query_signature_member(rulenumber,Signature,RuleNum).
 
 
 load_textual_info(FTXFile) :-

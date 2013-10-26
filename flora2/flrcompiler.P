@@ -87,8 +87,8 @@
 is_flrule(FLRULE(Head,Body),Head,Body).
 is_flfact(FLFACT(Head),Head).
 is_flquery(FLQUERY(Body),Body).
-%% integrity constraint
-is_flic(FLIC(Body),Body).
+%% latent queries
+is_fllatent_query(FLLATENTQUERY(Body),Body).
 is_fldirective(FLDIRECTIVE(DirectList,I),DirectList,I).
 is_flannotated_construct(FLANNOTATEDCONSTRUCT(Descriptor,MainPartOfRule),Descriptor,MainPartOfRule).
 is_fludfunction(FLUDF(Function,Body,ReturnValue),Function,Body,ReturnValue).
@@ -469,7 +469,7 @@ approx_flindex(FLFLORALIB(P,_M),I)            :- !, approx_flindex(P,I).
 approx_flindex(FLWORKSPACE(P,_WS),I)          :- !, approx_flindex(P,I).
 approx_flindex(FLCONSTRAINT(C),I)             :- !, approx_flindex(C,I).
 
-approx_flindex(FLIC(C),I)                     :- !, approx_flindex(C,I).
+approx_flindex(FLLATENTQUERY(C),I)            :- !, approx_flindex(C,I).
 
 approx_flindex(FLUDF(Fun,_,_),I)              :- !, approx_flindex(Fun,I).
 approx_flindex(FLUDFFACT(Fun,_),I)            :- !, approx_flindex(Fun,I).
@@ -1200,7 +1200,7 @@ termlit_struct(Context,FObj,N,ObjList,PRTERMLIT(FObj,N1,Args)) :-
 	splice_in_caller_argument(Context,ObjList,Args),
 	length(Args,N1),
 	!,
-	%% integrity check - debug
+	%% latent queries - debug
 	(N1 is N+1, !
 	; flora_error_line('[Compiler] BUG: Assertion N=N1 failed in termlit structure: Obj=~w, Arity=~w, Args=~w, Context=~w',
 			   [FObj,N,ObjList,Context]),
@@ -1211,7 +1211,7 @@ transactionaltermlit_struct(Context,FObj,N,ObjList,PRTRANSACTIONALTERMLIT(FObj,N
 	splice_in_caller_argument(Context,ObjList,Args),
 	length(Args,N1),
 	!,
-	%% integrity check - debug
+	%% latent queries - debug
 	(N1 is N+1, !
 	; flora_error_line('[Compiler] BUG: Assertion N=N1 failed in transactionaltermlit structure: Obj=~w, Arity=~w, Args=~w, Context=~w',
 			   [FObj,N,ObjList,Context]),
@@ -2628,9 +2628,9 @@ flora_reset_compiler(Purpose) :-
   FactDiffList is the same for facts
   UDFPredsDiffList is the same for the list of tabled predicates
 ****************************************************************************/
-flora_compile_add([NULL],R-R,F-F,Q-Q,IC-IC,U-U,_,[]) :- !.
+flora_compile_add([NULL],R-R,F-F,Q-Q,LQ-LQ,U-U,_,[]) :- !.
 	
-flora_compile_add(ParserTermList,RuleDiffList,FactDiffList,QueryDiffList,ICdiffList,UDFPredsDiffList,RuleNum+FileName,Status) :-
+flora_compile_add(ParserTermList,RuleDiffList,FactDiffList,QueryDiffList,LatentQueryDiffList,UDFPredsDiffList,RuleNum+FileName,Status) :-
 #ifdef SHOW_COMPILE_ADD_INPUT
 	DBGOUTLN('------------result of parsing-----------------'),
 	DBGOUTLN(ParserTerm),
@@ -2647,7 +2647,7 @@ flora_compile_add(ParserTermList,RuleDiffList,FactDiffList,QueryDiffList,ICdiffL
 	set_context(compiling_for_addition),
 	compile_add_list_internal(ParserTermList,
 				  RuleDiffList,FactDiffList,
-				  QueryDiffList,ICdiffList,
+				  QueryDiffList,LatentQueryDiffList,
 				  UDFPredsDiffList,
 				  Stat1),
 	clear_context(compiling_for_addition),
@@ -2658,7 +2658,7 @@ flora_compile_add(ParserTermList,RuleDiffList,FactDiffList,QueryDiffList,ICdiffL
 	DBGOUTLN(rules=RuleDiffList),
 	DBGOUTLN(facts=FactDiffList),
 	DBGOUTLN(queries=QueryDiffList),
-	DBGOUTLN(ics=ICdiffList),
+	DBGOUTLN(latent_queries=LatentQueryDiffList),
 	DBGOUTLN(metafacts=MetaFactDiffList),
 	%%DBGOUTLN(udfs =UDFPredsDiffList),
 	DBGOUTLN(status=Status),
@@ -2674,20 +2674,20 @@ flora_compile_add(ParserTerm,[],[],[],[],[],_,Status) :-
 
 
 /******************************************************************************
-    compile_add_list_internal(+ParserTerm,-RuleDiffList,-FactDiffList,-QueryDiffList,-ICdiffList,-UDFPredsDiffList,-Status)
+    compile_add_list_internal(+ParserTerm,-RuleDiffList,-FactDiffList,-QueryDiffList,-LatentQueryDiffList,-UDFPredsDiffList,-Status)
 ******************************************************************************/
-compile_add_list_internal([],_R-_R,_F-_F,_Q-_Q,_IC-_IC,_U-_U,[]) :- !.
+compile_add_list_internal([],_R-_R,_F-_F,_Q-_Q,_LQ-_LQ,_U-_U,[]) :- !.
 
-compile_add_list_internal([ParserTerm|ParserTermList],RuleDiffList-RuleTail,FactDiffList-FactTail,QueryList-QueryTail,ICList-ICTail,UDFPredsDiffList-UDFTail,Status) :-
+compile_add_list_internal([ParserTerm|ParserTermList],RuleDiffList-RuleTail,FactDiffList-FactTail,QueryList-QueryTail,LatentQueryList-LatentQueryTail,UDFPredsDiffList-UDFTail,Status) :-
 	approx_flindex(ParserTerm,RuleIdx),
-        compile_descriptor_list([]-RuleIdx,addrule,DescriptorIdCode,DescrVarsTerm,MetaFactDiffList,_),
-	compile_add_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList-RuleTail1,FactDiffList-FactTail1,QueryList-QueryTail1,ICList-ICTail1,MetaFactDiffList,UDFPredsDiffList-UDFTail1,Stat1),
+        compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_ADDRULE,DescriptorIdCode,DescrVarsTerm,MetaFactDiffList,_),
+	compile_add_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList-RuleTail1,FactDiffList-FactTail1,QueryList-QueryTail1,LatentQueryList-LatentQueryTail1,MetaFactDiffList,UDFPredsDiffList-UDFTail1,Stat1),
 	(no_errors_found(Stat1) ->
-	    compile_add_list_internal(ParserTermList,RuleDiffList2-RuleTail,FactDiffList2-FactTail,QueryList2-QueryTail,ICList2-ICTail,UDFPredsDiffList2-UDFTail,Stat2),
+	    compile_add_list_internal(ParserTermList,RuleDiffList2-RuleTail,FactDiffList2-FactTail,QueryList2-QueryTail,LatentQueryList2-LatentQueryTail,UDFPredsDiffList2-UDFTail,Stat2),
 	    RuleTail1 = RuleDiffList2,
 	    FactTail1 = FactDiffList2,
 	    QueryTail1 = QueryList2,
-	    ICTail1 = ICList2,
+	    LatentQueryTail1 = LatentQueryList2,
 	    UDFTail1 = UDFPredsDiffList2,
 	    append(Stat1,Stat2,Status)
 	; Status = Stat1
@@ -2695,13 +2695,14 @@ compile_add_list_internal([ParserTerm|ParserTermList],RuleDiffList-RuleTail,Fact
 
 /******************************************************************************
     compile_add_internal(+ParserTerm,+DescriptorIdCode,+DescrVarsTerm,
-                         -RuleDiffList,-FactDiffList,-QueryList,-IClist,
+                         -RuleDiffList,-FactDiffList,-QueryList,
+			 -LatentQueryList,
 			 ?MetaFactDiffList,-UDFPredsDiffList,-Status) :-
 
     MetaFactDiffList may be bound or unbound. In case this is called from
           compile_annotated_construct_add, it will be bound.
 ******************************************************************************/
-compile_add_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,QueryList,IClist,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+compile_add_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
 	( is_flrule(ParserTerm,Head,Body) ->
 	    compile_rule_add(Head,Body,
 			     DescriptorIdCode,DescrVarsTerm,
@@ -2709,28 +2710,28 @@ compile_add_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,Fact
 			     FactDiffList,MetaFactDiffList,
 			     Status),
 	    QueryList = _Q-_Q,
-	    IClist = _IC-_IC,
+	    LatentQueryList = _LQ-_LQ,
 	    UDFPreds=UDFPredsTail
 
 	; is_flfact(ParserTerm,Head) ->
 	    compile_fact_add(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,MetaFactDiffList,Status),
 	    QueryList = _Q-_Q,
-	    IClist = _IC-_IC,
+	    LatentQueryList = _LQ-_LQ,
 	    UDFPreds=UDFPredsTail
 
 	; is_flquery(ParserTerm,Body) ->
 	    compile_query(Body,QueryList,Status),
 	    RuleDiffList = _R-_R,
-	    IClist = _IC-_IC,
+	    LatentQueryList = _LQ-_LQ,
 	    FactDiffList = _Fact - _Fact,
 	    UDFPreds=UDFPredsTail
 
-	; is_flic(ParserTerm,Body) ->
-	    %% Note: ICs are always annotated.
+	; is_fllatent_query(ParserTerm,Body) ->
+	    %% Note: latent queries are always annotated.
 	    %% So, this must have been called from
 	    %% compile_annotated_construct_add.
 	    %% Therefore, MetaFactDiffList must be bound
-	    compile_integrity_constraint(DescriptorIdCode,MetaFactDiffList,Body,addic,IClist,Status),
+	    compile_latent_query(DescriptorIdCode,MetaFactDiffList,Body,FL_DESCRMODE_LATENT_ADDQUERY,LatentQueryList,Status),
 	    RuleDiffList = _R-_R,
 	    QueryList = _Q-_Q,
 	    FactDiffList = _Fact - _Fact,
@@ -2739,24 +2740,24 @@ compile_add_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,Fact
 	; is_fldirective(ParserTerm,DirectList,DirctIdx) ->
 	    compile_directive_add(DirectList,DirctIdx,RuleDiffList,FactDiffList,Status),
 	    QueryList = _Q-_Q,
-	    IClist = _IC-_IC,
+	    LatentQueryList = _LQ-_LQ,
 	    UDFPreds=UDFPredsTail
 
 
 	; is_flannotated_construct(ParserTerm,Descriptor,MainPartOfRule) ->
-	    compile_annotated_construct_add(Descriptor,MainPartOfRule,RuleDiffList,FactDiffList,QueryList,IClist,Status),
+	    compile_annotated_construct_add(Descriptor,MainPartOfRule,RuleDiffList,FactDiffList,QueryList,LatentQueryList,Status),
 	    UDFPreds=UDFPredsTail
 
 	; is_fludfunction(ParserTerm,Function,Body,ReturnValue) ->
 	    compile_udf_definition(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
 	    QueryList = _Q-_Q,
-	    IClist = _IC-_IC,
+	    LatentQueryList = _LQ-_LQ,
 	    MetaFactDiffList = _M-_M
 
 	; is_fludfunctionfact(ParserTerm,Function,Value) ->
 	    compile_udf_definition(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
 	    QueryList = _Q-_Q,
-	    IClist = _IC-_IC,
+	    LatentQueryList = _LQ-_LQ,
 	    MetaFactDiffList = _M-_M
         ),
 	!.
@@ -2815,7 +2816,7 @@ compile_direct_add(DirectTerm,DirIdx,DCodeList,S) :-
 	compile_direct(DirectTerm,DirIdx,DCodeList,S).
 
 /****************************************************************************
-  compile_annotated_construct_add(+DescriptorList,+MainPartOfRule,-RuleDiffList,-FactDiffList,-QueryList,-IClist,-Status)
+  compile_annotated_construct_add(+DescriptorList,+MainPartOfRule,-RuleDiffList,-FactDiffList,-QueryList,-LatentQueryList,-Status)
 
   DescriptorList - list of descriptors
   MainPartOfRule - rule without descriptors
@@ -2824,14 +2825,17 @@ compile_direct_add(DirectTerm,DirIdx,DCodeList,S) :-
   FactDiffList = the diff list of facts
   MetaFactDiffList - diff list of meta facts generated from annotations
 ****************************************************************************/
-compile_annotated_construct_add(DescriptorList,MainPartOfRule,RuleDiffList,FactDiffList,QueryList,IClist,Status) :-
+compile_annotated_construct_add(DescriptorList,MainPartOfRule,RuleDiffList,FactDiffList,QueryList,LatentQueryList,Status) :-
 	approx_flindex(MainPartOfRule,RuleIdx),
-	compile_descriptor_list(DescriptorList-RuleIdx,addrule,DescrIdCode,DescrVarsTerm,MetaFactDifflist,Status1),
+	(is_fllatent_query(MainPartOfRule,_) -> Mode = FL_DESCRMODE_LATENT_ADDQUERY
+	; Mode = FL_DESCRMODE_ADDRULE
+	),
+	compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTerm,MetaFactDifflist,Status1),
 	( no_errors_found(Status1) -> 
 	    %% this rule won't bring any new meta facts
 	    compile_add_internal(MainPartOfRule,
 				 DescrIdCode,DescrVarsTerm,
-				 RuleDiffList,FactDiffList,QueryList,IClist,
+				 RuleDiffList,FactDiffList,QueryList,LatentQueryList,
 				 MetaFactDifflist,
 				 _UDFPreds,Status)
 	;  Status = Status1
@@ -2840,7 +2844,7 @@ compile_annotated_construct_add(DescriptorList,MainPartOfRule,RuleDiffList,FactD
 
 
 /****************************************************************************
-  flora_compile(+ParserTerm,-RuleDiffList,-SigDiffList,-FactDiffList,-QueryDiffList,-ICdiffList,-MetaFactDiffList,-UDFPredsDiffList,-RuleNum+RuleFileName,-Status)
+  flora_compile(+ParserTerm,-RuleDiffList,-SigDiffList,-FactDiffList,-QueryDiffList,-LatentQueryDiffList,-MetaFactDiffList,-UDFPredsDiffList,-RuleNum+RuleFileName,-Status)
 
   This is the top level procedure that is called to compile code.
 
@@ -2851,9 +2855,9 @@ compile_annotated_construct_add(DescriptorList,MainPartOfRule,RuleDiffList,FactD
   MetaFactDiffList is a list of meta facts generated from annotations
   UDFPredsDiffList is the same for the list of tabled predicates
 ****************************************************************************/
-flora_compile([NULL],R-R,S-S,F-F,Q-Q,IC-IC,M-M,U-U,_,[]) :- !.
+flora_compile([NULL],R-R,S-S,F-F,Q-Q,LQ-LQ,M-M,U-U,_,[]) :- !.
 
-flora_compile(ParserTermList,RuleDiffList,SigDiffList,FactDiffList,QueryDiffList,ICdiffList,MetaFactDiffList,UDFPredsDiffList,RuleNum+FileName,Status) :-
+flora_compile(ParserTermList,RuleDiffList,SigDiffList,FactDiffList,QueryDiffList,LatentQueryDiffList,MetaFactDiffList,UDFPredsDiffList,RuleNum+FileName,Status) :-
 #ifdef SHOW_COMPILE_INPUT
 	DBGOUTLN('------------result of parsing-----------------'),
 	DBGOUTLN(ParserTermList),
@@ -2869,7 +2873,7 @@ flora_compile(ParserTermList,RuleDiffList,SigDiffList,FactDiffList,QueryDiffList
 	get_current_compile_file(FileName),
 	compile_list_internal(ParserTermList,
 			      RuleDiffList,SigDiffList,
-			      FactDiffList,QueryDiffList,ICdiffList,
+			      FactDiffList,QueryDiffList,LatentQueryDiffList,
 			      MetaFactDiffList,
 			      UDFPredsDiffList,
 			      Stat1),
@@ -2881,7 +2885,7 @@ flora_compile(ParserTermList,RuleDiffList,SigDiffList,FactDiffList,QueryDiffList
 	DBGOUTLN(signatures=SigDiffList),
 	DBGOUTLN(facts=FactDiffList),
 	DBGOUTLN(queries=QueryDiffList),
-	DBGOUTLN(ics=ICdiffList),
+	DBGOUTLN(latent_queries=LatentQueryDiffList),
 	DBGOUTLN(metafacts=MetaFactDiffList),
 	%%DBGOUTLN(udfs =UDFPredsDiffList),
 	DBGOUTLN(status=Status),
@@ -2897,19 +2901,19 @@ flora_compile([ParserTerm|_],[],[],[],[],[],[],[],_,Status) :-
 
 
 /******************************************************************************
-compile_list_internal(+ParserTermList,-RuleDiffList,-SigDiffList,-FactDiffList,-QueryList,-IClist,-MetaFactDiffList,-UDFPredsDiffList,-Status)
+compile_list_internal(+ParserTermList,-RuleDiffList,-SigDiffList,-FactDiffList,-QueryList,-LatentQueryList,-MetaFactDiffList,-UDFPredsDiffList,-Status)
 ******************************************************************************/
-compile_list_internal([],_R-_R,_S-_S,_F-_F,_Q-_Q,_IC-_IC,_M-_M,_U-_U,[]) :- !.
+compile_list_internal([],_R-_R,_S-_S,_F-_F,_Q-_Q,_LQ-_LQ,_M-_M,_U-_U,[]) :- !.
 
-compile_list_internal([ParserTerm|ParserTermList],RuleDiffList-RuleTail,SigDiffList-SigTail,FactDiffList-FactTail,QueryList-QueryTail,IClist-ICTail,MetaFactDiffList-MetaTail,UDFPredsDiffList-UDFTail,Status) :-
-	compile_internal(ParserTerm,_DescriptorIdCode,_DescrVarsTerm,RuleDiffList-RuleTail1,SigDiffList-SigTail1,FactDiffList-FactTail1,QueryList-QueryTail1,IClist-ICTail1,MetaFactDiffList-MetaTail1,UDFPredsDiffList-UDFTail1,Stat1),
+compile_list_internal([ParserTerm|ParserTermList],RuleDiffList-RuleTail,SigDiffList-SigTail,FactDiffList-FactTail,QueryList-QueryTail,LatentQueryList-LatentQueryTail,MetaFactDiffList-MetaTail,UDFPredsDiffList-UDFTail,Status) :-
+	compile_internal(ParserTerm,_DescriptorIdCode,_DescrVarsTerm,RuleDiffList-RuleTail1,SigDiffList-SigTail1,FactDiffList-FactTail1,QueryList-QueryTail1,LatentQueryList-LatentQueryTail1,MetaFactDiffList-MetaTail1,UDFPredsDiffList-UDFTail1,Stat1),
 	(no_errors_found(Stat1) ->
-	    compile_list_internal(ParserTermList,RuleDiffList2-RuleTail,SigDiffList2-SigTail,FactDiffList2-FactTail,QueryList2-QueryTail,IClist2-ICTail,MetaFactDiffList2-MetaTail,UDFPredsDiffList2-UDFTail,Stat2),
+	    compile_list_internal(ParserTermList,RuleDiffList2-RuleTail,SigDiffList2-SigTail,FactDiffList2-FactTail,QueryList2-QueryTail,LatentQueryList2-LatentQueryTail,MetaFactDiffList2-MetaTail,UDFPredsDiffList2-UDFTail,Stat2),
 	    RuleTail1 = RuleDiffList2,
 	    SigTail1 = SigDiffList2,
 	    FactTail1 = FactDiffList2,
 	    QueryTail1 = QueryList2,
-	    ICTail1 = IClist2,
+	    LatentQueryTail1 = LatentQueryList2,
 	    MetaTail1 = MetaFactDiffList2,
 	    UDFTail1 = UDFPredsDiffList2,
 	    append(Stat1,Stat2,Status)
@@ -2920,7 +2924,7 @@ compile_list_internal([ParserTerm|ParserTermList],RuleDiffList-RuleTail,SigDiffL
 
 /******************************************************************************
     compile_internal(+ParserTerm,+DescriptorIdCode,+DescrVarsTerm,-RuleDiffList,
-                     -SigDiffList,-FactDiffList,-QueryList,-IClist,
+                     -SigDiffList,-FactDiffList,-QueryList,-LatentQueryList,
 		     ?MetaFactDiffList,-UDFPreds,-Status)
      This does the main work
      DescriptorIdCode is either a code for an explicit Id or NULL
@@ -2929,19 +2933,19 @@ compile_list_internal([ParserTerm|ParserTermList],RuleDiffList-RuleTail,SigDiffL
             compile_annotated_construct/9 (in this case MetaFactDiffList=[]-[]).
             Otherwise MetaFactDiffList is unbound.
 ******************************************************************************/
-compile_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,QueryList,IClist,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+compile_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
 	( is_flrule(ParserTerm,Head,Body) ->
 	    UDFPreds=UDFPredsTail,
 	    (var(DescriptorIdCode) ->
 		%% MetaFactDiffList is nonvar, if compile_internal is called by
 		%% compile_annotated_construct (it is = []-[] then)
 		approx_flindex(ParserTerm,RuleIdx),
-		compile_descriptor_list([]-RuleIdx,rule,DescriptorIdCode,DescrVarsTerm,MetaFactDiffList,_)
+		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_RULE,DescriptorIdCode,DescrVarsTerm,MetaFactDiffList,_)
 	    ; true
 	    ),
 	    compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,Status),
 	    QueryList = _Q-_Q,
-	    IClist = _IC-_IC
+	    LatentQueryList = _LQ-_LQ
 
 	; is_flfact(ParserTerm,Head) ->
 	    %% DefaultMetaFactDiffList is empty diff list if Head is a real
@@ -2960,31 +2964,31 @@ compile_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffL
 	    ),
 	    UDFPreds=UDFPredsTail,
 	    QueryList = _Q-_Q,
-	    IClist = _IC-_IC
+	    LatentQueryList = _LQ-_LQ
 
 	; is_flquery(ParserTerm,Body) ->
 	    UDFPreds=UDFPredsTail,
 	    compile_query(Body,QueryList,Status),
 	    RuleDiffList = _R-_R,
-	    IClist = _IC-_IC,
+	    LatentQueryList = _LQ-_LQ,
 	    SigDiffList = _S-_S,
 	    FactDiffList = _Fact - _Fact,
 	    MetaFactDiffList = _M-_M
 
-	; is_flic(ParserTerm,Body) ->
+	; is_fllatent_query(ParserTerm,Body) ->
 	    UDFPreds=UDFPredsTail,
-	    %% Note: ICs are always annotated.
+	    %% Note: latent queries are always annotated.
 	    %% So, this must have been called from
 	    %% compile_annotated_construct/9.
 	    %% Therefore, MetaFactDiffList must be bound
 	    %% This is why we don't bind it further.
 	    %% However, we pass an empty diff list to
-	    %% compile_integrity_constraint/6 because this is static compile,
+	    %% compile_latent_query/6 because this is static compile,
 	    %% and the needed metafacts will be generated.
-	    %% So, FLLIBINSICSIG/7 does not need to.
+	    %% So, FLLIBINSQUERYSIG/7 does not need to.
 	    %% Actually, compile_annotated_construct/9 passes []-[] to
 	    %% compile_internal/11 anyway.
-	    compile_integrity_constraint(DescriptorIdCode,[]-[],Body,ic,IClist,Status),
+	    compile_latent_query(DescriptorIdCode,[]-[],Body,FL_DESCRMODE_LATENT_QUERY,LatentQueryList,Status),
 	    RuleDiffList = _R-_R,
 	    QueryList = _Q-_Q,
 	    SigDiffList = _S-_S,
@@ -2994,25 +2998,25 @@ compile_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffL
 	    UDFPreds=UDFPredsTail,
 	    compile_directive(DirectList,DirctIdx,RuleDiffList,FactDiffList,Status),
 	    QueryList = _Q-_Q,
-	    IClist = _IC-_IC,
+	    LatentQueryList = _LQ-_LQ,
 	    SigDiffList = _S-_S,
 	    MetaFactDiffList = _M-_M
 
 	; is_flannotated_construct(ParserTerm,DescriptorList,MainPartOfRule) ->
-	    compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,SigDiffList,FactDiffList,QueryList,IClist,MetaFactDiffList,Status),
+	    compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,Status),
 	    UDFPreds=UDFPredsTail
 
 	; is_fludfunction(ParserTerm,Function,Body,ReturnValue) ->
 	    compile_udf_definition(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
 	    QueryList = _Q-_Q,
-	    IClist = _IC-_IC,
+	    LatentQueryList = _LQ-_LQ,
 	    SigDiffList = _S-_S,
 	    MetaFactDiffList = _M-_M
 
 	; is_fludfunctionfact(ParserTerm,Function,Value) ->
 	    compile_udf_definition(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
 	    QueryList = _Q-_Q,
-	    IClist = _IC-_IC,
+	    LatentQueryList = _LQ-_LQ,
 	    SigDiffList = _S-_S,
 	    MetaFactDiffList = _M-_M
         ),
@@ -3286,8 +3290,8 @@ compile_direct(DirectTerm,_Idx,[Code],Status) :-
         clear_context(compile_with_var_module),
         !,
 	( no_errors_found(Status) -> 
-	    ignoredep_struct(SCode,ICode),
-	    directive_struct(ICode,Code)
+	    ignoredep_struct(SCode,LatentQueryode),
+	    directive_struct(LatentQueryode,Code)
         ;   true
         ),
 	!.
@@ -3562,7 +3566,7 @@ compile_fact(Head,RuleDiffList,SigDiffList,FactDiffList,MetaFactDiffList,Status)
 		add_dynrule_attr_code(L,H2BCode,BodyCode),
 		%% no explicit id given: just generate new rule id
 		approx_flindex(Head,RuleIdx),
-		compile_descriptor_list([]-RuleIdx,rule,DescrIdCode,DescrVarsTerm,MetaFactDiffList,_),
+		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_RULE,DescrIdCode,DescrVarsTerm,MetaFactDiffList,_),
 		split_ruleheads_add_rulesig(HeadCodeList,
 					    BodyCode,FL_TRUE,FL_TRUE,
 					    DescrIdCode,DescrVarsTerm,
@@ -3711,7 +3715,7 @@ compile_query(Body,_,[Err]) :-
 compile_query(Body,_,[Err]) :-
 	is_flterm(Body,Funct,1,_),
 	is_flatom(Funct,Sym,Idx),
-	memberchk(Sym,[FL_IMPLYOP,FL_QUERYOP,FL_ICOP]),
+	memberchk(Sym,[FL_IMPLYOP,FL_QUERYOP,FL_LATENT_QUERYOP]),
 	!,
 	compiling_error(Idx,SPURIOUS_SYMBOL,Err).
 compile_query(Body,QueryList-QueryTail,Status) :-
@@ -3744,19 +3748,19 @@ compile_query(Body,QueryList-QueryTail,Status) :-
 	!.
 
 /******************************************************************************
-    compile_integrity_constraint(+DescrIdCode,+MetaFactDiffList,+Body,+Mode,-ICDiffList,-Status)
+    compile_latent_query(+DescrIdCode,+MetaFactDiffList,+Body,+Mode,-LatentQueryDiffList,-Status)
 ******************************************************************************/
-compile_integrity_constraint(DescrIdCode,MetaFactDiffList,Body,Mode,IClist-TCtail,Status) :-
+compile_latent_query(DescrIdCode,MetaFactDiffList,Body,Mode,LatentQueryList-LatentQueryTail,Status) :-
 	compile_body_top(Body,BCode,Status),
 	( no_errors_found(Status) -> 
 	    collect_prdatatypevars(BCode,DTVarsCode),
 	    append(DTVarsCode,[BCode],BCode1),
-	    conjunct_code(BCode1,ICBodyCode),
+	    conjunct_code(BCode1,LatentQueryBodyCode),
 	    thismodule_struct(ThisMod),
 	    %% code to bind the Caller variable to the calling module
 	    caller_binding_code(ThisMod,CallerBindingCode),
-	    construct_rule_enabling_test(DescrIdCode,Mode,ICEnablerTest,_),
-	    conjunct_code([CallerBindingCode,ICEnablerTest],PreICCode),
+	    construct_rule_enabling_test(DescrIdCode,Mode,LatentQueryEnablerTest,_),
+	    conjunct_code([CallerBindingCode,LatentQueryEnablerTest],PreLatentQueryCode),
 	    get_current_compile_file(File),
 	    (approx_prindex(DescrIdCode,Idx), Idx > 0 -> true
 	    ; approx_prindex(Body,Idx)
@@ -3766,11 +3770,11 @@ compile_integrity_constraint(DescrIdCode,MetaFactDiffList,Body,Mode,IClist-TCtai
 	    list_struct(MetaFactList,[],MetaFactCode),
 	    %% Note: we do not add delay-checker code FLORA_DELAY_CHECKER
 	    %% in constraints, since it is explicit in FLLIBANSWER
-	    florasyslib_struct(FLLIBINSICSIG,7,[DescrIdCode,File,ThisMod,RuleNum,MetaFactCode,PreICCode,ICBodyCode],ICSigCodePre),
-	    (has_context(goal_reification) -> ICSigCode = ICSigCodePre
-	    ; query_struct(ICSigCodePre,ICSigCode)
+	    florasyslib_struct(FLLIBINSQUERYSIG,7,[DescrIdCode,File,ThisMod,RuleNum,MetaFactCode,PreLatentQueryCode,LatentQueryBodyCode],LatentQuerySigCodePre),
+	    (has_context(goal_reification) -> LatentQuerySigCode = LatentQuerySigCodePre
+	    ; query_struct(LatentQuerySigCodePre,LatentQuerySigCode)
 	    ),
-	    IClist = [ICSigCode|TCtail]
+	    LatentQueryList = [LatentQuerySigCode|LatentQueryTail]
 	;
 	  true
 	),
@@ -3778,7 +3782,7 @@ compile_integrity_constraint(DescrIdCode,MetaFactDiffList,Body,Mode,IClist-TCtai
 
 
 /****************************************************************************
-  compile_annotated_construct(+DescriptorList,+MainPartOfRule,-RuleDiffList,-SigDiffList,-FactDiffList,-QueryList,-IClist,-MetaFactDiffList,-Status)
+  compile_annotated_construct(+DescriptorList,+MainPartOfRule,-RuleDiffList,-SigDiffList,-FactDiffList,-QueryList,-LatentQueryList,-MetaFactDiffList,-Status)
 
   RuleDiffList is a difference list in the form of [...|R]-R.
 		It is used for append/3 optimization
@@ -3786,14 +3790,17 @@ compile_integrity_constraint(DescrIdCode,MetaFactDiffList,Body,Mode,IClist-TCtai
   FactDiffList = the diff list of facts
 		 FactList includes meta-facts
 ****************************************************************************/
-compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,SigDiffList,FactDiffList,QueryList,IClist,MetaFacts-MetaFactsTail,Status) :-
+compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,MetaFacts-MetaFactsTail,Status) :-
 	approx_flindex(MainPartOfRule,RuleIdx),
-	compile_descriptor_list(DescriptorList-RuleIdx,rule,DescrIdCode,DescrVarsTerm,MetaFacts-MetaFactsTail,Status1),
+	(is_fllatent_query(MainPartOfRule,_) -> Mode = FL_DESCRMODE_LATENT_QUERY
+	; Mode = FL_DESCRMODE_RULE
+	),
+	compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTerm,MetaFacts-MetaFactsTail,Status1),
 	( no_errors_found(Status1) -> 
 	    %% this rule won't bring any new meta facts
 	    compile_internal(MainPartOfRule,DescrIdCode,DescrVarsTerm,
 			     RuleDiffList,SigDiffList,
-			     FactDiffList,QueryList,IClist,
+			     FactDiffList,QueryList,LatentQueryList,
 			     []-[],
 			     _UDFPreds,Status)
 	;  Status = Status1
@@ -3804,9 +3811,10 @@ compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,SigDiffLi
 /*
  compile_descriptor_list(+DescriptorList-RuleIdx,+Mode,-DescrIdCode,-DescrVarsTermOut,
                          -MetaFactDiffList,-Status)
- Mode - rule/query/dynrule.
-        The 'query' mode is used for the clause{...} construct.
-        'dynrule' is for dynamic rules.
+ Mode - FL_DESCRMODE_RULE/FL_DESCRMODE_PLAIN_QUERY/FL_DESCRMODE_DYNRULE.
+        The FL_DESCRMODE_PLAIN_QUERY mode is used for the @!{...} queries.
+        The FL_DESCRMODE_CLAUSE mode is used for the clause{...} construct.
+        FL_DESCRMODE_DYNRULE is for dynamic rules.
  DescrVarsTermOut normally is output as vars(VariablesInDescriptorList)
  If DescrVarsTermOut is bound then we assume that we are compiling
      for the clause{....} statement and so we pass a new unbound variable to
@@ -3820,7 +3828,6 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
 		member(FLDESCRIPTOR(IdParserTerm,FLRULEID,Idx),FlatDescrList),
 		IdParserTermList),
 	!,
-	increment_default_ruleid,
 	set_context(no_symbol_check),
 	set_context(compiling_descriptors(Mode)),
 	(length(IdParserTermList,Len), Len > 1
@@ -3836,7 +3843,7 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
 	    %% compile Id descriptor here
 	    compile_ruleid_descriptor(IdParserTerm,DescrIdCode,RuleidFrameCode,ExplicitModule,IdStatus)
 	),
-	(memberchk(Mode,[rule,addrule,dynrule,ic,addic,dynic,udfrule])
+	(memberchk(Mode,[FL_DESCRMODE_RULE,FL_DESCRMODE_ADDRULE,FL_DESCRMODE_DYNRULE,FL_DESCRMODE_LATENT_QUERY,FL_DESCRMODE_LATENT_ADDQUERY,FL_DESCRMODE_LATENT_DYNQUERY,FL_DESCRMODE_UDFRULE])
 	->
 	    collect_flvars(FlatDescrList,DescrVars),
 	    compile_var_list(DescrVars,DescrVarsCode),
@@ -3849,7 +3856,7 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
 	),
 	get_current_compile_file_for_descriptor(CurrFileName,Mode),
 	get_descriptor_module(ExplicitModule,Mode,DescrModule),
-	(IdStatus == NO_ERRORS, Mode \== udfrule
+	(IdStatus == NO_ERRORS, Mode \== FL_DESCRMODE_UDFRULE
 	->
 	    extract_features_from_descriptor_list(FlatDescrList,DescrFeatures),
 	    determine_defeasibility(DescrFeatures,Mode,DescrIdCode,CurrFileName,DescrModule,DescrVarsTermOut,DefeatMetaFact,StatDefeat),
@@ -3887,12 +3894,12 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
           If tag is specified, assume defeasible.
           Otherwise: assume strict.
 */
-%% If Mode=clause_construct/query then don't produce defeasibility fact
+%% If Mode=FL_DESCRMODE_CLAUSE/FL_DESCRMODE_PLAIN_QUERY then don't produce defeasibility fact
 determine_defeasibility(_Features,Mode,_DescrIdCode,_FileName,_Module,_DescrVarsTerm,NULL,[]) :-
-	memberchk(Mode,[clause_construct,query,ic,dynic,addic]),
+	memberchk(Mode,[FL_DESCRMODE_CLAUSE,FL_DESCRMODE_PLAIN_QUERY,FL_DESCRMODE_LATENT_QUERY,FL_DESCRMODE_LATENT_DYNQUERY,FL_DESCRMODE_LATENT_ADDQUERY]),
 	!.
 determine_defeasibility(DescrFeatures,Mode,DescrIdCode,FileName,Module,DescrVarsTerm,DefeatMetaFact,Status) :-
-	memberchk(Mode,[rule,dynrule,addrule]),
+	memberchk(Mode,[FL_DESCRMODE_RULE,FL_DESCRMODE_DYNRULE,FL_DESCRMODE_ADDRULE]),
 	!,
 	(memberchk(FL_DEFEASIBLE,DescrFeatures),
 	    memberchk(FL_STRICT,DescrFeatures)
@@ -3979,10 +3986,10 @@ extract_features_from_objspec(_Spec, []).
 
 /*
    compile_descriptor_list1(+DescriptorList,+Mode,+DescrIdCode,+CurrFileName,+DescrModule,+RuleidFrameCode,+DescrVarsTerm,-MetaFactDiffList,-Status)
-   Mode - rule/clause_construct/query/dynrule/addrule/ic/dynic/addic/udfrule
-        'clause_construct' is used for the clause{...} construct.
-        `query' is used for @!{...} queries to metainfo in rule bodies.
-        'dynrule' is for dynamic rules.
+   Mode - FL_DESCRMODE_RULE/FL_DESCRMODE_CLAUSE/FL_DESCRMODE_PLAIN_QUERY/FL_DESCRMODE_DYNRULE/FL_DESCRMODE_ADDRULE/FL_DESCRMODE_LATENT_QUERY/FL_DESCRMODE_LATENT_DYNQUERY/FL_DESCRMODE_LATENT_ADDQUERY/FL_DESCRMODE_UDFRULE
+        FL_DESCRMODE_CLAUSE is used for the clause{...} construct.
+        FL_DESCRMODE_PLAIN_QUERY is for the @!{...} metainfo queries in bodies.
+        FL_DESCRMODE_DYNRULE is for dynamic rules.
 	etc.
 */
 compile_descriptor_list1([],_Mode,_DescrIdCode,_FileName,_Module,_RuleidFrameCode,_DescrVarsTerm,M-M,[]) :- !.
@@ -3997,11 +4004,11 @@ compile_descriptor_list1([Descriptor|RestDescr],Mode,DescrIdCode,FileName,Module
 
 /*
    compile_descriptor(+Descriptor,+Mode,+DescrIdCode,+DescrVarsTerm,-MetaFactDiffList,-Status)
-   Mode - rule/clause_construct/query/dynrule/addrule/ic/dynic/addic/udfrule
-        'rule' - rule descriptor in static rules
-        'clause_construct' mode is used for the clause{...} construct.
-        'query' - for @!{...} queries in rule bodies
-        'dynrule' is for dynamic rules.
+   Mode - FL_DESCRMODE_RULE/FL_DESCRMODE_CLAUSE/FL_DESCRMODE_PLAIN_QUERY/FL_DESCRMODE_DYNRULE/FL_DESCRMODE_ADDRULE/FL_DESCRMODE_LATENT_QUERY/FL_DESCRMODE_LATENT_DYNQUERY/FL_DESCRMODE_LATENT_ADDQUERY/FL_DESCRMODE_UDFRULE
+        FL_DESCRMODE_RULE - rule descriptor in static rules
+        FL_DESCRMODE_CLAUSE mode is used for the clause{...} construct.
+        FL_DESCRMODE_PLAIN_QUERY - for @!{...} queries in rule bodies
+        FL_DESCRMODE_DYNRULE is for dynamic rules.
 	etc.
 */
 compile_descriptor(Descriptor,Mode,DescrIdCode,FileName,Module,RuleidFrameCode,DescrVarsTerm,MetaFactDiffList,Status) :-
@@ -4025,56 +4032,56 @@ compile_ruleid_descriptor(IdDescriptorWithFrame,DescrIdCode,FrameCode,ExplicitMo
 
 
 /*
-   Mode - rule/clause_construct/query/dynrule/addrule/ic/dynic/addic/udfrule
-        'rule' - rule descriptor in static (loaded) rules
-        'clause_construct' mode is used for the clause{...} construct.
+   Mode - FL_DESCRMODE_RULE/FL_DESCRMODE_CLAUSE/FL_DESCRMODE_PLAIN_QUERY/FL_DESCRMODE_DYNRULE/FL_DESCRMODE_ADDRULE/FL_DESCRMODE_LATENT_QUERY/FL_DESCRMODE_LATENT_DYNQUERY/FL_DESCRMODE_LATENT_ADDQUERY/FL_DESCRMODE_UDFRULE
+        FL_DESCRMODE_RULE - rule descriptor in static (loaded) rules
+        FL_DESCRMODE_CLAUSE mode is used for the clause{...} construct.
 	       In that case, the default rule Id is just a new variable.
-	       Same for dynrule/addrule/dynic/addic: these Ids are set at run time,
+	       Same for FL_DESCRMODE_DYNRULE/FL_DESCRMODE_ADDRULE/FL_DESCRMODE_LATENT_DYNQUERY/FL_DESCRMODE_LATENT_ADDQUERY: these Ids are set at run time,
 	            so here we just make the id into a variable.
-        'query' is for @!{....} queries to metainfo in rule bodies
-        'dynrule' is for dynamic rules inserted at run time by insertrule.
-        'addrule' is for dynamic rules inserted by _add.
-        'ic' is for for static (loaded) integrity constraints
-        'addic' is for for integrity constraints inserted by _add.
-        'dynic' is for for integrity constraints inserted by insert{}.
-        'udfrule' is for rules created as part of the UDF encoding
+        FL_DESCRMODE_PLAIN_QUERY is for @!{....} queries to metainfo in rule bodies
+        FL_DESCRMODE_DYNRULE is for dynamic rules inserted at run time by insertrule.
+        FL_DESCRMODE_ADDRULE is for dynamic rules inserted by _add.
+        FL_DESCRMODE_LATENT_QUERY is for for static (loaded) latent queries
+        FL_DESCRMODE_LATENT_ADDQUERY is for for latent queries inserted by _add.
+        FL_DESCRMODE_LATENT_DYNQUERY is for for latent queries inserted by insert{}.
+        FL_DESCRMODE_UDFRULE is for rules created as part of the UDF encoding
 
      Now we just use the rule number generated by the lexer as rule Id
      for static and UDF rules.
      This is because previously we used long atoms 20 chars and longer,
      and this takes a huge amount of space on the heap.
 */
-construct_default_ruleid_descriptor(rule,Idx,RuleIdCode) :-
+construct_default_ruleid_descriptor(FL_DESCRMODE_RULE,Idx,RuleIdCode) :-
 	!,
-	%%flora_token_rulenum(Idx,RuleId),
+	increment_default_ruleid,
 	current_default_ruleid(RuleId),
 	numobj_struct(RuleId,Idx,RuleIdCode).
 construct_default_ruleid_descriptor(ic,Idx,RuleIdCode) :-
 	!,
-	%%flora_token_rulenum(Idx,RuleId),
+	increment_default_ruleid,
 	current_default_ruleid(RuleId),
 	numobj_struct(RuleId,Idx,RuleIdCode).
-construct_default_ruleid_descriptor(udfrule,Idx,RuleIdCode) :-
+construct_default_ruleid_descriptor(FL_DESCRMODE_UDFRULE,Idx,RuleIdCode) :-
 	!,
-	%%flora_token_rulenum(Idx,RuleId),
+	increment_default_ruleid,
 	current_default_ruleid(RuleId),
 	numobj_struct(RuleId,Idx,RuleIdCode).
-construct_default_ruleid_descriptor(addrule,Idx,RuleIdCode) :-
+construct_default_ruleid_descriptor(FL_DESCRMODE_ADDRULE,Idx,RuleIdCode) :-
 	!,
 	new_prvariable(Idx,RuleIdCode).
-construct_default_ruleid_descriptor(addic,Idx,RuleIdCode) :-
+construct_default_ruleid_descriptor(FL_DESCRMODE_LATENT_ADDQUERY,Idx,RuleIdCode) :-
 	!,
 	new_prvariable(Idx,RuleIdCode).
-construct_default_ruleid_descriptor(dynic,Idx,RuleIdCode) :-
+construct_default_ruleid_descriptor(FL_DESCRMODE_LATENT_DYNQUERY,Idx,RuleIdCode) :-
 	!,
 	new_prvariable(Idx,RuleIdCode).
-construct_default_ruleid_descriptor(dynrule,Idx,RuleIdCode) :-
+construct_default_ruleid_descriptor(FL_DESCRMODE_DYNRULE,Idx,RuleIdCode) :-
 	!,
 	new_prvariable(Idx,RuleIdCode).
-construct_default_ruleid_descriptor(clause_construct,Idx,RuleIdCode) :-
+construct_default_ruleid_descriptor(FL_DESCRMODE_CLAUSE,Idx,RuleIdCode) :-
 	!,
 	new_prvariable(Idx,RuleIdCode).
-construct_default_ruleid_descriptor(query,Idx,RuleIdCode) :-
+construct_default_ruleid_descriptor(FL_DESCRMODE_PLAIN_QUERY,Idx,RuleIdCode) :-
 	new_prvariable(Idx,RuleIdCode).
 
 %% construct_tag_descriptor_facts(+DescrIdCode,+FileName,+Module,+Mode,+DescrVarsTerm,+DescrContent,-MetaFactDiffList,-Stat)
@@ -4089,9 +4096,9 @@ construct_tag_descriptor_facts(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,De
 construct_tag_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,DescrContentsCode,TagIdMetaFact) :-
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
 	generate_prolog_liblit(PredCode,5,[DescrIdCode,FileName,Module,DescrContentsCode,DescrVarsTerm], TagIdMetaTerm),
-	((Mode == rule ; Mode == ic)
+	((Mode == FL_DESCRMODE_RULE ; Mode == FL_DESCRMODE_LATENT_QUERY)
 	 -> fact_struct(TagIdMetaTerm,TagIdMetaFact)
-	; %% Mode = clause_construct/query/dynrule/addrule/dynic/addic/udfrule
+	; %% Mode = FL_DESCRMODE_CLAUSE/FL_DESCRMODE_PLAIN_QUERY/FL_DESCRMODE_DYNRULE/FL_DESCRMODE_ADDRULE/FL_DESCRMODE_LATENT_DYNQUERY/FL_DESCRMODE_LATENT_ADDQUERY/FL_DESCRMODE_UDFRULE
 	    TagIdMetaTerm = TagIdMetaFact
 	).
 
@@ -4123,21 +4130,21 @@ construct_type_descriptor_query(DescrIdCode,_,_,_,_,_,_,_,[Err]) :-
 	approx_prindex(DescrIdCode,Idx),
 	compiling_error(Idx,INVALID_TYPE_DESCRIPTOR_PROP,Err).
 
-%% this constructs the meta fact for the type property: @!{id[type->rule/ic]}
+%% this constructs the meta fact for the type property: @!{id[type->rule/query]}
 construct_type_descriptor_fact(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,MetaFact) :-
 	has_context(compiling_body(_)),
 	!,
 	atomobj_struct(FL_TYPE_PROPERTY,Prop),
-	(memberchk(Mode,[addic,dynic,ic]) -> atomobj_struct(ic,Val)
-	; memberchk(Mode,[rule,addrule,dynrule]) -> atomobj_struct(rule,Val)
-	%% query/clause_construct
+	(memberchk(Mode,[FL_DESCRMODE_LATENT_ADDQUERY,FL_DESCRMODE_LATENT_DYNQUERY,FL_DESCRMODE_LATENT_QUERY]) -> atomobj_struct(FL_DESCRTYPE_QUERY,Val)
+	; memberchk(Mode,[FL_DESCRMODE_RULE,FL_DESCRMODE_ADDRULE,FL_DESCRMODE_DYNRULE]) -> atomobj_struct(FL_DESCRTYPE_RULE,Val)
+	%% Mode = FL_DESCRMODE_PLAIN_QUERY/FL_DESCRMODE_CLAUSE
 	; new_prvariable(NO_INDEX,Val)
 	),
 	construct_prop_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,Prop,Val,MetaFact).
 construct_type_descriptor_fact(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,MetaFact) :-
 	atomobj_struct(FL_TYPE_PROPERTY,Prop),
-	(memberchk(Mode,[addic,dynic,ic]) -> atomobj_struct(ic,Val)
-	; memberchk(Mode,[rule,addrule,dynrule]) -> atomobj_struct(rule,Val)
+	(memberchk(Mode,[FL_DESCRMODE_LATENT_ADDQUERY,FL_DESCRMODE_LATENT_DYNQUERY,FL_DESCRMODE_LATENT_QUERY]) -> atomobj_struct(FL_DESCRTYPE_QUERY,Val)
+	; memberchk(Mode,[FL_DESCRMODE_RULE,FL_DESCRMODE_ADDRULE,FL_DESCRMODE_DYNRULE]) -> atomobj_struct(FL_DESCRTYPE_RULE,Val)
 	;  %% this should be unreachable
 	    flora_abort(['Compiler bug!!! construct_type_descriptor_fact: unreachable statement'], FLORA_ABORT_NOTRACE)
 	),
@@ -4152,9 +4159,9 @@ construct_bool_descriptor_facts(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,D
 construct_bool_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,DescrContentsCode,BoolIdMetaFact) :-
 	PredCode = FL_BOOL_DESCRIPTOR_META_PREDICATE,
 	generate_prolog_liblit(PredCode,5,[DescrIdCode,FileName,Module,DescrContentsCode,DescrVarsTerm], BoolIdMetaTerm),
-	((Mode == rule ; Mode == ic)
+	((Mode == FL_DESCRMODE_RULE ; Mode == FL_DESCRMODE_LATENT_QUERY)
 	-> fact_struct(BoolIdMetaTerm,BoolIdMetaFact)
-	; %% Mode = clause_construct/query/dynrule/addrule/dynic/addic/udfrule
+	; %% Mode = FL_DESCRMODE_CLAUSE/FL_DESCRMODE_PLAIN_QUERY/FL_DESCRMODE_DYNRULE/FL_DESCRMODE_ADDRULE/FL_DESCRMODE_LATENT_DYNQUERY/FL_DESCRMODE_LATENT_ADDQUERY/FL_DESCRMODE_UDFRULE
 	    BoolIdMetaTerm = BoolIdMetaFact
 	).
 
@@ -4173,7 +4180,7 @@ construct_prop_descriptor_facts(DescrIdCode,File,Module,Mode,DescrVarsTerm,Rulei
 %% this should be unreachable due to the parser, but just in case
 construct_prop_descriptor_facts(_,_,_,Mode,_,RuleidFrameCode,_,[Err]) :-
 	is_prdisjunct(RuleidFrameCode,_,_),
-	memberchk(Mode,[rule,dynrule,addrule,ic,dynic,addic,udfrule]),
+	memberchk(Mode,[FL_DESCRMODE_RULE,FL_DESCRMODE_DYNRULE,FL_DESCRMODE_ADDRULE,FL_DESCRMODE_LATENT_QUERY,FL_DESCRMODE_LATENT_DYNQUERY,FL_DESCRMODE_LATENT_ADDQUERY,FL_DESCRMODE_UDFRULE]),
 	!,
 	approx_prindex(RuleidFrameCode,Idx),
 	compiling_error(Idx,NO_DISJUNCTS_DESCRIPTOR_FRAME,Err).
@@ -4182,7 +4189,7 @@ construct_prop_descriptor_facts(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,R
 	(is_prworkspace(RuleidFrameCode,RealCode,ExplicitModule) -> true
 	; RealCode = RuleidFrameCode, ExplicitModule = Module
 	),
-	%% change module
+	%% change module to ExplicitModule
 	construct_attrval_descriptor_facts(DescrIdCode,FileName,ExplicitModule,Mode,DescrVarsTerm,RealCode,Metafacts,Status).
 
 
@@ -4226,20 +4233,20 @@ construct_attrval_descriptor_facts(_DescrIdCode,_FileName,_Module,_Mode,_DescrVa
 construct_prop_descriptor_fact1(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,Prop,Val,MetaFact) :-
 	PredCode = FL_PROP_DESCRIPTOR_META_PREDICATE,
 	generate_prolog_liblit(PredCode,6,[DescrIdCode,FileName,Module,Prop,Val,DescrVarsTerm], MetaTerm),
-	((Mode == rule ; Mode == ic)
+	((Mode == FL_DESCRMODE_RULE ; Mode == FL_DESCRMODE_LATENT_QUERY)
 	-> fact_struct(MetaTerm,MetaFact)
-	; %% Mode = clause_construct/query/dynrule/addrule/dynic/addic/udfrule
+	; %% Mode = FL_DESCRMODE_CLAUSE/FL_DESCRMODE_PLAIN_QUERY/FL_DESCRMODE_DYNRULE/FL_DESCRMODE_ADDRULE/FL_DESCRMODE_LATENT_DYNQUERY/FL_DESCRMODE_LATENT_ADDQUERY/FL_DESCRMODE_UDFRULE
 	    MetaTerm = MetaFact
 	).
 
 
 get_descriptor_module(ExplicitMod,Mode,OutModule) :-
 	(ExplicitMod \== NULL -> OutModule = ExplicitMod
-	; memberchk(Mode,[clause_construct,dynrule]) ->
+	; memberchk(Mode,[FL_DESCRMODE_CLAUSE,FL_DESCRMODE_DYNRULE]) ->
 	    new_prvariable(NO_INDEX,OutModule)
-	; Mode == query
+	; Mode == FL_DESCRMODE_PLAIN_QUERY
 	-> thismodule_struct(OutModule)
-	; %% rule/addrule/ic/dynic/addic
+	; %% FL_DESCRMODE_RULE/FL_DESCRMODE_ADDRULE/FL_DESCRMODE_LATENT_QUERY/FL_DESCRMODE_LATENT_DYNQUERY/FL_DESCRMODE_LATENT_ADDQUERY
 	    thismodule_struct(OutModule)
 	).
 
@@ -4250,6 +4257,7 @@ compile_simple_descriptor(DescrContents,Object,Status) :-
 %% When compiling tags or bool descriptors,
 %% no frames are allowed: FramesOK == no_frames
 %% When compiling rule ids, frames are allowed: FramesOK == frames_ok
+%% Object here becomes the rule Id code.
 compile_complex_descriptor(DescrContentsWS,FramesOK,Object,FrameCode,ExplicitModule,Status) :-
 	(FramesOK == frames_ok -> true
 	; FrameCode = NULL
@@ -4260,15 +4268,27 @@ compile_complex_descriptor(DescrContentsWS,FramesOK,Object,FrameCode,ExplicitMod
 	%% compiling_body_pathexp context.
 	detach_flworkspace(DescrContentsWS,DescrContents,WS),
 	(has_context(compiling_body_pathexp),
-	    compile_body_pathexp(DescrContents,WS,Object,NULL,FrameCode,[],Status) 
+	    compile_body_pathexp(DescrContents,WS,Object,NULL,FrameCode,[],S1) 
 	-> set_context(compiling_body_pathexp)
 	;
-	    compile_body_pathexp(DescrContents,WS,Object,NULL,FrameCode,[],Status)
+	    compile_body_pathexp(DescrContents,WS,Object,NULL,FrameCode,[],S1)
 	-> true
 	; approx_flindex(DescrContents,Idx),
 	    compiling_error(Idx,SIMPLE_FRAMES_IN_RULE_DESCRIPTORS,Err),
-	    Status = [Err]
+	    S1 = [Err]
 	),
+	
+	%% don't let the user define a posint rule Id explicitly to avoid
+	%% clashes. The only exception is the _@! constant. In the latter case,
+	%% the context is set to allow__numeric_ruleids
+	(has_context(allow_numeric_ruleids) -> Status = S1
+	; is_prnumber(Object,RuleId,RidIdx), integer(RuleId), RuleId > 0 ->
+	    compiling_error(RidIdx,NO_INTEGERS_AS_RULEID,Err),
+	    Status = [Err|S1]
+	; Status = S1
+	),
+	clear_context(allow_numeric_ruleids),
+
 	(var(FrameCode) -> ExplicitModule = NULL
 	; is_prworkspace(FrameCode,_,ExplicitModule) -> true
 	; is_prconjunct(FrameCode,Left,_), is_prworkspace(Left,_,ExplicitModule)
@@ -4280,13 +4300,13 @@ compile_complex_descriptor(DescrContentsWS,FramesOK,Object,FrameCode,ExplicitMod
 	
 %% construct_rule_enabling_fact(+DescrIdCode,+Mode,-RuleEnablerMetaFact)
 %% For clause{...} and the @!{...} query, don't construct the rule-enabling fact
-construct_rule_enabling_fact(_DescrIdCode,_FileName,clause_construct,NULL) :- !.
-construct_rule_enabling_fact(_DescrIdCode,_FileName,query,NULL) :- !.
+construct_rule_enabling_fact(_DescrIdCode,_FileName,FL_DESCRMODE_CLAUSE,NULL) :- !.
+construct_rule_enabling_fact(_DescrIdCode,_FileName,FL_DESCRMODE_PLAIN_QUERY,NULL) :- !.
 construct_rule_enabling_fact(DescrIdCode,FileName,Mode,RuleEnablerMetaFact) :-
 	construct_rule_enabling_query(DescrIdCode,FileName,Mode,RuleEnablerMetaTerm),
-	((Mode == rule ; Mode == ic)
+	((Mode == FL_DESCRMODE_RULE ; Mode == FL_DESCRMODE_LATENT_QUERY)
 	-> fact_struct(RuleEnablerMetaTerm,RuleEnablerMetaFact)
-	; %% clause_construct/query/dynrule/addrule/dynic/addic/udfrule
+	; %% Mode = FL_DESCRMODE_CLAUSE/FL_DESCRMODE_PLAIN_QUERY/FL_DESCRMODE_DYNRULE/FL_DESCRMODE_ADDRULE/FL_DESCRMODE_LATENT_DYNQUERY/FL_DESCRMODE_LATENT_ADDQUERY/FL_DESCRMODE_UDFRULE
 	    RuleEnablerMetaTerm = RuleEnablerMetaFact
 	).
 
@@ -4296,26 +4316,26 @@ construct_rule_enabling_query(DescrIdCode,FileName,Mode,RuleEnablerMetaTerm) :-
 	generate_prolog_liblit(PredCode,3,[DescrIdCode,FileName,Module],RuleEnablerMetaTerm).
 
 %% like construct_rule_enabling_query/4 but generates file name for itself
-%% used as the first subgoal in rules, queries, ICs
+%% used as the first subgoal in rules, queries, latent queries
 construct_rule_enabling_test(DescrIdCode,Mode,RuleEnablerMetaTerm,FileName) :-
 	get_current_compile_file_for_descriptor(FileName,Mode),
 	construct_rule_enabling_query(DescrIdCode,FileName,Mode,RuleEnablerMetaTerm).
 
 construct_tag_descriptor_fact_from_id(DescrIdCode,FileName,Module,Mode,DescrVarsTerm,TagIdMetaFact) :-
 	PredCode = FL_TAG_DESCRIPTOR_META_PREDICATE,
-	(Mode == dynrule ->
+	(Mode == FL_DESCRMODE_DYNRULE ->
 	    Tag = DescrIdCode
-	; Mode == clause_construct ->
+	; Mode == FL_DESCRMODE_CLAUSE ->
 	    new_prvariable(NO_INDEX,Tag)
-	; Mode == query ->
+	; Mode == FL_DESCRMODE_PLAIN_QUERY ->
 	    new_prvariable(NO_INDEX,Tag)
 	;
 	    Tag = DescrIdCode
 	),
 	generate_prolog_liblit(PredCode,5,[DescrIdCode,FileName,Module,Tag,DescrVarsTerm],TagIdMetaTerm),
-	((Mode == rule ; Mode == ic)
+	((Mode == FL_DESCRMODE_RULE ; Mode == FL_DESCRMODE_LATENT_QUERY)
 	-> fact_struct(TagIdMetaTerm,TagIdMetaFact)
-	; %% Mode = clause_construct/query/dynrule/addrule/dynic/addic/udfrule
+	; %% Mode = FL_DESCRMODE_CLAUSE/FL_DESCRMODE_PLAIN_QUERY/FL_DESCRMODE_DYNRULE/FL_DESCRMODE_ADDRULE/FL_DESCRMODE_LATENT_DYNQUERY/FL_DESCRMODE_LATENT_ADDQUERY/FL_DESCRMODE_UDFRULE
 	    TagIdMetaTerm = TagIdMetaFact
 	).
 
@@ -4476,7 +4496,7 @@ compile_udf_definition(Function,Body,ReturnValue,CodeList-ListTail,FactDiffList,
 		    UDFPreds = UDFPredsTail
 		),
 		approx_flindex(Funct,FunctIndex),
-		compile_descriptor_list([]-FunctIndex,udfrule,DescrIdCode,DescrVarsTerm,_,_),
+		compile_descriptor_list([]-FunctIndex,FL_DESCRMODE_UDFRULE,DescrIdCode,DescrVarsTerm,_,_),
 		( Body=NULL ->
 		    %% UDFs are always compiled as rules: add a dummy body
 		    flatom_struct(FL_TRUE,NO_INDEX,RealBody),
@@ -4755,7 +4775,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	    ; delay_literals_checking_code(Head,Body,DescrVarsTerm,DelayCheckCode)
 	    ),
 	    (has_context(compiling_udf_definition) -> RuleEnablerTest = true
-	    ; construct_rule_enabling_test(DescriptorIdCode,rule,RuleEnablerTest,_)
+	    ; construct_rule_enabling_test(DescriptorIdCode,FL_DESCRMODE_RULE,RuleEnablerTest,_)
 	    ),
 	    PreBody = RuleEnablerTest,
 	    PostBody = DelayCheckCode,
@@ -4881,7 +4901,7 @@ construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVa
 	    %% It is faster, saves table space
 	    modularized_pratom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
 	    var_caller_info_structure(ThisModule,CallerInfo),
-	    get_current_compile_file_for_descriptor(FileName,dynrule),
+	    get_current_compile_file_for_descriptor(FileName,FL_DESCRMODE_DYNRULE),
 	    prologterm_struct(UnDefeatFunCode,6,
 			      [DescrIdCode,FileName,DescrVarsTerm,DummyVarObj4Head,ThisModule,CallerInfo],
 			      DefeatCondCode),
@@ -5128,19 +5148,20 @@ compile_body(ParserTerm,Code,Status) :-
 	    true
 	).
 
+%% this is used when we reify latent queries
 compile_body(ParserTerm,Code,Status) :-
 	is_flannotated_construct(ParserTerm,Descriptor,Statement),
-	is_flic(Statement,Body),
+	is_fllatent_query(Statement,Body),
 	!,
 	approx_flindex(Statement,RuleIdx),
-	compile_descriptor_list(Descriptor-RuleIdx,addic,DescrIdCode,_DescrVarsTerm,MetaFacts,Status1),
+	compile_descriptor_list(Descriptor-RuleIdx,FL_DESCRMODE_LATENT_ADDQUERY,DescrIdCode,_DescrVarsTerm,MetaFacts,Status1),
 	(no_errors_found(Status1) ->
-	    compile_integrity_constraint(DescrIdCode,MetaFacts,Body,addic,CodeList-[],Status),
+	    compile_latent_query(DescrIdCode,MetaFacts,Body,FL_DESCRMODE_LATENT_ADDQUERY,CodeList-[],Status),
 	    conjunct_code(CodeList,Code)
 	; Status = Status1
 	).
-	%%compile_annotated_construct_add(Descriptor,MainPartOfRule,RuleDiffList,FactDiffList,QueryList,IClist,Status),
-	%%lists:append_lists([RuleDiffList,FactDiffList,QueryList,IClist],Code).
+	%%compile_annotated_construct_add(Descriptor,MainPartOfRule,RuleDiffList,FactDiffList,QueryList,LatentQueryList,Status),
+	%%lists:append_lists([RuleDiffList,FactDiffList,QueryList,LatentQueryList],Code).
 
 
 %% a descriptor query in rule/query body like ... :- ..., @!{...}
@@ -5148,7 +5169,7 @@ compile_body(ParserTerm,Code,Status) :-
 	is_fldescriptor(ParserTerm,_,FLRULEID,_),
 	!,
 	approx_flindex(ParserTerm,QueryIdx),
-	compile_descriptor_list([ParserTerm]-QueryIdx,query,_,_,CodeList-[],Status),
+	compile_descriptor_list([ParserTerm]-QueryIdx,FL_DESCRMODE_PLAIN_QUERY,_,_,CodeList-[],Status),
 	conjunct_code(CodeList,Code).
 
 compile_body(ParserTerm,Code,Status) :-
@@ -6129,6 +6150,9 @@ compile_head_fltoken(Token,Suffix,Index,Object,Status) :-
 	    Token == FL_SPECIAL_CONST_TOKEN, Suffix == FL_RULEID_SYM ->
 	    ( has_context(compiling_descriptors(Mode))
 	    -> construct_default_ruleid_descriptor(Mode,Index,DescrIdCode),
+		%% the allow_numeric_ruleids context is
+		%% cleared out in compile_complex_descriptor/6
+		set_context(allow_numeric_ruleids),
 		Object = DescrIdCode,
 		Status = NO_ERRORS
 	    ; (has_context(compiling_dynrule(DescrIdCode)) -> true
@@ -6402,8 +6426,21 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyFrontList,Status) :-
 	    OidCode=NULL
 
 	; is_flsimpleprimitive(ParserTerm,PrimName,Args) ->
-	    flora_simple_primitive(PrimName,N,PrimPredicate,PrimModule),
-	    compile_body_pathexplist(Args,WS,ArgsCode,OidCode,_ListCode,_BodyHdLst,Status),
+	    flora_simple_primitive(PrimName,_,PrimPredicate,PrimModule),
+	    %% Ignore the arity given by flora_simple_primitive/4. Here we
+	    %% might get cases where the actual #args is less by 2
+	    %% (this is a hack bedscibed below)
+	    length(Args,N1),
+	    compile_body_pathexplist(Args,WS,ArgsCode1,OidCode,_,_,Status),
+	    %% This is a hack: add two extra arguments to primitives listed in
+	    %% rule_manipulation_primitive/1.
+	    %% Need to find a more general solution for the future.
+	    (rule_manipulation_primitive(PrimName), N1==1
+	    -> get_rule_manipulation_primitive_extra_args(ExtraArgs),
+		append(ArgsCode1,ExtraArgs,ArgsCode),
+		N is N1+2
+	    ; ArgsCode1 = ArgsCode, N = N1
+	    ),
 	    prologterm_struct(PrimPredicate,N,ArgsCode,PrimModule,WSCodePre),
 	    prologliblit_struct(WSCodePre,WSCode)
 
@@ -6782,6 +6819,9 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status
 	    ( has_context(compiling_descriptors(Mode))
 	    ->  approx_flindex(ParserTerm,Idx),
 		construct_default_ruleid_descriptor(Mode,Idx,DescrIdCode),
+		%% the allow_numeric_ruleids context is
+		%% cleared out in compile_complex_descriptor/6
+		set_context(allow_numeric_ruleids),
 		Object = DescrIdCode,
 		Status = NO_ERRORS
 	    ;  %% Note: descriptors are compiled BEFORE compiling_dynrule
@@ -8900,7 +8940,7 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 		%% The last FL_TRUE is the defeasible condition to be
 		%% attached to rule bodies.
 		approx_flindex(H,RuleIdx),
-		compile_descriptor_list([]-RuleIdx,dynrule,DescrIdCode,DescrVarsTerm,DefaultMetaFactDiffList,_),
+		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_DYNRULE,DescrIdCode,DescrVarsTerm,DefaultMetaFactDiffList,_),
 		set_context(compile_with_var_module),
 		set_context(compiling_dynrule(DescrIdCode)),
 		compile_head_literal(H,WS,HeadCode,H2BCodeHead,H2BCodeTail,S),
@@ -8911,7 +8951,7 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 		conjunct_code([H2BCodeHead,H2BCodeTail],H2BCode),
 		%% only the vars in the fact-term are to be checked
 		delay_literals_checking_code([],H,DescrVarsTerm,DelayCheckCode),
-		construct_rule_enabling_test(DescrIdCode,dynrule,RuleEnablerTest,FileName),
+		construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_DYNRULE,RuleEnablerTest,FileName),
 		PreBody = RuleEnablerTest,
 		PostBody = DelayCheckCode,
 		dynrule_struct(HeadCodeList,H2BCode,HVL,BVL,PreBody,PostBody,
@@ -9148,16 +9188,16 @@ compile_dynrule(Op,R,RCode,Status) :-
 	%% If delete op: default rule id descriptor should be Var
 	%% and shouldn't generate the rule enabling metafact.
 	%% In this case we use the same representation as in clause{...},
-	%% whence the 'clause_construct' mode in compile_descriptor_list/6
-	(is_fldeleteruleop(Op) -> DescrMode = clause_construct
-	; is_flic(Body,_) -> DescrMode = dynic
-	; DescrMode = dynrule
+	%% whence the FL_DESCRMODE_CLAUSE mode in compile_descriptor_list/6
+	(is_fldeleteruleop(Op) -> DescrMode = FL_DESCRMODE_CLAUSE
+	; is_fllatent_query(Body,_) -> DescrMode = FL_DESCRMODE_LATENT_DYNQUERY
+	; DescrMode = FL_DESCRMODE_DYNRULE
 	),
 	compile_descriptor_list(DescriptorList-RuleIdx,DescrMode,DescrIdCode,DescrVarsTerm,MetaFactDiffList,DescriptorStatus),
 
 	( no_errors_found(DescriptorStatus) -> 
-	    (is_flic(Body,RealBody) ->
-		compile_dyn_integrity_constraint(Op,DescrIdCode,MetaFactDiffList,RealBody,RCode,Status)
+	    (is_fllatent_query(Body,RealBody) ->
+		compile_dyn_latent_query(Op,DescrIdCode,MetaFactDiffList,RealBody,RCode,Status)
 	    ; compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,RCode,Status)
 	    )
 	;
@@ -9165,20 +9205,22 @@ compile_dynrule(Op,R,RCode,Status) :-
 	).
 
 
-%% compile_dyn_ic(+Op,+DescrIdCode,+MetaFactDiffList,+Body,-ICDiffList,-Status)
+%% compile_dyn_ic(+Op,+DescrIdCode,+MetaFactDiffList,+Body,-LatentQueryDiffList,-Status)
 %% op: delete/insert/insertrule/etc.
-compile_dyn_integrity_constraint(Op,DescrIdCode,MetaFactDiffList,Body,ICSigCode,Status) :-
+compile_dyn_latent_query(Op,DescrIdCode,MetaFactDiffList,Body,LatentQuerySigCode,Status) :-
+	set_context(compile_with_var_module),
+	set_context(compiling_dynrule(DescrIdCode)),
 	compile_body_top(Body,BCode,Status),
 	( no_errors_found(Status) -> 
 	    collect_prdatatypevars(BCode,DTVarsCode),
 	    append(DTVarsCode,[BCode],BCode1),
-	    conjunct_code(BCode1,ICBodyCode),
+	    conjunct_code(BCode1,LatentQueryBodyCode),
 	    thismodule_struct(ThisMod),
 	    %% code to bind the Caller variable to the calling module
 	    caller_binding_code(ThisMod,CallerBindingCode),
-	    construct_rule_enabling_test(DescrIdCode,dynic,ICEnablerTest,_),
-	    conjunct_code([CallerBindingCode,ICEnablerTest],PreICCode),
-	    get_current_compile_file_for_descriptor(File,dynic),
+	    construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_LATENT_DYNQUERY,LatentQueryEnablerTest,_),
+	    conjunct_code([CallerBindingCode,LatentQueryEnablerTest],PreLatentQueryCode),
+	    get_current_compile_file_for_descriptor(File,FL_DESCRMODE_LATENT_DYNQUERY),
 	    (approx_prindex(DescrIdCode,Idx), Idx > 0 -> true
 	    ; approx_prindex(Body,Idx)
 	    ),
@@ -9186,12 +9228,14 @@ compile_dyn_integrity_constraint(Op,DescrIdCode,MetaFactDiffList,Body,ICSigCode,
 	    MetaFactDiffList = MetaFactList - [],
 	    list_struct(MetaFactList,[],MetaFactCode),
 	    (is_fldeleteruleop(Op) ->
-		florasyslib_struct(FLLIBDELICSIG,5,[DescrIdCode,File,ThisMod,MetaFactCode,ICBodyCode],ICSigCode)
-	    ; florasyslib_struct(FLLIBINSICSIG,7,[DescrIdCode,File,ThisMod,RuleNum,MetaFactCode,PreICCode,ICBodyCode],ICSigCode)
+		florasyslib_struct(FLLIBDELQUERYSIG,5,[DescrIdCode,File,ThisMod,MetaFactCode,LatentQueryBodyCode],LatentQuerySigCode)
+	    ; florasyslib_struct(FLLIBINSQUERYSIG,7,[DescrIdCode,File,ThisMod,RuleNum,MetaFactCode,PreLatentQueryCode,LatentQueryBodyCode],LatentQuerySigCode)
 	    )
 	;
 	  true
 	),
+	clear_context(compiling_dynrule(DescrIdCode)),
+	clear_context(compile_with_var_module),
 	!.
 
 %% main workhorse that compiles dynamic rules
@@ -9200,7 +9244,7 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
         set_context(compile_with_var_module),
 	set_context(compiling_dynrule(DescrIdCode)),
 	compile_head_top(Head,HeadCode1,H2BCodeHead,H2BCodeTail,HeadStatusPre),
-        new_prvariable(NO_INDEX,HVL),
+        new_prvariable(NO_INDEX,HVL), % head var list
 	compile_conjunct2list(HeadCode1,HeadCode2),
 	remove_empty_list(HeadCode2,HeadCode),
 	%% no :- prolog predicates in dynamic rule heads
@@ -9219,13 +9263,13 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 		conjunct_code(BCodeList,PureBodyCode),
 
 	        list_struct(HeadCode,[],HeadCodeList),
-                new_prvariable(NO_INDEX,BVL),
+                new_prvariable(NO_INDEX,BVL), % body var list
 		construct_defeasible_condition_for_signature_or_dynrule(HeadCode,DescrIdCode,DescrVarsTerm,DefeatCondCode),
 		%% Note: Head cannot contain sensors, so no need to check
 		%% multi-headed rules if sensors mix with non-sensors
 		(has_context(compiling_udf_definition)
 		-> RuleEnablerTest = true, FileName = NULL
-		; construct_rule_enabling_test(DescrIdCode,dynrule,RuleEnablerTest,FileName)
+		; construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_DYNRULE,RuleEnablerTest,FileName)
 		),
 		delay_literals_checking_code(Head,Body,DescrVarsTerm,DelayCheckCode),
 		PreBody = RuleEnablerTest,
@@ -9317,19 +9361,9 @@ compile_refresh(List,Code,Status) :-
   compile_clause(+Mode,+HeadList,+Body,-Code,-Status)
   Mode determines which rules to search for: static only, dynamic only, etc.
 ****************************************************************************/
-/*
-   TODO: clause{Head,Body} has several problems:
-   1. If rule had head(_@!) :- ...
-      then clause{...} will return head(_h123) :- ...
-      Possible solution: bite the bullet and pass DescrIdTerm to all compiler
-      predicates, esp. compile_pathexp.
-   2. If we ask clause{?H,?B} and then insert{?H:-?B} then the tokens _@! will
-      be unbound variables.
-      Possible solution: same as in 1.
-*/
 compile_clause(Descriptor,Mode,HeadList,Body,Code,Status) :-
 	approx_flindex(HeadList,ClauseIdx),
-	compile_descriptor_list(Descriptor-ClauseIdx,clause_construct,DescrIdCode,
+	compile_descriptor_list(Descriptor-ClauseIdx,FL_DESCRMODE_CLAUSE,DescrIdCode,
 				DescrVarTerm,
 				MetaFactDiffList,Descr_Status),
 	( no_errors_found(Descr_Status) -> 
@@ -9776,10 +9810,13 @@ get_current_compile_file_for_descriptor(CurrFileName,_Mode) :-
 	has_context(rule_reification),
 	filename_in_ruleid_struct(CurrFileName).
 get_current_compile_file_for_descriptor(CurrFileName,Mode) :-
-	memberchk(Mode,[clause_construct,query]),
+	memberchk(Mode,[FL_DESCRMODE_CLAUSE,FL_DESCRMODE_PLAIN_QUERY]),
 	!,
 	new_prvariable(NO_INDEX,CurrFileName).
-get_current_compile_file_for_descriptor(FL_DYNRULE_FICTITIOUS_FILENAME,dynrule) :-
+get_current_compile_file_for_descriptor(FL_DYNRULE_FICTITIOUS_FILENAME,FL_DESCRMODE_DYNRULE) :-
+	\+ has_context(compiling_for_addition),
+	!.
+get_current_compile_file_for_descriptor(FL_DYNRULE_FICTITIOUS_FILENAME,FL_DESCRMODE_LATENT_DYNQUERY) :-
 	\+ has_context(compiling_for_addition),
 	!.
 
@@ -10084,6 +10121,26 @@ compile_sensor_literal(PrlgModName,FObj,N,ArgList,Code) :-
 	;
 	    prologterm_struct(NewFObj,SensArity2,NewArgList,PrlgModName,Code)
 	).
+
+
+%% get_rule_manipulation_primitive_extra_args(+Args)
+%% This is for rule manipulation primitives that need to be augmented
+%% with _@F and _@ as the last args.
+get_rule_manipulation_primitive_extra_args([ThisFile,ThisModule]) :-
+	get_current_compile_file(File),
+	atomobj_struct(File,NO_INDEX,ThisFile),
+	thismodule_struct(ThisModule).
+rule_manipulation_primitive(FL_RULEENABLE).
+rule_manipulation_primitive(FL_RULEDISABLE).
+rule_manipulation_primitive(FL_TRANS_RULEENABLE).
+rule_manipulation_primitive(FL_TRANS_RULEDISABLE).
+rule_manipulation_primitive(FL_ISRULEENABLED).
+rule_manipulation_primitive(FL_ISRULEDISABLED).
+rule_manipulation_primitive(FL_MAKEDEFEASIBLE).
+rule_manipulation_primitive(FL_MAKESTRICT).
+rule_manipulation_primitive(FL_ISDEFEASIBLE).
+rule_manipulation_primitive(FL_ISSTRICT).
+rule_manipulation_primitive(FL_RUN_QUERY).
 
 
 /*
