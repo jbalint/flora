@@ -28,59 +28,38 @@
 #include "flora_terms.flh"
 #include "flora_tabling_methods.flh"
 
-/****************************************************************************
-   rule for HiLog UDFs 
-****************************************************************************/
+:- import
+	flora_defined_udf_registry/6
+   from flrregistry.
+:- import
+	flora_op_synonym/2
+   from flrsynonym.
 :- import call0/1 from machine.
-UDFHILOGPREDICATENAME(Predicate,Arity,Module,ReturnValue) :-
-	%%get_base_pred(Predicate,Arity,BaseName,BasePredicate),
-	get_base_pred(Predicate,BaseName,BasePredicate),
-	flrregistry:flora_defined_udf_registry(Module,BaseName,Arity,BasePredicate,_,CallCode),
+
+/****************************************************************************
+    UDFHILOGPREDICATENAME(+UDFTerm,+Arity,+Module,-ReturnValue) :-
+    rule for HiLog UDFs 
+****************************************************************************/
+UDFHILOGPREDICATENAME(UDFTerm,Arity,Module,ReturnValue) :-
+	%% No cuts anywhere in this clause!
+	%% We do want the 2nd UDFHILOGPREDICATENAME/4 to fire!
+	get_base_pred(UDFTerm,BaseName,BasePredicate),
+	flora_defined_udf_registry(Module,BaseName,Arity,BasePredicate,_,CallCode),
 	arg(1,CallCode,ReturnValue),
-	%% No cut: flora_op_synonym/2 can have many matches if Name is a var!
-	%% !,
 	call0(CallCode).
 
-UDFHILOGPREDICATENAME(Predicate,_Arity,_Module,Predicate).
+UDFHILOGPREDICATENAME(UDFTerm,_Arity,_Module,UDFTerm).
 
 
 %% working version
-get_base_pred(Predicate,BaseName,BasePredicate) :-
-	functor(Predicate,Functor,_),
-	(Functor == WRAP_HILOG
-	-> Predicate =.. [WRAP_HILOG,OpName|Args]
-	; Predicate =.. [OpName|Args]
+get_base_pred(UDFTerm,BaseName,BasePredicate) :-
+	(UDFTerm =.. [WRAP_HILOG,OpName|Args] -> IfHilog = true
+	; UDFTerm =.. [OpName|Args],
+	    IfHilog = fail
 	),
-	( flrsynonym:flora_op_synonym(OpName,BaseName)
+	( flora_op_synonym(OpName,BaseName)
 	; BaseName = OpName
 	),
-	(Functor == WRAP_HILOG -> BasePredicate =.. [WRAP_HILOG,BaseName|Args]
+	(IfHilog -> BasePredicate =.. [WRAP_HILOG,BaseName|Args]
 	; BasePredicate =.. [BaseName|Args]
 	).
-
-
-/*
-%% This caches conversion from Predicate to BasePredicate, which uses
-%% flora_op_synonym inside.
-%% But such caching does not work because there can be several predicates 
-%% matching the same UDF.
-:- dynamic flora_udf_base_pred_cache/4.
-get_base_pred(Predicate,Arity,BaseName,BasePredicate) :-
-	flora_udf_base_pred_cache(Predicate,Arity,BaseName,BasePredicate),
-	!.
-get_base_pred(Predicate,Arity,BaseName,BasePredicate) :-
-	functor(Predicate,Functor,_),
-	basics:length(Args,Arity),
-	(Functor == WRAP_HILOG
-	-> arg(1,Predicate,OpName), CachedPredicate =.. [WRAP_HILOG,OpName|Args]
-	; OpName = Functor, CachedPredicate =.. [OpName|Args]
-	),
-	( flrsynonym:flora_op_synonym(OpName,BaseName)
-	; BaseName = OpName
-	),
-	(Functor == WRAP_HILOG -> BasePredicate =.. [WRAP_HILOG,BaseName|Args]
-	; BasePredicate =.. [BaseName|Args]
-	),
-	assert(flora_udf_base_pred_cache(CachedPredicate,Arity,BaseName,BasePredicate)),
-	CachedPredicate = Predicate.
-*/

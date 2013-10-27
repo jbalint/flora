@@ -36,6 +36,33 @@ f(d).
 f(g).
 
 
+/*
+  Note: foo(?x)=bar(?x) will return ?x as follows:
+   ?x = a,f,d: three times each because foo(?x) = bar(?x) since
+               (1) rewriting both into bar(?x) due to foo(?x):=bar(?x) if q(?x).
+               (2) rewriting both into moo(?x) due to bar(?x):=moo(?x) if t(?x).
+               (3) rewriting foo(a)/bar(a)->moo(a)->b
+                                           due to moo(a):=b if mooDef(a,b).
+                   rewriting foo(d)/bar(d)->moo(d)->e
+                                           due to moo(d):=e if mooDef(d,e).
+                   rewriting foo(f)/bar(f)->moo(f)->g
+                                           due to moo(f):=g if mooDef(f,g).
+   ?x = b,c: once each because foo(b/c) --> bar(b/c) only due to
+                                           foo(b/c):=bar(b/c) if q(b/c).
+
+  To optimize this, we would have to translate foo(?x)=bar(?x) as
+   :- table mycall/1.
+   mycall(X) :-
+      UDFHILOGPREDICATENAME(X,Arity,Module,_newvar1),
+      UDFHILOGPREDICATENAME(X,Arity,Module,_newvar2),             **
+      _newvar1 = _newvar1.
+  and use mycall/1 in the actual rule instead of the entire body **.
+   
+  Need to think about it: this can cause hard-to-explain cut-over-table errors.
+  For instance, if the usr write foo(?x)=bar(?x), ! then he has no reason to
+  suspect that he will be cutting over a tabled predicate and the resulting
+  error wiuld be hard to explain/justify.
+*/
 %test1 :- foo(?x)=bar(?x), writeln(?x)@_plg, fail.
 %test1 :- true.
 %test2 :- bar(?x)=moo(?x), writeln(?x)@_plg, fail.

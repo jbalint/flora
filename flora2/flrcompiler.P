@@ -5816,6 +5816,20 @@ compile_atomobj(ParserTerm,Object,[],Status):-
   compile_udf_body_literal(+Funct,+Predicate,-PCode,-PBodyFrontList,-Status)
 
   Compile a UDF literal in the body.
+
+  PBodyFrontList contains the UDFHILOGPREDICATENAME/4 predicates that have
+  to be fronted before the predicate being translated. For instance,
+  if foo/1, bar/1 are UDFs and we are translating mypred(foo(?X),bar(?X))
+  then we get:
+
+        UDFHILOGPREDICATENAME(foo(X),1,_@,Newvar1),
+        UDFHILOGPREDICATENAME(bar(X),1,_@,Newvar2),
+	mypred(Newvar1,Newvar2).
+   
+  Here the UDFHILOGPREDICATENAME part goes into PBodyFrontList. Note that there
+  is redundancy in the above translation, if foo(X) and bar(X) can be rewritten
+  in myltiple ways. This would result in unnecessary backtracking. An example
+  is givein in flora2-testsuite/functions/test_func_eq.flr
 ****************************************************************************/
 compile_udf_body_literal(Funct,Predicate,PCode,PBodyFrontList,Status) :-
 	%% If we set no_symbol_check here then clear it out at the end.
@@ -5873,7 +5887,7 @@ has_UDF(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	; BaseName = Name
 	),
 	find_UDF(BaseName,N,_UDFCode,_PredicateCode),
-	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue),
+	make_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue),
 	!.
 
 has_UDF(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
@@ -5885,7 +5899,7 @@ has_UDF(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	!,
 	\+ has_context(compiling_udf_hilog(Funct)),
 	find_UDF(_BaseName,N,_UDFCode,_PredicateCode),
-	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
+	make_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
 
 
 has_UDF(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
@@ -5897,7 +5911,7 @@ has_UDF(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	!,
 	\+ has_context(compiling_udf_hilog(Funct)),
 	find_UDF(_BaseName,N,_UDFCode,_Predicate),
-	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
+	make_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
 
 has_UDF(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	\+ has_context(block_udf_expansion),
@@ -5906,12 +5920,12 @@ has_UDF(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
 	Args\=[],
 	Args\=null,
 	find_UDF(HILOG_SYMBOL_NAME,N,_UDFCode,_PredicateCode),
-	form_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
+	make_udf_hilog_predicate(Funct,N,Args,Predicate,ReturnValue).
 
 /****************************************************************************
-  form_udf_hilog_predicate(+Funct,+N,+Args,+ReturnOrigPred,-Predicate,-ReturnValue) 
+  make_udf_hilog_predicate(+Funct,+N,+Args,+ReturnOrigPred,-Predicate,-ReturnValue) 
 
-  forms the predicate for UDF with term names (hilog).
+  makes the predicate for UDF with term names (hilog).
 
   Funct - udf functor
   N - udf arity
@@ -5921,7 +5935,7 @@ has_UDF(Funct,N,Args,Predicate,ReturnValue,[],[]) :-
                 of udf_hilog_predicate. This variable appears as argument 5 in
 		UDFHILOGPREDICATENAME.
 ****************************************************************************/
-form_udf_hilog_predicate(Funct,N,Args,NewHeadCode,NewReturnValueObj):-
+make_udf_hilog_predicate(Funct,N,Args,NewHeadCode,NewReturnValueObj):-
 	get_udf_hilog_predicate_funct(NPFunct),
 	%%set_context(compiling_udf_hilog(NPFunct)),
 	new_flvariable(NO_INDEX,NewReturnValue,NewReturnValueObj),
