@@ -50,7 +50,10 @@
 	flora_abort/2
    from flrporting.
 
-:- import flora_decode_module_name/2 from flrwrapper.
+:- import
+	is_flora_callable_literal/1,
+	flora_decode_module_name/2
+   from flrwrapper.
 
 :- import get_tag_descriptor_info_with_rulehead/6 from flrdescriptor_support.
 
@@ -264,16 +267,24 @@ store_query_in_cache(QString,QCode,QArgs) :-
 /******************************************************************************
 	    traced_call(+Goal,-CalledRuleId,-CalledFile,-CalledModule)
 
-   Calls a Flora-2 **primitive** subgoal and returns the Id of the rule
-   that matched. The tracing parameters of Goal remain unbound.
-   This can be further extended to add module (which can be obtained from Goal).
+   Calls a Flora-2 **primitive** subgoal and returns the Id,file,module
+   of the rule that matched.
+   If Goal is not a Flora-2 user goal, CalledRuleId is unbound and CalledFile,
+   CalledModule are NULL. The same is true if Goal is matched against a base
+   fact. But the latter case can be caught by further testing _isbasefact(Goal).
 
-   But getting the file name is tricky. We can only find one of the possible
-   file names that has a rule with the same head and local Id. The problem is
-   that even the current tracing info slows XSB by a factor. So, adding file
-   names to FL_TRACING/2 would further slow it down.
+   There can be some uncertainty regarding the file if different files
+   loaded into the same module happen to have a rule with the same local
+   id and unifiable heads, so multiple results will be returned in this case.
+   This can be solved only by adding the file information to the tracing
+   argument of the Flora-2 calls, i.e., changing FL_TRACING/2 to FL_TRACING/4.
+   We didn't do it because even the current tracing info slows XSB by
+   a significant factor. So, adding file names to FL_TRACING/2 would
+   further slow it down.
 ******************************************************************************/
 traced_call(Goal,CalledRuleId,CalledFile,Module) :-
+	is_flora_callable_literal(Goal),
+	!,
 	flora_bind_last(Goal,CallerInfo),
 	(flora_decode_module_name(Goal,Module) -> true
 	; Module = NULL
@@ -283,10 +294,13 @@ traced_call(Goal,CalledRuleId,CalledFile,Module) :-
 	flora_replace_last(Goal,NewCallerInfo,OutGoal),
 	call(OutGoal),
 	get_goal_caller_id(OutGoal,CalledRuleId),
-	(Module \= NULL
-	-> get_tag_descriptor_info_with_rulehead(CalledRuleId,CalledFile,Module,_,OutGoal,_)
+	(Module \= NULL,
+	    get_tag_descriptor_info_with_rulehead(CalledRuleId,CalledFile,Module,_,OutGoal,_)
+	-> true
 	; CalledFile = NULL
 	).
+traced_call(Goal,_,NULL,NULL) :-
+	call(Goal).
 
 %% gets goal's rule id, if available, and the called-rule id
 get_goal_caller_id(Goal,CalledId) :-
