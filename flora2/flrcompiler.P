@@ -633,21 +633,31 @@ is_prdisjunct(PROR(L,R),L,R).
 ****************************************************************************/
 conjunct_struct(Goal1,Goal2,Goal2) :-
 	%% NULL and FL_TRUE are both dummy code that is ignored
-	(Goal1 == NULL ; Goal1 == FL_TRUE),
+	nonvar(Goal1),
+	ignore_null_and_true(Goal1),
 	!.
 conjunct_struct(Goal1,Goal2,Goal1) :-
-	(Goal2 == NULL ; Goal2 == FL_TRUE),
+	nonvar(Goal2),
+	ignore_null_and_true(Goal2),
 	!.
 conjunct_struct(Goal1,Goal2,PRAND(Goal1,Goal2)).
 
 disjunct_struct(Goal1,Goal2,Goal2) :-
-	%% NULL and FL_TRUE are both dummy code that is ignored
-	(Goal1 == NULL ; Goal1 == FL_FALSE),
+	%% NULL and FL_FALSE are both dummy code that is ignored
+	nonvar(Goal1),
+	ignore_null_and_false(Goal1),
 	!.
 disjunct_struct(Goal1,Goal2,Goal1) :-
-	(Goal2 == NULL ; Goal2 == FL_FALSE),
+	nonvar(Goal2),
+	ignore_null_and_false(Goal2),
 	!.
 disjunct_struct(Goal1,Goal2,PROR(Goal1,Goal2)).
+
+ignore_null_and_true(NULL) :- !.
+ignore_null_and_true(FL_TRUE) :- !.
+
+ignore_null_and_false(NULL) :-!.
+ignore_null_and_false(FL_FALSE).
 
 quantifier_struct(QuantifierType,FormCode,FreVarObjs,
 		  PRQUANTIFIER(QuantifierType,FormCode,FreVarObjs)).
@@ -845,13 +855,11 @@ ignorable_negated_head_conjunct(Goal) :-
   Discards NULLs
   If all are NULLs, returns NULL.
 ****************************************************************************/
-conjunct_code([],Goal) :-
-	!,
-	generate_prolog_liblit(FL_TRUE,0,[],Goal).
+conjunct_code([],FL_TRUE) :- !.
 conjunct_code([Goal],Goal) :- !.
 
-%% DON't include the case FL_TRUE here!
 conjunct_code([NULL|GList],ConjGoal) :- !, conjunct_code(GList,ConjGoal).
+conjunct_code([FL_TRUE|GList],ConjGoal) :- !, conjunct_code(GList,ConjGoal).
 
 conjunct_code([Goal|GList],ConjGoal) :-
 	conjunct_code(GList,ConjGoalTail),
@@ -863,19 +871,17 @@ conjunct_code([Goal|GList],ConjGoal) :-
 	).
 
 /*
-disjunct_code([],Goal) :-
-	!,
-	generate_prolog_liblit(FL_FALSE,0,[],Goal).
+disjunct_code([],FL_FALSE) :- !.
 disjunct_code([Goal],Goal) :- !.
 
-%% DON't include the case FL_FALSE/TRUE here!
 disjunct_code([NULL|GList],ConjGoal) :- !, disjunct_code(GList,ConjGoal).
+disjunct_code([FL_FALSE|GList],ConjGoal) :- !, disjunct_code(GList,ConjGoal).
 
 disjunct_code([Goal|GList],ConjGoal) :-
 	disjunct_code(GList,ConjGoalTail),
 	!,
 	( ConjGoalTail == NULL -> ConjGoal=Goal
-	%% DON't include the case FL_FALSE/TRUE here!
+	%% DON't include the case FL_FALSE here!
 	;
 	  disjunct_struct(Goal,ConjGoalTail,ConjGoal)
 	).
@@ -1398,6 +1404,7 @@ prologterm_struct(F,N,Args,Module,PROLOGTERM(F,N,Args,ModuleCode)) :-
 	atomobj_struct(Module,ModuleCode).
 
 prologliblit_struct(PrologTerm,PROLOGLIBLIT(PrologTerm)).
+%%is_prologliblit(PROLOGLIBLIT(PrologTerm),PrologTerm).
 
 is_prologterm(Term)    :- is_prologterm(Term,_,_,_), !.
 is_prologterm(Term)    :- is_prologterm(Term,_,_,_,_).
@@ -3546,11 +3553,11 @@ compile_defsensor_direct(SensCall,DelayCond,Code,Status) :-
 	%% termlit_struct, which takes flterm's.
 	flprologlib_call(SensCall,SensFLtermCall),
 	compile_body_literal(SensFLtermCall,FL_THISMODULE,OidCode,WSCode,[],S1),
-	conjunct_code([OidCode,WSCode],SensCode),
+	conjunct_struct(OidCode,WSCode,SensCode),
 	(no_errors_found(S1) ->
 	    detach_flworkspace(DelayCond,DelayCondSansWS,WS),
 	    compile_body_literal(DelayCondSansWS,WS,DelayOidCode,DelayWSCode,[],S2),
-	    conjunct_code([DelayOidCode,DelayWSCode],DelayCheckCode)
+	    conjunct_struct(DelayOidCode,DelayWSCode,DelayCheckCode)
 	; S2 = S1
 	),
 	(no_errors_found(S2) ->
@@ -3594,7 +3601,10 @@ compile_fact(Head,RuleDiffList,SigDiffList,FactDiffList,MetaFactDiffList,Status)
 	    ; %% fact became static rule
 	        compile_conjunct2list(HeadCode,HeadCodeList),
 		get_dynrule_varlist(L),
-		conjunct_code([H2BCodeHead,H2BCodeTail],H2BCode),
+		conjunct_struct(H2BCodeHead,H2BCodeTail,H2BCode1),
+		(H2BCode1 == NULL -> flatom_struct(FL_TRUE,NO_INDEX,H2BCode)
+		; H2BCode = H2BCode1
+		),
 		add_dynrule_attr_code(L,H2BCode,BodyCode),
 		%% no explicit id given: just generate new rule id
 		approx_flindex(Head,RuleIdx),
@@ -3623,25 +3633,34 @@ compile_fact_add(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,M
 	compile_head(Head,HeadCode,H2BCodeHead,H2BCodeTail,S),
 	!,
 	( no_errors_found(S) ->
-	    ( H2BCodeHead == NULL, H2BCodeTail == NULL ->
+	    ( H2BCodeHead == NULL, H2BCodeTail == NULL,
+		\+has_context(converting_fact2rule) ->
+		clear_context(converting_fact2rule),
 		compile_factlist(Head,HeadCode,RuleDiffList,FactDiffList,S2),
 		MetaFactDiffList = _M-_M
 	    ; %%% fact became a rule due to code in arguments: compile as a rule
 	        %% if compiling for addition, just insert the rule: no need
 		%% to add signature, as signatures are added when such rules
 		%% are inserted at compile time
-		flatom_struct(FL_TRUE,NO_INDEX,H2BflCode),
+		clear_context(converting_fact2rule),
+		%% NOTE: Here we just FAKE the body to be TRUE!
+		%% We don't need H2BCodeHead+H2BCodeTail because below we
+		%% recompile using compile_rule_add/8, so compile_head/5 will
+		%% be called again and create proper body.
+		%%conjunct_struct(H2BCodeHead,H2BCodeTail,H2BCode1),
+		flatom_struct(FL_TRUE,NO_INDEX,H2BCode),
 		%% no explicit id given: just generate new rule id
-		compile_rule_add(Head,H2BflCode,
+		compile_rule_add(Head,H2BCode,
 				 DescriptorIdCode,DescrVarsTerm,
 				 RuleDiffList,FactDiffList,
 				 MetaFactDiffList,S2)
 	    ),
 	    append(S,S2,Status)
         ;
-	  Status=S
+	    Status=S
 	),
 	!,
+	clear_context(converting_fact2rule),
 	clear_context(compiling_facts).
 
 
@@ -3753,9 +3772,9 @@ compile_query(Body,_,[Err]) :-
 compile_query(Body,QueryList-QueryTail,Status) :-
 	compile_body_top(Body,BCode,Status),
 	( no_errors_found(Status) -> 
-	    collect_prdatatypevars(BCode,DTVarsCode),
-	    append(DTVarsCode,[BCode],BCode1),
-	    conjunct_code(BCode1,BCode2),
+	    collect_prdatatypevars(BCode,DTVarsCodeList),
+	    conjunct_code(DTVarsCodeList,DTVarsCode),
+	    conjunct_struct(DTVarsCode,BCode,BCode2),
             get_dynrule_varlist(L),
 	    %% sets attributed variables for the checker of
 	    %% vars in dynamic rules
@@ -3770,9 +3789,6 @@ compile_query(Body,QueryList-QueryTail,Status) :-
 	    %% in queries, since it is explicit in FLLIBANSWER
 	    florasyslib_struct(FLLIBANSWER,2,[AugmentedBodyCode,NVCode],Goal),
 	    query_struct(Goal,QueryCode),
-	    %% The commented part would be used if we used import
-	    %%get_directive(DirectCodeList),
-	    %%append(DirectCodeList,[QueryCode|QueryTail],QueryList)
 	    QueryList = [QueryCode|QueryTail]
 	;
 	  true
@@ -3785,14 +3801,14 @@ compile_query(Body,QueryList-QueryTail,Status) :-
 compile_latent_query(DescrIdCode,MetaFactDiffList,Body,Mode,LatentQueryList-LatentQueryTail,Status) :-
 	compile_body_top(Body,BCode,Status),
 	( no_errors_found(Status) -> 
-	    collect_prdatatypevars(BCode,DTVarsCode),
-	    append(DTVarsCode,[BCode],BCode1),
-	    conjunct_code(BCode1,LatentQueryBodyCode),
+	    collect_prdatatypevars(BCode,DTVarsCodeList),
+	    conjunct_code(DTVarsCodeList,DTVarsCode),
+	    conjunct_struct(DTVarsCode,BCode,LatentQueryBodyCode),
 	    thismodule_struct(ThisMod),
 	    %% code to bind the Caller variable to the calling module
 	    caller_binding_code(ThisMod,CallerBindingCode),
 	    construct_rule_enabling_test(DescrIdCode,Mode,LatentQueryEnablerTest,_),
-	    conjunct_code([CallerBindingCode,LatentQueryEnablerTest],PreLatentQueryCode),
+	    conjunct_struct(CallerBindingCode,LatentQueryEnablerTest,PreLatentQueryCode),
 	    get_current_compile_file(File),
 	    (approx_prindex(DescrIdCode,Idx), Idx > 0 -> true
 	    ; approx_prindex(Body,Idx)
@@ -4796,10 +4812,9 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	append(HeadStatusPre,DelayStatus,HeadStatus),
 	( no_errors_found(HeadStatus) ->
 	    compile_body_top(Body,BCode1,BodyStatus),
-	    collect_prdatatypevars([HeadCodeList,BCode1],DTVarsCode),
-	    %% TODO: get rid of this append and in collect_prdatatypevars
-	    append(DTVarsCode,[H2BCodeHead,BCode1,H2BCodeTail],BCodeList),
-	    conjunct_code(BCodeList,BCode),
+	    collect_prdatatypevars([HeadCodeList,BCode1],DTVarsCodeList),
+	    conjunct_code(DTVarsCodeList,DTVarsCode),
+	    conjunct_code([DTVarsCode,H2BCodeHead,BCode1,H2BCodeTail],BCode),
             get_dynrule_varlist(L),
             add_dynrule_attr_code(L,BCode,PureBodyCode),
 	    %% should not add delay-checker to sensor rules
@@ -5032,8 +5047,8 @@ compile_head([ParserTerm|ParserTermList],Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    compile_head(ParserTermList,PLCode,PLH2BCodeHead,PLH2BCodeTail,S2),
 	    ( no_errors_found(S2) ->
 		    conjunct_struct(PCode,PLCode,Code),
-		    conjunct_code([PH2BCodeHead,PLH2BCodeHead],H2BCodeHead),
-		    conjunct_code([PH2BCodeTail,PLH2BCodeTail],H2BCodeTail),
+		    conjunct_struct(PH2BCodeHead,PLH2BCodeHead,H2BCodeHead),
+		    conjunct_struct(PH2BCodeTail,PLH2BCodeTail,H2BCodeTail),
 		    append(S,S2,Status)
 	     ;
 		Status=S2
@@ -5203,9 +5218,8 @@ compile_body(ParserTerm,Code,Status) :-
 compile_body(ParserTerm,Code,Status) :-
 	detach_flworkspace(ParserTerm,P,WS),
 	compile_body_literal(P,WS,OidCode,SpecCode,BodyFrontList,Status),
-	conjunct_code([OidCode,SpecCode],LitCode),
-	append(BodyFrontList,[LitCode],CodeList), 
-	conjunct_code(CodeList,Code).
+	conjunct_code(BodyFrontList,BodyFrontCode),
+	conjunct_code([BodyFrontCode,OidCode,SpecCode],Code).
 
 
 /****************************************************************************
@@ -5283,7 +5297,7 @@ compile_metauniv(Left,Right,OidCode,Code,Status) :-
 	    ( no_errors_found(Status) ->
 	       metauniv_struct(LeftCode,RightCode,UnivCode),
 		conjunct_code([UnivCode,ObjCode,RightObjCode],Code),
-		conjunct_code([OidCodeLeft,OidCodeRight],OidCode)
+		conjunct_struct(OidCodeLeft,OidCodeRight,OidCode)
 	    ; true
 	    )
 	;
@@ -5771,7 +5785,7 @@ compile_load(LoadList,Code,Status) :-
 	    florasyslib_struct(I,FLLIBLOAD,
 			       4,
 			       [ObjList,ProgramFile,Mod,PositionCode],LCode),
-	    conjunct_code([OCode,LCode],Code)
+	    conjunct_struct(OCode,LCode,Code)
 	;
 	  true
         ).
@@ -5826,6 +5840,7 @@ compile_atomobj(ParserTerm,Object,BodyFrontList,Status):-
 			      NONTRANSACTIONAL_SYMBOL,SymStatus),
 	compile_udf_body_literal(ParserTerm,Predicate,PCode,PBodyFrontList,S),
 	( no_errors_found(S) -> 
+	    %%BodyFrontList = [PCode|PBodyFrontList],
 	    append(PBodyFrontList,[PCode],BodyFrontList),
 	    append(S,SymStatus,Status)
 	;
@@ -5868,7 +5883,7 @@ compile_udf_body_literal(Funct,Predicate,PCode,PBodyFrontList,Status) :-
 	),
 	set_context(compiling_udf_hilog(Funct)),
 	compile_body_literal(Predicate,FL_THISMODULE,OidCode,SpecCode,PBodyFrontList,Status),
-	conjunct_code([OidCode,SpecCode],PCode),
+	conjunct_struct(OidCode,SpecCode,PCode),
 	clear_context(compiling_udf_hilog(Funct)),
 	(Clear == yes -> clear_context(no_symbol_check)
 	; true
@@ -5969,7 +5984,7 @@ make_udf_hilog_predicate(Funct,N,Args,NewHeadCode,NewReturnValueObj):-
 	new_flvariable(NO_INDEX,NewReturnValue,NewReturnValueObj),
 	flterm_struct(Funct,N,Args,OrigPredicateCode),
 	flthismodule_struct(Module),
-	flterm_struct(NPFunct,5,[OrigPredicateCode,N,Module,NewReturnValue],NewHeadCodePre),
+	flterm_struct(NPFunct,4,[OrigPredicateCode,N,Module,NewReturnValue],NewHeadCodePre),
 	flplib_struct(NewHeadCodePre,NewHeadCode).
 
 /****************************************************************************
@@ -5992,7 +6007,7 @@ compile_delayquant(Quant,ConditionWS,Goal,Index,SpecCode,BodyFrontList,Status):-
 	vars_to_var_names(GoalVarList,GoalVarNames),
 	detach_flworkspace(ConditionWS,Condition,WS),
 	compile_body_literal(Condition,WS,OidCode,WSCode,BodyFrontList,S1),
-	conjunct_code([OidCode,WSCode],ConditionCode),
+	conjunct_struct(OidCode,WSCode,ConditionCode),
 	(subset(CondVarNames,GoalVarNames) ->
 	    ( no_errors_found(S1) ->
 		compile_body(Goal,GoalCode,S2),
@@ -6637,8 +6652,8 @@ compile_body_pathexplist([T|L],WS,[TObj|LObj],OidCode,Code,BodyFrontList,Status)
 		true
 	    ),
 	    ( no_errors_found(S2) -> 
-		conjunct_code([TCode,LCode],Code),
-		conjunct_code([OidCodeHead,OidCodeTail],OidCode),
+		conjunct_struct(TCode,LCode,Code),
+		conjunct_struct(OidCodeHead,OidCodeTail,OidCode),
 		append(S,S2,Status)
 	    ; Status=S2
 	    )
@@ -6813,15 +6828,15 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status
 		    OidCode = NULL,
 		    new_oidobj(Index,Object)
 		)
-	    ;   %% Otherwise, p(_#) ==>> p(?N), _skolem(?N)
+	    ;   %% Otherwise, p(_#) ==>> p(?N), _skolemquery(?N)
 		OidCode = NULL,
 		new_prvariable(Index,Object),
-		prologterm_struct(FL_SKOLEM,1,[Object],flrnewoid,Code)
+		prologterm_struct(FL_SKOLEMQUERY,1,[Object],flrnewoid,Code)
 	    ),
 	    Status = NO_ERRORS,
 	    BodyFrontList=[]
 
-	%% A numbered OID, which appears in a reified formula in rule body
+	%% A numbered OID that appears in a reified formula in rule body
 	; is_fltoken(ParserTerm,FL_NEWOID,Num,Index) ->
 	    /*
 	    %% do not check the context of the skolems!
@@ -6838,10 +6853,10 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status
 		    OidCode = NULL,
 		    new_oidobj(Num,Index,Object)
 		)
-	    ;
+	    ; %% Otherwise, p(_#) ==>> p(?N), _skolemquery(?N)
 		OidCode = NULL,
 		prvariable_for_numbered_skolem(Index,Num,Object),
-		prologterm_struct(FL_SKOLEM,1,[Object],flrnewoid,Code)
+		prologterm_struct(FL_SKOLEMQUERY,1,[Object],flrnewoid,Code)
 	    ),
 	    Status = NO_ERRORS,
 	    BodyFrontList=[]
@@ -7013,6 +7028,7 @@ compile_body_termobj(Funct,N,Args,WS,Object,OidCode,Code,BodyFrontList,Transacti
 		( no_errors_found(S) -> 
 		    append(FunctBodyFrontList,PBodyFrontList,BodyFrontList1),
 		    append(BodyFrontList1,[PCode],BodyFrontList),
+		    %%BodyFrontList = [PCode|BodyFrontList1],
 		    Status = NO_ERRORS
 		;
 		    approx_flindex(Funct,Index),
@@ -7095,7 +7111,7 @@ compile_body_termlit(Funct,N,Args,WS,OidCode,Code,BodyFrontList,CompileStatus) :
 	( no_errors_found(PathexpStatus) -> 
 	    termlit_struct(BODYLITERAL,FObj,N,AObj,TCode),
 	    attach_workspace(TCode,WS,WSCode,WSStatus),
-	    conjunct_code([WSCode,ObjCode],Code)
+	    conjunct_struct(WSCode,ObjCode,Code)
 	;
 	    WSStatus = NO_ERRORS
         ),
@@ -7112,7 +7128,7 @@ compile_body_transactional_termlit(Funct,N,Args,WS,OidCode,Code,BodyFrontList,Co
 	( no_errors_found(PathexpStatus) -> 
 	    transactionaltermlit_struct(BODYLITERAL,FObj,N,AObj,TCode),
 	    attach_workspace(TCode,WS,WSCode,WSStatus),
-	    conjunct_code([WSCode,ObjCode],Code)
+	    conjunct_struct(WSCode,ObjCode,Code)
 	;
 	    WSStatus = NO_ERRORS
         ),
@@ -7150,8 +7166,8 @@ compile_body_list_obj(ObjTermList,ObjTerm,Index,WS,Object,OidCode,Code,BodyFront
 	    ),
 	    ( no_errors_found(Status) -> 
 		list_struct(ObjList,Obj,Index,Object),
-		conjunct_code([ObjListCode,ObjCode],Code),
-		conjunct_code([OidCodeList,OidCodeObj],OidCode)
+		conjunct_struct(ObjListCode,ObjCode,Code),
+		conjunct_struct(OidCodeList,OidCodeObj,OidCode)
 	    ;
 	      true
 	    )
@@ -7176,7 +7192,7 @@ compile_body_objref(ObjTerm,RefType,AttTerm,WS,Object,OidCode,Code,Status) :-
 	    body_objref_struct(Obj,RefType,Att,Index,Object,TCode),
 	    attach_workspace(TCode,WS,WTCode,WSStatus),
 	    Code = OACode,
-	    conjunct_code([OidCodeList,WTCode],OidCode)
+	    conjunct_struct(OidCodeList,WTCode,OidCode)
 	;
 	    WSStatus = NO_ERRORS
         ),
@@ -7194,7 +7210,7 @@ compile_body_bin_relation(ObjTerm1,RelType,ObjTerm2,WS,Obj1,OidCode,Code,Status)
 	( no_errors_found(PathexpStatus) -> 
 	    birelate_struct(BODYLITERAL,Obj1,RelType,Obj2,TCode),
 	    attach_workspace(TCode,WS,WTCode,WSStatus),
-	    conjunct_code([WTCode,OCode],Code)
+	    conjunct_struct(WTCode,OCode,Code)
 	;
 	    WSStatus = NO_ERRORS
         ),
@@ -7226,7 +7242,7 @@ compile_body_objspec(ObjTerm,SpecBody,WS,Object,OidCode,Code,BodyFrontList,Statu
 		    approx_flindex(ATerm,Index),
 		    body_objref_struct(OObj,RefType,AObj,Index,Object,TCode),
 		    attach_workspace(TCode,WS,WTCode,WSStatus),
-		    conjunct_code([WTCode,ObjCode],Code)
+		    conjunct_struct(WTCode,ObjCode,Code)
 		;
 		    WSStatus = NO_ERRORS
 	        ),
@@ -7239,7 +7255,7 @@ compile_body_objspec(ObjTerm,SpecBody,WS,Object,OidCode,Code,BodyFrontList,Statu
 		( no_errors_found(PathexpStatus) -> 
 		    objexists_struct(BODYLITERAL,Object,ECode),
 		    attach_workspace(ECode,WS,WSECode,WSStatus),
-		    conjunct_code([WSECode,ObjCode],Code)
+		    conjunct_struct(WSECode,ObjCode,Code)
 		;
 		    WSStatus = NO_ERRORS
 		),
@@ -7259,8 +7275,8 @@ compile_body_objspec(ObjTerm,SpecBody,WS,Object,OidCode,Code,BodyFrontList,Statu
 		  %% computing a:b  (or a::b)when a or b are vars, is expensive.
 		  %% Ideally we should check the type of ObjCode or used
 		  %% delay for ObjCode
-		  conjunct_code([SpecCode,ObjCode],Code),
-		  conjunct_code([ObjOidCode,SpecOidCode],OidCode)
+		  conjunct_struct(SpecCode,ObjCode,Code),
+		  conjunct_struct(ObjOidCode,SpecOidCode,OidCode)
 	      ; 
 		  true
 	      ),
@@ -7290,7 +7306,7 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	( no_errors_found(S) -> 
 	    compile_body_specbody(Object,R,WS,OidCode,RCode,BodyFrontList2,Status),
 	    ( no_errors_found(Status) -> 
-		conjunct_code([LCode,RCode],Code)
+		conjunct_struct(LCode,RCode,Code)
 	    ; true
 	    ),
 	    append(BodyFrontList1,BodyFrontList2,BodyFrontList)
@@ -7331,7 +7347,7 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 		remove_existential_vars(FreeVarObjList1,FreeVarObjList),
 		list_struct(FreeVarObjList,[],FreeVarObjs)
 	    ),
-	    conjunct_code([OidCode,FormCode],CombinedCode),
+	    conjunct_struct(OidCode,FormCode,CombinedCode),
 	    (NAFType == FL_RULELOGNAF
 	    -> naf_struct_flora(CombinedCode,FreeVarObjs,Code)
 	    ; naf_struct_prolog(CombinedCode,Code)
@@ -7345,7 +7361,7 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	!,
 	compile_body_specbody(Object,G,WS,OidCode,GCode,BodyFrontList,Status1),
 	( no_errors_found(Status1) -> 
-	    conjunct_code([OidCode,GCode],CombinedGCode),
+	    conjunct_struct(OidCode,GCode,CombinedGCode),
 	    neg_struct(CombinedGCode,Idx,Code,Status)
 	; Status = Status1
 	),
@@ -7386,7 +7402,7 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	flatten([S1,S2,S3],Status),
 	( no_errors_found(Status) -> 
 	    %% Create the code for compiled quantification.
-	    conjunct_code([OidCode,RenamedFormCode],CombinedCode),
+	    conjunct_struct(OidCode,RenamedFormCode,CombinedCode),
 	    quantifier_struct(FL_EXISTS,CombinedCode,FreeVarObjs,Code)
 	;
 	    true
@@ -7490,8 +7506,7 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 		;
 		    Status = S_C
 		),
-		append(BodyFrontList1,BodyFrontList2,BodyFrontList4),
-		append(BodyFrontList4,BodyFrontList3,BodyFrontList)
+		lists:append_lists([BodyFrontList1,BodyFrontList2,BodyFrontList3], BodyFrontList)
 	    )
 	;
 	    BodyFrontList = BodyFrontList1,
@@ -7621,7 +7636,7 @@ compile_body_specbody(_Object,SpecTerm,_WS,NULL,Code,BodyFrontList,Status) :-
 	!,
 	compile_prlgterm(Funct,N,Args,
 			 TCode,_OidCode,ACode,BodyFrontList,Status),
-	( no_errors_found(Status) -> conjunct_code([ACode,TCode],Code)
+	( no_errors_found(Status) -> conjunct_struct(ACode,TCode,Code)
 	; true
 	).
 
@@ -7694,7 +7709,7 @@ compile_body_mvd_attspec(Object,AttObj,RefType,[T],WS,OidCode,Code,BodyFrontList
 	( no_errors_found(PathexpStatus) -> 
 	    mvdattspec_struct(BODYLITERAL,Object,AttObj,RefType,TObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
-	    conjunct_code([WSCode,TCode],Code)
+	    conjunct_struct(WSCode,TCode,Code)
 	;
 	    WSStatus = NO_ERRORS
 	),
@@ -7709,8 +7724,8 @@ compile_body_mvd_attspec(Object,AttObj,RefType,[T|L],WS,OidCode,Code,BodyFrontLi
 	( no_errors_found(S) -> 
 	    compile_body_mvd_attspec(Object,AttObj,RefType,L,WS,OidCodeTail,WLCode,BodyFrontList2,Status),
 	    ( no_errors_found(Status) -> 
-		conjunct_code([WTCode,WLCode],Code),
-		conjunct_code([OidCodeHead,OidCodeTail],OidCode)
+		conjunct_struct(WTCode,WLCode,Code),
+		conjunct_struct(OidCodeHead,OidCodeTail,OidCode)
 	    ; true
 	    ),
 	    append(BodyFrontList1,BodyFrontList2,BodyFrontList)
@@ -7728,7 +7743,7 @@ compile_body_objeql(Obj1,Obj2,WS,OidCode,Code,Status) :-
 	( no_errors_found(PathexpStatus) -> 
 	    objeql_struct(BODYLITERAL,O1,O2,OECode),
 	    attach_workspace(OECode,WS,WSCode,WSStatus),
-	    conjunct_code([OCode,WSCode],Code)
+	    conjunct_struct(OCode,WSCode,Code)
 	;
 	    WSStatus = NO_ERRORS
 	),
@@ -7752,7 +7767,7 @@ compile_reifyop(Formula,Object,OidCode,Status) :-
 	( no_errors_found(Status) -> 
 	    new_prvariable(NO_INDEX,Object),
 	    attrvar_code(Object,AttrValCode,FLSEMANTICUNIFICATION,PutAttrCode),
-	    conjunct_code([PrependedCode,PutAttrCode],OidCode)
+	    conjunct_struct(PrependedCode,PutAttrCode,OidCode)
 	;
 	    true
 	).
@@ -7855,7 +7870,7 @@ compile_prologliblit(ParserTerm,OidCode,Code,BodyFrontList,Status) :-
 	    compile_prlgterm(Funct,N,Args,
 			     TCode,OidCode,ACode,BodyFrontList,Status),
 	    ( no_errors_found(Status) -> 
-		conjunct_code([ACode,TCode],Code)
+		conjunct_struct(ACode,TCode,Code)
 	    ; true
 	    )
 	;
@@ -7894,7 +7909,7 @@ compile_prologliblit(ParserTerm,Module,OidCode,Code,BodyFrontList,Status) :-
 	    %% prologliblit_struct is NOT added by compile_prologliblit/6 ---
 	    %% only by compile_prologliblit/7
 	    prologliblit_struct(TCode,PCode),
-	    conjunct_code([ACode,PCode],Code)
+	    conjunct_struct(ACode,PCode,Code)
 	/*
 	    %% generate an import statement for the corresponding XSB predicate
 	    is_flatom(Module,MName),
@@ -8093,7 +8108,7 @@ generate_convert_to_prolog_code([AObjH|AObjT],[VarH|VarT],Code) :-
 	*/
 	prologterm_struct(FlP2H,4,[VarH,AObjH,WRAP_HILOG,P2H_UNIFY_VARS],CodeH),
 	generate_convert_to_prolog_code(AObjT,VarT,CodeT),
-	conjunct_code([CodeH,CodeT],Code).
+	conjunct_struct(CodeH,CodeT,Code).
 
 /*************************************************************************
    generate_convert_from_prolog_code(+AObjList,+VarList,-Code)
@@ -8105,7 +8120,7 @@ generate_convert_from_prolog_code([AObjH|AObjT],[VarH|VarT],Code) :-
 	%% P2H_UNIFY_VARS - unify when both arguments are vars
 	prologterm_struct(FlP2H,4,[VarH,AObjH,WRAP_HILOG,P2H_UNIFY_VARS],CodeH),
 	generate_convert_from_prolog_code(AObjT,VarT,CodeT),
-	conjunct_code([CodeH,CodeT],Code).
+	conjunct_struct(CodeH,CodeT,Code).
 		
 
 /****************************************************************************
@@ -8235,8 +8250,8 @@ compile_head_pathexplist([T|L],WS,[TObj|LObj],Code,H2BCodeHead,H2BCodeTail,Statu
 	    compile_head_pathexplist(L,WS,LObj,LCode,LH2BCodeHead,LH2BCodeTail,S2),
 	    ( no_errors_found(S2) -> 
 		conjunct_struct(TCode,LCode,Code),
-		conjunct_code([TH2BCodeHead,LH2BCodeHead],H2BCodeHead),
-		conjunct_code([TH2BCodeTail,LH2BCodeTail],H2BCodeTail),
+		conjunct_struct(TH2BCodeHead,LH2BCodeHead,H2BCodeHead),
+		conjunct_struct(TH2BCodeTail,LH2BCodeTail,H2BCodeTail),
 		append(S,S2,Status)
 	    ;
 		Status=S2
@@ -8315,7 +8330,7 @@ compile_head_pathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :
 
         ; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_head_termobj(Funct,N,Args,WS,Object,Code,
-				     H2BCodeHead,H2BCodeTail,Status)
+				 H2BCodeHead,H2BCodeTail,Status)
 
 	; is_fllist(ParserTerm,L,T,I) ->
 	    compile_head_list_obj(L,T,I,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
@@ -8368,12 +8383,13 @@ compile_head_termobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Compile
 	    ( no_errors_found(S1) -> 
 	    	H2BCodeTail=NULL,
 	    	Code=NULL,
-	    	compile_udf_body_literal(Funct,Predicate,PCode,PH2BCodeHead,S),
+	    	compile_udf_body_literal(Funct,Predicate,PCode,PH2BCodeHeadL,S),
 	    	SymbolContext = UDF_SYMBOL,
 	    	( no_errors_found(S) -> 
-		    append(FunctBodyFrontList,PH2BCodeHead,List1),
-		    append(List1,[PCode],List),
-		    conjunct_code(List,H2BCodeHead),
+		    conjunct_code(FunctBodyFrontList,FunctBodyFrontCode),
+		    conjunct_code(PH2BCodeHeadL,PH2BCodeHeadCode),
+		    conjunct_code([FunctBodyFrontCode,PH2BCodeHeadCode,PCode],
+				  H2BCodeHead),
 		    Status = NO_ERRORS
 	    	;
 		    approx_flindex(Funct,Index),
@@ -8413,7 +8429,8 @@ compile_head_termlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatus)
 	((H2BCodeHead_pre \== NULL ; H2BCodeTail \== NULL)
 	-> H2BCodeHead = H2BCodeHead_pre
 	; /* compiling modular prolog fact: convert to rule fact :- true.
-	     such rules are compiled by compile_fact_add so they will
+	     ONLY FOR ADDITION OF MODULAR PROLOG FACTS
+	     Such rules are compiled by compile_fact_add so they will
 	     be insertable and will not conflict with the staic version
 	     of the same modular prolog fact
 	     For instance: 
@@ -8436,7 +8453,8 @@ compile_head_termlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatus)
 	    get_flatom_name(Funct,AtomName),
 	    flora_modular_prlgdef(AtomName,N)
 	-> %% FL_TRUE is dummy code, which gets ignored by conjunct_struct/3
-	    H2BCodeHead = FL_TRUE
+	    H2BCodeHead = NULL,
+	    set_context(converting_fact2rule)
 	; H2BCodeHead = H2BCodeHead_pre
 	),
 	( no_errors_found(PathexpStatus) -> 
@@ -8447,7 +8465,7 @@ compile_head_termlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatus)
 	    WSStatus = NO_ERRORS
         ),
 	!,
-	(WSStatus == NO_ERRORS -> append(SymbolStatus,PathexpStatus,CompileStatus)
+	(WSStatus==NO_ERRORS -> append(SymbolStatus,PathexpStatus,CompileStatus)
 	; CompileStatus = WSStatus
 	).
 
@@ -8463,7 +8481,7 @@ compile_head_transactional_termlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,
 	    WSStatus = NO_ERRORS
         ),
 	!,
-	(WSStatus == NO_ERRORS -> append(SymbolStatus,PathexpStatus,CompileStatus)
+	(WSStatus==NO_ERRORS -> append(SymbolStatus,PathexpStatus,CompileStatus)
 	; CompileStatus = WSStatus
 	).
 
@@ -8487,8 +8505,8 @@ compile_head_list_obj(ObjTermList,ObjTerm,Index,WS,Object,Code,H2BCodeHead,H2BCo
 	    ( no_errors_found(Status) -> 
 		list_struct(ObjList,Obj,Index,Object),
 		conjunct_struct(ObjListCode,ObjCode,Code),
-		conjunct_code([ObjListH2BCodeHead,ObjH2BCodeHead],H2BCodeHead),
-		conjunct_code([ObjListH2BCodeTail,ObjH2BCodeTail],H2BCodeTail)
+		conjunct_struct(ObjListH2BCodeHead,ObjH2BCodeHead,H2BCodeHead),
+		conjunct_struct(ObjListH2BCodeTail,ObjH2BCodeTail,H2BCodeTail)
 	    ;
 	      true
 	    )
@@ -8510,7 +8528,7 @@ compile_head_objref(ObjTerm,RefType,AttTerm,WS,Object,Code,H2BCodeHead,H2BCodeTa
 	    head_objref_struct(Obj,RefType,Att,Index,Object,TCode),
 	    attach_workspace(TCode,WS,WTCode,WSStatus),
 	    OAH2BCodeHead = H2BCodeHead,
-	    conjunct_code([OAH2BCodeTail,WTCode],H2BCodeTail),
+	    conjunct_struct(OAH2BCodeTail,WTCode,H2BCodeTail),
 	    Code = OACode
 	;
 	    WSStatus = NO_ERRORS
@@ -8564,8 +8582,8 @@ compile_head_objspec(ObjTerm,SpecBody,WS,Object,Code,H2BCodeHead,H2BCodeTail,Sta
 	      compile_head_specbody(Object,SpecBody,WS,SCode,SH2BCodeHead,SH2BCodeTail,Status),
 	      ( no_errors_found(Status) -> 
 		      conjunct_struct(ObjCode,SCode,Code),
-	              conjunct_code([ObjH2BCodeHead,SH2BCodeHead],H2BCodeHead),
-	              conjunct_code([ObjH2BCodeTail,SH2BCodeTail],H2BCodeTail)
+	              conjunct_struct(ObjH2BCodeHead,SH2BCodeHead,H2BCodeHead),
+	              conjunct_struct(ObjH2BCodeTail,SH2BCodeTail,H2BCodeTail)
 	      ; true
 	      )
 	  ;
@@ -8592,8 +8610,8 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    compile_head_specbody(Object,R,WS,RCode,RH2BCodeHead,RH2BCodeTail,Status),
 	    ( no_errors_found(Status) -> 
 		conjunct_struct(LCode,RCode,Code),
-		conjunct_code([LH2BCodeHead,RH2BCodeHead],H2BCodeHead),
-		conjunct_code([LH2BCodeTail,RH2BCodeTail],H2BCodeTail)
+		conjunct_struct(LH2BCodeHead,RH2BCodeHead,H2BCodeHead),
+		conjunct_struct(LH2BCodeTail,RH2BCodeTail,H2BCodeTail)
 	    ; true
 	    )
 	;
@@ -8626,8 +8644,8 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	      compile_head_mvd_attspec(Object,AObj,RefType,VL,WS,VCode,VH2BCodeHead,VH2BCodeTail,Status),
 	      ( no_errors_found(Status) -> 
 	              conjunct_struct(ACode,VCode,Code),
-		      conjunct_code([AH2BCodeHead,VH2BCodeHead],H2BCodeHead),
-		      conjunct_code([AH2BCodeTail,VH2BCodeTail],H2BCodeTail)
+		      conjunct_struct(AH2BCodeHead,VH2BCodeHead,H2BCodeHead),
+		      conjunct_struct(AH2BCodeTail,VH2BCodeTail,H2BCodeTail)
 	       
 	      ; true
 	      )
@@ -8705,8 +8723,8 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 		    sigattspec_struct(HEADLITERAL,Object,AttObj,RefType,ValObj,SCode),
 		    attach_workspace(SCode,WS,WSSCode,WSStatus),
 		    conjunct_code([ACode,VCode,WSSCode],Code),
-		    conjunct_code([AH2BCodeHead,VH2BCodeHead],H2BCodeHead),
-		    conjunct_code([AH2BCodeTail,VH2BCodeTail],H2BCodeTail)
+		    conjunct_struct(AH2BCodeHead,VH2BCodeHead,H2BCodeHead),
+		    conjunct_struct(AH2BCodeTail,VH2BCodeTail,H2BCodeTail)
 		;
 		    WSStatus = NO_ERRORS
 		),
@@ -8841,8 +8859,8 @@ compile_head_mvd_attspec(Object,AttObj,RefType,[T|L],WS,Code,H2BCodeHead,H2BCode
 	    append(AttspecStatus,WSStatus,Status),
 	    ( no_errors_found(Status) -> 
 		conjunct_struct(TSCode,LCode,Code),
-		conjunct_code([TH2BCodeHead,LH2BCodeHead],H2BCodeHead),
-		conjunct_code([TH2BCodeTail,LH2BCodeTail],H2BCodeTail)
+		conjunct_struct(TH2BCodeHead,LH2BCodeHead,H2BCodeHead),
+		conjunct_struct(TH2BCodeTail,LH2BCodeTail,H2BCodeTail)
 	    ; true
 	    )
 	;
@@ -8998,7 +9016,7 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 		new_prvariable(NO_INDEX,HVL),
 		new_prvariable(NO_INDEX,BVL),
 		list_struct(HCode,[],HeadCodeList),
-		conjunct_code([H2BCodeHead,H2BCodeTail],H2BCode),
+		conjunct_struct(H2BCodeHead,H2BCodeTail,H2BCode),
 		%% only the vars in the fact-term are to be checked
 		delay_literals_checking_code([],H,DescrVarsTerm,DelayCheckCode),
 		construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_DYNRULE,RuleEnablerTest,FileName),
@@ -9097,7 +9115,7 @@ compile_delete_litlist([H|T],CodeList,Status) :-
 	is_flobjeql(H,O1,O2),
 	!,
 	compile_body_objeql(O1,O2,FL_THISMODULE,OidCode,SpecCode,S),
-	conjunct_code([OidCode,SpecCode],HCode),
+	conjunct_struct(OidCode,SpecCode,HCode),
 	approx_flindex(O1,Idx),
 	report_option(FLOBJEQLDEF,Idx),
 	( no_errors_found(S) -> 
@@ -9135,7 +9153,7 @@ compile_delete_litlist([HWS|T],CodeList,Status) :-
         set_context(compile_delete),
 	detach_flworkspace(HWS,H,WS),
 	compile_body_literal(H,WS,OidCode,SpecCode,[],S),
-	conjunct_code([OidCode,SpecCode],HCode),
+	conjunct_struct(OidCode,SpecCode,HCode),
         clear_context(compile_delete),
 	( no_errors_found(S) -> 
 	    compile_conjunct2list(HCode,HCodeList),
@@ -9262,14 +9280,14 @@ compile_dyn_latent_query(Op,DescrIdCode,MetaFactDiffList,Body,LatentQuerySigCode
 	set_context(compiling_dynrule(DescrIdCode)),
 	compile_body_top(Body,BCode,Status),
 	( no_errors_found(Status) -> 
-	    collect_prdatatypevars(BCode,DTVarsCode),
-	    append(DTVarsCode,[BCode],BCode1),
-	    conjunct_code(BCode1,LatentQueryBodyCode),
+	    collect_prdatatypevars(BCode,DTVarsCodeList),
+	    conjunct_code(DTVarsCodeList,DTVarsCode),
+	    conjunct_struct(DTVarsCode,BCode,LatentQueryBodyCode),
 	    thismodule_struct(ThisMod),
 	    %% code to bind the Caller variable to the calling module
 	    caller_binding_code(ThisMod,CallerBindingCode),
 	    construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_LATENT_DYNQUERY,LatentQueryEnablerTest,_),
-	    conjunct_code([CallerBindingCode,LatentQueryEnablerTest],PreLatentQueryCode),
+	    conjunct_struct(CallerBindingCode,LatentQueryEnablerTest,PreLatentQueryCode),
 	    get_current_compile_file_for_descriptor(File,FL_DESCRMODE_LATENT_DYNQUERY),
 	    (approx_prindex(DescrIdCode,Idx), Idx > 0 -> true
 	    ; approx_prindex(Body,Idx)
@@ -9307,10 +9325,9 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 	( no_errors_found(HeadStatus) -> 
 	    compile_body_top(Body,BodyCode1,BodyStatus),
 	    ( no_errors_found(BodyStatus) -> 
-	        collect_prdatatypevars([HeadCode,BodyCode1],DTVarsCode),
-		%% TODO: get rid of this append!!!
-		append(DTVarsCode,[H2BCodeHead,BodyCode1,H2BCodeTail],BCodeList),
-		conjunct_code(BCodeList,PureBodyCode),
+	        collect_prdatatypevars([HeadCode,BodyCode1],DTVarsCodeList),
+		conjunct_code(DTVarsCodeList,DTVarsCode),
+		conjunct_code([DTVarsCode,H2BCodeHead,BodyCode1,H2BCodeTail],PureBodyCode),
 
 	        list_struct(HeadCode,[],HeadCodeList),
                 new_prvariable(NO_INDEX,BVL), % body var list
@@ -9654,7 +9671,7 @@ flora_compile_pathexp(ParserTerm,Code,Status) :-
 	compile_body_pathexp(ParserTerm,FL_THISMODULE,ObjectCode,OidCode,SpecCode,[],Status1),
 	!,
 	( no_errors_found(Status1), (OidCode \= NULL ; SpecCode \= NULL) -> 
-	    %%conjunct_code([OidCode,SpecCode],Code)
+	    %%conjunct_struct(OidCode,SpecCode,Code)
 	    approx_flindex(ParserTerm,Index),
 	    compiling_error(Index,READING_NONREIFIED_MOLECULE, S),
 	    Status = [S|Status1]
@@ -9734,18 +9751,26 @@ is_body_neg_negatable_literal(X) :-
 	%%has_context(goal_reification),
 	!.
 
+is_body_neg_passthrough_literal(FL_TRUE) :- !.
 %% this one is used to make neg(UDFHILOGPREDICATENAME(....),Goal) into
 %% UDFHILOGPREDICATENAME(....), neg(Goal)
 is_body_neg_passthrough_literal(X) :-
-	is_prologterm(X,Struct,5,_Args),
+	is_prologterm(X,Struct,4,_Args),
 	is_pratom(Struct,UDFHILOGPREDICATENAME,_),
 	!.
+%% FL_SKOLEMQUERY == _skolemquery, which is builtin_identifier, not prologterm
+%% this is probably never used
 is_body_neg_passthrough_literal(X) :-
-	is_prologterm(X,Struct,1,_Args,_),
-	(Struct = FL_SKOLEM
-	; is_pratom(Struct,UDFHILOGPREDICATENAME,_)
-	),
+	is_prologterm(X,FL_SKOLEMQUERY,1,_Args,_),
 	!.
+/*
+is_prtermlit(PRTERMLIT(Obj,N,Args),Obj,N,Args).
+is_body_neg_passthrough_literal(X) :-
+	is_prtermlit(X,Struct,1,_),
+	is_prbuiltin_identifier(Struct,FL_SKOLEMQUERY),
+	!.
+*/
+
 /*
 is_unimplemented_neg_negatable_literal(X) :-
 	is_florasyslib_struct(X, _I,_F,_N,_Args).
@@ -9872,7 +9897,6 @@ get_current_compile_file_for_descriptor(FL_DYNRULE_FICTITIOUS_FILENAME,FL_DESCRM
 
 get_current_compile_file_for_descriptor(CurrFileName,_Mode) :-
 	get_current_compile_file(CurrFileName).
-
 
 
 /*
