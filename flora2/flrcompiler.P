@@ -204,6 +204,8 @@ is_flpliball(FLPLIBALL(P,M),P,M) :-
 is_flifthenelse(FLIFTHENELSE(Cond,Then,Else),Cond,Then,Else).
 is_flifthen(FLIFTHEN(Cond,Then),Cond,Then).
 
+is_flsetarg(FLSETARG(Term,Idx),Term,Idx).
+
 %% Meta ~
 is_fluniveqform(FLUNIVEQFORM(Left,Right),Left,Right).
 %% Meta =..
@@ -470,6 +472,7 @@ approx_flindex(FLWORKSPACE(P,_WS),I)          :- !, approx_flindex(P,I).
 approx_flindex(FLCONSTRAINT(C),I)             :- !, approx_flindex(C,I).
 
 approx_flindex(FLLATENTQUERY(C),I)            :- !, approx_flindex(C,I).
+approx_flindex(FLSETARG(_,I),I)               :- !.
 
 approx_flindex(FLUDF(Fun,_,_),I)              :- !, approx_flindex(Fun,I).
 approx_flindex(FLUDFFACT(Fun,_),I)            :- !, approx_flindex(Fun,I).
@@ -637,6 +640,13 @@ conjunct_struct(Goal1,Goal2,Goal1) :-
 	!.
 conjunct_struct(Goal1,Goal2,PRAND(Goal1,Goal2)).
 
+disjunct_struct(Goal1,Goal2,Goal2) :-
+	%% NULL and FL_TRUE are both dummy code that is ignored
+	(Goal1 == NULL ; Goal1 == FL_FALSE),
+	!.
+disjunct_struct(Goal1,Goal2,Goal1) :-
+	(Goal2 == NULL ; Goal2 == FL_FALSE),
+	!.
 disjunct_struct(Goal1,Goal2,PROR(Goal1,Goal2)).
 
 quantifier_struct(QuantifierType,FormCode,FreVarObjs,
@@ -826,9 +836,12 @@ ignorable_negated_head_conjunct(Goal) :-
 
 /****************************************************************************
   conjunct_code(+GoalList,-Code)
+  disjunct_code(+GoalList,-Code)
 
   Takes a list of goals and constructs a conjunct:
         prand(G1, prand(G2, G3))
+     resp
+        pror(G1, pror(G2, G3))
   Discards NULLs
   If all are NULLs, returns NULL.
 ****************************************************************************/
@@ -848,6 +861,25 @@ conjunct_code([Goal|GList],ConjGoal) :-
 	;
 	  conjunct_struct(Goal,ConjGoalTail,ConjGoal)
 	).
+
+/*
+disjunct_code([],Goal) :-
+	!,
+	generate_prolog_liblit(FL_FALSE,0,[],Goal).
+disjunct_code([Goal],Goal) :- !.
+
+%% DON't include the case FL_FALSE/TRUE here!
+disjunct_code([NULL|GList],ConjGoal) :- !, disjunct_code(GList,ConjGoal).
+
+disjunct_code([Goal|GList],ConjGoal) :-
+	disjunct_code(GList,ConjGoalTail),
+	!,
+	( ConjGoalTail == NULL -> ConjGoal=Goal
+	%% DON't include the case FL_FALSE/TRUE here!
+	;
+	  disjunct_struct(Goal,ConjGoalTail,ConjGoal)
+	).
+*/
 
 
 /****************************************************************************
@@ -4783,8 +4815,6 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	    ; RealPostBody = PostBody
 	    ),
 	    ( no_errors_found(BodyStatus) ->
-		%%get_directive(DirectCodeList),
-		%%append(DirectCodeList,Tail,RuleList),
 		split_ruleheads_add_rulesig(HeadCodeList,
 					    PureBodyCode,PreBody,RealPostBody,
 					    DescriptorIdCode,DescrVarsTerm,
@@ -5160,8 +5190,6 @@ compile_body(ParserTerm,Code,Status) :-
 	    conjunct_code(CodeList,Code)
 	; Status = Status1
 	).
-	%%compile_annotated_construct_add(Descriptor,MainPartOfRule,RuleDiffList,FactDiffList,QueryList,LatentQueryList,Status),
-	%%lists:append_lists([RuleDiffList,FactDiffList,QueryList,LatentQueryList],Code).
 
 
 %% a descriptor query in rule/query body like ... :- ..., @!{...}
@@ -6595,7 +6623,7 @@ compile_floralibobj(ParserTerm,WS,Object,OidCode,Code,Status) :-
 		  it is normally an output parameter, but if bound to []
 		  then ignores user defined functions
 ****************************************************************************/
-compile_body_pathexplist([],_WS,[],NULL,NULL,[],[]).
+compile_body_pathexplist([],_WS,[],NULL,NULL,[],[]) :- !.
 
 compile_body_pathexplist([T|L],WS,[TObj|LObj],OidCode,Code,BodyFrontList,Status) :-
 	(var(BodyFrontList) -> true ; BodyFrontList1=[],BodyFrontList2=[]),
@@ -6701,6 +6729,12 @@ compile_body_pathexp(ParserTerm,WS,Object,OidCode,Code,BodyFrontList,Status) :-
 
 	; is_flworkspace(ParserTerm,P,NestedWS) ->
 	    compile_pathexp_with_explicit_workspace(P,NestedWS,Object,OidCode,Code,BodyFrontList,Status)
+
+	; is_flsetarg(ParserTerm,Setarg,Idx) ->
+	    new_prvariable(Idx,Object),
+	    compile_body_setarg_list(Object,Setarg,WS,OidCode,SetList,BodyFrontList,Status),
+	    writeln(ssss=SetList),
+	    Code = NULL
 
 	;
 	  compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status)
@@ -6949,13 +6983,13 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status
 	    compile_prologalllibobj(P,Module,Object,OidCode,Code,BodyFrontList,Status)
 	
 	; is_flfloralib(ParserTerm,P,Module) ->
-	    BodyFrontList=[],
-	    compile_floralibobj(P,Module,Object,OidCode,Code,Status)
+	    compile_floralibobj(P,Module,Object,OidCode,Code,Status),
+	    BodyFrontList=[]
 	),
 	!.
 
 
-/****************************************************************************
+/******************************************************************************
   compile_body_termobj(+FunctorTerm,+Arity,+ArgList,+Workspace,-Object,-OidCode,-Code,?BodyFrontList,+Transactional,-Status)
 
   BodyFrontList - code to add at the beginning of the body
@@ -6964,7 +6998,7 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status
 		  empty ([]) ignores user defined functions
   Transactional - flag if Funct is transactional
 			can be TRANSACTIONAL_SYMBOL or NONTRANSACTIONAL_SYMBOL
-****************************************************************************/
+******************************************************************************/
 compile_body_termobj(Funct,N,Args,WS,Object,OidCode,Code,BodyFrontList,Transactional,CompileStatus) :-
 	var(BodyFrontList),
 	!,
@@ -7066,7 +7100,7 @@ compile_body_termlit(Funct,N,Args,WS,OidCode,Code,BodyFrontList,CompileStatus) :
 	    WSStatus = NO_ERRORS
         ),
 	!,
-	(WSStatus == NO_ERRORS -> append(SymbolStatus,PathexpStatus,CompileStatus)
+	(WSStatus==NO_ERRORS -> append(SymbolStatus,PathexpStatus,CompileStatus)
 	; CompileStatus = WSStatus
 	).
 
@@ -7083,7 +7117,7 @@ compile_body_transactional_termlit(Funct,N,Args,WS,OidCode,Code,BodyFrontList,Co
 	    WSStatus = NO_ERRORS
         ),
 	!,
-	(WSStatus == NO_ERRORS -> append(SymbolStatus,PathexpStatus,CompileStatus)
+	(WSStatus==NO_ERRORS -> append(SymbolStatus,PathexpStatus,CompileStatus)
 	; CompileStatus = WSStatus
 	).
 
@@ -7097,7 +7131,7 @@ compile_body_transactional_termlit(Funct,N,Args,WS,OidCode,Code,BodyFrontList,Co
 		 it is output argument, but if it is initialized to empty ([]) ignores user defined functions
 ****************************************************************************/
 compile_body_list_obj(ObjTermList,ObjTerm,Index,WS,Object,OidCode,Code,BodyFrontList,Status) :-
-	(var(BodyFrontList) -> true; BodyFrontList1=[],BodyFrontList2=[]),
+	(var(BodyFrontList) -> true; BodyFrontList1=[], BodyFrontList2=[]),
 	compile_body_pathexplist(ObjTermList,WS,ObjList,OidCodeList,ObjListCode,BodyFrontList1,S),
 	( no_errors_found(S) -> 
 	    ( ObjTerm == [] ->
@@ -7449,7 +7483,8 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 		    ;
 			WSStatus1 = NO_ERRORS, WSStatus2 = NO_ERRORS
 		    ),
-		    (WSStatus1 == NO_ERRORS, WSStatus2 == NO_ERRORS -> Status = PathexpStatus
+		    (WSStatus1 == NO_ERRORS, WSStatus2 == NO_ERRORS
+		    -> Status = PathexpStatus
 		    ; append(WSStatus1,WSStatus2,Status)
 		    )
 		;
@@ -8793,7 +8828,7 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	),
 	!.
 
-compile_head_mvd_attspec(_Object,_AttObj,_RefType,[],_WS,NULL,NULL,NULL,[]) :- !.
+compile_head_mvd_attspec(_Obj,_AttObj,_RefType,[],_WS,NULL,NULL,NULL,[]) :- !.
 
 compile_head_mvd_attspec(Object,AttObj,RefType,[T|L],WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	!,
@@ -10136,6 +10171,34 @@ compile_sensor_literal(PrlgModName,FObj,N,ArgList,Code) :-
 	;
 	    prologterm_struct(NewFObj,SensArity2,NewArgList,PrlgModName,Code)
 	).
+
+
+/*****************************************************************************
+%% compile_body_setarg_list(+MemberVar,+Setarg,+WS,-OidCode,-SetList,-BodyFrontList,-Status)
+%% set expression {a1,a2,a3}
+%%
+%% SetList - the list [Elt1, Elt2, ...], where Elt1,Elt2, etc., are the
+%%                  compiled object parts in the set expression
+%% BodyFrontList -  the code resulting from stuff attached
+%%                  to the elements of the set, e.g., elt[foo->bar]
+%%                  OidCode, code to produce elements of the set
+%%                  goes into BodyFrontList
+******************************************************************************/
+compile_body_setarg_list(_,[],_WS,NULL,[],[],[]) :- !.
+compile_body_setarg_list(MemberVar,[Elt|Rest],WS,OidCode,SetList,BodyFrontList,Status) :-
+	compile_body_pathexp(Elt,WS,EltObj,EltOidCode,EltFrameStuff,EltFrontList1,S),
+	( no_errors_found(S) -> 
+	    compile_body_setarg_list(MemberVar,Rest,WS,ResrOidCode,RestSetList,RestFrontList2,S2),
+	    ( no_errors_found(S2) -> 
+		conjunct_code([EltOidCode,ResrOidCode,EltFrameStuff],OidCode),
+		append(EltFrontList1,RestFrontList2,BodyFrontList),
+		SetList = [EltObj|RestSetList],
+		append(S,S2,Status)
+	    ; Status=S2
+	    )
+	;
+	  Status=S
+        ).
 
 
 %% get_rule_manipulation_primitive_extra_args(+Args)
