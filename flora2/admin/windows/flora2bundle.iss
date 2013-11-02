@@ -6,9 +6,9 @@
 ; A compiled version of XSB must exist at the location of XSBBaseDir
 
 #define MyAppName "Flora-2"
-#define FlrVersion "0.99.4"
+#define FlrVersion "0.99.5"
 #define XSBVersion "3.4"
-#define MyAppVerName "Flora-2  v. "+FlrVersion+" (Kumquat) and XSB "+XSBVersion
+#define MyAppVerName "Flora-2  v. "+FlrVersion+" (Olive) and XSB "+XSBVersion
 #define MyAppPublisher "Flora-2"
 #define MyAppURL "http://flora.sourceforge.net/"
 #define MyAppUrlName "Flora-2 Web Site.url"

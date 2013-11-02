@@ -5,8 +5,8 @@
 ; by the MyBaseDir variable below.
 
 #define MyAppName "Flora-2"
-#define FlrVersion "0.99.4"
-#define MyAppVerName "Flora-2  v. "+FlrVersion+" (Kumquat)"
+#define FlrVersion "0.99.5"
+#define MyAppVerName "Flora-2  v. "+FlrVersion+" (Olive)"
 #define MyAppPublisher "Flora-2"
 #define MyAppURL "http://flora.sourceforge.net/"
 #define MyAppUrlName "Flora-2 Web Site.url"
