@@ -43,6 +43,7 @@
     from flrporting.
 
 :- import
+	flrterm_vars_split/4,
 	flratom_char_code/3
    from flora_ground.
 
@@ -54,6 +55,14 @@
 	flatten/2,
 	length/2
    from basics.
+
+:- import
+	put_attr/3,
+	get_attr/3,
+	del_attr/2,
+	install_verify_attribute_handler/4,
+	install_attribute_portray_hook/3
+   from machine.
 
 :- import
         %%concat_atom/2,

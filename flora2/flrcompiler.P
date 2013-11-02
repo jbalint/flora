@@ -59,6 +59,8 @@
 #define BODYLITERAL         	 1
 #define HEADLITERAL         	 2
 
+#define SETARGATTRIBUTE          flrsetarg
+
 %% used in an error message
 #define ERRLINE_NO               ' on line '
 
@@ -6280,7 +6282,14 @@ compile_floraliblit(ParserTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 
 
 /****************************************************************************
-  compile_body_literal(+ParserTerm,+Workspace,-OidCode,-Code,?BodyFrontList,-Status)
+  compile_body_literal(+ParserTerm,+Workspace,-OidCode,-BodyLitCode,?BodyFrontList,-Status)
+  BodyLitCode is the main code for the literal. It may be multiplied if
+              it contains set arguments. Eg, p({a,b}) becomes p(a),p(b).
+              This is done by replacing {a,b} with an attributed variable X
+	      that has member(X,[a,b]) as an attribute. At the end of
+	      compile_body_literal/6, we do
+	      findall(WSCode,member(X,[a,b]),BodyLitCode), which does
+	      the multiplication trick.
   ?BodyFrontList - code to add at the beginning of the body
                   (mostly for user defined fnctions),
 		  it is output argument, but if it is initialized to
@@ -6288,7 +6297,7 @@ compile_floraliblit(ParserTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 ****************************************************************************/
 %% TODO: no need for separate OidCode+WSCode. This is used only in
 %% compile_floraliblit, but compile_floraliblit does not need it either!!!
-compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyFrontList,Status) :-
+compile_body_literal(ParserTerm,WS,OidCode,BodyLitCode,BodyFrontList,Status) :-
 	( is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_body_transactional_termlit(Funct,N,Args,WS,OidCode,
 					       WSCode,BodyFrontList,Status)
@@ -6646,6 +6655,8 @@ compile_body_literal(ParserTerm,WS,OidCode,WSCode,BodyFrontList,Status) :-
 	    compiling_error(ErrIdx,[UNKNOWN_ERROR,'\n\t\t Details: in compile_body_literal'],Err),
 	    Status = [Err]
 	),
+	%% multiply the literal, if it has set arguments inside
+	multiply_setarg_code(WSCode,BodyLitCode),
 	!.
 
 
@@ -6672,9 +6683,11 @@ compile_body_pathexplist([],_WS,[],NULL,NULL,[],NO_ERRORS) :- !.
 compile_body_pathexplist([T|L],WS,[TObj|LObj],OidCode,Code,BodyFrontList,Status) :-
 	(var(BodyFrontList) -> true ; BodyFrontList1=[],BodyFrontList2=[]),
 	compile_body_pathexp(T,WS,TObj,OidCodeHead,TCode,BodyFrontList1,S),
+	(var(TCode) -> TCode = NULL ; true),
 	clear_context(compiling_term_name),
 	( no_errors_found(S) -> 
 	    compile_body_pathexplist(L,WS,LObj,OidCodeTail,LCode,BodyFrontList2,S2),
+	    (var(LCode) -> LCode = NULL ; true),
 	    ( var(BodyFrontList) ->
 		append(BodyFrontList1,BodyFrontList2,BodyFrontList)
 	    ;
@@ -6774,11 +6787,11 @@ compile_body_pathexp(ParserTerm,WS,Object,OidCode,Code,BodyFrontList,Status) :-
 	; is_flworkspace(ParserTerm,P,NestedWS) ->
 	    compile_pathexp_with_explicit_workspace(P,NestedWS,Object,OidCode,Code,BodyFrontList,Status)
 
-	; is_flsetarg(ParserTerm,Setarg,Idx) ->
-	    compile_body_setarg_list(Setarg,WS,SetList,OidCode,Code,BodyFrontList,_Status11111),
+	; is_flsetarg(ParserTerm,Setarg,_Idx) ->
+	    compile_body_setarg_list(Setarg,WS,SetList,OidCode,
+				     Code,BodyFrontList,_Status),
 	    Object = _, %% NOTE: a prolog var, since we'll be macro-expanding
-	    compiling_error(Idx,['set arguments in the body not implemented: ', SetList], Err),
-	    Status = [Err]
+	    put_attr(Object,SETARGATTRIBUTE,member(Object,SetList))
 
 	;
 	  compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status)
@@ -8169,14 +8182,21 @@ compile_head_floraliblit(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 
 
 /****************************************************************************
-  compile_head_literal(+ParserTerm,+Workspace,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_literal(+ParserTerm,+Workspace,-HeadLitCode,-H2BCodeHead,-H2BCodeTail,-Status)
 
+  HeadLitCode is the main code for the literal. It may be multiplied if
+              it contains set arguments. Eg, p({a,b}) becomes p(a),p(b).
+              This is done by replacing {a,b} with an attributed variable X
+	      that has member(X,[a,b]) as an attribute. At the end of
+	      compile_head_literal/6, we do
+	      findall(WSCode,member(X,[a,b]),BodyLitCode), which does
+	      the multiplication trick.
   H2BCodeHead - code passed from head to body, which is supposed to be
                 prepended to the code of the body
   H2BCodeTail - code passed from head to body, which is supposed to be
                 appended to the code of the body
 ****************************************************************************/
-compile_head_literal(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_literal(ParserTerm,WS,HeadLitCode,H2BCodeHead,H2BCodeTail,Status) :-
         set_context(compiling_headliteral),
 	( is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_head_transactional_termlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,Status)
@@ -8264,6 +8284,7 @@ compile_head_literal(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	    Status = [Err]
 	),
 	!,
+	multiply_setarg_code(Code,HeadLitCode),
         clear_context(compiling_headliteral).
 
 
@@ -8274,9 +8295,11 @@ compile_head_pathexplist([],_WS,[],NULL,NULL,NULL,NO_ERRORS) :- !.
 
 compile_head_pathexplist([T|L],WS,[TObj|LObj],Code,H2BCodeHead,H2BCodeTail,Status) :-
 	compile_head_pathexp(T,WS,TObj,TCode,TH2BCodeHead,TH2BCodeTail,S),
+	(var(TCode) -> TCode = NULL ; true),
 	clear_context(compiling_term_name),
 	( no_errors_found(S) -> 
 	    compile_head_pathexplist(L,WS,LObj,LCode,LH2BCodeHead,LH2BCodeTail,S2),
+	    (var(LCode) -> LCode = NULL ; true),
 	    ( no_errors_found(S2) -> 
 		conjunct_struct(TCode,LCode,Code),
 		conjunct_struct(TH2BCodeHead,LH2BCodeHead,H2BCodeHead),
@@ -8394,12 +8417,11 @@ compile_head_pathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :
 	    Code = NULL,
 	    H2BCodeTail = NULL
 
-	; is_flsetarg(ParserTerm,Setarg,Idx) ->
+	; is_flsetarg(ParserTerm,Setarg,_Idx) ->
 	    compile_head_setarg_list(Setarg,WS,SetList,Code,
-				     H2BCodeHead,H2BCodeTail,_Status1111),
+				     H2BCodeHead,H2BCodeTail,Status),
 	    Object = _, %% NOTE: a prolog var, since we'll be macro-expanding
-	    compiling_error(Idx,['set arguments in the head not implemented: ', SetList], Err),
-	    Status = [Err]
+	    put_attr(Object,SETARGATTRIBUTE,member(Object,SetList))
 
 	;
 	    approx_flindex(ParserTerm,ErrIdx),
@@ -10291,3 +10313,38 @@ show_nowarn_symbols :-
 	fail.
 show_nowarn_symbols.
 */
+
+/*******************************************************************************
+    Handling attributed variables for set arguments multipliers.
+*******************************************************************************/
+:- install_verify_attribute_handler(SETARGATTRIBUTE,
+				    AttrVal,VarBinding,
+				    setarg_unify_handler(AttrVal,VarBinding)).
+:- install_attribute_portray_hook(SETARGATTRIBUTE,Attr,write(attr=Attr)).
+%% we might not need to check if the attribute value is a list:
+%% this is just a precaution against weird bindings
+setarg_unify_handler(AttrVal,_VarBinding) :- is_list(AttrVal).
+get_all_attrvars(PRTerm,AttrVars) :- flrterm_vars_split(PRTerm,_,AttrVars,0).
+
+get_setarg_multiplier(PRTerm,Multiplier) :-
+	get_all_attrvars(PRTerm,AttrVars),
+	get_setarg_multiplier_from_list(AttrVars,Multiplier).
+
+get_setarg_multiplier_from_list([],FL_TRUE) :- !.
+get_setarg_multiplier_from_list([Var|Rest], (Membership,RestMems)) :-
+	get_attr(Var,SETARGATTRIBUTE,Membership),
+	!,
+	del_attr(Var,SETARGATTRIBUTE),
+	get_setarg_multiplier_from_list(Rest,RestMems).
+get_setarg_multiplier_from_list([_|Rest], RestMems) :-
+	get_setarg_multiplier_from_list(Rest,RestMems).
+
+%% multiply the literal, if it has set arguments inside
+multiply_setarg_code(Code,MultCode) :-
+	get_setarg_multiplier(Code,Multiplier),
+	(Multiplier == FL_TRUE -> MultCode = Code
+	; findall(Code,Multiplier,MultLitList),
+	    conjunct_code(MultLitList,MultCode)
+	).
+
+/******************************************************************************/
