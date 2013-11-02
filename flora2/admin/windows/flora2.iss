@@ -5,8 +5,8 @@
 ; by the MyBaseDir variable below.
 
 #define MyAppName "Flora-2"
-#define FlrVersion "0.99.3"
-#define MyAppVerName "Flora-2  v. "+FlrVersion+" (Aronia)"
+#define FlrVersion "0.99.4"
+#define MyAppVerName "Flora-2  v. "+FlrVersion+" (Kumquat)"
 #define MyAppPublisher "Flora-2"
 #define MyAppURL "http://flora.sourceforge.net/"
 #define MyAppUrlName "Flora-2 Web Site.url"
@@ -73,7 +73,7 @@ Source: "{#MyBaseDir}\runflora.bat"; Excludes: ".*,CVS"; DestDir: "{app}\"; Comp
 
 Source: "{#MyBaseDir}\LICENSE"; Excludes: ".*,CVS"; DestDir: "{app}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
-Source: "{#MyBaseDir}\etc\flora.ico"; Excludes: ".*,CVS"; DestDir: "{app}\etc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#MyBaseDir}\etc\flora-desktop.ico"; Excludes: ".*,CVS"; DestDir: "{app}\etc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#MyBaseDir}\*.P"; Excludes: ".*,CVS"; DestDir: "{app}\"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#MyBaseDir}\*.H"; Excludes: ".*,CVS"; DestDir: "{app}\"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -173,9 +173,9 @@ Filename: "{app}\{#MyAppLicenseUrlName}"; Section: "InternetShortcut"; Key: "URL
 
 
 [Icons]
-Name: "{group}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {app} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{app}"; Components: base; IconFilename: "{app}\etc\flora.ico"
+Name: "{group}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {app} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{app}"; Components: base; IconFilename: "{app}\etc\flora-desktop.ico"
 
-Name: "{userdesktop}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {app} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{app}"; Components: base; IconFilename: "{app}\etc\flora.ico"; Tasks: shortcut
+Name: "{userdesktop}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {app} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{app}"; Components: base; IconFilename: "{app}\etc\flora-desktop.ico"; Tasks: shortcut
 
 Name: "{group}\License"; Filename: "{#MyAppLicenseURL}"; Components: base
 

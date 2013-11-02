@@ -6,9 +6,9 @@
 ; A compiled version of XSB must exist at the location of XSBBaseDir
 
 #define MyAppName "Flora-2"
-#define FlrVersion "0.99.3"
+#define FlrVersion "0.99.4"
 #define XSBVersion "3.4"
-#define MyAppVerName "Flora-2  v. "+FlrVersion+" (Aronia) and XSB "+XSBVersion
+#define MyAppVerName "Flora-2  v. "+FlrVersion+" (Kumquat) and XSB "+XSBVersion
 #define MyAppPublisher "Flora-2"
 #define MyAppURL "http://flora.sourceforge.net/"
 #define MyAppUrlName "Flora-2 Web Site.url"
@@ -90,7 +90,7 @@ Source: "{#FlrBaseDir}\runflora.bat"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\";
 
 Source: "{#FlrBaseDir}\LICENSE_bundle"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
-Source: "{#FlrBaseDir}\etc\flora.ico"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\etc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#FlrBaseDir}\etc\flora-desktop.ico"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\etc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#FlrBaseDir}\*.P"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\*.H"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -222,9 +222,9 @@ Filename: "{app}\{#XSBLicenseUrlName}"; Section: "InternetShortcut"; Key: "URL";
 
 
 [Icons]
-Name: "{group}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {#flrapp} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{#flrapp}"; Components: base; IconFilename: "{#flrapp}\etc\flora.ico"
+Name: "{group}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {#flrapp} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{#flrapp}"; Components: base; IconFilename: "{#flrapp}\etc\flora-desktop.ico"
 
-Name: "{userdesktop}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {#flrapp} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{#flrapp}"; Components: base; IconFilename: "{#flrapp}\etc\flora.ico"; Tasks: shortcut
+Name: "{userdesktop}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {#flrapp} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{#flrapp}"; Components: base; IconFilename: "{#flrapp}\etc\flora-desktop.ico"; Tasks: shortcut
 
 Name: "{group}\Flora-2 License"; Filename: "{#FlrLicenseURL}"; Components: base
 Name: "{group}\XSB License"; Filename: "{#XSBLicenseURL}"; Components: base
