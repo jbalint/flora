@@ -91,6 +91,7 @@ Source: "{#FlrBaseDir}\runflora.bat"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\";
 Source: "{#FlrBaseDir}\LICENSE_bundle"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#FlrBaseDir}\etc\flora-desktop.ico"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\etc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#FlrBaseDir}\etc\flora.ico"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\etc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#FlrBaseDir}\*.P"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\*.H"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -222,7 +223,7 @@ Filename: "{app}\{#XSBLicenseUrlName}"; Section: "InternetShortcut"; Key: "URL";
 
 
 [Icons]
-Name: "{group}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {#flrapp} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{#flrapp}"; Components: base; IconFilename: "{#flrapp}\etc\flora-desktop.ico"
+Name: "{group}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {#flrapp} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{#flrapp}"; Components: base; IconFilename: "{#flrapp}\etc\flora.ico"
 
 Name: "{userdesktop}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {#flrapp} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{#flrapp}"; Components: base; IconFilename: "{#flrapp}\etc\flora-desktop.ico"; Tasks: shortcut
 

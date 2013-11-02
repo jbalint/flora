@@ -74,6 +74,7 @@ Source: "{#MyBaseDir}\runflora.bat"; Excludes: ".*,CVS"; DestDir: "{app}\"; Comp
 Source: "{#MyBaseDir}\LICENSE"; Excludes: ".*,CVS"; DestDir: "{app}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#MyBaseDir}\etc\flora-desktop.ico"; Excludes: ".*,CVS"; DestDir: "{app}\etc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#MyBaseDir}\etc\flora.ico"; Excludes: ".*,CVS"; DestDir: "{app}\etc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#MyBaseDir}\*.P"; Excludes: ".*,CVS"; DestDir: "{app}\"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#MyBaseDir}\*.H"; Excludes: ".*,CVS"; DestDir: "{app}\"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -173,7 +174,7 @@ Filename: "{app}\{#MyAppLicenseUrlName}"; Section: "InternetShortcut"; Key: "URL
 
 
 [Icons]
-Name: "{group}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {app} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{app}"; Components: base; IconFilename: "{app}\etc\flora-desktop.ico"
+Name: "{group}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {app} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{app}"; Components: base; IconFilename: "{app}\etc\flora.ico"
 
 Name: "{userdesktop}\Flora-2"; Filename: "cmd" ; Parameters: "/k ""cd {app} & runflora.bat"""; Comment: "Runs Flora-2 within a Windows command window"; WorkingDir: "{app}"; Components: base; IconFilename: "{app}\etc\flora-desktop.ico"; Tasks: shortcut
 
