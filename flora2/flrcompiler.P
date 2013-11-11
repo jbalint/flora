@@ -381,10 +381,6 @@ is_imvdtolistspecop(FL_INTOLISTARROW).
 is_imvdsigspecop(FL_INMVDSIGARR).
 
 
-%% For postprocessing dynrules that were stuch inside insert{...} or delete{...}
-is_prdynrule(PRDYNRULE(Head,Body,HVars,BVars,PreBody,PostBody,Descriptor),
-	     Head,Body,HVars,BVars,PreBody,PostBody,Descriptor).
-
 is_fltermdescriptor(FLTERMDESCRIPTOR(Funct,Arity),Funct,N) :-
 	is_flnumber(Arity,N),!.
 is_fltermdescriptor(FLTERMDESCRIPTOR(Funct,Arity),Funct,FL_STAR) :-
@@ -572,7 +568,6 @@ approx_prindex(PROR(First,Second),I)          :- !,
 	-> true
 	; approx_prindex(Second,I)).
 approx_prindex(PRRULE(Head,_),I)              :- !, approx_prindex(Head,I).
-approx_prindex(PRDYNRULE(Head,_,_,_,_,_),I)   :- !, approx_prindex(Head,I).
 approx_prindex(PRFACT(Head),I)                :- !, approx_prindex(Head,I).
 approx_prindex(PRREIFY(F),I)                  :- !, approx_prindex(F,I).
 approx_prindex(PRQUERY(Body),I)               :- !, approx_prindex(Body,I).
@@ -603,10 +598,6 @@ rule_struct(Head,Body,PRRULE(Head,Body)).
 fact_struct(Head,PRFACT(Head)).
 query_struct(Goal,PRQUERY(Goal)).
 directive_struct(Direct,PRDIRECTIVE(Direct)).
-
-%% Descriptor is a tripple: (DescrIdCode,DescrVarsTerm,MetaFactDiffList,DefeatConditionCode)
-dynrule_struct(Head,Body,HVars,BVars,PreBody,PostBody,Descriptor,PRDYNRULE(Head,Body,HVars,BVars,PreBody,PostBody,Descriptor)) :-
-	report_option(FLSYSLIB(FLLIBINSERTRULE_A),NO_INDEX).
 
 reify_struct(Formula,PRREIFY(Formula)) :-
 	report_option(FLSYSLIB(FLLIBUNIVEQFORM),NO_INDEX).
@@ -9109,13 +9100,15 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 		PreBody = RuleEnablerTest,
 		PostBody = DelayCheckCode,
 		get_current_stmt_number_for_descriptor(RuleIdx,StmtNum),
-		dynrule_struct(HeadCodeList,H2BCode,HVL,BVL,PreBody,PostBody,
-			       (DescrIdCode,FileName,
-				   DescrVarsTerm,
-				   StmtNum,
-				   DefaultMetaFactDiffList,
-				   FL_TRUE),  %% default defeat condition
-			       HDynruleCode),
+		DefaultMetaFactDiffList = DefaultMetaFactList - [],
+		list_struct(DefaultMetaFactList,[],MetaFactCode),
+		florasyslib_struct(FLSYSRULEUPDATE,12,
+				   [DescrIdCode,FileName,DescrVarsTerm,
+				    StmtNum,MetaFactCode,
+				    HeadCodeList,H2BCode,HVL,BVL,
+				    PreBody,PostBody,
+				    FL_TRUE], %% default defeat condition
+				   HDynruleCode),
 		clear_context(compiling_dynrule(DescrIdCode)),
 		clear_context(compile_with_var_module),
 		compile_insert_litlist(T,TCode,S2),
@@ -9268,7 +9261,7 @@ compile_dbupdate_list([C|CL],[C|DBCodeList]) :-
 	compile_dbupdate_list(CL,DBCodeList).
 
 compile_dbupdate_list([C|CL],[DBCode|DBCodeList]) :-
-	is_prdynrule(C,_Head,_Body,_HeadVars,_BodyVars,_PreBody,_PostBody,_Descriptor),
+	is_florasyslib_struct(C,_,FLSYSRULEUPDATE,_,_),
 	!,
 	%% Already compiled, don't tack on FLSYSDBUPDATE
 	DBCode = C,
@@ -9445,13 +9438,14 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 		PostBody = DelayCheckCode,
 		approx_prindex(DescrIdCode,RuleIdx),
 		get_current_stmt_number_for_descriptor(RuleIdx,StmtNum),
-		dynrule_struct(HeadCodeList,PureBodyCode,HVL,BVL,
-			       PreBody,PostBody,
-			       (DescrIdCode,FileName,
-				   DescrVarsTerm,
-				   StmtNum,
-				   MetaFactDiffList,DefeatCondCode),
-			       RuleCode),
+		MetaFactDiffList = MetaFactList - [],
+		list_struct(MetaFactList,[],MetaFactCode),
+		florasyslib_struct(FLSYSRULEUPDATE,12,
+				   [DescrIdCode,FileName,DescrVarsTerm,
+				    StmtNum,MetaFactCode,
+				    HeadCodeList,PureBodyCode,HVL,BVL,
+				    PreBody,PostBody,DefeatCondCode],
+				   RuleCode),
 		flatten([HeadStatus,BodyStatus],Status)
 	    ;
 		flatten([HeadStatus,BodyStatus],Status)

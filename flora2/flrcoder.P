@@ -61,9 +61,6 @@ is_prquery(PRQUERY(Goal),Goal).
 is_prdirective(PRDIRECTIVE(Direct),Direct).
 is_prudf_definition(PRUDFDEFINITION(Name,N,UDFCode,PredName,PredCode),Name,N,UDFCode,PredName,PredCode).
 
-%% DescrInfo is a tuple: (IdCode,DescrVarTermCode,DescrMetafactCode,DefeatCondCode)
-is_prdynrule(PRDYNRULE(Head,Body,HVars,BVars,PreBody,PostBody,DescrInfo),Head,Body,HVars,BVars,PreBody,PostBody,DescrInfo).
-
 is_prreify(PRREIFY(Formula),Formula).
 
 is_primport(PRIMPORT(P,A,M),P,A,M).      % prolog's :- import (for output only)
@@ -997,7 +994,7 @@ flora_write_struct(Term,Context,Status) :-
 %% At present we do not support reified rules with annotations
 %% (and thus also with implicit defeat conditions).
 flora_write_struct(Term,_Context,Status) :-
-	is_prdynrule(Term,_HeadList,_Body,_HVars,_BVars,_PreBody,_PostBody,_Descr),
+	is_florasyslib(Term,FLSYSRULEUPDATE,_,_,_),
 	!,
 	coder_write_dynrulelist([Term],Status).
 
@@ -1416,6 +1413,10 @@ coder_write_syslib(Lib,1,[WrappedList],_Context,Status) :-
 	put(CH_RBRACKET),
 	put(CH_RPAREN).
 
+%% when writing out dynamic rules, do it always in the body context
+%% so that head literals will match body literals
+coder_write_syslib(FLSYSRULEUPDATE,N,Args,_Context,Status) :-
+	coder_write_prolog(FLSYSRULEUPDATE,N,Args,CODER_BODY_CONTEXT,Status).
 
 coder_write_syslib(F,N,Args,Context,Status) :-
 	coder_write_prolog(F,N,Args,Context,Status).
@@ -1436,85 +1437,6 @@ coder_write_dynrulelist([Term],Status) :-
 	is_florasyslib(Term,F,N,Args,_Index),
 	!,
 	coder_write_syslib(F,N,Args,CODER_GENERIC_CONTEXT,Status).
-
-coder_write_dynrulelist([Term],Status) :-
-	is_prdynrule(Term,HeadList,Body,HVars,BVars,PreBody,PostBody,(Id,FileName,DescrVarsTerm,StmtNum,DescrMetaFacts,DefeatCond)),
-	!,
-	flora_write_atom(FLSYSRULEUPDATE),
-	put(CH_LPAREN),
-	flora_write_struct(Id,CODER_GENERIC_CONTEXT,Stat_Id),
-	(Stat_Id == [] ->
-	    put(CH_COMMA),
-	    flora_write_struct(FileName,CODER_GENERIC_CONTEXT,_),
-	    put(CH_COMMA),
-	    flora_write_struct(DescrVarsTerm,CODER_GENERIC_CONTEXT,Stat_descr_vars),
-	    (Stat_descr_vars==[] ->
-		put(CH_COMMA),
-		flora_write_struct(StmtNum,CODER_GENERIC_CONTEXT,_),
-		put(CH_COMMA),
-		put(CH_LBRACKET),
-		DescrMetaFacts = DescrMetaList - [],
-		%% compile_add produces empty meta-lists,
-		%% since meta facts go into the .flm file.
-		(DescrMetaList==[]
-		-> Stat_metafacts=[]
-		;
-		    coder_write_structlist(DescrMetaList,CODER_GENERIC_CONTEXT,Stat_metafacts)
-		),
-		(Stat_metafacts==[] ->
-		    put(CH_RBRACKET),
-		    put(CH_COMMA),
-		    is_prlist(HeadList,Head,_T,_I),
-		    put(CH_LBRACKET),
-		    %% don't use prefixes: use CODER_GENERIC_CONTEXT
-		    coder_write_structlist(Head,CODER_GENERIC_CONTEXT,Status_Head),
-		    ( Status_Head == [] ->
-			put(CH_RBRACKET),
-			put(CH_COMMA),
-			flora_write_struct(Body,CODER_BODY_CONTEXT,Status_Body),
-			( Status_Body == [] ->
-			    put(CH_COMMA),
-			    flora_write_struct(HVars,CODER_BODY_CONTEXT,Status_HVars),
-			    ( Status_HVars == [] ->
-				put(CH_COMMA),
-				flora_write_struct(BVars,CODER_BODY_CONTEXT,Status_BV),
-				(Status_BV == [] ->
-				    put(CH_COMMA),
-				    flora_write_struct(PreBody,CODER_BODY_CONTEXT,Status_PreBody),
-				    (Status_PreBody == [] ->
-					put(CH_COMMA),
-					flora_write_struct(PostBody,CODER_BODY_CONTEXT,Status_PostBody),
-					(Status_PostBody == [] ->
-					    put(CH_COMMA),
-					    flora_write_struct(DefeatCond,CODER_BODY_CONTEXT,Status),
-					    put(CH_RPAREN)
-					;
-					    Status = Status_PostBody
-					)
-				    ;
-					Status = Status_PreBody
-				    )
-				;
-				    Status = Status_BV
-				)
-			    ;
-				Status = Status_HVars
-			    )
-			;
-			    Status = Status_Body
-			)
-		    ;
-			Status = Status_Head
-		    )
-		;
-		    Status = Stat_metafacts
-		)
-	    ;
-		Status = Stat_descr_vars
-	    )
-	;
-	    Status = Stat_Id
-	).
 
 
 coder_write_dynrulelist([H|L],Status) :-
@@ -2047,7 +1969,7 @@ flora_build_struct(Term,DWS,Context,VarList,Code,(CodeInd,Index),Status) :-
 %% At present we do not support reified rules with annotations
 %% (and thus also with implicit defeat conditions).
 flora_build_struct(Term,DWS,_Context,VarList,Code,(CodeInd,NO_INDEX),Status) :-
-	is_prdynrule(Term,_HeadList,_Body,_HVars,_BVars,_PreBody,_PostBody,_Descr),
+	is_florasyslib(Term,FLSYSRULEUPDATE,_,_,_),
 	!,
 	coder_build_dynrulelist([Term],DWS,VarList,Code1,CodeInd,Status),
 	%% Code is built as a list, but we need the head
@@ -2355,6 +2277,10 @@ coder_build_syslib(Lib,1,[WrappedList],DWS,_Context,VarList,Code,CInd,Status) :-
 	Code =.. [Lib,FLORA_DEFAULT_WORKSPACE,RLCode],
 	CInd =.. [Lib,RLCInd].
 
+%% when building dynamic rules, do it always in the body context
+%% so that head literals will match body literals
+coder_build_syslib(FLSYSRULEUPDATE,N,Args,DWS,_Context,VarList,Code,CodeInd,Status) :-
+	coder_build_prolog(FLSYSRULEUPDATE,N,Args,DWS,CODER_BODY_CONTEXT,VarList,Code,CodeInd,Status).
 
 coder_build_syslib(Lib,N,Args,DWS,Context,VarList,Code,CodeInd,Status) :-
 	coder_build_prolog(Lib,N,Args,DWS,Context,VarList,Code,CodeInd,Status).
@@ -2378,92 +2304,6 @@ coder_build_dynrulelist([Term],DWS,VarList,[Code],[(CInd,Index)],Status) :-
 	!,
 	coder_build_syslib(F,N,Args,DWS,CODER_GENERIC_CONTEXT,VarList,Code,CInd,Status).
 
-coder_build_dynrulelist([Term],DWS,VarList,Code,CInd,Status) :-
-	is_prdynrule(Term,HeadList,Body,HVars,BVars,PreBody,PostBody,(Id,FileName,DescrVarsTerm,StmtNum,DescrMetaFacts,DefeatCond)),
-	!,
-	is_prlist(HeadList,Head,_T,NO_INDEX),
-	flora_build_struct(Id,DWS,CODER_GENERIC_CONTEXT,VarList,IdCode,IdCodeInd,Stat_Id),
-	(Stat_Id == [] ->
-	    flora_build_struct(FileName,DWS,CODER_GENERIC_CONTEXT,VarList,FileNameCode,FileNameCodeInd,_),
-	    flora_build_struct(DescrVarsTerm,DWS,CODER_GENERIC_CONTEXT,VarList,DescrVarsTermCode,DescrVarsTermICode,Stat_descr_vars),
-	    (Stat_descr_vars==[] ->
-		%% compile_add produces empty meta-lists,
-		%% since meta facts go into the .flm file.
-		DescrMetaFacts = DescrMetaList - [],
-		(DescrMetaList==[]
-		-> DescrMetaFactsCode = [], DescrMetaFactsICode = ([],NO_INDEX),
-		    Stat_metafacts=[]
-		;
-		    coder_build_structlist(DescrMetaList,DWS,CODER_GENERIC_CONTEXT,VarList,DescrMetaFactsCode,DescrMetaFactsICode,Stat_metafacts)
-		),
-		(Stat_metafacts==[] ->
-		    %% don't use any prefix
-		    coder_build_structlist(Head,DWS,CODER_GENERIC_CONTEXT,VarList,HCode,HICode,Status_Head),
-		    ( Status_Head == [] ->
-			flora_build_struct(Body,DWS,CODER_BODY_CONTEXT,VarList,BCode,BICode,Status_Body),
-			( Status_Body == [] ->
-			    flora_build_struct(HVars,DWS,CODER_BODY_CONTEXT,VarList,HVCode,HVICode,Status_HVars), 
-			    ( Status_HVars == [] ->
-				flora_build_struct(BVars,DWS,CODER_BODY_CONTEXT,VarList,BVCode,BVICode,Stat_BV),
-				(Stat_BV == [] ->
-				    flora_build_struct(PreBody,DWS,CODER_BODY_CONTEXT,VarList,PreBCode,PreBCodeInd,Status_PreBody),
-				    (Status_PreBody == [] ->
-					flora_build_struct(PostBody,DWS,CODER_BODY_CONTEXT,VarList,PostBCode,PostBCodeInd,Stat_PostBody),
-					(Stat_PostBody == [] ->
-					    %% _Stat below should always be [],
-					    %% so we do not check it: the defeat
-					    %% cond literal is generated by compiler
-					    flora_build_struct(DefeatCond,DWS,CODER_BODY_CONTEXT,_,DefeatCode,DefeatCodeInd,Status),
-					    flora_build_struct(StmtNum,DWS,CODER_GENERIC_CONTEXT,_,StmtNumCode,StmtNumCodeInd,_),
-					    Code1 = FLSYSRULEUPDATE(IdCode,FileNameCode,DescrVarsTermCode,StmtNumCode,DescrMetaFactsCode,HCode,BCode,HVCode,BVCode,PreBCode,PostBCode,DefeatCode),
-					    CInd1 = FLSYSRULEUPDATE(IdCodeInd,FileNameCodeInd,DescrVarsTermICode,StmtNumCodeInd,DescrMetaFactsICode,HICode,BICode,HVICode,BVICode,PreBCodeInd,PostBCodeInd,DefeatCodeInd),
-					    Code = [Code1],
-					    CInd = [CInd1]
-					;
-					    Status = Stat_PostBody,
-					    Code = [],
-					    CInd = []
-					)
-				    ;
-					Status = Status_PreBody,
-					Code = [],
-					CInd = []
-				    )
-				;
-				    Status = Stat_BV,
-				    Code = [],
-				    CInd = []
-				)
-			    ;
-				Status = Status_HVars,
-				Code = [],
-				CInd = []
-			    )
-			;
-			    Status = Status_Body,
-			    Code = [],
-			    CInd = []
-			)
-		    ;
-			Status = Status_Head,
-			Code = [],
-			CInd = [] 
-		    )
-		;
-		    Status = Stat_metafacts,
-		    Code = [],
-		    CInd = [] 
-		)
-	    ;
-		Status = Stat_descr_vars,
-		Code = [],
-		CInd = [] 
-	    )
-	;
-	    Status = Stat_Id,
-	    Code = [],
-	    CInd = [] 
-	).
 
 coder_build_dynrulelist([Term|T],DWS,VarList,Code,CInd,Status) :-
 	coder_build_dynrulelist([Term],DWS,VarList,HCode,HCInd,HS),
