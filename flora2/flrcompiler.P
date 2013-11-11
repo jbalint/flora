@@ -78,6 +78,8 @@
 :- index(COMPILATION_CONTEXT/1,trie).
 
 :- dynamic DYNRULE_VARLIST(_,_).
+:- index(DYNRULE_VARLIST/2,0).
+
 :- dynamic symbol(_,_,_,_,_,_,_).
 :- dynamic nowarn_symbol(_,_,_,_,_).
 :- dynamic symbol_warnings_flag(_).
@@ -2611,14 +2613,20 @@ flora_compilation_context(X) :- has_context(X).
 clear_dynrule_varlist :- flora_retractall_substitute(DYNRULE_VARLIST(_,_)).
 report_dynrule_varlist(AttrVar,Val) :-
 	asserta(DYNRULE_VARLIST(AttrVar,Val)).
-get_dynrule_varlist(L) :- findall((Var,Val),DYNRULE_VARLIST(Var,Val),L).
-get_dynrule_varlist(VarList,L) :- findall((Var,Val),(DYNRULE_VARLIST(Var,Val),memberchk(Var,VarList)),L).
+get_dynrule_varlist(L) :-
+	(\+DYNRULE_VARLIST(_,_) -> L=[]
+	; findall((Var,Val),DYNRULE_VARLIST(Var,Val),L)
+	).
+get_dynrule_varlist(VarList,L) :-
+	(\+DYNRULE_VARLIST(_,_) -> L=[]
+	; findall((Var,Val),(DYNRULE_VARLIST(Var,Val),memberchk(Var,VarList)),L)
+	).
 
 %% Report options specified in the :- setsemantics{...} directive
 %% Since the argument is a parser list (sans the FLLIST wrapper), we need 
 %% to extract the actual values of terms in the list in order to pass
 %% to report_options/2.
-report_semantic_options([]).
+report_semantic_options([]) :- !.
 report_semantic_options([H|T]) :-
 	is_flplib(H,FlTerm),
 	is_flterm(FlTerm,Funct,_N,[Arg|_]),
@@ -9090,10 +9098,14 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 			       HDynruleCode),
 		collect_name_var_pairs(H,HeadVars),
 		list_struct(HeadVars,[],HVLValue),
-		report_dynrule_varlist(HVL,HVLValue),
+		(HeadVars==[] -> true
+		; report_dynrule_varlist(HVL,HVLValue)
+		),
 		collect_name_var_pairs([],BodyVars),
 		list_struct(BodyVars,[],BVLValue),
-		report_dynrule_varlist(BVL,BVLValue),
+		(BodyVars==[] -> true
+		; report_dynrule_varlist(BVL,BVLValue)
+		),
 		clear_context(compiling_dynrule(DescrIdCode)),
 		clear_context(compile_with_var_module),
 		compile_insert_litlist(T,TCode,S2),
@@ -9411,10 +9423,14 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 		->  true
 		;   collect_name_var_pairs(Head,HeadVars),
 		    list_struct(HeadVars,[],HVLValue),
-		    report_dynrule_varlist(HVL,HVLValue),
+		    (HeadVars==[] -> true
+		    ; report_dynrule_varlist(HVL,HVLValue)
+		    ),
 		    collect_name_var_pairs(Body,BodyVars),
 		    list_struct(BodyVars,[],BVLValue),
-		    report_dynrule_varlist(BVL,BVLValue)
+		    (BodyVars==[] -> true
+		    ; report_dynrule_varlist(BVL,BVLValue)
+		    )
 		),
 		flatten([HeadStatus,BodyStatus],Status)
 	    ;

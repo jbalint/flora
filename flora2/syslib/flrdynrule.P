@@ -36,10 +36,12 @@
 #define GLOBAL_DYN_NEWPREDICATE_COUNTER  '_$$''''global_dynnewpredicate'
 #define GLOBAL_DYN_RULEID_COUNTER        '_$$''''global_dynruleid'
 
+#define VARHEAD_IN_DYNRULE       'variable head in dynamically inserted rule, '
+#define INVALIDHEAD_IN_DYNRULE   'Flora-2 bug: invalid head in dynamically inserted rule, '
+
 :- import conset/2,conget/2 from gensym.
 :- import
 	copy_term/2,
-	reverse/2,
 	memberchk/2,
 	append/3,
 	length/2
@@ -116,7 +118,9 @@
 
 :- import FLLIBNEWOID/1 from flrnewoid.
 
-:- import flora_decode_goal_as_atom/2 from flrdecode.
+:- import
+	flora_decode_goal_as_atom/2
+   from flrdecode.
 
 :- import flora_reset_export_registries/1 from flrexport.
 :- import
@@ -169,12 +173,12 @@ FLLIBNEWMODULE(_ThisModuleName,Module) :-
 FLLIBERASEMODULE(_ThisModuleName,Module) :-
 	var(Module),
 	!,
-	flora_abort('erasemodule{?modname}: uninstantiated module name in erasemodule{...}',FLORA_ABORT_NOTRACE).
+	flora_abort('erasemodule{?modname}: uninstantiated module name',FLORA_ABORT_NOTRACE).
 
 FLLIBERASEMODULE(_ThisModuleName,Module) :-
 	\+ flora_module_registry(Module),
 	!,
-	flora_abort([Module,': module is not registered'],FLORA_ABORT_NOTRACE).
+	flora_abort(['erasemodule{',Module,'}: module is not registered'],FLORA_ABORT_NOTRACE).
 
 FLLIBERASEMODULE(_ThisModuleName,Module) :-
 	retract(flora_module_registry(Module)),
@@ -187,10 +191,15 @@ FLLIBERASEMODULE(_ThisModuleName,Module) :-
 	flloadtrailer([],Module),
 	catch(abolish_all_tables, _, flora_warning_line(WARN_TABLED_FLLOAD,[FLLIBERASEMODULE])).
 	
-/***********************************************************************
+/*******************************************************************************
  FLLIBINSERTRULE_A(+CallerModule,+RuleList)
  FLLIBINSERTRULE_Z(+CallerModule,+RuleList)
-************************************************************************/ 
+
+ Note: these predicates eventually call flora_record_query_signature/6
+ to insert the rule signature for DYNAMIC rules.
+ This operation is different from FLLIBINSRULESIG in flrclause.P:
+ FLLIBINSRULESIG inserts signatures for STATIC RULES only.
+*******************************************************************************/
 FLLIBINSERTRULE_A(_ThisModuleName,RuleList) :- 
         flora_bind_libmodobj(RuleList,NewRuleList),
 	flora_insert_rules(FLLIBINSERTRULE_A,NewRuleList).
@@ -222,7 +231,7 @@ flora_insert_rules(_InsOp,[]) :- !.
 flora_insert_rules(_InsOp,[H|_Tail]) :-
 	var(H),
 	!,
-	flora_abort('uninstantiated member in the rule list of insertrule{...}',
+	flora_abort('uninstantiated object in the rule list of insertrule{...}',
 		    FLORA_ABORT_NOTRACE).
 flora_insert_rules(InsOp,[FLSYSRULEUPDATE(RuleId,FileName,DescrVarTerm,RuleNum,DescrMetaFacts,HeadList,PureBody,HV,BV,PreBody,PostBody,DefeatCond)|L]) :-
 	!,
@@ -241,7 +250,7 @@ flora_insert_rules(InsOp,[FLSYSRULEUPDATE(RuleId,FileName,DescrVarTerm,RuleNum,D
 	(var(RuleId) -> new_dynruleid(RuleId)
 	; true
 	),
-	flora_expand_and_ins_rules(RuleId,FileName,DescrVarTerm,RuleNum,InsOp,HeadList,InstBody,PreBody,PostBody,DefeatCond,ModName),
+	flora_prepare_then_insert_rule(RuleId,FileName,DescrVarTerm,RuleNum,InsOp,HeadList,InstBody,PreBody,PostBody,DefeatCond,ModName),
 	flora_assert_metafact_list(DescrMetaFacts,FileName,ModName),
 	flora_insert_rules(InsOp,L).
 
@@ -259,23 +268,26 @@ flora_insert_rules(InsOp,[(R,L)|Rules]) :-
 flora_insert_rules(_InsOp,[H|_Tail]) :-
 	!,
 	flora_decode_goal_as_atom(H,AtomH),
-	flora_abort(['a non-rule element in the rule list of insertrule{...}, ',
-		     AtomH],FLORA_ABORT_NOTRACE).
+	flora_abort(['a non-rule element in insertrule{...}, ',AtomH],FLORA_ABORT_NOTRACE).
 
 
 /***********************************************************************
- flora_expand_and_ins_rules(+RuleId,+FileName,+DescrVarTerm,+RuleNum,+InsOp,+HeadList,+Body,+PreBody,+PostBody,+DefeatCond,-ModName)
+ flora_prepare_then_insert_rule(+RuleId,+FileName,+DescrVarTerm,+RuleNum,+InsOp,+HeadList,+Body,+PreBody,+PostBody,+DefeatCond,-ModName)
 
- If the rule is multiheaded (length(HeadList)>1), create a new 
- predicate with all vars in the body as the arguments, and assert
- a rule with the new predicate as the head and Body as the body
- (PreBody, PostBody, and Defeat condition are attached to Body)
+ If the rule is single-headed, then just insert it.
+
+ If it is multiheaded (length(HeadList)>1), create a new predicate
+ with all vars in the body as the arguments, and assert a bridge rule.
+ A bridge rule has that new predicate as its head and Body as the body
+ (PreBody, PostBody, and Defeat condition are eventually attached to Body)
+
  Note: PreBody is what the compiler inserts in front of the body.
                It contains the rule-enabling test plus maybe something else.
-       PostBody is the PostBody plus whatever we might add later
+       PostBody is what goes after the user-specified body. For instance,
+	       the delay checker.
 ************************************************************************/ 
-flora_expand_and_ins_rules(_Id,_FileName,_DescrVarTerm,_RuleNum,_InsOp,[],_Body,_PreBody,_PostBody,_DefeatCond,_MName) :- !.
-flora_expand_and_ins_rules(Id,FileName,DescrVarTerm,RuleNum,InsOp,[Head],Body,PreBody,PostBody,DefeatCond,MName) :-
+flora_prepare_then_insert_rule(_Id,_FileName,_DescrVarTerm,_RuleNum,_InsOp,[],_Body,_PreBody,_PostBody,_DefeatCond,_MName) :- !.
+flora_prepare_then_insert_rule(Id,FileName,DescrVarTerm,RuleNum,InsOp,[Head],Body,PreBody,PostBody,DefeatCond,MName) :-
 	!,
 	%% attach delay checker to body to be asserted,
 	%% but not to body in signature (the second body-argument
@@ -284,11 +296,11 @@ flora_expand_and_ins_rules(Id,FileName,DescrVarTerm,RuleNum,InsOp,[Head],Body,Pr
 	),
 	flora_insert_rule(InsOp,Id,FileName,DescrVarTerm,RuleNum,Head,Body,Body,PreBody,PostBody,DefeatCond,[],MName).
 
-flora_expand_and_ins_rules(Id,FileName,DescrVarTerm,RuleNum,InsOp,HeadList,Body,PreBody,PostBody,DefeatCond,MName) :-
+flora_prepare_then_insert_rule(Id,FileName,DescrVarTerm,RuleNum,InsOp,HeadList,Body,PreBody,PostBody,DefeatCond,MName) :-
 	HeadList=[H|_L],
         ( var(H) ->
-            flora_abort(['uninstantiated head in dynamically inserted rule, ',
-			H, ' :- ', Body],FLORA_ABORT_NOTRACE)
+	    flora_decode_goal_as_atom((H:-Body),RuleAtm),
+            flora_abort([VARHEAD_IN_DYNRULE,RuleAtm],FLORA_ABORT_NOTRACE)
         ;
 	    ( H=FLLIBMODLIT(_F,_Args1,MName,Caller) -> true
 	    ;
@@ -296,16 +308,15 @@ flora_expand_and_ins_rules(Id,FileName,DescrVarTerm,RuleNum,InsOp,HeadList,Body,
 		( memberchk(Type,[(hilog),flogic,neg_hilog,neg_flogic,
 				  (flora),neg_flora])
 		->
-		    reverse(Args,[Caller|_])
+		    flora_bind_last(Args,[Caller|_])
                 ;
-                    flora_abort(['internal error: invalid head in dynamically inserted rule, ', H, ' :- ', Body])
+                    flora_abort([INVALIDHEAD_IN_DYNRULE, H, ' :- ', Body])
 		)
 	    )
         ),
 	%% check if a module name is valid during an update
 	flora_storage_check_module_name(MName),
 	new_dynpredicate(IntermediatePredicateName),
-	%%collect_vars(Body,BodyVars),
 	flrterm_vars(Body,BodyVars,0), %% 0: collect all vars
 	sort(BodyVars,SortedBodyVars),
 	append(SortedBodyVars,[Caller],NewP_Arguments),
@@ -315,10 +326,7 @@ flora_expand_and_ins_rules(Id,FileName,DescrVarTerm,RuleNum,InsOp,HeadList,Body,
 	(var(PostBody) -> PostBody = true
 	; true
 	),
-	/*
-	TODO: We should move concatenation of the pre/post body + defeat
-	condition for the bridge rule here.
-	*/
+	%% NewPredicate :- OldBody.
 	BridgeRule =.. [FL_IMPLYOP,IntermediatePredicate,Body],
 	%% This copy-term speeds up unification with rule signatures for
 	%% multi-headed rules. This is because the variables in Head/Body
@@ -376,28 +384,36 @@ flora_insert_multiheaded_rule(InsOp,Id,FileName,DescrVarTerm,RuleNum,[H|L],Inter
 	 p :- newpredicateXYZ.
          q :- newpredicateXYZ.
          newpredicateXYZ :- r.
- The last rule is called the bridge rule.
+ The last rule is called the BRIDGE rule.
+ The first two are called the HEAD rules.
+
+ If this call comes from a single-headed rule then that rule is inserted.
+ If it comes from a multiheaded rule then the HEAD rules (see above for
+ a definition) are inserted. The bridge rule is inserted before that,
+ in flora_prepare_then_insert_rule.
 ************************************************************************/ 
-flora_insert_rule(_InsOp,_Id,_FileName,_DescrVarTerm,_RuleNum,Head,_Body,_OrigBody,_Pre,_Post,_DefeatCond,_BridgeRule,_MName) :-
-        var(Head),
+flora_insert_rule(_InsOp,_Id,_FileName,_DescrVarTerm,_RuleNum,H,_Body,OrigBody,_Pre,_Post,_DefeatCond,_BridgeRule,_MName) :-
+        var(H),
         !,
-        flora_abort('uninstantiated rule head in insertrule{...}',FLORA_ABORT_NOTRACE).
+	flora_decode_goal_as_atom((H:-OrigBody),RuleAtm),
+	flora_abort([VARHEAD_IN_DYNRULE,RuleAtm],FLORA_ABORT_NOTRACE).
 
 flora_insert_rule(InsOp,Id,FileName,DescrVarTerm,RuleNum,Head,Body,OrigBody,PreBody,PostBody,DefeatCond,BridgeRule,Module) :-
         ( Head=FLLIBMODLIT(_F,_A1,PossibleMName,_Caller) ->
-            get_canonical_form(Head,FLCANON(_Wrap,_A2,MName,InstHead,_)),
+            get_canonical_form(Head,FLCANON(_Wrap,_A2,MName,GenericHead,_)),
 	    (var(MName) -> MName = PossibleMName ; true),
-            ( var(InstHead) ->
-                flora_abort('uninstantiated rule head in insertrule{...}',FLORA_ABORT_NOTRACE)
+            ( var(GenericHead) ->
+		flora_decode_goal_as_atom((GenericHead:-OrigBody),RuleAtm),
+                flora_abort([VARHEAD_IN_DYNRULE,RuleAtm],FLORA_ABORT_NOTRACE)
             ;
                 true
             ),
 	    %% check if a module name is valid during an update
 	    flora_storage_check_module_name(MName)
 	;
-	    InstHead=Head
+	    GenericHead=Head
 	),
-	flora_decode_predicate(InstHead,Type,Module,_WPrefix,BaseWrap,Args),
+	flora_decode_predicate(GenericHead,Type,Module,_WPrefix,BaseWrap,Args),
 	(atom(Module), \+ is_invalid_flogic_head(BaseWrap),
 	    memberchk(Type,[(hilog),flogic,(flora)]) ->
 	    ( InsOp==FLLIBINSERTRULE_A -> RealPrefix = FL_DYNAPREFIX
@@ -409,42 +425,57 @@ flora_insert_rule(InsOp,Id,FileName,DescrVarTerm,RuleNum,Head,Body,OrigBody,PreB
 	    ; InsOp==FLLIBINSERTRULE_Z -> RealPrefix = FL_NEGDYNZPREFIX
 	    )
         ;
-            flora_abort(['internal error: invalid head in a dynamically inserted rule, ', InstHead, ' :- ', OrigBody])
+            flora_abort([INVALIDHEAD_IN_DYNRULE, GenericHead, ' :- ', OrigBody])
 	),
 	%% the following line to bind FileName is needed for reified rules
 	(var(FileName) -> FileName = FL_DYNRULE_FICTITIOUS_FILENAME ; true),
 	bind_rule_enabler(PreBody,FileName,Module),
 	flora_concat_atoms([RealPrefix,BaseWrap],Wrapper),
-	flora_module_predicate(Wrapper,Args,Module,NewHead),
+	/*
+	  Difference between RealDynHead and GenericHead:
+	    Generic head is what is normally found in the trailer and such.
+            It is the tabled version of the predicate.
+            RealDynHead is what is found in the actual dynamic rules.
+            For instance,
+	     FLORA_THIS_WORKSPACE(tblflapply)(p,X,[Caller,Tracer])
+	     FLORA_THIS_WORKSPACE(FLDYNZPREFIX(tblflapply))(p,X,[Caller,Tracer])
+
+	    The first is a GenericHead, the second is a RealDynHead.
+
+	*/
+	flora_module_predicate(Wrapper,Args,Module,RealDynHead),
 	%% check if a module name is valid during the update
 	flora_storage_check_module_name(Module),
 	%% flora_record_rule_signature will bind DefeatCond, if it isn't NULL
 	(DefeatCond == FL_TRUE
 	->
-	    NewRule =.. [FL_IMPLYOP,NewHead,(PreBody,Body,PostBody)]
+	    %% NewRule: OrigHead :- OriginalBody
+	    %%       or OrigHead :- PreBodyNewIntermedPredicate,PostBody,Defeat
+	    %% RealDynHead == OrigHead + the dyna or dynz dynamic rules' prefix
+	    NewRule =.. [FL_IMPLYOP,RealDynHead,(PreBody,Body,PostBody)]
 	; 
-	    bind_head_in_defeat_condition(NewHead,DefeatCond),
-	    NewRule =.. [FL_IMPLYOP,NewHead,(PreBody,Body,DefeatCond,PostBody)]
+	    bind_head_in_defeat_condition(RealDynHead,DefeatCond),
+	    NewRule =.. [FL_IMPLYOP,RealDynHead,(PreBody,Body,DefeatCond,PostBody)]
 	),
 	%% This copy-term speeds up unification with rule signatures for
 	%% multi-headed rules. This is because the variables in Head/Body
 	%% would be different from the variables in the head/bridge rules.
 	copy_term(NewRule,NewRule1),
-	convert_to_body_literal(InstHead,InstHeadB),
+	convert_to_body_literal(GenericHead,GenericHeadBodified),
         ( InsOp == FLLIBINSERTRULE_A ->
-            flora_record_rule_signature(Id,FileName,DescrVarTerm,FL_DYNAPREFIX,Module,RuleNum,InstHeadB,OrigBody,PreBody,PostBody,DefeatCond,[NewRule1],BridgeRule)
+            flora_record_rule_signature(Id,FileName,DescrVarTerm,FL_DYNAPREFIX,Module,RuleNum,GenericHeadBodified,OrigBody,PreBody,PostBody,DefeatCond,[NewRule1],BridgeRule)
         ;
-            flora_record_rule_signature(Id,FileName,DescrVarTerm,FL_DYNZPREFIX,Module,RuleNum,InstHeadB,OrigBody,PreBody,PostBody,DefeatCond,[NewRule1],BridgeRule)
+            flora_record_rule_signature(Id,FileName,DescrVarTerm,FL_DYNZPREFIX,Module,RuleNum,GenericHeadBodified,OrigBody,PreBody,PostBody,DefeatCond,[NewRule1],BridgeRule)
         ),
 	flora_adaptive_assert(NewRule),
-	flora_refresh_tables(InstHead),
+	flora_refresh_tables(GenericHead),
 	incr_flora_update_counter,
 	(BaseWrap==WRAP_OBJEQL ->
 	    (flloadtrailer([FLOBJEQLDEF],Module), ! ; flora_abort)
 	;
 	    true
 	),
-        flora_define_predicate(InstHead).
+        flora_define_predicate(GenericHead).
 
 /***********************************************************************
  FLLIBDELETERULE_A(+CallerModule,+RuleList)
@@ -491,7 +522,7 @@ flora_refresh_rulehead(Head) :-
 flora_select_rules_for_deletion(_DelOp,_Mod,[],[],[]) :- !.
 flora_select_rules_for_deletion(DelOp,CallerMod,[FLSYSRULEUPDATE(Id,FileName,_DescrVarTerm,_RuleNum,DescrMetaFacts,HeadList,Body,_HV,_BV,_PreBody,_PostBody,_DefeatCond)|L],SigList,HL) :-
 	!,
-	flora_check_multiheaded_rule(DelOp,Id,FileName,RuleMod,HeadList,Body,HSigList,HHL),
+	flora_check_multiheaded_rule_in_registry(DelOp,Id,FileName,RuleMod,HeadList,Body,HSigList,HHL),
 	(var(RuleMod) -> RuleMod = CallerMod ; true),
 	%% Match the metafacts before deciding to delete
 	call_metafact_list(DescrMetaFacts,FileName,RuleMod),
@@ -519,19 +550,21 @@ flora_select_rules_for_deletion(DelOp,CallerMod,[(R,L)|Rules],SigList,HL) :-
 flora_select_rules_for_deletion(_DelOp,_Mod,[H|_Tail],_SigList,_HL) :-
 	!,
 	flora_decode_goal_as_atom(H,AtomH),
-	flora_abort(['a non-rule item ', H, ' in the rule-list of deleterule{...}, ',
-		     AtomH],FLORA_ABORT_NOTRACE).
+	flora_abort(['a non-rule item ',H,' in deleterule{...}, ',AtomH],FLORA_ABORT_NOTRACE).
 
 /***********************************************************************
-  flora_check_multiheaded_rule(+DelOp,+Id,+FileName,+RuleMod,+HeadList,+Body,-RuleSigList,-NewHeadList)
-  For multiheaded rules, check if a rule for each head component exists.
+  flora_check_multiheaded_rule_in_registry(+DelOp,+Id,+FileName,+RuleMod,+HeadList,+Body,-RuleSigList,-NewHeadList)
+  For multiheaded rules, check if a rule for each head component exists
+       in the rule registry.
+    NewHeadList: list of the matching instances for HeadList that are
+       found in the rule registry
 ***********************************************************************/
-flora_check_multiheaded_rule(_DelOp,_Id,_FN,_Mod,[],_Body,[],[]) :- !.
-flora_check_multiheaded_rule(DelOp,Id,FileName,RuleMod,[H|L],Body,[HSig|LSig],[HH|LH]) :-
-        flora_check_rule(DelOp,Id,FileName,RuleMod,H,Body,HSig,HH),
-        flora_check_multiheaded_rule(DelOp,Id,FileName,RuleMod,L,Body,LSig,LH).
+flora_check_multiheaded_rule_in_registry(_DelOp,_Id,_FN,_Mod,[],_Body,[],[]) :- !.
+flora_check_multiheaded_rule_in_registry(DelOp,Id,FileName,RuleMod,[H|L],Body,[HSig|LSig],[HH|LH]) :-
+        flora_check_rule_in_registry(DelOp,Id,FileName,RuleMod,H,Body,HSig,HH),
+        flora_check_multiheaded_rule_in_registry(DelOp,Id,FileName,RuleMod,L,Body,LSig,LH).
 
-flora_check_rule(DelOp,Id,FileName,RuleMod,Head,Body,RuleSig,BoundHead) :-
+flora_check_rule_in_registry(DelOp,Id,FileName,RuleMod,Head,Body,RuleSig,BoundHead) :-
         get_canonical_form(Head,FLCANON(_,_,_,HT,_)),
 	convert_to_body_literal(HT,BHead),
         ( DelOp == FLLIBDELETERULE_A ->
@@ -687,11 +720,11 @@ is_singleton([H|L],V,Cnt) :-
 singleton_warning([],_NamedHVars,_NamedBVars,[]) :- !.
 singleton_warning([H|L],NamedHVars,NamedBVars,Warns) :-
         ( get_var_name(H,NamedHVars,Name) ->
-            fmt_write_string(WarningStr,"singleton variable `%s' in the head of dynamically inserted rule", args(Name)),
+            fmt_write_string(WarningStr,'singleton variable %s in dynamically inserted rule', args(Name)),
             Warns=[WarningStr|RestWarns]
         ;
             ( get_var_name(H,NamedBVars,Name) ->
-                fmt_write_string(WarningStr,"singleton variable `%s' in the body of dynamically inserted rule", args(Name)),
+                fmt_write_string(WarningStr,'singleton variable %s in dynamically inserted rule', args(Name)),
                 Warns=[WarningStr|RestWarns]
             ;
                 Warns=RestWarns
@@ -724,7 +757,7 @@ in_list(V,[H|L]) :-
 unbound_warning([],_NamedHVars,[]) :- !.
 unbound_warning([H|L],NamedHVars,Warns) :-
         ( get_var_name(H,NamedHVars,Name) ->
-            fmt_write_string(WarningStr,"unsafe variable `%s' in the head of dynamically inserted rule", args(Name)),
+            fmt_write_string(WarningStr,'unsafe variable %s in the head of dynamically inserted rule', args(Name)),
             unbound_warning(L,NamedHVars,RestWarns),
             Warns=[WarningStr|RestWarns]
         ;

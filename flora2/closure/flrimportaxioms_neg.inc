@@ -23,7 +23,7 @@
 
 *******************************************************************************/
 
-#define FLORA_IMPORT_NEG_WRAPPER(Wrap) FLORA_WORKSPACE(FLORA_IMPORTED_MODULE,FLNEGPREFIX_UNQ(Wrap))
+#define FLORA_IMPORT_NEG_WRAPPER(Wrap) FLORA_WORKSPACE(FLORA_IMPORTED_MODULE_UNQUOTED,FLNEGPREFIX_UNQ(Wrap))
 
 /* Axioms for negated literals in imported module */
 

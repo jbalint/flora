@@ -63,7 +63,7 @@
 
 %% making is_flogic/4 dynamic and indexing on 1+2 makes the coder a bit faster
 :- dynamic is_flogic(_,_,_,_).
-:- index(is_flogic/4,1+2).
+:- index(is_flogic/4,trie).
 
 :- index(is_pratomlit/5,2).
 :- index(is_prtermlit/5,2).
