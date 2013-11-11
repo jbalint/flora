@@ -53,6 +53,7 @@
    from machine.
 
 :- import
+	flora_user_load_registry/4,
 	flora_module_registry/1
    from flrregistry.
 :- import
@@ -73,6 +74,7 @@
 	flora_clear_xpp_options/0,
 	flora_cleanup_udf/1,
 	flora_cleanup_registry/1,
+	flora_get_textual_info/3,
 	flloadtrailer/2
    from flrutils.
 
@@ -137,6 +139,7 @@
 
 :- import
 	get_module_from_metafacts/2,
+	extract_stmt_fileinfo_from_filespec/4,
 	flora_clear_all_metafacts_by_ruleid/3
    from flrdescriptor_support.
 
@@ -209,19 +212,24 @@ FLLIBINSERTRULE_Z(_ThisModuleName,RuleList) :-
 	flora_insert_rules(FLLIBINSERTRULE_Z,NewRuleList).
 
 /******************************************************************************
-     FLLIBINSQUERYSIG(+Descr,+File,+Module,+RuleNum,+MetaFacts,+PreLatentQuery,+LatentQuery)
-     FLLIBDELQUERYSIG(+Descr,+File,+Module,+MetaFacts,+LatentQuery)
+     FLLIBINSQUERYSIG(+RuleId,+File,+Module,+RuleNum,+MetaFacts,+PreLatentQuery,+LatentQuery)
+     FLLIBDELQUERYSIG(+RuleId,+File,+Module,+MetaFacts,+LatentQuery)
      Insert/delete signature for latent queries
      PreLatentQuery is the stuff that compiler inserts before the LatentQuery body.
      Currently this is the rule enabling fact.
 ******************************************************************************/
-FLLIBINSQUERYSIG(Descr,File,Module,RuleNum,MetaFacts,PreLatentQuery,LatentQuery) :-
+FLLIBINSQUERYSIG(RuleId,File,Module,RuleNum,MetaFacts,PreLatentQuery,LatentQuery) :-
+	%% assigning new_dynruleid/1 MUST be here!
+	(var(RuleId) -> new_dynruleid(RuleId)
+	; true
+	),
+	%% flora_assert_metafact_list/3 MUST be here!
 	flora_assert_metafact_list(MetaFacts,File,Module),
-	flora_record_query_signature(Descr,File,Module,RuleNum,PreLatentQuery,LatentQuery).
+	flora_record_query_signature(RuleId,File,Module,RuleNum,PreLatentQuery,LatentQuery).
 
-FLLIBDELQUERYSIG(Descr,File,Module,_MetaFacts,LatentQuery) :-
-	flora_clear_all_metafacts_by_ruleid(Descr,File,Module),
-	flora_delete_query_signature(Descr,File,Module,LatentQuery).
+FLLIBDELQUERYSIG(RuleId,File,Module,_MetaFacts,LatentQuery) :-
+	flora_clear_all_metafacts_by_ruleid(RuleId,File,Module),
+	flora_delete_query_signature(RuleId,File,Module,LatentQuery).
 
 /***********************************************************************
  flora_insert_rules(+InsOp,+RuleList)
@@ -244,23 +252,36 @@ flora_insert_rules(InsOp,[FLSYSRULEUPDATE(RuleId,FileName,DescrVarTerm,RuleNum,D
 	(get_attr(BV,FLDYNRULEVARCHECK,BVars) -> true
 	; BVars = []
 	),
-	(HVars == [], BVars == [] -> true
-	; check_vars(HeadList,PureBody,HVars,BVars,Warns),
-	    sort(Warns,SortedWarns),
-	    flora_show_warnings(SortedWarns)
-	),
 	del_attr(HV,FLDYNRULEVARCHECK),
 	del_attr(BV,FLDYNRULEVARCHECK),
 	(var(RuleId) -> new_dynruleid(RuleId)
 	; true
 	),
+
+	%% flora_prepare_then_insert_rule/11 MUST come first because it binds
+	%% ModName for flora_assert_metafact_list/3
 	flora_prepare_then_insert_rule(RuleId,FileName,DescrVarTerm,RuleNum,InsOp,HeadList,InstBody,PreBody,PostBody,DefeatCond,ModName),
 	flora_assert_metafact_list(DescrMetaFacts,FileName,ModName),
+
+	(HVars == [], BVars == [] -> true
+	; 
+	    get_fullfile_name(FileName,ModName,FullFile),
+	    '_$flr_check_vars'(RuleId,FullFile,HeadList,PureBody,HVars,BVars,Warns),
+	    sort(Warns,SortedWarns),
+	    flora_show_warnings(SortedWarns)
+	),
 	flora_insert_rules(InsOp,L).
 
-flora_insert_rules(InsOp,[FLLIBINSQUERYSIG(RuleId,FileName,Module,RuleNum,DescrMetaFacts,PreBody,Body)|L]) :-
+flora_insert_rules(InsOp,[FLSYSINSQUERYSIG(RuleId,FileName,Module,RuleNum,DescrMetaFacts,PreBody,Body,BV)|L]) :-
 	!,
 	FLLIBINSQUERYSIG(RuleId,FileName,Module,RuleNum,DescrMetaFacts,PreBody,Body),
+	(get_attr(BV,FLDYNRULEVARCHECK,BVars) -> true
+	; BVars = []
+	),
+	get_fullfile_name(FileName,Module,FullFile),
+	'_$flr_check_vars'(RuleId,FullFile,NULL,Body,[],BVars,Warns),
+	sort(Warns,SortedWarns),
+	flora_show_warnings(SortedWarns),
 	flora_insert_rules(InsOp,L).
 
 %% conjunct of rules - convert to list
@@ -308,7 +329,8 @@ flora_prepare_then_insert_rule(Id,FileName,DescrVarTerm,RuleNum,InsOp,HeadList,B
         ;
 	    ( H=FLLIBMODLIT(_F,_Args1,MName,Caller) -> true
 	    ;
-	        flora_decode_predicate(H,Type,MName,_Prefix,_Wrap,Args),
+	        flora_decode_predicate(H,Type,HeadMName,_Prefix,_Wrap,Args),
+		MName = HeadMName,
 		( memberchk(Type,[(hilog),flogic,neg_hilog,neg_flogic,
 				  (flora),neg_flora])
 		->
@@ -417,7 +439,8 @@ flora_insert_rule(InsOp,Id,FileName,DescrVarTerm,RuleNum,Head,Body,OrigBody,PreB
 	;
 	    GenericHead=Head
 	),
-	flora_decode_predicate(GenericHead,Type,Module,_WPrefix,BaseWrap,Args),
+	flora_decode_predicate(GenericHead,Type,GenModule,_WPrefix,BaseWrap,Args),
+	GenModule = Module,
 	(atom(Module), \+ is_invalid_flogic_head(BaseWrap),
 	    memberchk(Type,[(hilog),flogic,(flora)]) ->
 	    ( InsOp==FLLIBINSERTRULE_A -> RealPrefix = FL_DYNAPREFIX
@@ -432,7 +455,11 @@ flora_insert_rule(InsOp,Id,FileName,DescrVarTerm,RuleNum,Head,Body,OrigBody,PreB
             flora_abort([INVALIDHEAD_IN_DYNRULE, GenericHead, ' :- ', OrigBody])
 	),
 	%% the following line to bind FileName is needed for reified rules
-	(var(FileName) -> FileName = FL_DYNRULE_FICTITIOUS_FILENAME ; true),
+	(var(FileName)
+	-> FileName = FL_DYNRULE_FICTITIOUS_FILENAME('<unknown>')
+	;
+	    true
+	),
 	bind_rule_enabler(PreBody,FileName,Module),
 	flora_concat_atoms([RealPrefix,BaseWrap],Wrapper),
 	/*
@@ -536,7 +563,7 @@ flora_select_rules_for_deletion(DelOp,CallerMod,[FLSYSRULEUPDATE(Id,FileName,_De
 
 %% here we delete latent query sigs right away and don't select any rules
 %% by adding to SigList and HL
-flora_select_rules_for_deletion(DelOp,CallerMod,[FLLIBDELQUERYSIG(Id,_FN,_Mod,DescrMetaFacts,LatentQuery)|L],SigList,HL) :-
+flora_select_rules_for_deletion(DelOp,CallerMod,[FLSYSDELQUERYSIG(Id,_FN,_Mod,DescrMetaFacts,LatentQuery)|L],SigList,HL) :-
 	!,
 	%% Match the metafacts before deciding to delete
 	call_metafact_list(DescrMetaFacts,FileName,RuleMod),
@@ -687,18 +714,16 @@ new_dynruleid(NewRuleId) :-
 
 
 /***********************************************************************
- check_vars(+HeadList,+Body,+NamedHeadVars,+NamedBodyVars,-Warnings)
+ '_$flr_check_vars'(+RuleId,+FileName,+HeadList,+Body,+NamedHeadVars,+NamedBodyVars,-Warnings)
 ************************************************************************/ 
-check_vars(HeadList,Body,NamedHVars,NamedBVars,Warnings) :-
-        %%collect_var_list(HeadList,HVars),
-        %%collect_vars(Body,BVars),
+'_$flr_check_vars'(RuleId,FileName,HeadList,Body,NamedHVars,NamedBVars,Warnings) :-
         flrterm_vars(HeadList,HVars,0), %% 0: collect all vars
         flrterm_vars(Body,BVars,0),
         append(HVars,BVars,Vars),
         singleton_vars(Vars,Vars,SingletonVars),
-        singleton_warning(SingletonVars,NamedHVars,NamedBVars,SWarnings),
+        singleton_warning(RuleId,FileName,SingletonVars,NamedHVars,NamedBVars,SWarnings),
         subtract_vars(HVars,BVars,UnboundVars),
-        unbound_warning(UnboundVars,NamedHVars,UWarnings),
+        unbound_warning(RuleId,FileName,UnboundVars,NamedHVars,UWarnings),
         append(SWarnings,UWarnings,Warnings).
 
 singleton_vars(_AllVars,[],[]) :- !.
@@ -720,20 +745,25 @@ is_singleton([H|L],V,Cnt) :-
             is_singleton(L,V,Cnt)
         ).
 
-singleton_warning([],_NamedHVars,_NamedBVars,[]) :- !.
-singleton_warning([H|L],NamedHVars,NamedBVars,Warns) :-
+singleton_warning(_RuleId,_File,[],_NamedHVars,_NamedBVars,[]) :- !.
+singleton_warning(RuleId,File,[H|L],NamedHVars,NamedBVars,Warns) :-
+	(flora_get_textual_info(RuleId,File,Info)
+	-> Info = FL_TEXTUAL_INFO_PRED(_,_,Line,_,_,_)
+	; Line = '<unknown>'
+	),
+	extract_stmt_fileinfo_from_filespec(File,PrintableFile,_,_),
         ( get_var_name(H,NamedHVars,Name) ->
-            fmt_write_string(WarningStr,'singleton variable %s in dynamically inserted rule', args(Name)),
+            fmt_write_string(WarningStr,'singleton variable %s in dynamically inserted rule on line %S in file %S', args(Name,Line,PrintableFile)),
             Warns=[WarningStr|RestWarns]
         ;
             ( get_var_name(H,NamedBVars,Name) ->
-                fmt_write_string(WarningStr,'singleton variable %s in dynamically inserted rule', args(Name)),
+                fmt_write_string(WarningStr,'singleton variable %s in dynamically inserted rule on line %S in file %S', args(Name,Line,PrintableFile)),
                 Warns=[WarningStr|RestWarns]
             ;
                 Warns=RestWarns
             )
         ),
-        singleton_warning(L,NamedHVars,NamedBVars,RestWarns).
+        singleton_warning(RuleId,File,L,NamedHVars,NamedBVars,RestWarns).
 
 get_var_name(H,[N=V|NVs],Name) :-
         ( H==V -> Name=N
@@ -757,14 +787,19 @@ in_list(V,[H|L]) :-
             in_list(V,L)
         ).
 
-unbound_warning([],_NamedHVars,[]) :- !.
-unbound_warning([H|L],NamedHVars,Warns) :-
+unbound_warning(_RuleId,_File,[],_NamedHVars,[]) :- !.
+unbound_warning(RuleId,File,[H|L],NamedHVars,Warns) :-
+	(flora_get_textual_info(RuleId,File,Info)
+	-> Info = FL_TEXTUAL_INFO_PRED(_,_,Line,_,_,_)
+	; Line = '<unknown>'
+	),
+	extract_stmt_fileinfo_from_filespec(File,PrintableFile,_,_),
         ( get_var_name(H,NamedHVars,Name) ->
-            fmt_write_string(WarningStr,'unsafe variable %s in the head of dynamically inserted rule', args(Name)),
-            unbound_warning(L,NamedHVars,RestWarns),
+            fmt_write_string(WarningStr,'unsafe variable %s in the head of dynamically inserted rule on line %S in file %S', args(Name,Line,PrintableFile)),
+            unbound_warning(RuleId,File,L,NamedHVars,RestWarns),
             Warns=[WarningStr|RestWarns]
         ;
-            unbound_warning(L,NamedHVars,Warns)
+            unbound_warning(RuleId,File,L,NamedHVars,Warns)
         ).
 
 
@@ -840,6 +875,15 @@ call_metafact_list([Head|Rest],FileName,Mod) :-
 	arg(2,Head,FileName),
 	call(Head),
 	call_metafact_list(Rest,FileName,Mod).
+
+%% if there are multiple different (in different directories) files
+%% with the same base name loaded into the same module then
+%% textual info might not be correct.
+get_fullfile_name(FileName,ModName,FullFile) :-
+	(flora_user_load_registry(FullFile,ModName,FileName,_)
+	-> true
+	; FullFile = FileName
+	).
 
 /*
 adaptive_retract_list([]) :- !.

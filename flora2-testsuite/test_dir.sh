@@ -36,6 +36,7 @@ exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
     	      terminyzer1.flr \
     	      terminyzer2.flr \
               trailer.flr \
+              textual_warn.flr \
               sensortest_declarations.flr sensortest_usedecl.flr \
               ruleupdates.flr reif_foo.flr \
               callReified_foo.flr callReified_foo2.flr \

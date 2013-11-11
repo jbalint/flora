@@ -56,6 +56,10 @@
 	flora_adaptive_retract/1
    from flrstoragebase.
 
+:- import
+	flora_file_op/3
+   from flrporting.
+
 :- export
 	get_tag_descriptor_info/5,
 	get_bool_descriptor_info/5,
@@ -87,6 +91,8 @@
 
 	get_module_from_metafacts/2,
 	get_file_from_metafacts/2,
+
+	extract_stmt_fileinfo_from_filespec/4,
 
 	clear_bool_metafacts_by_ruleid/3,
 	clear_tag_metafacts_by_ruleid/3,
@@ -313,7 +319,7 @@ disable_rule_by_id(Id,FileName,Mod,GotDisabled) :-
 	).
 
 %% Delete the rule enabler fact only if there are no rules with this id
-%% left in the system. This is used for rule/IC deletion.
+%% left in the system. This is used for rule/latent query deletion.
 clear_rule_enabler_carefully(Id,FileName,Mod) :-
 	(show_rule_signature(Id,FileName,_DescrVarTerm,_Prefix,Mod,_RuleNum,
 			     _Head,
@@ -474,12 +480,12 @@ get_file_from_metafacts(Meta,File) :-
 	%% arg3 must be unbound while Mod may be bound
 	FileVar = File.
 
-%% predicate implementing test{?IC,?File,?Mod}
+%% predicate implementing query{?LQID,?File,?Mod}
 test_latent_query(Id,File,Mod) :-
 	matching_query_signature(Id,File,Mod,Sig),
 	query_signature_member(prequery,Sig,PreBody),
-	query_signature_member(query,Sig,IC),
-	call((PreBody,IC)).
+	query_signature_member(query,Sig,LQBody),
+	call((PreBody,LQBody)).
 
 call_metafacts(MetaFacts) :-
 	call_metafacts(MetaFacts,FL_TAG_DESCRIPTOR_META_PREDICATE(_,_,_,_,_)).
@@ -501,4 +507,29 @@ filter_tag_metafact(MetaFact,TagPred) :-
 	    MetaFact = FL_TAG_DESCRIPTOR_META_PREDICATE(Id,File,Mod,_,Vars),
 	    call(MetaFact)
 	; call(MetaFact)
+	).
+
+%% FileSpec is either a file name
+%% or '(interactive)' (==FL_SHELL_FICTITIOUS_FILENAME)
+%% or FL_DYNRULE_FICTITIOUS_FILENAME(FileName)
+%% LocalFileSpec:
+%%    If FileSpec is a file name then LocalFileSpec is the local name
+%%       (looses directory name)
+%%    If FileSpec is FL_SHELL_FICTITIOUS_FILENAME then no change
+%%    If FileSpec is FL_DYNRULE_FICTITIOUS_FILENAME(FileName) then LocalFileSpec
+%%       is FL_DYNRULE_FICTITIOUS_FILENAME(LocalFileName)
+extract_stmt_fileinfo_from_filespec(FileSpec,PrintableFile,LocalFileName,LocalFileSpec) :-
+	(FileSpec == FL_SHELL_FICTITIOUS_FILENAME -> PrintableFile = '<runtime>'
+	; FileSpec = FL_DYNRULE_FICTITIOUS_FILENAME(PrintableFile) ->
+	    (nonvar(PrintableFile) -> 
+		flora_file_op(localname,PrintableFile,LocalFileName),
+		LocalFileSpec = FL_DYNRULE_FICTITIOUS_FILENAME(LocalFileName)
+	    ; PrintableFile = '<unknown>',
+		LocalFileSpec = PrintableFile,
+		LocalFileName = LocalFileSpec
+	    )
+	; %% FileSpec is just a regular file name
+	    PrintableFile = FileSpec,
+	    flora_file_op(localname,PrintableFile,LocalFileSpec),
+	    LocalFileName = LocalFileSpec
 	).

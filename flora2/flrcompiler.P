@@ -447,7 +447,11 @@ approx_flindex(FLCONJUNCT(First,_),I)       :- !, approx_flindex(First,I).
 approx_flindex(FLDISJUNCT(First,_),I)       :- !, approx_flindex(First,I).
 approx_flindex(FLRULE(Head,_),I)            :- !, approx_flindex(Head,I).
 approx_flindex(FLDYNRULE(Head,_,_),I)       :- !, approx_flindex(Head,I).
-approx_flindex(FLUPDATERULE(_,Rule),I)      :- !, approx_flindex(Rule,I).
+approx_flindex(FLUPDATERULE(Op,Rule),I)     :-
+	!,
+	(approx_flindex(Op,I), I>0 -> true
+	; approx_flindex(Rule,I)
+	).
 approx_flindex(FLFACT(Head),I)              :- !, approx_flindex(Head,I).
 approx_flindex(FLQUERY(Body),I)             :- !, approx_flindex(Body,I).
 approx_flindex(FLDIRECTIVE(_Dir,I),I)       :- !.
@@ -473,6 +477,7 @@ approx_flindex(FLPLIBALL(P,_M),I)             :- !, approx_flindex(P,I).
 approx_flindex(FLPLIBALL(P),I)                :- !, approx_flindex(P,I).
 approx_flindex(FLFLORALIB(P,_M),I)            :- !, approx_flindex(P,I).
 approx_flindex(FLWORKSPACE(P,_WS),I)          :- !, approx_flindex(P,I).
+approx_flindex(FLRULEWORKSPACE(P,_WS),I)      :- !, approx_flindex(P,I).
 approx_flindex(FLCONSTRAINT(C),I)             :- !, approx_flindex(C,I).
 
 approx_flindex(FLLATENTQUERY(C),I)            :- !, approx_flindex(C,I).
@@ -1550,8 +1555,8 @@ insert_rulesig_struct(HeadList,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,
 	(approx_prindex(DescrIdCode,Idx), Idx > 0 -> true
 	; approx_prindex(HeadList,Idx)
 	),
-	flora_token_rulenum(Idx,RuleNum), %% rulenum within file
-	florasyslib_struct(FLLIBINSRULESIG,11,[DescrIdCode,File,DescrVarsTerm,WS,RuleNum,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],Code).
+	flora_token_rulenum(Idx,StmtNum), %% rulenum within file
+	florasyslib_struct(FLLIBINSRULESIG,11,[DescrIdCode,File,DescrVarsTerm,WS,StmtNum,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],Code).
 
 insert_syslib(FL_INSERT,FLLIBINSERT) :- !.
 insert_syslib(FL_INSERTALL,FLLIBINSERTALL) :- !.
@@ -1984,8 +1989,8 @@ new_oidobj(OidNumStr,Index,OidObject) :-
 	;  asserta(ruleoid(OidNumStr,Index,1))
 	), 
 	!,
-	flora_get_counter(RULE_NUM, RuleNum), 
-        flora_concat_items([NEWOID,RuleNum,'|',OidNumStr],Name),
+	flora_get_counter(RULE_NUM, StmtNum), 
+        flora_concat_items([NEWOID,StmtNum,'|',OidNumStr],Name),
 	newoid_struct(Name,Index,OidObject).
 
 /*************************************************************************
@@ -2667,7 +2672,7 @@ flora_reset_compiler(Purpose) :-
 
 
 /****************************************************************************
-  flora_compile_add(+ParserTerm,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-RuleNum+RuleFileName,-Status)
+  flora_compile_add(+ParserTerm,-RuleDiffList,-FactDiffList,-UDFPredsDiffList,-StmtNum+StmtFileName,-Status)
 
   This is the top level predicate that is called to compile code for
   adding code to module.
@@ -2679,7 +2684,7 @@ flora_reset_compiler(Purpose) :-
 ****************************************************************************/
 flora_compile_add([NULL],R-R,F-F,Q-Q,LQ-LQ,U-U,_,NO_ERRORS) :- !.
 	
-flora_compile_add(ParserTermList,RuleDiffList,FactDiffList,QueryDiffList,LatentQueryDiffList,UDFPredsDiffList,RuleNum+FileName,Status) :-
+flora_compile_add(ParserTermList,RuleDiffList,FactDiffList,QueryDiffList,LatentQueryDiffList,UDFPredsDiffList,StmtNum+FileName,Status) :-
 #ifdef SHOW_COMPILE_ADD_INPUT
 	DBGOUTLN('------------result of parsing-----------------'),
 	DBGOUTLN(ParserTerm),
@@ -2689,9 +2694,7 @@ flora_compile_add(ParserTermList,RuleDiffList,FactDiffList,QueryDiffList,LatentQ
 	increment_rule_number,
 	ParserTermList = [ParserTerm|_],
 	approx_flindex(ParserTerm,RuleIdx),
-	(RuleIdx > 0 -> flora_token_rulenum(RuleIdx,RuleNum)
-	; RuleNum = -1
-	),
+	get_current_stmt_number_for_descriptor(RuleIdx,StmtNum),
 	get_current_compile_file(FileName),
 	set_context(compiling_for_addition),
 	compile_add_list_internal(ParserTermList,
@@ -2876,7 +2879,8 @@ compile_direct_add(DirectTerm,DirIdx,DCodeList,S) :-
 ****************************************************************************/
 compile_annotated_construct_add(DescriptorList,MainPartOfRule,RuleDiffList,FactDiffList,QueryList,LatentQueryList,Status) :-
 	approx_flindex(MainPartOfRule,RuleIdx),
-	(is_fllatent_query(MainPartOfRule,_) -> Mode = FL_DESCRMODE_LATENT_ADDQUERY
+	(is_fllatent_query(MainPartOfRule,_)
+	-> Mode = FL_DESCRMODE_LATENT_ADDQUERY
 	; Mode = FL_DESCRMODE_ADDRULE
 	),
 	compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTerm,MetaFactDifflist,Status1),
@@ -2893,7 +2897,7 @@ compile_annotated_construct_add(DescriptorList,MainPartOfRule,RuleDiffList,FactD
 
 
 /****************************************************************************
-  flora_compile(+ParserTerm,-RuleDiffList,-SigDiffList,-FactDiffList,-QueryDiffList,-LatentQueryDiffList,-MetaFactDiffList,-UDFPredsDiffList,-RuleNum+RuleFileName,-Status)
+  flora_compile(+ParserTerm,-RuleDiffList,-SigDiffList,-FactDiffList,-QueryDiffList,-LatentQueryDiffList,-MetaFactDiffList,-UDFPredsDiffList,-StmtNum+StmtFileName,-Status)
 
   This is the top level procedure that is called to compile code.
 
@@ -2906,7 +2910,7 @@ compile_annotated_construct_add(DescriptorList,MainPartOfRule,RuleDiffList,FactD
 ****************************************************************************/
 flora_compile([NULL],R-R,S-S,F-F,Q-Q,LQ-LQ,M-M,U-U,_,NO_ERRORS) :- !.
 
-flora_compile(ParserTermList,RuleDiffList,SigDiffList,FactDiffList,QueryDiffList,LatentQueryDiffList,MetaFactDiffList,UDFPredsDiffList,RuleNum+FileName,Status) :-
+flora_compile(ParserTermList,RuleDiffList,SigDiffList,FactDiffList,QueryDiffList,LatentQueryDiffList,MetaFactDiffList,UDFPredsDiffList,StmtNum+FileName,Status) :-
 #ifdef SHOW_COMPILE_INPUT
 	DBGOUTLN('------------result of parsing-----------------'),
 	DBGOUTLN(ParserTermList),
@@ -2916,9 +2920,7 @@ flora_compile(ParserTermList,RuleDiffList,SigDiffList,FactDiffList,QueryDiffList
 	increment_rule_number,
 	ParserTermList = [ParserTerm|_],
 	approx_flindex(ParserTerm,RuleIdx),
-	(RuleIdx > 0 -> flora_token_rulenum(RuleIdx,RuleNum)
-	; RuleNum = -1
-	),
+	get_current_stmt_number_for_descriptor(RuleIdx,StmtNum),
 	get_current_compile_file(FileName),
 	compile_list_internal(ParserTermList,
 			      RuleDiffList,SigDiffList,
@@ -3815,14 +3817,14 @@ compile_latent_query(DescrIdCode,MetaFactDiffList,Body,Mode,LatentQueryList-Late
 	    conjunct_struct(CallerBindingCode,LatentQueryEnablerTest,PreLatentQueryCode),
 	    get_current_compile_file(File),
 	    (approx_prindex(DescrIdCode,Idx), Idx > 0 -> true
-	    ; approx_prindex(Body,Idx)
+	    ; approx_flindex(Body,Idx)
 	    ),
-	    flora_token_rulenum(Idx,RuleNum), %% rulenum within file
+	    get_current_stmt_number_for_descriptor(Idx,StmtNum),
 	    MetaFactDiffList = MetaFactList - [],
 	    list_struct(MetaFactList,[],MetaFactCode),
 	    %% Note: we do not add delay-checker code FLORA_DELAY_CHECKER
 	    %% in constraints, since it is explicit in FLLIBANSWER
-	    florasyslib_struct(FLLIBINSQUERYSIG,7,[DescrIdCode,File,ThisMod,RuleNum,MetaFactCode,PreLatentQueryCode,LatentQueryBodyCode],LatentQuerySigCodePre),
+	    florasyslib_struct(FLLIBINSQUERYSIG,7,[DescrIdCode,File,ThisMod,StmtNum,MetaFactCode,PreLatentQueryCode,LatentQueryBodyCode],LatentQuerySigCodePre),
 	    (has_context(goal_reification) -> LatentQuerySigCode = LatentQuerySigCodePre
 	    ; query_struct(LatentQuerySigCodePre,LatentQuerySigCode)
 	    ),
@@ -3844,7 +3846,8 @@ compile_latent_query(DescrIdCode,MetaFactDiffList,Body,Mode,LatentQueryList-Late
 ****************************************************************************/
 compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,MetaFacts-MetaFactsTail,Status) :-
 	approx_flindex(MainPartOfRule,RuleIdx),
-	(is_fllatent_query(MainPartOfRule,_) -> Mode = FL_DESCRMODE_LATENT_QUERY
+	(is_fllatent_query(MainPartOfRule,_)
+	-> Mode = FL_DESCRMODE_LATENT_QUERY
 	; Mode = FL_DESCRMODE_RULE
 	),
 	compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTerm,MetaFacts-MetaFactsTail,Status1),
@@ -3887,7 +3890,8 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
 	    compiling_error(Idx,MULTIPLE_RULE_IDS,Err),
 	    IdStatus = [Err]
 	; IdParserTermList == [] % no explicit rule id
-	-> construct_default_ruleid_descriptor(Mode,RuleIdx,DescrIdCode),
+	->
+	    construct_default_ruleid_descriptor(Mode,RuleIdx,DescrIdCode),
 	    RuleidFrameCode = _M - _M,
 	    ExplicitModule = NULL,
 	    IdStatus = NO_ERRORS
@@ -4108,7 +4112,7 @@ construct_default_ruleid_descriptor(FL_DESCRMODE_RULE,Idx,RuleIdCode) :-
 	increment_default_ruleid,
 	current_default_ruleid(RuleId),
 	numobj_struct(RuleId,Idx,RuleIdCode).
-construct_default_ruleid_descriptor(ic,Idx,RuleIdCode) :-
+construct_default_ruleid_descriptor(FL_DESCRMODE_LATENT_QUERY,Idx,RuleIdCode) :-
 	!,
 	increment_default_ruleid,
 	current_default_ruleid(RuleId),
@@ -6524,6 +6528,10 @@ compile_body_literal(ParserTerm,WS,OidCode,BodyLitCode,BodyFrontList,Status) :-
 	    OidCode=NULL
 
 	; is_flsimpleprimitive(ParserTerm,PrimName,Args) ->
+	    (rule_manipulation_primitive(PrimName)
+	    -> set_context(compiling_rule_manipulation_primitive)
+	    ; true
+	    ),
 	    flora_simple_primitive(PrimName,PN,PrimPredicate,PrimModule),
 	    %% Ignore the arity given by flora_simple_primitive/4. Here we
 	    %% might get cases where the actual #args is less by 2
@@ -6541,7 +6549,8 @@ compile_body_literal(ParserTerm,WS,OidCode,BodyLitCode,BodyFrontList,Status) :-
 	    ; flora_abort(['Compiler bug!!! something wrong with flora_simple_primitive'], FLORA_ABORT_NOTRACE)
 	    ),
 	    prologterm_struct(PrimPredicate,N,ArgsCode,PrimModule,WSCodePre),
-	    prologliblit_struct(WSCodePre,WSCode)
+	    prologliblit_struct(WSCodePre,WSCode),
+	    clear_context(compiling_rule_manipulation_primitive)
 
 	; is_flupdaterule(ParserTerm,Op,List) ->
 	    compile_updaterule(Op,List,WSCode,Status),
@@ -9099,10 +9108,11 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 		construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_DYNRULE,RuleEnablerTest,FileName),
 		PreBody = RuleEnablerTest,
 		PostBody = DelayCheckCode,
+		get_current_stmt_number_for_descriptor(RuleIdx,StmtNum),
 		dynrule_struct(HeadCodeList,H2BCode,HVL,BVL,PreBody,PostBody,
 			       (DescrIdCode,FileName,
 				   DescrVarsTerm,
-				   -1, %% RuleNum
+				   StmtNum,
 				   DefaultMetaFactDiffList,
 				   FL_TRUE),  %% default defeat condition
 			       HDynruleCode),
@@ -9357,20 +9367,27 @@ compile_dyn_latent_query(Op,DescrIdCode,MetaFactDiffList,Body,LatentQuerySigCode
 	    conjunct_code(DTVarsCodeList,DTVarsCode),
 	    conjunct_struct(DTVarsCode,BCode,LatentQueryBodyCode),
 	    thismodule_struct(ThisMod),
+	    %% info for singleton var checking
+	    new_prvariable(NO_INDEX,BVL), % attr var for body var list
+	    collect_name_var_pairs(Body,BodyVars),
+	    list_struct(BodyVars,[],BVLValue),
+	    (BodyVars==[] -> true
+	    ; report_dynrule_varlist(BVL,BVLValue)
+	    ),
 	    %% code to bind the Caller variable to the calling module
 	    caller_binding_code(ThisMod,CallerBindingCode),
 	    construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_LATENT_DYNQUERY,LatentQueryEnablerTest,_),
 	    conjunct_struct(CallerBindingCode,LatentQueryEnablerTest,PreLatentQueryCode),
 	    get_current_compile_file_for_descriptor(File,FL_DESCRMODE_LATENT_DYNQUERY),
 	    (approx_prindex(DescrIdCode,Idx), Idx > 0 -> true
-	    ; approx_prindex(Body,Idx)
+	    ; approx_flindex(Body,Idx)
 	    ),
-	    flora_token_rulenum(Idx,RuleNum), %% rulenum within file
+	    get_current_stmt_number_for_descriptor(Idx,StmtNum),
 	    MetaFactDiffList = MetaFactList - [],
 	    list_struct(MetaFactList,[],MetaFactCode),
 	    (is_fldeleteruleop(Op) ->
-		florasyslib_struct(FLLIBDELQUERYSIG,5,[DescrIdCode,File,ThisMod,MetaFactCode,LatentQueryBodyCode],LatentQuerySigCode)
-	    ; florasyslib_struct(FLLIBINSQUERYSIG,7,[DescrIdCode,File,ThisMod,RuleNum,MetaFactCode,PreLatentQueryCode,LatentQueryBodyCode],LatentQuerySigCode)
+		florasyslib_struct(FLSYSDELQUERYSIG,5,[DescrIdCode,File,ThisMod,MetaFactCode,LatentQueryBodyCode],LatentQuerySigCode)
+	    ; florasyslib_struct(FLSYSINSQUERYSIG,8,[DescrIdCode,File,ThisMod,StmtNum,MetaFactCode,PreLatentQueryCode,LatentQueryBodyCode,BVL],LatentQuerySigCode)
 	    )
 	;
 	  true
@@ -9426,11 +9443,13 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 		delay_literals_checking_code(Head,Body,DescrVarsTerm,DelayCheckCode),
 		PreBody = RuleEnablerTest,
 		PostBody = DelayCheckCode,
+		approx_prindex(DescrIdCode,RuleIdx),
+		get_current_stmt_number_for_descriptor(RuleIdx,StmtNum),
 		dynrule_struct(HeadCodeList,PureBodyCode,HVL,BVL,
 			       PreBody,PostBody,
 			       (DescrIdCode,FileName,
 				   DescrVarsTerm,
-				   -1, %% RuleNum,
+				   StmtNum,
 				   MetaFactDiffList,DefeatCondCode),
 			       RuleCode),
 		flatten([HeadStatus,BodyStatus],Status)
@@ -9948,13 +9967,24 @@ generate_prolog_liblit(Atom,Arity,Args,PrlgModule,Code) :-
         prologterm_struct(AtomCode,Arity,Args,PrlgModule,Code1),
         prologliblit_struct(Code1,Code).
 
+%% generate_prolog_term/4 - without module
+generate_prolog_term(Atom,Arity,Args,Code) :-
+	atomobj_struct(Atom,AtomCode),
+        prologterm_struct(AtomCode,Arity,Args,Code).
+/*
+%% generate_prolog_term/5 - with module, unused so far
+generate_prolog_term(Atom,Arity,Args,PrlgModule,Code) :-
+	atomobj_struct(Atom,AtomCode),
+        prologterm_struct(AtomCode,Arity,Args,PrlgModule,Code1).
+*/
+
 list2commalist([A],(A)) :- !.
 list2commalist([A|L], (A,LL)) :- list2commalist(L,LL).
 
 
 get_current_compile_file(CurrFileName) :-
 	flora_current_compile_filename(CurrFileName)->true
-	; CurrFileName = '(interactive)'.
+	; CurrFileName = FL_SHELL_FICTITIOUS_FILENAME.
 compiling_flrshell_command :- \+ flora_current_compile_filename(_).
 
 get_current_compile_file_for_descriptor(CurrFileName,_Mode) :-
@@ -9964,16 +9994,24 @@ get_current_compile_file_for_descriptor(CurrFileName,Mode) :-
 	memberchk(Mode,[FL_DESCRMODE_CLAUSE,FL_DESCRMODE_PLAIN_QUERY]),
 	!,
 	new_prvariable(NO_INDEX,CurrFileName).
-get_current_compile_file_for_descriptor(FL_DYNRULE_FICTITIOUS_FILENAME,FL_DESCRMODE_DYNRULE) :-
+get_current_compile_file_for_descriptor(FileNameObj,Mode) :-
+	memberchk(Mode,[FL_DESCRMODE_DYNRULE,FL_DESCRMODE_LATENT_DYNQUERY]),
 	\+ has_context(compiling_for_addition),
-	!.
-get_current_compile_file_for_descriptor(FL_DYNRULE_FICTITIOUS_FILENAME,FL_DESCRMODE_LATENT_DYNQUERY) :-
-	\+ has_context(compiling_for_addition),
+	(flora_current_compile_filename(FN) -> true
+	; new_prvariable(NO_INDEX,FN)
+	),
+	generate_prolog_term(FL_DYNRULE_FICTITIOUS_FILENAME,1,[FN],FileNameObj),
 	!.
 
 get_current_compile_file_for_descriptor(CurrFileName,_Mode) :-
 	get_current_compile_file(CurrFileName).
 
+get_current_stmt_number_for_descriptor(StmtIndex,StmtNum) :-
+	(has_context(goal_reification) -> new_prvariable(NO_INDEX,StmtNum)
+	; has_context(rule_reification) -> new_prvariable(NO_INDEX,StmtNum)
+	; StmtIndex > 0 -> flora_token_rulenum(StmtIndex,StmtNum)
+	; StmtNum = -1
+	).
 
 /*
 %% This often looses warnings and errors, so we replaced with append and flatten

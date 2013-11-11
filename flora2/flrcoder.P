@@ -431,10 +431,6 @@ is_ruleupdate(FLLIBDELETERULE_A) :- !.
 is_ruleupdate(FLLIBDELETERULE_Z) :- !.
 is_ruleupdate(FLLIBDELETERULE) :- !.
 
-is_fllibclause(FLLIBCLAUSE) :- !.
-is_fllibinsrulesig(FLLIBINSRULESIG) :- !.
-
-
 
 /****************************************************************************
   error and warning messages
@@ -1420,102 +1416,6 @@ coder_write_syslib(Lib,1,[WrappedList],_Context,Status) :-
 	put(CH_RBRACKET),
 	put(CH_RPAREN).
 
-coder_write_syslib(Lib,6,[Id,DescrVarTerm,MetaFacts,Mode,HeadList,Body],_Context,Status) :-
-        is_fllibclause(Lib),
-	!,
-	write_canonical(Lib),
-	put(CH_LPAREN),
-	%% do not prepend FL_HEADPREFIX when constructing clauses;
-	%% generate heads as facts
-	flora_write_struct(Id,CODER_GENERIC_CONTEXT,Status_Id),
-	(Status_Id == [] ->
-	    put(CH_COMMA),
-	    flora_write_struct(DescrVarTerm,CODER_GENERIC_CONTEXT,DescrVar_Status),
-	    (DescrVar_Status == [] ->
-		put(CH_COMMA),
-		flora_write_struct(MetaFacts,CODER_GENERIC_CONTEXT,MetaFact_Status),
-		(MetaFact_Status == [] ->
-		    put(CH_COMMA),
-		    flora_write_struct(Mode,CODER_GENERIC_CONTEXT,Status_Mode),
-		    ( Status_Mode == [] ->
-			put(CH_COMMA),
-			flora_write_struct(HeadList,CODER_GENERIC_CONTEXT,Status_Head),
-			( Status_Head == [] ->
-			    put(CH_COMMA),
-			    flora_write_struct(Body,CODER_BODY_CONTEXT,Status),
-			    put(CH_RPAREN)
-			;
-			    Status = Status_Head
-			)
-		    ;
-			Status = Status_Mode
-		    )
-		; 
-		    Status = MetaFact_Status
-		)
-	    ;
-		Status = DescrVar_Status
-	    )
-	;
-	    Status = Status_Id
-	).
-
-%% FLLIBINSRULESIG
-coder_write_syslib(Lib,11,[DescrId,FileName,DescrVarsTerm,WS,RuleNum,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],_Context,Status) :-
-        is_fllibinsrulesig(Lib),
-	!,
-	write_canonical(Lib),
-	put(CH_LPAREN),
-	flora_write_struct(DescrId,CODER_GENERIC_CONTEXT,Stat_DescrId),
-	put(CH_COMMA),
-	( Stat_DescrId == [] ->
-	    flora_write_struct(FileName,CODER_GENERIC_CONTEXT,_),
-	    put(CH_COMMA),
-	    %% writing DescrVarsTerm should always succeed
-	    flora_write_struct(DescrVarsTerm,CODER_GENERIC_CONTEXT,_),
-	    put(CH_COMMA),
-	    %% WS = PRTHISMODULE(PRTHISMODULE) - always succeds, so we
-	    %% do not condition flora_write_struct(WS,CODER_GENERIC_CONTEXT,_)
-	    flora_write_struct(WS,CODER_GENERIC_CONTEXT,_),
-	    put(CH_COMMA),
-	    write(RuleNum),
-	    put(CH_COMMA),
-	    %% Generate inserted rule heads as facts: do not add FL_HEADPREFIX
-	    flora_write_struct(HeadList,CODER_GENERIC_CONTEXT,Status_Head),
-	    ( Status_Head == [] ->
-		put(CH_COMMA),
-		flora_write_struct(Body,CODER_BODY_CONTEXT,Status_Body),
-		( Status_Body == [] ->
-		    put(CH_COMMA),
-		    flora_write_struct(PreBody,CODER_BODY_CONTEXT,Status_PreBody),
-		    ( Status_PreBody == [] ->
-			put(CH_COMMA),
-			flora_write_struct(PostBody,CODER_BODY_CONTEXT,Status_PostBody),
-			( Status_PostBody == [] ->
-			    put(CH_COMMA),
-			    flora_write_struct(DefeatCond,CODER_BODY_CONTEXT,Status_Defeat),
-			    ( Status_Defeat == [] ->
-				put(CH_COMMA),
-				flora_write_struct(Newpred,CODER_GENERIC_CONTEXT,Status)
-			    ;
-				Status = Status_Defeat
-			    ),
-			    put(CH_RPAREN)
-			;
-			    Status = Status_PostBody
-			)
-		    ;
-			Status = Status_PreBody
-		    )
-		;
-		    Status = Status_Body
-		)
-	    ;
-		Status = Status_Head
-	    )
-	;
-	    Status = Stat_DescrId
-	).
 
 coder_write_syslib(F,N,Args,Context,Status) :-
 	coder_write_prolog(F,N,Args,Context,Status).
@@ -1538,7 +1438,7 @@ coder_write_dynrulelist([Term],Status) :-
 	coder_write_syslib(F,N,Args,CODER_GENERIC_CONTEXT,Status).
 
 coder_write_dynrulelist([Term],Status) :-
-	is_prdynrule(Term,HeadList,Body,HVars,BVars,PreBody,PostBody,(Id,FileName,DescrVarsTerm,RuleNum,DescrMetaFacts,DefeatCond)),
+	is_prdynrule(Term,HeadList,Body,HVars,BVars,PreBody,PostBody,(Id,FileName,DescrVarsTerm,StmtNum,DescrMetaFacts,DefeatCond)),
 	!,
 	flora_write_atom(FLSYSRULEUPDATE),
 	put(CH_LPAREN),
@@ -1550,7 +1450,7 @@ coder_write_dynrulelist([Term],Status) :-
 	    flora_write_struct(DescrVarsTerm,CODER_GENERIC_CONTEXT,Stat_descr_vars),
 	    (Stat_descr_vars==[] ->
 		put(CH_COMMA),
-		write(RuleNum),
+		flora_write_struct(StmtNum,CODER_GENERIC_CONTEXT,_),
 		put(CH_COMMA),
 		put(CH_LBRACKET),
 		DescrMetaFacts = DescrMetaList - [],
@@ -2455,91 +2355,6 @@ coder_build_syslib(Lib,1,[WrappedList],DWS,_Context,VarList,Code,CInd,Status) :-
 	Code =.. [Lib,FLORA_DEFAULT_WORKSPACE,RLCode],
 	CInd =.. [Lib,RLCInd].
 
-coder_build_syslib(Lib,6,[Id,DescrVarTerm,MetaFacts,Mode,HeadList,Body],DWS,_Context,VarList,Code,CodeInd,Status) :-
-	is_fllibclause(Lib),
-	!,
-	%% do not prepend FL_HEADPREFIX when constructing clauses;
-	%% generate heads as facts
-	flora_build_struct(Id,DWS,CODER_GENERIC_CONTEXT,VarList,IdCode,IdCodeInd,Status_Id),
-	( Status_Id == [] ->
-	    flora_build_struct(DescrVarTerm,DWS,CODER_GENERIC_CONTEXT,VarList,DescrVarTermCode,DescrVarTermCodeInd,Status_DescrVars),
-	    ( Status_DescrVars == [] ->
-		flora_build_struct(MetaFacts,DWS,CODER_GENERIC_CONTEXT,VarList,MetaFactCode,MetaFactCodeInd,Status_MetaFact),
-		( Status_MetaFact == [] ->
-		    flora_build_struct(Mode,DWS,CODER_GENERIC_CONTEXT,VarList,ModeCode,ModeCodeInd,Status_Mode),
-		    ( Status_Mode == [] ->
-			%% do not prepend FL_HEADPREFIX when constructing
-			%% clauses; generate heads as facts
-			flora_build_struct(HeadList,DWS,CODER_GENERIC_CONTEXT,VarList,HeadListCode,HeadListCodeInd,Status_Head),
-			( Status_Head == [] ->
-			    flora_build_struct(Body,DWS,CODER_BODY_CONTEXT,VarList,BodyCode,BodyCodeInd,Status),
-			    Code =.. [Lib,IdCode,DescrVarTermCode,MetaFactCode,ModeCode,HeadListCode,BodyCode],
-			    CodeInd =.. [Lib,IdCodeInd,DescrVarTermCodeInd,MetaFactCodeInd,ModeCodeInd,HeadListCodeInd,BodyCodeInd]
-			;
-			    Status = Status_Head
-			)
-		    ;
-			Status = Status_Mode
-		    )
-		;
-		    Status = Status_MetaFact
-		)
-	    ;
-		Status = Status_DescrVars
-	    )
-	;
-	    Status = Status_Id
-	).
-
-%% Where is this used? Check!!!
-%% Maybe is used by flrdependency.P to build code for FLLIBINSRULESIG/9
-coder_build_syslib(Lib,11,[DescrId,FileName,DescrVarsTerm,WSterm,RuleNum,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],DWS,_Context,VarList,Code,CodeInd,Status) :-
-	is_fllibinsrulesig(Lib),
-	!,
-	flora_build_struct(DescrId,DWS,CODER_GENERIC_CONTEXT,VarList,DescrIdCode,DescrIdCodeInd,Stat_DescrId),
-	(Stat_DescrId == [] ->
-	    flora_build_struct(FileName,DWS,CODER_GENERIC_CONTEXT,VarList,FileNameCode,FileNameCodeInd,_),
-	    flora_build_struct(DescrVarsTerm,DWS,CODER_GENERIC_CONTEXT,VarList,DescrVarsTermCode,DescrVarsTermCodeInd,Stat_DescrVarsTerm),
-	    (Stat_DescrVarsTerm == [] ->
-		flora_build_struct(WSterm,DWS,CODER_GENERIC_CONTEXT,VarList,WStermCode,WStermCodeInd,Stat_WS),
-		(Stat_WS == [] ->
-		    flora_build_struct(HeadList,DWS,CODER_GENERIC_CONTEXT,VarList,HeadListCode,HeadListCodeInd,Status_Head),
-		    ( Status_Head == [] ->
-			flora_build_struct(Body,DWS,CODER_BODY_CONTEXT,VarList,BodyCode,BodyCodeInd,Status_Body),
-			( Status_Body == [] ->
-			    flora_build_struct(PreBody,DWS,CODER_BODY_CONTEXT,VarList,PreBodyCode,PreBodyCodeInd,Status_PreBody),
-			    ( Status_PreBody == [] ->
-				flora_build_struct(PostBody,DWS,CODER_BODY_CONTEXT,VarList,PostBodyCode,PostBodyCodeInd,Status_PostBody),
-				( Status_PostBody == [] ->
-				    flora_build_struct(DefeatCond,DWS,CODER_BODY_CONTEXT,VarList,DefeatCode,DefeatCodeInd,Status_Defeat),
-				    (Status_Defeat == [] ->
-					flora_build_struct(Newpred,DWS,CODER_GENERIC_CONTEXT,VarList,NewpredCode,NewpredCodeInd,Status),
-					Code =.. [Lib,DescrIdCode,FileNameCode,DescrVarsTermCode,WStermCode,RuleNum,HeadListCode,BodyCode,PreBodyCode,PostBodyCode,DefeatCode,NewpredCode],
-					CodeInd =.. [Lib,DescrIdCodeInd,FileNameCodeInd,DescrVarsTermCodeInd,WStermCodeInd,(RuleNum,NO_INDEX),HeadListCodeInd,BodyCodeInd,PreBodyCodeInd,PostBodyCodeInd,DefeatCodeInd,NewpredCodeInd]
-				    ;
-					Status = Status_Defeat
-				    )
-				;
-				    Status = Status_PostBody
-				)
-			    ;
-				Status = Status_PreBody
-			    )
-			;
-			    Status = Status_Body
-			)
-		    ;
-			Status = Status_Head
-		    )
-		;
-		    Status = Stat_WS
-		)
-	    ;
-		Status = Stat_DescrVarsTerm
-	    )
-	;
-	    Status = Stat_DescrId
-	).
 
 coder_build_syslib(Lib,N,Args,DWS,Context,VarList,Code,CodeInd,Status) :-
 	coder_build_prolog(Lib,N,Args,DWS,Context,VarList,Code,CodeInd,Status).
@@ -2564,7 +2379,7 @@ coder_build_dynrulelist([Term],DWS,VarList,[Code],[(CInd,Index)],Status) :-
 	coder_build_syslib(F,N,Args,DWS,CODER_GENERIC_CONTEXT,VarList,Code,CInd,Status).
 
 coder_build_dynrulelist([Term],DWS,VarList,Code,CInd,Status) :-
-	is_prdynrule(Term,HeadList,Body,HVars,BVars,PreBody,PostBody,(Id,FileName,DescrVarsTerm,RuleNum,DescrMetaFacts,DefeatCond)),
+	is_prdynrule(Term,HeadList,Body,HVars,BVars,PreBody,PostBody,(Id,FileName,DescrVarsTerm,StmtNum,DescrMetaFacts,DefeatCond)),
 	!,
 	is_prlist(HeadList,Head,_T,NO_INDEX),
 	flora_build_struct(Id,DWS,CODER_GENERIC_CONTEXT,VarList,IdCode,IdCodeInd,Stat_Id),
@@ -2599,8 +2414,9 @@ coder_build_dynrulelist([Term],DWS,VarList,Code,CInd,Status) :-
 					    %% so we do not check it: the defeat
 					    %% cond literal is generated by compiler
 					    flora_build_struct(DefeatCond,DWS,CODER_BODY_CONTEXT,_,DefeatCode,DefeatCodeInd,Status),
-					    Code1 = FLSYSRULEUPDATE(IdCode,FileNameCode,DescrVarsTermCode,RuleNum,DescrMetaFactsCode,HCode,BCode,HVCode,BVCode,PreBCode,PostBCode,DefeatCode),
-					    CInd1 = FLSYSRULEUPDATE(IdCodeInd,FileNameCodeInd,DescrVarsTermICode,(RuleNum,NO_INDEX),DescrMetaFactsICode,HICode,BICode,HVICode,BVICode,PreBCodeInd,PostBCodeInd,DefeatCodeInd),
+					    flora_build_struct(StmtNum,DWS,CODER_GENERIC_CONTEXT,_,StmtNumCode,StmtNumCodeInd,_),
+					    Code1 = FLSYSRULEUPDATE(IdCode,FileNameCode,DescrVarsTermCode,StmtNumCode,DescrMetaFactsCode,HCode,BCode,HVCode,BVCode,PreBCode,PostBCode,DefeatCode),
+					    CInd1 = FLSYSRULEUPDATE(IdCodeInd,FileNameCodeInd,DescrVarsTermICode,StmtNumCodeInd,DescrMetaFactsICode,HICode,BICode,HVICode,BVICode,PreBCodeInd,PostBCodeInd,DefeatCodeInd),
 					    Code = [Code1],
 					    CInd = [CInd1]
 					;

@@ -181,7 +181,7 @@
 	flora_defined_udf_registry/6,
 	flora_modular_prolog_registry/3,
 	flora_defeasible_module_registry/2,
-	flora_load_registry/3,
+	flora_load_registry/4,
 	flora_module_registry/1
    from flrregistry.
 
@@ -254,6 +254,10 @@
 	flora_attributed_vars_disabled/0,
 	flora_put_attr/3
    from flrwhen.
+
+:- import
+	extract_stmt_fileinfo_from_filespec/4
+   from flrdescriptor_support.
 
 :- import
 	query_signature_member/3,
@@ -358,7 +362,7 @@
 	reset_modules_for_load/1,
 	reset_modules_for_add/1,
 
-	flora_get_textual_info/4,
+	flora_get_textual_info/3,
 
 	flora_warnings_level/1,
         flora_coder_error/1.

@@ -611,7 +611,8 @@ flora_load_system_module_util(Module) :-
 	    -> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
 	    ;  true
 	    ),
-	    assert(flora_load_registry(FlrFile,Module,load)),
+	    flora_file_op(localname,FlrFile,ShortFlrFile),
+	    assert(flora_load_registry(FlrFile,Module,ShortFlrFile,load)),
 	    consult(WSXWAMFile),
 	    flora_clear_xpp_options
 	;
@@ -695,7 +696,8 @@ flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 		),
 		  util_rename_file(AddXWAMFile,WSXWAMFile)
 	      ),
-	      assert(flora_load_registry(FlrFile,Module,add)),
+	      flora_file_op(localname,FlrFile,ShortFlrFile),
+	      assert(flora_load_registry(FlrFile,Module,ShortFlrFile,add)),
 	      flora_measure_time(
 				 consult(WSXWAMFile),
 				 ['Done adding ', FlrFile, '. CPU time used:']
@@ -780,7 +782,8 @@ flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 		util_rename_file(MainXWAMFile,WSXWAMFile)
 	      ),
 	      flora_call_hooks(Module,LOADTOMODULE,FlrFile,before,AroundHookLink),
-	      assert(flora_load_registry(FlrFile,Module,load)),
+	      flora_file_op(localname,FlrFile,ShortFlrFile),
+	      assert(flora_load_registry(FlrFile,Module,ShortFlrFile,load)),
 	      %% We clear out UDF preds before loading (NOT adding!) modules.
 	      %% See comment about this where flora_cleanup_udf/1 is defined.
 	      %% Note: cleaning up UDFs *cannot* be done from within
@@ -1032,7 +1035,7 @@ util_addFLT_filename(File,FLTFile) :-
 
 util_addFTX_filename(File,FTXFile) :-
 	util_hidden_aux_file_base(File,AuxBase),
-	flora_concat_atoms([AuxBase,'#for_add.',FLORA_FTX_EXT],FTXFile).
+	flora_concat_atoms([AuxBase,'.',FLORA_FTX_EXT],FTXFile).	
 
 
 /*************************************************************************
@@ -1407,7 +1410,7 @@ util_compile_file_add(InputFile,Module,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLT
 	flora_measure_time(
 			   util_rpc_file_add(MaxErrNum,0,
 					     CompiledRuleList,CompiledFactList,
-					     CompiledQueryList,CompiledIClist,
+					     CompiledQueryList,CompiledLatentQueryList,
 					     UDFPredsList,
 					     TextualInfoList,
 					     RuleStatus,CompileStatus),
@@ -1443,7 +1446,7 @@ util_compile_file_add(InputFile,Module,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLT
 		(check_custom_trailer_file(TrailerOptions)
 		->
 		    generate_code_add(CompiledRuleList,CompiledFactList,
-				      CompiledQueryList,CompiledIClist,
+				      CompiledQueryList,CompiledLatentQueryList,
 				      %%CompiledMetaFactList,
 				      UDFPredsList,
 				      TextualInfoList,
@@ -1492,7 +1495,7 @@ util_compile_file_add(_InputFile,_Mod,_PFile,_DBFile,_FLDFile,
 
 /*************************************************************************
   generate_code_add(+CompiledRuleList,+CompiledFactList,
-                    +CompiledQueryList,+CompiledIClist,
+                    +CompiledQueryList,+CompiledLatentQueryList,
                     %%+CompiledMetaFactList,
 		    +UDFPredsList,+TextualInfoList,
 		    +FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,
@@ -1501,7 +1504,7 @@ util_compile_file_add(_InputFile,_Mod,_PFile,_DBFile,_FLDFile,
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 *************************************************************************/
-generate_code_add(CompiledRuleList,CompiledFactList,CompiledQueryList,CompiledIClist,UDFPredsList,TextualInfoList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLTFile,FTXFile,InputFile,FileStatus) :-
+generate_code_add(CompiledRuleList,CompiledFactList,CompiledQueryList,CompiledLatentQueryList,UDFPredsList,TextualInfoList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLTFile,FTXFile,InputFile,FileStatus) :-
 	%% Generate FLD file for undefinedness checking
 	flora_debug_code(CompiledRuleList,CompiledFactList,FLDFile),
 	%% Generate symbol file - fls
@@ -1520,7 +1523,7 @@ generate_code_add(CompiledRuleList,CompiledFactList,CompiledQueryList,CompiledIC
 					      CompiledRuleList,
 					      CompiledFactList,
 					      CompiledQueryList,
-					      CompiledIClist,
+					      CompiledLatentQueryList,
 					      %%CompiledMetaFactList,
 					      DBFile,FLDFile,
 					      %%FLMFile,
@@ -1544,7 +1547,7 @@ generate_code_add(CompiledRuleList,CompiledFactList,CompiledQueryList,CompiledIC
 /*************************************************************************
   generate_Pfile_add(+PFileName,+FileOptionList,+TrailerOptions,
                        +RuleList,+FactList,+QueryList,
-		       +IClist,
+		       +LQList,
 		       %%+MetaFactList,
                        +DBFile,+FLDFile,
 		       %%+FLMFile,
@@ -1558,7 +1561,7 @@ generate_code_add(CompiledRuleList,CompiledFactList,CompiledQueryList,CompiledIC
   (5) program.
   (6) trailer.
 *************************************************************************/
-generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,QueryList,IClist,DBFile,FLDFile,FLSFile,FLS2File,FLTFile,FileStatus) :-
+generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,QueryList,LQList,DBFile,FLDFile,FLSFile,FLS2File,FLTFile,FileStatus) :-
 	telling(PreOutFile),
 	tell(PFileName),
 	%% these two must be member/2, not memberchk/2, as
@@ -1615,17 +1618,17 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,Que
 		insert_code_for_loaddyn_data(FLDFile),
 		insert_code_for_loaddyn_data(FLSFile),
 		flora_extern_code(RuleList,CoderStatus1),
-		util_save_latent_query_signatures(IClist,ICstatus),
+		util_save_latent_query_signatures(LQList,LQStatus),
 		util_save_query_code(QueryList,QueryStatus),
 		%% FLS2File contains symbols to be checked AFTER loading
 		%% (to allow any relevant declarations to be taken into account)
 		insert_code_for_loaddyn_data(FLS2File),
 		( CoderStatus1 == NO_ERRORS,
-		    ICstatus == NO_ERRORS,
+		    LQStatus == NO_ERRORS,
 		    QueryStatus == NO_ERRORS
 		-> FileStatus = FLORA_SUCCESS
 		;
-		    append_lists([CoderStatus1,ICstatus,QueryStatus],CoderStatus),
+		    append_lists([CoderStatus1,LQStatus,QueryStatus],CoderStatus),
 		    print_errors([coder(CoderStatus)]),
 		    FileStatus = FLORA_FAILURE
 		)
@@ -1674,7 +1677,7 @@ util_compile_file(InputFile,Module,PFile,DBFile,FLDFile,FLMFile,FLSFile,FLS2File
 					 CompiledRuleList,
 					 CompiledSigList,
 					 CompiledFactList,
-					 CompiledQueryList, CompiledIClist,
+					 CompiledQueryList, CompiledLatentQueryList,
 					 CompiledMetaFactList,UDFPredsList,
 					 TextualInfoList,
 					 RuleStatus,CompileStatus),
@@ -1711,7 +1714,7 @@ util_compile_file(InputFile,Module,PFile,DBFile,FLDFile,FLMFile,FLSFile,FLS2File
 		->
 		    generate_code(CompiledRuleList,CompiledSigList,
 				  CompiledFactList,
-				  CompiledQueryList, CompiledIClist,
+				  CompiledQueryList, CompiledLatentQueryList,
 				  CompiledMetaFactList,UDFPredsList,
 				  TextualInfoList,
 				  StrippedFileOptions,TrailerOptions,
@@ -1757,11 +1760,11 @@ util_compile_file(_InputFile,_Mod,_PFile,_DBFile,_FLDFile,_FLMFile,_FLSFile,_FLS
 
 
 /*************************************************************************
-  generate_code(+CompiledRuleList,+CompiledSigList,+CompiledFactList,+CompiledQueryList,+CompiledIClist,+CompiledMetaFactList,+UDFPredsList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,+FLMFile,+FLSFile,+FLS2File,+FLTFile,+FTXFile,+InputFile,-FileStatus)
+  generate_code(+CompiledRuleList,+CompiledSigList,+CompiledFactList,+CompiledQueryList,+CompiledLatentQueryList,+CompiledMetaFactList,+UDFPredsList,+FileOptionList,+TrailerOptions,+PFile,+DBFile,+FLDFile,+FLMFile,+FLSFile,+FLS2File,+FLTFile,+FTXFile,+InputFile,-FileStatus)
 
   Note: FileStatus returns either FLORA_FAILURE or FLORA_SUCCESS.
 *************************************************************************/
-generate_code(CompiledRuleList,CompiledSigList,CompiledFactList,CompiledQueryList,CompiledIClist,CompiledMetaFactList,UDFPredsList,TextualInfoList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FLMFile,FLSFile,FLS2File,FLTFile,FTXFile,InputFile,FileStatus) :-
+generate_code(CompiledRuleList,CompiledSigList,CompiledFactList,CompiledQueryList,CompiledLatentQueryList,CompiledMetaFactList,UDFPredsList,TextualInfoList,FileOptionList,TrailerOptions,PFile,DBFile,FLDFile,FLMFile,FLSFile,FLS2File,FLTFile,FTXFile,InputFile,FileStatus) :-
 	%% Generate FLD file for undefinedness checking
 	flora_measure_time(
 			   flora_debug_code(CompiledRuleList,CompiledFactList,
@@ -1786,7 +1789,7 @@ generate_code(CompiledRuleList,CompiledSigList,CompiledFactList,CompiledQueryLis
 					  CompiledSigList,
 					  CompiledFactList,
 					  CompiledQueryList,
-					  CompiledIClist,
+					  CompiledLatentQueryList,
 					  CompiledMetaFactList,
 					  DBFile,FLDFile,FLMFile,
 					  FLSFile,FLS2File,
@@ -1810,7 +1813,7 @@ generate_code(CompiledRuleList,CompiledSigList,CompiledFactList,CompiledQueryLis
   generate_Pfile(+PFileName,+FileOptionList,+TrailerOptions,
                        +RuleList,+SignList,+FactList,
 		       +QueryList,
-		       +IClist,
+		       +LQList,
 		       +MetaFactList,
                        +DBFile,+FLDFile,+FLMFile,
 		       +FLSFile,+FLS2File,+FLTFile,-FileStatus)
@@ -1823,7 +1826,7 @@ generate_code(CompiledRuleList,CompiledSigList,CompiledFactList,CompiledQueryLis
   (5) program.
   (6) trailer.
 *************************************************************************/
-generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,SigList,FactList,QueryList,IClist,MetaFactList,DBFile,FLDFile,FLMFile,FLSFile,FLS2File,FLTFile,FileStatus) :-
+generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,SigList,FactList,QueryList,LQList,MetaFactList,DBFile,FLDFile,FLMFile,FLSFile,FLS2File,FLTFile,FileStatus) :-
 	telling(PreOutFile),
 	tell(PFileName),
 	%% these two must be member/2, not memberchk/2, as
@@ -1888,14 +1891,14 @@ generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,SigList,FactList
 		flora_current_out_line('~n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Rules %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'),
 		flora_current_out_line('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%~n'),
 		flora_extern_code(RuleList,CoderStatus2),
-		util_save_latent_query_signatures(IClist,ICstatus),
+		util_save_latent_query_signatures(LQList,LQStatus),
 		util_save_query_code(QueryList,QueryStatus),
 		%% FLS2File has symbol declarations to be checked AFTER loading
 		%% (to allow any relevant declarations to be taken into account)
 		insert_code_for_loaddyn_data(FLS2File),
 		( CoderStatus1 == NO_ERRORS,
 		    CoderStatus2 == NO_ERRORS,
-		    ICstatus == NO_ERRORS,
+		    LQStatus == NO_ERRORS,
 		    QueryStatus == NO_ERRORS
 		->
 		    util_include_file([FLTRAILER,FLDYNZLIB,FLPREDDEF],FileStatus),
@@ -1905,7 +1908,7 @@ generate_Pfile(PFileName,FileOptionList,TrailerOptions,RuleList,SigList,FactList
 		    ; true
 		    )
 		;
-		    append_lists([CoderStatus1,CoderStatus2,ICstatus,QueryStatus], CoderStatus),
+		    append_lists([CoderStatus1,CoderStatus2,LQStatus,QueryStatus], CoderStatus),
 		    print_errors([coder(CoderStatus)]),
 		    FileStatus = FLORA_FAILURE
 		)
@@ -2106,13 +2109,13 @@ flora_read_descriptor_metafacts_canonical_and_insert(File,ErrNumFinal) :-
 	; functor(Term,FL_RULE_ENABLER,3),
 	    call(Term)
 	->
-	    arg(1,Term,RuleId),
+	    arg(1,Term,StmtId),
 	    arg(2,Term,RFN),
 	    arg(3,Term,Module),
 	    parse_filename(File,_,Base,_),
 	    flora_concat_atoms([Base,FLORA_FILE_EXT],ErrFile),
 	    flora_concat_atoms(['a rule with Id (',
-				RuleId,',',RFN,',',Module,
+				StmtId,',',RFN,',',Module,
 				') already exists'],
 			       Mesg),
 	    util_load_metafact_error(ErrFile,Mesg),
@@ -2540,7 +2543,7 @@ flora_reclaim_storage_space :-
 
 /*************************************************************************
 util_rpc_file_add(+MaxErr,+ErrNum,-CompiledRuleList,-CompiledFactList,
-		  -CompiledQueryList,+CompiledIClist,
+		  -CompiledQueryList,+CompiledLatentQueryList,
 		  -TextualInfoList,
 		  -UDFPredsList,-RuleStatus,-FileStatus),
 
@@ -2548,7 +2551,7 @@ util_rpc_file_add(+MaxErr,+ErrNum,-CompiledRuleList,-CompiledFactList,
       Each time checks if there were errors. 
 *************************************************************************/
 util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,
-		  CompiledQueryList,CompiledIClist,
+		  CompiledQueryList,CompiledLatentQueryList,
 		  UDFPredsList,
 		  [TextualInfo|TextualInfoList],
 		  RuleStatus,FileStatus) :-
@@ -2556,7 +2559,7 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,
 				    CompiledRuleList-RestCompiledRuleList,
 				    CompiledFactList-RestCompiledFactList,
 				    CompiledQueryList-RestCompiledQueryList,
-				    CompiledIClist-RestCompiledIClist,
+				    CompiledLatentQueryList-RestCompiledLatentQueryList,
 				    UDFPredsList-RestUDFPredsList,
 				    TextualInfo,
 				    RuleStatus1),
@@ -2576,7 +2579,7 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,
 	    ->
 	        util_rpc_file_add(MaxErr,NewErrNum,
 				  _CompiledRuleList,_CompiledFactList,
-				  _CompiledQueryList,_CompiledIClist,
+				  _CompiledQueryList,_CompiledLatentQueryList,
 				  _UDFPredsList,
 				  _TexualInfoList,
 				  RuleStatus2,FileStatus),
@@ -2586,7 +2589,7 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,
 	    ->
 	        util_rpc_file_add(MaxErr,NewErrNum,
 				  _CompiledRuleList,_CompiledFactList,
-				  _CompiledQueryList,_CompiledIClist,
+				  _CompiledQueryList,_CompiledLatentQueryList,
 				  _UDFPredsList,
 				  _TexualInfoList,
 				  RuleStatus2,FileStatus),
@@ -2600,7 +2603,7 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,
 	    ->
 		util_rpc_file_add(MaxErr,NewErrNum,
 				  RestCompiledRuleList,RestCompiledFactList,
-				  RestCompiledQueryList,RestCompiledIClist,
+				  RestCompiledQueryList,RestCompiledLatentQueryList,
 				  RestUDFPredsList,
 				  TextualInfoList,
 				  RuleStatus2,FileStatus),
@@ -2610,7 +2613,7 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,
 		    RestCompiledRuleList=[],
 		    RestCompiledFactList=[],
 		    RestCompiledQueryList=[],
-		    RestCompiledIClist=[],
+		    RestCompiledLatentQueryList=[],
 		    %%RestCompiledMetaFactList=[],
 		    FileStatus = FLORA_SUCCESS
 		;
@@ -2624,7 +2627,7 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,
 
 /*************************************************************************
   util_read_parse_compile_add(+Option,-Tokens,-RulesCode,-FactsCode,
-                              -QueryCode,-ICcode,
+                              -QueryCode,-LQCode,
                               -MetaFacts,
 			      -TextualInfo,
 			      -UDFPredsCode,-OptionList,-Status)
@@ -2638,9 +2641,9 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,
         returns and so it should be set to [] later accordingly to close
         the end of the list.
 	FactsCode is the same for facts.
-        TextualInfo = FL_TEXTUAL_INFO_PRED(RuleNum,RuleFileName,BegL,BegCh,EndL,EndCh)
+        TextualInfo = FL_TEXTUAL_INFO_PRED(StmtNum,ShortStmtFileSpec,BegL,BegCh,EndL,EndCh)
 *************************************************************************/
-util_read_parse_compile_add(Option,Tokens,RulesCode,FactsCode,QueryCode,ICcode,UDFPredsCode,TextualInfo,Status) :-
+util_read_parse_compile_add(Option,Tokens,RulesCode,FactsCode,QueryCode,LQCode,UDFPredsCode,TextualInfo,Status) :-
 	%% get InputTokens
 	flora_tokens(InputTokens,LexerStatus), 
 	count_errors(LexerStatus,LexErrNum),
@@ -2649,7 +2652,7 @@ util_read_parse_compile_add(Option,Tokens,RulesCode,FactsCode,QueryCode,ICcode,U
 	    RulesCode=R-R,
 	    FactsCode=F-F,
 	    QueryCode=Q-Q,
-	    ICcode=IC-IC,
+	    LQCode=LQ-LQ,
 	    %%MetaFacts=MF-MF,
 	    UDFPredsCode=U-U,
 	    ErrNum=LexErrNum
@@ -2659,7 +2662,7 @@ util_read_parse_compile_add(Option,Tokens,RulesCode,FactsCode,QueryCode,ICcode,U
 	    RulesCode=R-R,
 	    FactsCode=F-F,
 	    QueryCode=Q-Q,
-	    ICcode=IC-IC,
+	    LQCode=LQ-LQ,
 	    %%MetaFacts=MF-MF,
 	    UDFPredsCode=U-U,
 	    ErrNum = 0
@@ -2675,7 +2678,7 @@ util_read_parse_compile_add(Option,Tokens,RulesCode,FactsCode,QueryCode,ICcode,U
 		RulesCode=R-R,
 		FactsCode=F-F,
 		QueryCode=Q-Q,
-		ICcode=IC-IC,
+		LQCode=LQ-LQ,
 		%%MetaFacts=MF-MF,
 	    	UDFPredsCode=U-U,
 		ErrNum=CompoErrNum
@@ -2686,14 +2689,14 @@ util_read_parse_compile_add(Option,Tokens,RulesCode,FactsCode,QueryCode,ICcode,U
 		    RulesCode=R-R,
 		    FactsCode=F-F,
 		    QueryCode=Q-Q,
-		    ICcode=IC-IC,
+		    LQCode=LQ-LQ,
 		    %%MetaFacts=MF-MF,
 		    UDFPredsCode=U-U,
 		    ErrNum=ParErrNum
 		;
 		    %% compile for addition, and get RulesCode
 		    %% This call does not generate MetaFacts at compile time
-		    flora_compile_add(ParserTerm,RulesCode,FactsCode,QueryCode,ICcode,UDFPredsCode,RuleNum+RuleFN,CompileStat),
+		    flora_compile_add(ParserTerm,RulesCode,FactsCode,QueryCode,LQCode,UDFPredsCode,StmtNum+StmtFN,CompileStat),
 		    count_errors(CompileStat,CompiErrN),
 		    ErrNum=CompiErrN
 		)
@@ -2708,18 +2711,24 @@ util_read_parse_compile_add(Option,Tokens,RulesCode,FactsCode,QueryCode,ICcode,U
 	),
 	%% If TokenRange = NULL then this is not a rule
 	%% Also, RulesCode should be [_|_] - _ to rule out facts.
-	%% RuleNum should be > 1, RuleFN nonvar and not NULL.
-	%% Queries will also be recorded, as the compiler gives them a RuleNum.
+	%% StmtNum should be > 1, StmtFN nonvar and not NULL.
+	%% Queries will also be recorded, as the compiler gives them a StmtNum.
 	%% These would be dead facts,
 	extractTokenRange(Tokens,TokenRange),
-	(RulesCode = RList - _, (var(RList) ; RList \= [_|_]) ;
-	    var(RuleNum) ; RuleNum =< 0 ;
-	    RuleFN == NULL ; is_fldirective(ParserTerm,_,_)
+	( (
+	    (RulesCode = RList - _, (var(RList) ; RList == []),
+		LQCode = LQList - _, (var(LQList) ; LQList == []),
+		QueryCode = QList - _, (var(QList) ; QList == [])
+	    )
+	  ;
+	    var(StmtNum) ; (integer(StmtNum), StmtNum =< 0) ;
+	    StmtFN == NULL ; is_fldirective(ParserTerm,_,_)
+	  )
 	-> TextualInfo = NULL
-	; RulesCode = [QLit|_] - _, is_prquery(QLit,PLit),
+	; RulesCode = [QLit|_] - _, nonvar(QLit), is_prquery(QLit,PLit),
 	    (is_prologliblit(PLit,_,_,_) ; is_prologliblit(PLit,_,_,_,_))
 	-> TextualInfo = NULL
-	; TokenRange = FL_TEXTUAL_INFO_PRED(RuleNum,RuleFN,_,_,_,_)
+	; TokenRange = FL_TEXTUAL_INFO_PRED(StmtNum,StmtFN,_,_,_,_)
 	-> TextualInfo = TokenRange
 	; TextualInfo = NULL
 	),
@@ -2737,20 +2746,20 @@ util_read_parse_compile_add(Option,Tokens,RulesCode,FactsCode,QueryCode,ICcode,U
 
 
 /*************************************************************************
-  util_rpc_file(+MaxErr,+ErrNum,-CompiledRuleList,-CompiledSigList,-CompiledFactList,-CompiledQueryList,-CompiledIClist,-CompiledMetaFactList,-UDFPredsList,-TextualInfoList,-RuleStatus,-FileStatus)
+  util_rpc_file(+MaxErr,+ErrNum,-CompiledRuleList,-CompiledSigList,-CompiledFactList,-CompiledQueryList,-CompiledLatentQueryList,-CompiledMetaFactList,-UDFPredsList,-TextualInfoList,-RuleStatus,-FileStatus)
 
   util_rpc_file/9 calls the lexer/composer/compiler rule-by-rule.
       Each time checks if there have been any errors. Collects options passed
       in by the compiler into a list. These options tell which libraries
       to load, how to compose the trailer, etc.
 *************************************************************************/
-util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledSigList,CompiledFactList,CompiledQueryList,CompiledIClist,CompiledMetaFactList,UDFPredsList,[TextualInfo|TextualInfoList],RuleStatus,FileStatus) :-
+util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledSigList,CompiledFactList,CompiledQueryList,CompiledLatentQueryList,CompiledMetaFactList,UDFPredsList,[TextualInfo|TextualInfoList],RuleStatus,FileStatus) :-
 	util_read_parse_compile(FLORA_FILE,Tokens,
 				CompiledRuleList-RestCompiledRuleList,
 				CompiledSigList-RestCompiledSigList,
 				CompiledFactList-RestCompiledFactList,
 				CompiledQueryList-RestCompiledQueryList,
-				CompiledIClist-RestCompiledIClist,
+				CompiledLatentQueryList-RestCompiledLatentQueryList,
 				CompiledMetaFactList-RestCompiledMetaFactList,
 				UDFPredsList-RestUDFPredsList,
 				TextualInfo,
@@ -2776,7 +2785,7 @@ util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledSigList,CompiledFactList,Co
 			      _CompiledSigList,
 			      _CompiledFactList,
 			      _CompiledQueryList,
-			      _CompiledIClist,
+			      _CompiledLatentQueryList,
 			      _CompiledMetaFactList,_UDFPredsList,
 			      _TextualInfoList,
 			      RuleStatus2,FileStatus),
@@ -2791,7 +2800,7 @@ util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledSigList,CompiledFactList,Co
 			      _CompiledSigList,
 			      _CompiledFactList,
 			      _CompiledQueryList,
-			      _CompiledIClist,
+			      _CompiledLatentQueryList,
 			      _CompiledMetaFactList,_UDFPredsList,
 			      _TextualInfoList,
 			      RuleStatus2,FileStatus),
@@ -2808,7 +2817,7 @@ util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledSigList,CompiledFactList,Co
 			      RestCompiledSigList,
 			      RestCompiledFactList,
 			      RestCompiledQueryList,
-			      RestCompiledIClist,
+			      RestCompiledLatentQueryList,
 			      RestCompiledMetaFactList,RestUDFPredsList,
 			      TextualInfoList,
 			      RuleStatus2,FileStatus),
@@ -2819,7 +2828,7 @@ util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledSigList,CompiledFactList,Co
 		    RestCompiledSigList=[],
 		    RestCompiledFactList=[],
 		    RestCompiledQueryList=[],
-		    RestCompiledIClist=[],
+		    RestCompiledLatentQueryList=[],
 		    FileStatus = FLORA_SUCCESS
 		;
 		    FileStatus = FLORA_FAILURE
@@ -2864,7 +2873,7 @@ discard_tokens_EOF :-
 
 
 /******************************************************************************
-  util_read_parse_compile(+Option,-Tokens,-RuleCode,-SignCode,-FactCode,-QueryCode,-ICcode,-MetaFactCode,-UDFPredCode,-TextualInfo,-Status)
+  util_read_parse_compile(+Option,-Tokens,-RuleCode,-SignCode,-FactCode,-QueryCode,-LQCode,-MetaFactCode,-UDFPredCode,-TextualInfo,-Status)
 
         Read file or command line, then parse and compile.
 
@@ -2876,9 +2885,9 @@ discard_tokens_EOF :-
         where Tail is the tail of List. Tail is unbound when this predicate
         returns and so it should be set to [] later accordingly to close
         the end of the list.
-        TextualInfo = FL_TEXTUAL_INFO_PRED(RuleNum,RuleFileName,BegL,BegCh,EndL,EndCh)
+        TextualInfo = FL_TEXTUAL_INFO_PRED(StmtNum,ShortStmtFileSpec,BegL,BegCh,EndL,EndCh)
 ******************************************************************************/
-util_read_parse_compile(Option,Tokens,RulesCode,SignCode,FactsCode,QueryCode,ICcode,MetaFacts,UDFPredsCode,TextualInfo,Status) :-
+util_read_parse_compile(Option,Tokens,RulesCode,SignCode,FactsCode,QueryCode,LQCode,MetaFacts,UDFPredsCode,TextualInfo,Status) :-
 	flora_tokens(InputTokens,LexerStatus), 
 	%% get InputTokens
 	count_errors(LexerStatus,LexErrNum),
@@ -2888,7 +2897,7 @@ util_read_parse_compile(Option,Tokens,RulesCode,SignCode,FactsCode,QueryCode,ICc
 	    SignCode=S-S,
 	    FactsCode=F-F,
 	    QueryCode=Q-Q,
-	    ICcode=IC-IC,
+	    LQCode=LQ-LQ,
 	    MetaFacts=M-M,
 	    UDFPredsCode=U-U,
 	    ErrNum=LexErrNum
@@ -2899,7 +2908,7 @@ util_read_parse_compile(Option,Tokens,RulesCode,SignCode,FactsCode,QueryCode,ICc
 	    SignCode=S-S,
 	    FactsCode=F-F,
 	    QueryCode=Q-Q,
-	    ICcode=IC-IC,
+	    LQCode=LQ-LQ,
 	    MetaFacts=M-M,
 	    UDFPredsCode=U-U,
 	    ErrNum = 0
@@ -2919,7 +2928,7 @@ util_read_parse_compile(Option,Tokens,RulesCode,SignCode,FactsCode,QueryCode,ICc
 		SignCode=S-S,
 		FactsCode=F-F,
 		QueryCode=Q-Q,
-		ICcode=IC-IC,
+		LQCode=LQ-LQ,
 		MetaFacts=M-M,
 	    	UDFPredsCode=U-U,
 		ErrNum=CompoErrNum
@@ -2932,13 +2941,13 @@ util_read_parse_compile(Option,Tokens,RulesCode,SignCode,FactsCode,QueryCode,ICc
 		    SignCode=S-S,
 		    FactsCode=F-F,
 		    QueryCode=Q-Q,
-		    ICcode=IC-IC,
+		    LQCode=LQ-LQ,
 		    MetaFacts=M-M,
 		    UDFPredsCode=U-U,
 		    ErrNum=ParErrNum
 		;
 		    %% compile, and get RulesCode,FactsCode
-		    flora_compile(ParserTerm,RulesCode,SignCode,FactsCode,QueryCode,ICcode,MetaFacts,UDFPredsCode,RuleNum+RuleFN,CompileStat),
+		    flora_compile(ParserTerm,RulesCode,SignCode,FactsCode,QueryCode,LQCode,MetaFacts,UDFPredsCode,StmtNum+StmtFN,CompileStat),
 		    count_errors(CompileStat,CompiErrN),
 		    ErrNum=CompiErrN
 		)
@@ -2952,18 +2961,25 @@ util_read_parse_compile(Option,Tokens,RulesCode,SignCode,FactsCode,QueryCode,ICc
 	),
 	%% If TokenRange = NULL then this is not a rule
 	%% Also, RulesCode should be [_|_] - _ to rule out facts.
-	%% RuleNum should be > 0, RuleFN nonvar and not NULL.
-	%% Queries will also be recorded, as the compiler gives them a RuleNum.
+	%% StmtNum should be > 0, StmtFN nonvar and not NULL.
+	%% Queries will also be recorded, as the compiler gives them a StmtNum.
 	%% These would be dead facts,
 	extractTokenRange(Tokens,TokenRange),
-	(RulesCode = RList - _, (var(RList) ; RList \= [_|_]) ;
-	    var(RuleNum) ; RuleNum =< 0 ;
-	    RuleFN == NULL ; is_fldirective(ParserTerm,_,_)
+	(
+	  (
+	    (RulesCode = RList - _, (var(RList) ; RList == []),
+		LQCode = LQList - _, (var(LQList) ; LQList == []),
+		QueryCode = QList - _, (var(QList) ; QList == [])
+	    )
+	  ;
+	    var(StmtNum) ; (integer(StmtNum), StmtNum =< 0) ;
+	    StmtFN == NULL ; is_fldirective(ParserTerm,_,_)
+	  )
 	-> TextualInfo = NULL
-	; RulesCode = [PLit|_] - _,
+	; RulesCode = [PLit|_] - _, nonvar(PLit),
 	    (is_prologliblit(PLit,_,_,_) ; is_prologliblit(PLit,_,_,_,_))
 	-> TextualInfo = NULL
-	; TokenRange = FL_TEXTUAL_INFO_PRED(RuleNum,RuleFN,_,_,_,_)
+	; TokenRange = FL_TEXTUAL_INFO_PRED(StmtNum,StmtFN,_,_,_,_)
 	-> TextualInfo = TokenRange
 	; TextualInfo = NULL
 	),
@@ -4656,7 +4672,7 @@ flora_cleanup_registry(Module) :-
 	(retract(flora_defeasible_module_registry(Module,_)) -> true
 	; true
 	),
-	retractall(flora_load_registry(_,Module,_)).
+	retractall(flora_load_registry(_,Module,_,_)).
 
 flora_cleanup_udf(Module) :-
 	(Module == FLORA_DEFAULT_WORKSPACE ->
@@ -4782,7 +4798,7 @@ extractTokenRange(Tokens,TokenRange):-
 	),
 	(L1 == -1 -> TokenRange = NULL
 	;
-	    TokenRange = FL_TEXTUAL_INFO_PRED(_RuleNum,_RuleFN,L1,C1,L2,C2)
+	    TokenRange = FL_TEXTUAL_INFO_PRED(_StmtNum,_StmtFN,L1,C1,L2,C2)
 	).
 extractTokenRange(_Tokens,NULL).
 
@@ -4823,33 +4839,34 @@ util_save_latent_query_signatures(LatentQueryList,Status) :-
 	nl.
 
 /******************************************************************************
-      flora_get_textual_info(+RuleId,+RuleFile,+Mode,-Info)
-      RuleFile: can be absolute or relative name. Or just even the base name.
-      Mode: load/add
+      flora_get_textual_info(+StmtId,+StmtFileSpec,-Info)
+      StmtFileSpec: can be absolute or relative name.
+                    Or just even the base name.
+                    Can also be FL_SHELL_FICTITIOUS_FILENAME or
+		    FL_DYNRULE_FICTITIOUS_FILENAME(PrintableFile)
 
-      Info: FL_TEXTUAL_INFO_PRED(RuleNum,RuleFileName,BegLn,BegCh,EndLn,EndCh)
+      Info: FL_TEXTUAL_INFO_PRED(StmtNum,ShortStmtFileSpec,BegLn,BegCh,EndLn,EndCh)
+      If the textual info file does not exist, this predicate fails.
 ******************************************************************************/
-flora_get_textual_info(RuleId,RuleFile,Mode,Info) :-
+flora_get_textual_info(StmtId,StmtFileSpec,Info) :-
+	extract_stmt_fileinfo_from_filespec(StmtFileSpec,PrintableFileName,ShortStmtFileName,ShortStmtFileSpec),
 	(\+current_predicate(FL_TEXTUAL_INFO_PRED/6) ->
-	    (Mode == add -> util_addFTX_filename(RuleFile,FTXFile)
-	    ; util_FTX_filename(RuleFile,FTXFile)
-	    ),
+	    util_FTX_filename(PrintableFileName,FTXFile),
+	    flora_file_op(exists,FTXFile),
 	    load_textual_info(FTXFile)
 	; true
 	),
-	parse_filename(RuleFile,_Dir,Base,Extension),
-	flora_concat_atoms([Base,'.',Extension],RuleFileName),
-	get_rule_or_query_number(RuleId,RuleFileName,RuleNum),
-	Info = FL_TEXTUAL_INFO_PRED(RuleNum,RuleFileName,_,_,_,_),
-	storage_find_fact(flora_textual_info_trie,Info).
+	get_rule_or_query_number(StmtId,ShortStmtFileSpec,StmtNum),
+	Info = FL_TEXTUAL_INFO_PRED(StmtNum,ShortStmtFileName,_,_,_,_),
+	call(Info).
 
-get_rule_or_query_number(RuleId,RuleFileName,RuleNum) :-
-	matching_rule_signature(RuleId,RuleFileName,_DescrVarTerm,_Prefix,_Head,_Body,Signature),
-	rule_signature_member(rulenumber,Signature,RuleNum),
+get_rule_or_query_number(StmtId,ShortStmtFileSpec,StmtNum) :-
+	matching_rule_signature(StmtId,ShortStmtFileSpec,_DescrVarTerm,_Prefix,_Head,_Body,Signature),
+	rule_signature_member(rulenumber,Signature,StmtNum),
 	!.
-get_rule_or_query_number(RuleId,RuleFileName,RuleNum) :-
-	matching_query_signature(RuleId,RuleFileName,_Mod,Signature),
-	query_signature_member(rulenumber,Signature,RuleNum).
+get_rule_or_query_number(StmtId,ShortStmtFileSpec,StmtNum) :-
+	matching_query_signature(StmtId,ShortStmtFileSpec,_Mod,Signature),
+	query_signature_member(rulenumber,Signature,StmtNum).
 
 
 load_textual_info(FTXFile) :-
@@ -4864,7 +4881,9 @@ load_textual_info(FTXFile) :-
 	    fail
 	),
 	seen,
-	see(OldF).
+	see(OldF),
+	Info = FL_TEXTUAL_INFO_PRED(_X,_Y,_Z,_U,_V,_W),
+	assert((Info :- storage_find_fact(flora_textual_info_trie,Info))).
 
 
 
