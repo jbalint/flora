@@ -3601,21 +3601,19 @@ compile_defsensor_direct(SensCall,DelayCond,Code,Status) :-
 ****************************************************************************/
 compile_fact(Head,RuleDiffList,SigDiffList,FactDiffList,MetaFactDiffList,Status) :-
 	set_context(compiling_facts),
-	compile_head(Head,HeadCode,H2BCodeHead,H2BCodeTail,HeadStat),
+	compile_head(Head,HeadCode,H2BCodeFront,H2BCodeBack,HeadStat),
 	!,
 	( no_errors_found(S) ->
-	    ( H2BCodeHead == NULL, H2BCodeTail == NULL ->
+	    ( H2BCodeFront == NULL, H2BCodeBack == NULL ->
 		compile_factlist(Head,HeadCode,RuleDiffList,FactDiffList,S2),
 		SigDiffList = _Sign-_Sign,
 		MetaFactDiffList = _M-_M
 	    ; %% fact became static rule
 	        compile_conjunct2list(HeadCode,HeadCodeList),
-		get_dynrule_varlist(L),
-		conjunct_struct(H2BCodeHead,H2BCodeTail,H2BCode1),
-		(H2BCode1 == NULL -> flatom_struct(FL_TRUE,NO_INDEX,H2BCode)
-		; H2BCode = H2BCode1
+		conjunct_struct(H2BCodeFront,H2BCodeBack,H2BCode),
+		(H2BCode == NULL -> flatom_struct(FL_TRUE,NO_INDEX,BodyCode)
+		; BodyCode = H2BCode
 		),
-		add_dynrule_attr_code(L,H2BCode,BodyCode),
 		%% no explicit id given: just generate new rule id
 		approx_flindex(Head,RuleIdx),
 		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_RULE,DescrIdCode,DescrVarsTerm,MetaFactDiffList,_),
@@ -3640,10 +3638,10 @@ compile_fact(Head,RuleDiffList,SigDiffList,FactDiffList,MetaFactDiffList,Status)
 
 compile_fact_add(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,MetaFactDiffList,Status) :-
 	set_context(compiling_facts), 
-	compile_head(Head,HeadCode,H2BCodeHead,H2BCodeTail,S),
+	compile_head(Head,HeadCode,H2BCodeFront,H2BCodeBack,S),
 	!,
 	( no_errors_found(S) ->
-	    ( H2BCodeHead == NULL, H2BCodeTail == NULL,
+	    ( H2BCodeFront == NULL, H2BCodeBack == NULL,
 		\+has_context(converting_fact2rule) ->
 		clear_context(converting_fact2rule),
 		compile_factlist(Head,HeadCode,RuleDiffList,FactDiffList,S2),
@@ -3654,10 +3652,10 @@ compile_fact_add(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,M
 		%% are inserted at compile time
 		clear_context(converting_fact2rule),
 		%% NOTE: Here we just FAKE the body to be TRUE!
-		%% We don't need H2BCodeHead+H2BCodeTail because below we
+		%% We don't need H2BCodeFront+H2BCodeBack because below we
 		%% recompile using compile_rule_add/8, so compile_head/5 will
 		%% be called again and create proper body.
-		%%conjunct_struct(H2BCodeHead,H2BCodeTail,H2BCode1),
+		%%conjunct_struct(H2BCodeFront,H2BCodeBack,H2BCode1),
 		flatom_struct(FL_TRUE,NO_INDEX,H2BCode),
 		%% no explicit id given: just generate new rule id
 		compile_rule_add(Head,H2BCode,
@@ -3784,11 +3782,7 @@ compile_query(Body,QueryList-QueryTail,Status) :-
 	( no_errors_found(Status) -> 
 	    collect_prdatatypevars(BCode,DTVarsCodeList),
 	    conjunct_code(DTVarsCodeList,DTVarsCode),
-	    conjunct_struct(DTVarsCode,BCode,BCode2),
-            get_dynrule_varlist(L),
-	    %% sets attributed variables for the checker of
-	    %% vars in dynamic rules
-            add_dynrule_attr_code(L,BCode2,BodyCode),
+	    conjunct_struct(DTVarsCode,BCode,BodyCode),
 	    thismodule_struct(ThisMod),
 	    %% code to bind the Caller variable to the calling module
 	    caller_binding_code(ThisMod,CallerBindingCode),
@@ -4810,7 +4804,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	    set_context(no_symbol_check)
 	; true
 	),
-	compile_head_top(Head,HeadCode,H2BCodeHead,H2BCodeTail,HeadStatusPre),
+	compile_head_top(Head,HeadCode,H2BCodeFront,H2BCodeBack,HeadStatusPre),
 	(has_context(compiling_udf_definition) ->
 	    %% done compiling UDF definition head
 	    clear_context(block_udf_expansion),
@@ -4824,9 +4818,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	    compile_body_top(Body,BCode1,BodyStatus),
 	    collect_prdatatypevars([HeadCodeList,BCode1],DTVarsCodeList),
 	    conjunct_code(DTVarsCodeList,DTVarsCode),
-	    conjunct_code([DTVarsCode,H2BCodeHead,BCode1,H2BCodeTail],BCode),
-            get_dynrule_varlist(L),
-            add_dynrule_attr_code(L,BCode,PureBodyCode),
+	    conjunct_code([DTVarsCode,H2BCodeFront,BCode1,H2BCodeBack],BCode),
 	    %% should not add delay-checker to sensor rules
 	    (all_defined_as_sensors(HeadCodeList) -> DelayCheckCode = NULL
 	    ; delay_literals_checking_code(Head,Body,DescrVarsTerm,DelayCheckCode)
@@ -4841,7 +4833,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	    ),
 	    ( no_errors_found(BodyStatus) ->
 		split_heads_add_sig_make_rule(HeadCodeList,
-					      PureBodyCode,PreBody,RealPostBody,
+					      BCode,PreBody,RealPostBody,
 					      DescriptorIdCode,DescrVarsTerm,
 					      RuleList-RuleTail,
 					      SigDiffList,
@@ -4863,7 +4855,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	!.
 
 /****************************************************************************
-  split_heads_add_sig_make_rule(+HeadCodeList,+PureBodyCode,+PreBody,+PostBody,+DescriptorIdCode,+DescrVarsTerm,-RuleDiffList,-SigDiffList,-Status)
+  split_heads_add_sig_make_rule(+HeadCodeList,+BodyCode,+PreBody,+PostBody,+DescriptorIdCode,+DescrVarsTerm,-RuleDiffList,-SigDiffList,-Status)
 
   HeadCodeList is a list of atoms in the rule head. BodyCode is the formula
   in the rule body. This procedure splits the list of atoms in the rule
@@ -4874,13 +4866,13 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 
   Note: delay checker is NOT added to the body in signatures
 ****************************************************************************/
-split_heads_add_sig_make_rule([H],PureBodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,[RuleCode|R]-R,[InsSigCode|S]-S,NO_ERRORS) :-
+split_heads_add_sig_make_rule([H],BodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,[RuleCode|R]-R,[InsSigCode|S]-S,NO_ERRORS) :-
 	!,
 	%% Only a single atom appears in the rule head.
-	make_insert_rulesig_code(H,PureBodyCode,PreBody,PostBody,(DescriptorIdCode,DescrVarsTerm),NULL,InsSigCode),
-	finalize_rule_code(H,PureBodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,RuleCode).
+	make_insert_rulesig_code(H,BodyCode,PreBody,PostBody,(DescriptorIdCode,DescrVarsTerm),NULL,InsSigCode),
+	finalize_rule_code(H,BodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,RuleCode).
 
-split_heads_add_sig_make_rule(HeadList,PureBodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,[IntermedRuleCode|RuleCodeList]-RuleListTail,[InsSigCode|SigList]-SigList,Status) :-
+split_heads_add_sig_make_rule(HeadList,BodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,[IntermedRuleCode|RuleCodeList]-RuleListTail,[InsSigCode|SigList]-SigList,Status) :-
 	%% Multiple atoms appear in the rule head.
 	%% Generate a temp rule.
 	collect_prvars(HeadList,HeadVars),
@@ -4891,9 +4883,9 @@ split_heads_add_sig_make_rule(HeadList,PureBodyCode,PreBody,PostBody,DescriptorI
 	append(HeadVars,[CallerVarObj],HeadVarsAndCaller),
 	N1 is N+1,
 	newpredicate_struct(Name,N1,HeadVarsAndCaller,NewIntermediatePred),
-        make_insert_rulesig_code(HeadList,PureBodyCode,PreBody,PostBody,(DescriptorIdCode,DescrVarsTerm),NewIntermediatePred,InsSigCode),
+        make_insert_rulesig_code(HeadList,BodyCode,PreBody,PostBody,(DescriptorIdCode,DescrVarsTerm),NewIntermediatePred,InsSigCode),
 	%% new intermediate rule
-	rule_struct(NewIntermediatePred,PureBodyCode,IntermedRuleCode),
+	rule_struct(NewIntermediatePred,BodyCode,IntermedRuleCode),
 	%% Split the head of this intermediate rule.
 	make_headrules_for_multiheaded_rule(HeadList,NewIntermediatePred,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,RuleCodeList-RuleListTail,Status).
 
@@ -5036,32 +5028,32 @@ compile_conjunct2list(Code,[Code|ListTail],ListTail) :- !.
 
 
 /****************************************************************************
-  compile_head(+ParserTermList,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
-  H2BCodeHead - code passed from head to body, which is supposed to be
-                prepended to the code of the body
-  H2BCodeTail - code passed from head to body, which is supposed to be
+  compile_head(+ParserTermList,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
+  H2BCodeFront - code passed from head to body, which is supposed to be
+                 prepended to the code of the body
+  H2BCodeBack - code passed from head to body, which is supposed to be
                 appended to the code of the body
 ****************************************************************************/
-compile_head_top(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_top(ParserTerm,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	collect_flvars(ParserTerm,FlVars),
 	%% TODO: pass FlVars to compile_head as a parameter
 	%%       Then pass it also to compile_body_top, compile_body,
 	%%       compile_stop_delay
 	set_context(compiling_head(FlVars)),
-	compile_head(ParserTerm,Code,H2BCodeHead,H2BCodeTail,Status),
+	compile_head(ParserTerm,Code,H2BCodeFront,H2BCodeBack,Status),
 	clear_context(compiling_head(FlVars)),
 	!.
 compile_head([],NULL,NULL,NULL,NO_ERRORS) :- !.
 
-compile_head([ParserTerm|ParserTermList],Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head([ParserTerm|ParserTermList],Code,H2BCodeFront,H2BCodeBack,Status) :-
 	detach_flworkspace(ParserTerm,P,WS),
-	compile_head_literal(P,WS,PCode,PH2BCodeHead,PH2BCodeTail,S),
+	compile_head_literal(P,WS,PCode,PH2BCodeFront,PH2BCodeBack,S),
 	( no_errors_found(S) ->
-	    compile_head(ParserTermList,PLCode,PLH2BCodeHead,PLH2BCodeTail,S2),
+	    compile_head(ParserTermList,PLCode,PLH2BCodeFront,PLH2BCodeBack,S2),
 	    ( no_errors_found(S2) ->
 		    conjunct_struct(PCode,PLCode,Code),
-		    conjunct_struct(PH2BCodeHead,PLH2BCodeHead,H2BCodeHead),
-		    conjunct_struct(PH2BCodeTail,PLH2BCodeTail,H2BCodeTail),
+		    conjunct_struct(PH2BCodeFront,PLH2BCodeFront,H2BCodeFront),
+		    conjunct_struct(PH2BCodeBack,PLH2BCodeBack,H2BCodeBack),
 		    append(S,S2,Status)
 	     ;
 		Status=S2
@@ -6243,7 +6235,7 @@ compile_head_fltoken(Token,Suffix,Index,Object,Status) :-
 
 
 /*****************************************************************************
-%% compile_head_setarg_list(+Setarg,+WS,-SetList,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+%% compile_head_setarg_list(+Setarg,+WS,-SetList,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 %% set expression {a1,a2,a3}
 %%
 %% SetList - the list [Elt1, Elt2, ...], where Elt1,Elt2, etc., are the
@@ -6254,15 +6246,15 @@ compile_head_fltoken(Token,Suffix,Index,Object,Status) :-
 %%                  goes into BodyFrontList
 ******************************************************************************/
 compile_head_setarg_list([],_WS,[],_,NULL,NULL,NO_ERRORS) :- !.
-compile_head_setarg_list([Elt|Rest],WS,SetList,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	compile_head_pathexp(Elt,WS,EltObj,EltFrameStuff,EltH2BCodeHead,EltH2BCodeTail,S),
+compile_head_setarg_list([Elt|Rest],WS,SetList,Code,H2BCodeFront,H2BCodeBack,Status) :-
+	compile_head_pathexp(Elt,WS,EltObj,EltFrameStuff,EltH2BCodeFront,EltH2BCodeBack,S),
 	( no_errors_found(S) -> 
-	    compile_head_setarg_list(Rest,WS,RestSetList,RestCode,RestH2BCodeHead,RestH2BCodeTail,S2),
+	    compile_head_setarg_list(Rest,WS,RestSetList,RestCode,RestH2BCodeFront,RestH2BCodeBack,S2),
 	    ( no_errors_found(S2) -> 
 		SetList = [EltObj|RestSetList],
 		conjunct_struct(EltFrameStuff,RestCode,Code),
-		conjunct_struct(EltH2BCodeHead,RestH2BCodeHead,H2BCodeHead),
-		conjunct_struct(EltH2BCodeTail,RestH2BCodeTail,H2BCodeTail),
+		conjunct_struct(EltH2BCodeFront,RestH2BCodeFront,H2BCodeFront),
+		conjunct_struct(EltH2BCodeBack,RestH2BCodeBack,H2BCodeBack),
 		append(S,S2,Status)
 	    ; Status=S2
 	    )
@@ -8177,23 +8169,23 @@ generate_convert_from_prolog_code([AObjH|AObjT],[VarH|VarT],Code) :-
 		
 
 /****************************************************************************
-  compile_head_floraliblit(+ParserTerm,+Workspace,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_floraliblit(+ParserTerm,+Workspace,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 
   This procedure compiles a head literal associated with a Flora system
   module specification.
 ****************************************************************************/
-compile_head_floraliblit(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_floraliblit(ParserTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	%% Flora system modules are like normal user modules except that
 	%% users cannot load files into them
 	is_flatom(WS,WSName,Index),
 	report_option(FLSYSMOD(WSName),Index),
 	atomobj_struct(WSName,Index,WSNameCode),
 	floralib_struct(WSNameCode,WSCode),
-	compile_head_literal(ParserTerm,WSCode,Code,H2BCodeHead,H2BCodeTail,Status).
+	compile_head_literal(ParserTerm,WSCode,Code,H2BCodeFront,H2BCodeBack,Status).
 
 
 /****************************************************************************
-  compile_head_literal(+ParserTerm,+Workspace,-HeadLitCode,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_literal(+ParserTerm,+Workspace,-HeadLitCode,-H2BCodeFront,-H2BCodeBack,-Status)
 
   HeadLitCode is the main code for the literal. It may be multiplied if
               it contains set arguments. Eg, p({a,b}) becomes p(a),p(b).
@@ -8202,59 +8194,59 @@ compile_head_floraliblit(ParserTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	      compile_head_literal/6, we do
 	      findall(WSCode,member(X,[a,b]),BodyLitCode), which does
 	      the multiplication trick.
-  H2BCodeHead - code passed from head to body, which is supposed to be
-                prepended to the code of the body
-  H2BCodeTail - code passed from head to body, which is supposed to be
+  H2BCodeFront - code passed from head to body, which is supposed to be
+                 prepended to the code of the body
+  H2BCodeBack - code passed from head to body, which is supposed to be
                 appended to the code of the body
 ****************************************************************************/
-compile_head_literal(ParserTerm,WS,HeadLitCode,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_literal(ParserTerm,WS,HeadLitCode,H2BCodeFront,H2BCodeBack,Status) :-
         set_context(compiling_headliteral),
 	( is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
-	    compile_head_transactional_termlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_transactional_termlit(Funct,N,Args,WS,Code,H2BCodeFront,H2BCodeBack,Status)
 
 	; is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_head_termlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_termlit(Funct,N,Args,WS,Code,H2BCodeFront,H2BCodeBack,Status)
 
 	; is_flbirelate(ParserTerm,ObjTerm1,RelType,ObjTerm2) ->
-	    compile_head_bin_relation(ObjTerm1,RelType,ObjTerm2,WS,_Obj,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_bin_relation(ObjTerm1,RelType,ObjTerm2,WS,_Obj,Code,H2BCodeFront,H2BCodeBack,Status)
 
 	; is_flobjspec(ParserTerm,ObjTerm,Spec) ->
-	    compile_head_objspec(ObjTerm,Spec,WS,_Obj,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_objspec(ObjTerm,Spec,WS,_Obj,Code,H2BCodeFront,H2BCodeBack,Status)
 
 	; is_flobjeql(ParserTerm,O1,O2) ->
-	    compile_head_objeql(O1,O2,WS,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_objeql(O1,O2,WS,Code,H2BCodeFront,H2BCodeBack,Status)
 
 	; is_flneg(ParserTerm,PosPart,Idx) ->
 	    detach_flworkspace(PosPart,PosPartSansWS,PosWS),
-	    compile_head_neg(PosPartSansWS,PosWS,Idx,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_neg(PosPartSansWS,PosWS,Idx,Code,H2BCodeFront,H2BCodeBack,Status)
 
         ; is_flvariable(ParserTerm,VarName,Index) ->
 	    %% Is this possible? Should be taken care by the libmodlit code
 	    compile_var(VarName,Index,VarCode),
 	    attach_workspace(VarCode,WS,Code,Status),
-	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL
+	    H2BCodeFront=NULL,
+	    H2BCodeBack=NULL
 
         ; is_fltransactionalvariable(ParserTerm,VarName,Index) ->
 	    %% Is this possible? Should be taken care by the libmodlit code
 	    compile_transactionalvar(VarName,Index,VarCode),
 	    attach_workspace(VarCode,WS,Code,Status),
-	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL
+	    H2BCodeFront=NULL,
+	    H2BCodeBack=NULL
 
 	; is_flfloralib(ParserTerm,P,Module) ->
-	    compile_head_floraliblit(P,Module,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_floraliblit(P,Module,Code,H2BCodeFront,H2BCodeBack,Status)
 	; is_fldatatype(ParserTerm,_Sort,_Lit,_Index) ->
 	    datatypeobj_struct(ParserTerm,Code1,Status),
 	    atomlit_struct(HEADLITERAL,Code1,Code),
-	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL
+	    H2BCodeFront=NULL,
+	    H2BCodeBack=NULL
 
 	; is_fltransactionaldatatype(ParserTerm,_Sort,_Lit,_Index) ->
 	    datatypeobj_struct(ParserTerm,Code1,Status),
 	    transactionalatomlit_struct(HEADLITERAL,Code1,Code),
-	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL
+	    H2BCodeFront=NULL,
+	    H2BCodeBack=NULL
 
 	; is_flatom(ParserTerm,_) ->
 	    %% atom (0-ary predicate)
@@ -8265,8 +8257,8 @@ compile_head_literal(ParserTerm,WS,HeadLitCode,H2BCodeHead,H2BCodeTail,Status) :
 	    (WSStatus == NO_ERRORS -> Status = SymbolStatus
 	    ; append(SymbolStatus,WSStatus,Status)
 	    ),
-	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL
+	    H2BCodeFront=NULL,
+	    H2BCodeBack=NULL
 	
 	; is_fltransactionalatom(ParserTerm,_A) ->
 	    transactionalatomlit_struct(HEADLITERAL,ParserTerm,ACode),
@@ -8276,8 +8268,8 @@ compile_head_literal(ParserTerm,WS,HeadLitCode,H2BCodeHead,H2BCodeTail,Status) :
 	    (WSStatus == NO_ERRORS -> Status = SymbolStatus
 	    ; append(SymbolStatus,WSStatus,Status)
 	    ),
-	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL
+	    H2BCodeFront=NULL,
+	    H2BCodeBack=NULL
 
 	; is_flbuiltin_identifier(ParserTerm,_) ->
 	    atomlit_struct(HEADLITERAL,ParserTerm,BICode),
@@ -8287,8 +8279,8 @@ compile_head_literal(ParserTerm,WS,HeadLitCode,H2BCodeHead,H2BCodeTail,Status) :
 	    (WSStatus == NO_ERRORS -> Status = SymbolStatus
 	    ; append(SymbolStatus,WSStatus,Status)
 	    ),
-	    H2BCodeHead=NULL,
-	    H2BCodeTail=NULL
+	    H2BCodeFront=NULL,
+	    H2BCodeBack=NULL
 	;
 	    approx_flindex(ParserTerm,ErrIdx),
 	    compiling_error(ErrIdx,[UNKNOWN_ERROR,'\n\t\t Details: in compile_head_literal'],Err),
@@ -8300,21 +8292,21 @@ compile_head_literal(ParserTerm,WS,HeadLitCode,H2BCodeHead,H2BCodeTail,Status) :
 
 
 /****************************************************************************
-  compile_head_pathexplist(+ParserTermList,+WS,-ObjectList,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_pathexplist(+ParserTermList,+WS,-ObjectList,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 ****************************************************************************/
 compile_head_pathexplist([],_WS,[],NULL,NULL,NULL,NO_ERRORS) :- !.
 
-compile_head_pathexplist([T|L],WS,[TObj|LObj],Code,H2BCodeHead,H2BCodeTail,Status) :-
-	compile_head_pathexp(T,WS,TObj,TCode,TH2BCodeHead,TH2BCodeTail,S),
+compile_head_pathexplist([T|L],WS,[TObj|LObj],Code,H2BCodeFront,H2BCodeBack,Status) :-
+	compile_head_pathexp(T,WS,TObj,TCode,TH2BCodeFront,TH2BCodeBack,S),
 	(var(TCode) -> TCode = NULL ; true),
 	clear_context(compiling_term_name),
 	( no_errors_found(S) -> 
-	    compile_head_pathexplist(L,WS,LObj,LCode,LH2BCodeHead,LH2BCodeTail,S2),
+	    compile_head_pathexplist(L,WS,LObj,LCode,LH2BCodeFront,LH2BCodeBack,S2),
 	    (var(LCode) -> LCode = NULL ; true),
 	    ( no_errors_found(S2) -> 
 		conjunct_struct(TCode,LCode,Code),
-		conjunct_struct(TH2BCodeHead,LH2BCodeHead,H2BCodeHead),
-		conjunct_struct(TH2BCodeTail,LH2BCodeTail,H2BCodeTail),
+		conjunct_struct(TH2BCodeFront,LH2BCodeFront,H2BCodeFront),
+		conjunct_struct(TH2BCodeBack,LH2BCodeBack,H2BCodeBack),
 		append(S,S2,Status)
 	    ;
 		Status=S2
@@ -8326,7 +8318,7 @@ compile_head_pathexplist([T|L],WS,[TObj|LObj],Code,H2BCodeHead,H2BCodeTail,Statu
 
 
 /****************************************************************************
-  compile_head_pathexp(+ParserTerm,+WS,-Object,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_pathexp(+ParserTerm,+WS,-Object,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 
   Path expression in rule head
 
@@ -8378,38 +8370,38 @@ compile_head_pathexp(ParserTerm,_WS,Object,NULL,NULL,NULL,Status) :-
 	),
 	!.
 
-compile_head_pathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :- 
+compile_head_pathexp(ParserTerm,WS,Object,Code,H2BCodeFront,H2BCodeBack,Status) :- 
 	( is_flbirelate(ParserTerm,OT1,RelType,OT2) ->
-	    compile_head_bin_relation(OT1,RelType,OT2,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_bin_relation(OT1,RelType,OT2,WS,Object,Code,H2BCodeFront,H2BCodeBack,Status)
 
 	; is_flobjspec(ParserTerm,ObjTerm,Spec) ->
-	    compile_head_objspec(ObjTerm,Spec,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_objspec(ObjTerm,Spec,WS,Object,Code,H2BCodeFront,H2BCodeBack,Status)
 
 	; is_flobjref(ParserTerm,ObjTerm,RefType,AttTerm) ->
-	    compile_head_objref(ObjTerm,RefType,AttTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_objref(ObjTerm,RefType,AttTerm,WS,Object,Code,H2BCodeFront,H2BCodeBack,Status)
 
 	; is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_head_termobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_termobj(Funct,N,Args,WS,Object,Code,H2BCodeFront,H2BCodeBack,Status)
 
         ; is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
 	    compile_head_termobj(Funct,N,Args,WS,Object,Code,
-				 H2BCodeHead,H2BCodeTail,Status)
+				 H2BCodeFront,H2BCodeBack,Status)
 
 	; is_fllist(ParserTerm,L,T,I) ->
-	    compile_head_list_obj(L,T,I,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_list_obj(L,T,I,WS,Object,Code,H2BCodeFront,H2BCodeBack,Status)
 
 	; is_flworkspace(ParserTerm,P,NestedWS) ->
-	    compile_head_pathexp(P,NestedWS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+	    compile_head_pathexp(P,NestedWS,Object,Code,H2BCodeFront,H2BCodeBack,Status)
 
 	; is_flatom(ParserTerm,_A) ->
 	    Code=NULL,
-	    H2BCodeTail=NULL,
+	    H2BCodeBack=NULL,
 	    compile_atomobj(ParserTerm,Object,BodyFrontList,Status),
-	    (BodyFrontList==[] -> H2BCodeHead=NULL
+	    (BodyFrontList==[] -> H2BCodeFront=NULL
 	    ;
-		conjunct_code(BodyFrontList,H2BCodeHead)
+		conjunct_code(BodyFrontList,H2BCodeFront)
 	    ),
-	    H2BCodeTail = NULL
+	    H2BCodeBack = NULL
 
 	; is_reifyop(ParserTerm,Formula) ->
 	    %% Code: code to get Object
@@ -8420,17 +8412,17 @@ compile_head_pathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :
 		a(1,mmm).
 		?- p(${a(?X)@mmm}).
 	    */
-	    %% If H2BCodeHead != NULL, it means that head-reification could
+	    %% If H2BCodeFront != NULL, it means that head-reification could
 	    %% not be fully computed due to a var in the module or literal
 	    %% position. In that case, fllibmodobj/5 is pushed to the body;
 	    %% it will then compute the reification or will unify with it.
-	    compile_reifyop(Formula,Object,H2BCodeHead,Status),
+	    compile_reifyop(Formula,Object,H2BCodeFront,Status),
 	    Code = NULL,
-	    H2BCodeTail = NULL
+	    H2BCodeBack = NULL
 
 	; is_flsetarg(ParserTerm,Setarg,_Idx) ->
 	    compile_head_setarg_list(Setarg,WS,SetList,Code,
-				     H2BCodeHead,H2BCodeTail,Status),
+				     H2BCodeFront,H2BCodeBack,Status),
 	    Object = _, %% NOTE: a prolog var, since we'll be macro-expanding
 	    put_attr(Object,SETARGATTRIBUTE,member(Object,SetList))
 
@@ -8443,23 +8435,23 @@ compile_head_pathexp(ParserTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :
 
 
 /****************************************************************************
-  compile_head_termobj(+FunctorTerm,+Arity,+ArgList,+WS,-Object,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_termobj(+FunctorTerm,+Arity,+ArgList,+WS,-Object,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 
 ****************************************************************************/
-compile_head_termobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
+compile_head_termobj(Funct,N,Args,WS,Object,Code,H2BCodeFront,H2BCodeBack,CompileStatus) :-
         ( \+ has_context(compiling_arithmetics),
 	    has_UDF(Funct,N,Args,Predicate,Object /* return value */,FunctBodyFrontList,S1)
 	->
 	    ( no_errors_found(S1) -> 
-	    	H2BCodeTail=NULL,
+	    	H2BCodeBack=NULL,
 	    	Code=NULL,
-	    	compile_udf_body_literal(Funct,Predicate,PCode,PH2BCodeHeadL,S),
+	    	compile_udf_body_literal(Funct,Predicate,PCode,PH2BCodeFront,S),
 	    	SymbolContext = UDF_SYMBOL,
 	    	( no_errors_found(S) -> 
 		    conjunct_code(FunctBodyFrontList,FunctBodyFrontCode),
-		    conjunct_code(PH2BCodeHeadL,PH2BCodeHeadCode),
-		    conjunct_code([FunctBodyFrontCode,PH2BCodeHeadCode,PCode],
-				  H2BCodeHead),
+		    conjunct_code(PH2BCodeFront,PH2BCodeFront2),
+		    conjunct_code([FunctBodyFrontCode,PH2BCodeFront2,PCode],
+				  H2BCodeFront),
 		    Status = NO_ERRORS
 	    	;
 		    approx_flindex(Funct,Index),
@@ -8473,7 +8465,7 @@ compile_head_termobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Compile
 	    )
         ;
 	    set_context(compiling_term_name),
-	    compile_head_pathexplist([Funct|Args],WS,[FObj|AObj],Code,H2BCodeHead,H2BCodeTail,Status),
+	    compile_head_pathexplist([Funct|Args],WS,[FObj|AObj],Code,H2BCodeFront,H2BCodeBack,Status),
 	    SymbolContext = FUNCTION_SYMBOL,
 	    ( no_errors_found(Status) -> 
 		termobj_struct(FObj,N,AObj,Object)
@@ -8490,14 +8482,14 @@ compile_head_termobj(Funct,N,Args,WS,Object,Code,H2BCodeHead,H2BCodeTail,Compile
 
 
 /****************************************************************************
-  compile_head_termlit(+FunctorTerm,+Arity,+ArgList,+WS,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_termlit(+FunctorTerm,+Arity,+ArgList,+WS,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 ****************************************************************************/
-compile_head_termlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
+compile_head_termlit(Funct,N,Args,WS,Code,H2BCodeFront,H2BCodeBack,CompileStatus) :-
 	verify_symbol_context(Funct,N,WS,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
-	compile_head_pathexplist([Funct|Args],WS,[FObj|AObj],ObjCode,H2BCodeHead_pre,H2BCodeTail,PathexpStatus),
-	((H2BCodeHead_pre \== NULL ; H2BCodeTail \== NULL)
-	-> H2BCodeHead = H2BCodeHead_pre
+	compile_head_pathexplist([Funct|Args],WS,[FObj|AObj],ObjCode,H2BCodeFront_pre,H2BCodeBack,PathexpStatus),
+	((H2BCodeFront_pre \== NULL ; H2BCodeBack \== NULL)
+	-> H2BCodeFront = H2BCodeFront_pre
 	; /* compiling modular prolog fact: convert to rule fact :- true.
 	     ONLY FOR ADDITION OF MODULAR PROLOG FACTS
 	     Such rules are compiled by compile_fact_add so they will
@@ -8523,9 +8515,9 @@ compile_head_termlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatus)
 	    get_flatom_name(Funct,AtomName),
 	    flora_modular_prlgdef(AtomName,N)
 	-> %% FL_TRUE is dummy code, which gets ignored by conjunct_struct/3
-	    H2BCodeHead = NULL,
+	    H2BCodeFront = NULL,
 	    set_context(converting_fact2rule)
-	; H2BCodeHead = H2BCodeHead_pre
+	; H2BCodeFront = H2BCodeFront_pre
 	),
 	( no_errors_found(PathexpStatus) -> 
 	    termlit_struct(HEADLITERAL,FObj,N,AObj,TObj),
@@ -8539,10 +8531,10 @@ compile_head_termlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatus)
 	; CompileStatus = WSStatus
 	).
 
-compile_head_transactional_termlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,CompileStatus) :-
+compile_head_transactional_termlit(Funct,N,Args,WS,Code,H2BCodeFront,H2BCodeBack,CompileStatus) :-
 	verify_symbol_context(Funct,N,WS,PREDICATE_SYMBOL,TRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
-	compile_head_pathexplist([Funct|Args],WS,[FObj|AObj],ObjCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	compile_head_pathexplist([Funct|Args],WS,[FObj|AObj],ObjCode,H2BCodeFront,H2BCodeBack,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    transactionaltermlit_struct(HEADLITERAL,FObj,N,AObj,TObj),
 	    attach_workspace(TObj,WS,WSTObj,WSStatus),
@@ -8558,25 +8550,25 @@ compile_head_transactional_termlit(Funct,N,Args,WS,Code,H2BCodeHead,H2BCodeTail,
 
 
 /****************************************************************************
-  compile_head_list_obj(+ObjTermList,+ObjTerm,+Index,+WS,-Object,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_list_obj(+ObjTermList,+ObjTerm,+Index,+WS,-Object,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 ****************************************************************************/
-compile_head_list_obj(ObjTermList,ObjTerm,Index,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	compile_head_pathexplist(ObjTermList,WS,ObjList,ObjListCode,ObjListH2BCodeHead,ObjListH2BCodeTail,S),
+compile_head_list_obj(ObjTermList,ObjTerm,Index,WS,Object,Code,H2BCodeFront,H2BCodeBack,Status) :-
+	compile_head_pathexplist(ObjTermList,WS,ObjList,ObjListCode,ObjListH2BCodeFront,ObjListH2BCodeBack,S),
 	( no_errors_found(S) -> 
 	    ( ObjTerm == [] ->
 		Obj=[],
 		ObjCode=NULL,
-		ObjH2BCodeHead=NULL,
-		ObjH2BCodeTail=NULL,
+		ObjH2BCodeFront=NULL,
+		ObjH2BCodeBack=NULL,
 		Status = NO_ERRORS
 	    ;
-	      compile_head_pathexp(ObjTerm,WS,Obj,ObjCode,ObjH2BCodeHead,ObjH2BCodeTail,Status)
+	      compile_head_pathexp(ObjTerm,WS,Obj,ObjCode,ObjH2BCodeFront,ObjH2BCodeBack,Status)
 	    ),
 	    ( no_errors_found(Status) -> 
 		list_struct(ObjList,Obj,Index,Object),
 		conjunct_struct(ObjListCode,ObjCode,Code),
-		conjunct_struct(ObjListH2BCodeHead,ObjH2BCodeHead,H2BCodeHead),
-		conjunct_struct(ObjListH2BCodeTail,ObjH2BCodeTail,H2BCodeTail)
+		conjunct_struct(ObjListH2BCodeFront,ObjH2BCodeFront,H2BCodeFront),
+		conjunct_struct(ObjListH2BCodeBack,ObjH2BCodeBack,H2BCodeBack)
 	    ;
 	      true
 	    )
@@ -8587,18 +8579,18 @@ compile_head_list_obj(ObjTermList,ObjTerm,Index,WS,Object,Code,H2BCodeHead,H2BCo
 
 
 /****************************************************************************
-  compile_head_objref(+ObjT,+RefType,+AttT,+WS,-Object,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_objref(+ObjT,+RefType,+AttT,+WS,-Object,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 ****************************************************************************/
-compile_head_objref(ObjTerm,RefType,AttTerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	compile_head_pathexplist([ObjTerm,AttTerm],WS,[Obj,Att],OACode,OAH2BCodeHead,OAH2BCodeTail,PathexpStatus),
+compile_head_objref(ObjTerm,RefType,AttTerm,WS,Object,Code,H2BCodeFront,H2BCodeBack,Status) :-
+	compile_head_pathexplist([ObjTerm,AttTerm],WS,[Obj,Att],OACode,OAH2BCodeFront,OAH2BCodeBack,PathexpStatus),
 	!,
 	( no_errors_found(PathexpStatus) -> 
 	    %% Approximate the textual information for the new variable.
 	    approx_flindex(AttTerm,Index),
 	    head_objref_struct(Obj,RefType,Att,Index,Object,TCode),
 	    attach_workspace(TCode,WS,WTCode,WSStatus),
-	    OAH2BCodeHead = H2BCodeHead,
-	    conjunct_struct(OAH2BCodeTail,WTCode,H2BCodeTail),
+	    OAH2BCodeFront = H2BCodeFront,
+	    conjunct_struct(OAH2BCodeBack,WTCode,H2BCodeBack),
 	    Code = OACode
 	;
 	    WSStatus = NO_ERRORS
@@ -8609,10 +8601,10 @@ compile_head_objref(ObjTerm,RefType,AttTerm,WS,Object,Code,H2BCodeHead,H2BCodeTa
 
 
 /****************************************************************************
-  compile_head_bin_relation(+OT1,+RelType,+OT2,+WS,-Object,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_bin_relation(+OT1,+RelType,+OT2,+WS,-Object,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 ****************************************************************************/
-compile_head_bin_relation(ObjTerm1,RelType,ObjTerm2,WS,Obj1,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	compile_head_pathexplist([ObjTerm1,ObjTerm2],WS,[Obj1,Obj2],OCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+compile_head_bin_relation(ObjTerm1,RelType,ObjTerm2,WS,Obj1,Code,H2BCodeFront,H2BCodeBack,Status) :-
+	compile_head_pathexplist([ObjTerm1,ObjTerm2],WS,[Obj1,Obj2],OCode,H2BCodeFront,H2BCodeBack,PathexpStatus),
 	!,
 	( no_errors_found(PathexpStatus) -> 
 	    birelate_struct(HEADLITERAL,Obj1,RelType,Obj2,TCode),
@@ -8627,14 +8619,14 @@ compile_head_bin_relation(ObjTerm1,RelType,ObjTerm2,WS,Obj1,Code,H2BCodeHead,H2B
 
 
 /****************************************************************************
-  compile_head_objspec(+ObjTerm,+SpecBody,+WS,-Object,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_objspec(+ObjTerm,+SpecBody,+WS,-Object,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 ****************************************************************************/
-compile_head_objspec(ObjTerm,SpecBody,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_objspec(ObjTerm,SpecBody,WS,Object,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	( SpecBody == NO_ERRORS ->
 	    ( is_flobjref(ObjTerm,OTerm,RefType,ATerm) ->
-		compile_head_objref(OTerm,RefType,ATerm,WS,Object,Code,H2BCodeHead,H2BCodeTail,Status)
+		compile_head_objref(OTerm,RefType,ATerm,WS,Object,Code,H2BCodeFront,H2BCodeBack,Status)
 	    ;
-		compile_head_pathexp(ObjTerm,WS,Object,ObjCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+		compile_head_pathexp(ObjTerm,WS,Object,ObjCode,H2BCodeFront,H2BCodeBack,PathexpStatus),
 		( no_errors_found(PathexpStatus) -> 
 		    objexists_struct(HEADLITERAL,Object,ECode),
 		    attach_workspace(ECode,WS,WSECode,WSStatus),
@@ -8647,13 +8639,13 @@ compile_head_objspec(ObjTerm,SpecBody,WS,Object,Code,H2BCodeHead,H2BCodeTail,Sta
 		)
 	    )
 	;
-	  compile_head_pathexp(ObjTerm,WS,Object,ObjCode,ObjH2BCodeHead,ObjH2BCodeTail,S),
+	  compile_head_pathexp(ObjTerm,WS,Object,ObjCode,ObjH2BCodeFront,ObjH2BCodeBack,S),
 	  ( no_errors_found(S) -> 
-	      compile_head_specbody(Object,SpecBody,WS,SCode,SH2BCodeHead,SH2BCodeTail,Status),
+	      compile_head_specbody(Object,SpecBody,WS,SCode,SH2BCodeFront,SH2BCodeBack,Status),
 	      ( no_errors_found(Status) -> 
 		      conjunct_struct(ObjCode,SCode,Code),
-	              conjunct_struct(ObjH2BCodeHead,SH2BCodeHead,H2BCodeHead),
-	              conjunct_struct(ObjH2BCodeTail,SH2BCodeTail,H2BCodeTail)
+	              conjunct_struct(ObjH2BCodeFront,SH2BCodeFront,H2BCodeFront),
+	              conjunct_struct(ObjH2BCodeBack,SH2BCodeBack,H2BCodeBack)
 	      ; true
 	      )
 	  ;
@@ -8664,24 +8656,24 @@ compile_head_objspec(ObjTerm,SpecBody,WS,Object,Code,H2BCodeHead,H2BCodeTail,Sta
 
 
 /****************************************************************************
-  compile_head_specbody(+Object,+SpecTerm,+WS,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
-  compile_head_mvd_attspec(+Object,+AttObj,+RefType,+VL,+WS,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_specbody(+Object,+SpecTerm,+WS,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
+  compile_head_mvd_attspec(+Object,+AttObj,+RefType,+VL,+WS,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 ****************************************************************************/
-compile_head_specbody(Object,SpecTerm,_WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_specbody(Object,SpecTerm,_WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flworkspace(SpecTerm,Spec,SpecWS),
 	!,
-	compile_head_specbody(Object,Spec,SpecWS,Code,H2BCodeHead,H2BCodeTail,Status).
+	compile_head_specbody(Object,Spec,SpecWS,Code,H2BCodeFront,H2BCodeBack,Status).
 
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flconjunct(SpecTerm,L,R),
 	!,
-	compile_head_specbody(Object,L,WS,LCode,LH2BCodeHead,LH2BCodeTail,S),
+	compile_head_specbody(Object,L,WS,LCode,LH2BCodeFront,LH2BCodeBack,S),
 	( no_errors_found(S) -> 
-	    compile_head_specbody(Object,R,WS,RCode,RH2BCodeHead,RH2BCodeTail,Status),
+	    compile_head_specbody(Object,R,WS,RCode,RH2BCodeFront,RH2BCodeBack,Status),
 	    ( no_errors_found(Status) -> 
 		conjunct_struct(LCode,RCode,Code),
-		conjunct_struct(LH2BCodeHead,RH2BCodeHead,H2BCodeHead),
-		conjunct_struct(LH2BCodeTail,RH2BCodeTail,H2BCodeTail)
+		conjunct_struct(LH2BCodeFront,RH2BCodeFront,H2BCodeFront),
+		conjunct_struct(LH2BCodeBack,RH2BCodeBack,H2BCodeBack)
 	    ; true
 	    )
 	;
@@ -8689,33 +8681,33 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
         ),
 	!.
 
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flneg(SpecTerm,G,Idx),
 	!,
-	compile_head_specbody(Object,G,WS,GCode,H2BCodeHead,H2BCodeTail,S),
+	compile_head_specbody(Object,G,WS,GCode,H2BCodeFront,H2BCodeBack,S),
 	!,
 	( no_errors_found(S) -> 
 	    neg_struct(GCode,Idx,Code,Status)
 	; Status = S
 	).
 
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flmvdattspec(SpecTerm,AttTerm,RefType,VL),
 	!,
-	compile_head_pathexp(AttTerm,WS,AObj,ACode,AH2BCodeHead,AH2BCodeTail,S),
+	compile_head_pathexp(AttTerm,WS,AObj,ACode,AH2BCodeFront,AH2BCodeBack,S),
 	( no_errors_found(S) -> 
 	    ( VL == [] ->
 		mvdattdef_struct(HEADLITERAL,Object,AObj,RefType,SCode),
 		attach_workspace(SCode,WS,WSSCode,Status),
 		conjunct_struct(ACode,WSSCode,Code),
-		H2BCodeHead=AH2BCodeHead,
-		H2BCodeTail=AH2BCodeTail
+		H2BCodeFront=AH2BCodeFront,
+		H2BCodeBack=AH2BCodeBack
 	    ;
-	      compile_head_mvd_attspec(Object,AObj,RefType,VL,WS,VCode,VH2BCodeHead,VH2BCodeTail,Status),
+	      compile_head_mvd_attspec(Object,AObj,RefType,VL,WS,VCode,VH2BCodeFront,VH2BCodeBack,Status),
 	      ( no_errors_found(Status) -> 
 	              conjunct_struct(ACode,VCode,Code),
-		      conjunct_struct(AH2BCodeHead,VH2BCodeHead,H2BCodeHead),
-		      conjunct_struct(AH2BCodeTail,VH2BCodeTail,H2BCodeTail)
+		      conjunct_struct(AH2BCodeFront,VH2BCodeFront,H2BCodeFront),
+		      conjunct_struct(AH2BCodeBack,VH2BCodeBack,H2BCodeBack)
 	       
 	      ; true
 	      )
@@ -8725,10 +8717,10 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
         ),
 	!.
 
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flmethspec(SpecTerm,MethTerm),
 	!,
-	compile_head_pathexp(MethTerm,WS,MethObj,MCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	compile_head_pathexp(MethTerm,WS,MethObj,MCode,H2BCodeFront,H2BCodeBack,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    methspec_struct(HEADLITERAL,Object,MethObj,SCode),
 	    attach_workspace(SCode,WS,WSSCode,WSStatus),
@@ -8741,10 +8733,10 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	),
 	!.
 
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flimethspec(SpecTerm,IMethTerm),
 	!,
-	compile_head_pathexp(IMethTerm,WS,IMethObj,IMCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	compile_head_pathexp(IMethTerm,WS,IMethObj,IMCode,H2BCodeFront,H2BCodeBack,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    imethspec_struct(HEADLITERAL,Object,IMethObj,SCode),
 	    attach_workspace(SCode,WS,WSSCode,WSStatus),
@@ -8757,10 +8749,10 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	),
 	!.
 
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_fltranspec(SpecTerm,TranTerm),
 	!,
-	compile_head_pathexp(TranTerm,WS,TranObj,TCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	compile_head_pathexp(TranTerm,WS,TranObj,TCode,H2BCodeFront,H2BCodeBack,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    transpec_struct(HEADLITERAL,Object,TranObj,SCode),
 	    attach_workspace(SCode,WS,WSSCode,WSStatus),
@@ -8775,26 +8767,26 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 
 
 %% signatures: =>, *=>, etc.
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flsigattspec(SpecTerm,AttTerm,RefType,ValTerm),
 	!,
-	compile_head_pathexp(AttTerm,WS,AttObj,ACode,AH2BCodeHead,AH2BCodeTail,S),
+	compile_head_pathexp(AttTerm,WS,AttObj,ACode,AH2BCodeFront,AH2BCodeBack,S),
 	( no_errors_found(S) -> 
 	    (is_flemptyterm(ValTerm) ->
 		%% This is SIGDEF: occurs when we have a[b=> ()]
 		sigattdef_struct(HEADLITERAL,Object,AttObj,RefType,SCode),
 		attach_workspace(SCode,WS,WSSCode,Status),
 		conjunct_struct(ACode,WSSCode,Code),
-		H2BCodeHead=AH2BCodeHead,
-		H2BCodeTail=AH2BCodeTail
+		H2BCodeFront=AH2BCodeFront,
+		H2BCodeBack=AH2BCodeBack
 	    ;
-		compile_head_pathexp(ValTerm,WS,ValObj,VCode,VH2BCodeHead,VH2BCodeTail,PathexpStatus),
+		compile_head_pathexp(ValTerm,WS,ValObj,VCode,VH2BCodeFront,VH2BCodeBack,PathexpStatus),
 		( no_errors_found(PathexpStatus) -> 
 		    sigattspec_struct(HEADLITERAL,Object,AttObj,RefType,ValObj,SCode),
 		    attach_workspace(SCode,WS,WSSCode,WSStatus),
 		    conjunct_code([ACode,VCode,WSSCode],Code),
-		    conjunct_struct(AH2BCodeHead,VH2BCodeHead,H2BCodeHead),
-		    conjunct_struct(AH2BCodeTail,VH2BCodeTail,H2BCodeTail)
+		    conjunct_struct(AH2BCodeFront,VH2BCodeFront,H2BCodeFront),
+		    conjunct_struct(AH2BCodeBack,VH2BCodeBack,H2BCodeBack)
 		;
 		    WSStatus = NO_ERRORS
 		),
@@ -8807,23 +8799,23 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
         ),
 	!.
 
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flsigattconspec(SpecTerm,AttTerm,ConstrTerm,RefType,ValTerm),
 	!,
-	compile_head_pathexp(AttTerm,WS,AttObj,ACode,AH2BCodeHead,AH2BCodeTail,S),
+	compile_head_pathexp(AttTerm,WS,AttObj,ACode,AH2BCodeFront,AH2BCodeBack,S),
 	( no_errors_found(S) -> 
 	    (is_flemptyterm(ValTerm) ->
 		%% This is SIGDEF: occurs when we have a[b=> ()]
 		sigattdef_struct(HEADLITERAL,Object,AttObj,RefType,SCode),
 		attach_workspace(SCode,WS,WSSCode,Status),
 		conjunct_struct(ACode,WSSCode,Code),
-		H2BCodeHead = AH2BCodeHead,
-		H2BCodeTail = AH2BCodeTail
+		H2BCodeFront = AH2BCodeFront,
+		H2BCodeBack = AH2BCodeBack
 	    ;
 		is_flsigconstr(ConstrTerm,Lower,Upper),
-		compile_head_pathexplist([Lower,Upper],WS,[OLower,OUpper],CCode,CH2BCodeHead,CH2BCodeTail,S_C),
+		compile_head_pathexplist([Lower,Upper],WS,[OLower,OUpper],CCode,CH2BCodeFront,CH2BCodeBack,S_C),
 		( no_errors_found(S_C) -> 
-		    compile_head_pathexp(ValTerm,WS,ValObj,VCode,VH2BCodeHead,VH2BCodeTail,PathexpStatus),
+		    compile_head_pathexp(ValTerm,WS,ValObj,VCode,VH2BCodeFront,VH2BCodeBack,PathexpStatus),
 		    ( no_errors_found(PathexpStatus) -> 
 			sigattspec_struct(HEADLITERAL,Object,AttObj,RefType,ValObj,SCode),
 			attach_workspace(SCode,WS,WSSCode,WSStatus1),
@@ -8833,8 +8825,8 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 			; append(WSStatus1,WSStatus2,Status)
 			),
 			conjunct_code([ACode,CCode,VCode,WSSCode,CWSSCode],Code),
-			conjunct_code([AH2BCodeHead,CH2BCodeHead,VH2BCodeHead],H2BCodeHead),
-			conjunct_code([AH2BCodeTail,CH2BCodeTail,VH2BCodeTail],H2BCodeTail)
+			conjunct_code([AH2BCodeFront,CH2BCodeFront,VH2BCodeFront],H2BCodeFront),
+			conjunct_code([AH2BCodeBack,CH2BCodeBack,VH2BCodeBack],H2BCodeBack)
 		    ;
 			Status = PathexpStatus
 		    )
@@ -8849,10 +8841,10 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 
 
 %% boolean signatures: =>.
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flboolsig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_head_pathexp(AttTerm,WS,AttObj,ACode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	compile_head_pathexp(AttTerm,WS,AttObj,ACode,H2BCodeFront,H2BCodeBack,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    boolsig_struct(HEADLITERAL,Object,AttObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -8866,10 +8858,10 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	!.
 
 %% boolean signatures: *=>.
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_fliboolsig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_head_pathexp(AttTerm,WS,AttObj,ACode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	compile_head_pathexp(AttTerm,WS,AttObj,ACode,H2BCodeFront,H2BCodeBack,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    iboolsig_struct(HEADLITERAL,Object,AttObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -8883,10 +8875,10 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	!.
 
 %% boolean signatures: =>% for transactional method
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_fltransig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_head_pathexp(AttTerm,WS,AttObj,ACode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	compile_head_pathexp(AttTerm,WS,AttObj,ACode,H2BCodeFront,H2BCodeBack,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    transig_struct(HEADLITERAL,Object,AttObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -8900,10 +8892,10 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	!.
 
 %% boolean signatures: *=>% for transactional method
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flitransig(SpecTerm,AttTerm,_RefType),
 	!,
-	compile_head_pathexp(AttTerm,WS,AttObj,ACode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+	compile_head_pathexp(AttTerm,WS,AttObj,ACode,H2BCodeFront,H2BCodeBack,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    itransig_struct(HEADLITERAL,Object,AttObj,SCode),
 	    attach_workspace(SCode,WS,WSCode,WSStatus),
@@ -8918,19 +8910,19 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 
 compile_head_mvd_attspec(_Obj,_AttObj,_RefType,[],_WS,NULL,NULL,NULL,NO_ERRORS) :- !.
 
-compile_head_mvd_attspec(Object,AttObj,RefType,[T|L],WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
+compile_head_mvd_attspec(Object,AttObj,RefType,[T|L],WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	!,
-	compile_head_pathexp(T,WS,TObj,TCode,TH2BCodeHead,TH2BCodeTail,S),
+	compile_head_pathexp(T,WS,TObj,TCode,TH2BCodeFront,TH2BCodeBack,S),
 	( no_errors_found(S) -> 
 	    mvdattspec_struct(HEADLITERAL,Object,AttObj,RefType,TObj,SCode),
 	    attach_workspace(SCode,WS,WSSCode,WSStatus),
 	    conjunct_struct(TCode,WSSCode,TSCode),
-	    compile_head_mvd_attspec(Object,AttObj,RefType,L,WS,LCode,LH2BCodeHead,LH2BCodeTail,AttspecStatus),
+	    compile_head_mvd_attspec(Object,AttObj,RefType,L,WS,LCode,LH2BCodeFront,LH2BCodeBack,AttspecStatus),
 	    append(AttspecStatus,WSStatus,Status),
 	    ( no_errors_found(Status) -> 
 		conjunct_struct(TSCode,LCode,Code),
-		conjunct_struct(TH2BCodeHead,LH2BCodeHead,H2BCodeHead),
-		conjunct_struct(TH2BCodeTail,LH2BCodeTail,H2BCodeTail)
+		conjunct_struct(TH2BCodeFront,LH2BCodeFront,H2BCodeFront),
+		conjunct_struct(TH2BCodeBack,LH2BCodeBack,H2BCodeBack)
 	    ; true
 	    )
 	;
@@ -8940,15 +8932,15 @@ compile_head_mvd_attspec(Object,AttObj,RefType,[T|L],WS,Code,H2BCodeHead,H2BCode
 
 
 /****************************************************************************
-  compile_head_objeql(+Obj1,+Obj2,+Workspace,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_objeql(+Obj1,+Obj2,+Workspace,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 
-  H2BCodeHead - code passed from head to body, which is supposed to be
-                prepended to the code of the body
-  H2BCodeTail - code passed from head to body, which is supposed to be
+  H2BCodeFront - code passed from head to body, which is supposed to be
+                 prepended to the code of the body
+  H2BCodeBack - code passed from head to body, which is supposed to be
                 appended to the code of the body
 ****************************************************************************/
-compile_head_objeql(Obj1,Obj2,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	compile_head_pathexplist([Obj1,Obj2],WS,[O1,O2],OCode,H2BCodeHead,H2BCodeTail,PathexpStatus),
+compile_head_objeql(Obj1,Obj2,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
+	compile_head_pathexplist([Obj1,Obj2],WS,[O1,O2],OCode,H2BCodeFront,H2BCodeBack,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    objeql_struct(HEADLITERAL,O1,O2,OECode),
 	    attach_workspace(OECode,WS,WSCode,WSStatus),
@@ -8962,15 +8954,15 @@ compile_head_objeql(Obj1,Obj2,WS,Code,H2BCodeHead,H2BCodeTail,Status) :-
 	!.
 
 /****************************************************************************
-  compile_head_neg(+PosPart,+WS,+Idx,-Code,-H2BCodeHead,-H2BCodeTail,-Status)
+  compile_head_neg(+PosPart,+WS,+Idx,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 
-  H2BCodeHead - code passed from head to body, which is supposed to be
-                prepended to the code of the body
-  H2BCodeTail - code passed from head to body, which is supposed to be
+  H2BCodeFront - code passed from head to body, which is supposed to be
+                 prepended to the code of the body
+  H2BCodeBack - code passed from head to body, which is supposed to be
                 appended to the tail of the code of the body
 ****************************************************************************/
-compile_head_neg(PosPart,WS,Idx,Code,H2BCodeHead,H2BCodeTail,Status) :-
-	compile_head_literal(PosPart,WS,PosCode,H2BCodeHead,H2BCodeTail,S),
+compile_head_neg(PosPart,WS,Idx,Code,H2BCodeFront,H2BCodeBack,Status) :-
+	compile_head_literal(PosPart,WS,PosCode,H2BCodeFront,H2BCodeBack,S),
 	( no_errors_found(S) -> 
 	    head_neg_struct(PosCode,Idx,NegCode,Status1),
 	    attach_workspace(NegCode,WS,Code,WSStatus),
@@ -9001,14 +8993,19 @@ compile_insert(Op,List,Cond,Code,Status) :-
         ),
 	!.
 
-/****************************************************************************
+/*******************************************************************************
   compile_insert(+Op,+List,-Code,Status)
-****************************************************************************/
+  NOTE: When inserting rules, we check for singleton/unsafe variables
+        at runtime in flrdynrule.P.
+        When inserting facts, we do not check for these variables at run time.
+*******************************************************************************/
 compile_insert(Op,List,Code,Status) :-
 	compile_insert_literals(List,CodeList,Status),
 	( no_errors_found(Status) -> 
 	    list_struct(CodeList,[],ListCode),
-	    insert_struct(Op,ListCode,Code)
+	    insert_struct(Op,ListCode,Code1),
+	    get_dynrule_varlist(VarList),
+	    add_dynrule_attr_code(VarList,Code1,Code)
 	;
 	  true
         ),
@@ -9058,10 +9055,22 @@ compile_insert_litlist([H|T],Code,Status) :-
 compile_insert_litlist([HWS|T],Code,Status) :-
 	%% regular fact. may have path expression inside
 	detach_flworkspace(HWS,H,WS),
-	compile_head_literal(H,WS,HeadCode1,H2BCodeHead1,H2BCodeTail1,S),
+	compile_head_literal(H,WS,HeadCode1,H2BCodeFront1,H2BCodeBack1,S),
 	!,
+	new_prvariable(NO_INDEX,HVL),
+	new_prvariable(NO_INDEX,BVL),
+	collect_name_var_pairs(H,HeadVars),
+	list_struct(HeadVars,[],HVLValue),
+	(HeadVars==[] -> true
+	; report_dynrule_varlist(HVL,HVLValue)
+	),
+	collect_name_var_pairs([],BodyVars),
+	list_struct(BodyVars,[],BVLValue),
+	(BodyVars==[] -> true
+	; report_dynrule_varlist(BVL,BVLValue)
+	),
 	( no_errors_found(S) -> 
-	    ( H2BCodeHead1==NULL, H2BCodeTail1==NULL
+	    ( H2BCodeFront1==NULL, H2BCodeBack1==NULL
 	    ->
 		compile_insert_litlist(T,TCode,S2),
 		( no_errors_found(S2) -> 
@@ -9081,12 +9090,10 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_DYNRULE,DescrIdCode,DescrVarsTerm,DefaultMetaFactDiffList,_),
 		set_context(compile_with_var_module),
 		set_context(compiling_dynrule(DescrIdCode)),
-		compile_head_literal(H,WS,HeadCode,H2BCodeHead,H2BCodeTail,S),
+		compile_head_literal(H,WS,HeadCode,H2BCodeFront,H2BCodeBack,S),
 		compile_conjunct2list(HeadCode,HCode),
-		new_prvariable(NO_INDEX,HVL),
-		new_prvariable(NO_INDEX,BVL),
 		list_struct(HCode,[],HeadCodeList),
-		conjunct_struct(H2BCodeHead,H2BCodeTail,H2BCode),
+		conjunct_struct(H2BCodeFront,H2BCodeBack,H2BCode),
 		%% only the vars in the fact-term are to be checked
 		delay_literals_checking_code([],H,DescrVarsTerm,DelayCheckCode),
 		construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_DYNRULE,RuleEnablerTest,FileName),
@@ -9099,16 +9106,6 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 				   DefaultMetaFactDiffList,
 				   FL_TRUE),  %% default defeat condition
 			       HDynruleCode),
-		collect_name_var_pairs(H,HeadVars),
-		list_struct(HeadVars,[],HVLValue),
-		(HeadVars==[] -> true
-		; report_dynrule_varlist(HVL,HVLValue)
-		),
-		collect_name_var_pairs([],BodyVars),
-		list_struct(BodyVars,[],BVLValue),
-		(BodyVars==[] -> true
-		; report_dynrule_varlist(BVL,BVLValue)
-		),
 		clear_context(compiling_dynrule(DescrIdCode)),
 		clear_context(compile_with_var_module),
 		compile_insert_litlist(T,TCode,S2),
@@ -9290,7 +9287,9 @@ compile_updaterule(Op,List,Code,Status) :-
 	( no_errors_found(Status) -> 
 	    list_struct(CodeList,[],ListCode),
 	    updaterule_syslib(OpAtom,UpdateruleLib),
-	    florasyslib_struct(Index,UpdateruleLib,1,[ListCode],Code)
+	    florasyslib_struct(Index,UpdateruleLib,1,[ListCode],Code1),
+	    get_dynrule_varlist(VarList),
+	    add_dynrule_attr_code(VarList,Code1,Code)
 	;
 	    true
         ).
@@ -9385,8 +9384,7 @@ compile_dyn_latent_query(Op,DescrIdCode,MetaFactDiffList,Body,LatentQuerySigCode
 compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,RuleCode,Status) :-
         set_context(compile_with_var_module),
 	set_context(compiling_dynrule(DescrIdCode)),
-	compile_head_top(Head,HeadCode1,H2BCodeHead,H2BCodeTail,HeadStatusPre),
-        new_prvariable(NO_INDEX,HVL), % head var list
+	compile_head_top(Head,HeadCode1,H2BCodeFront,H2BCodeBack,HeadStatusPre),
 	compile_conjunct2list(HeadCode1,HeadCode2),
 	remove_empty_list(HeadCode2,HeadCode),
 	%% no :- prolog predicates in dynamic rule heads
@@ -9396,15 +9394,28 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 	; DelayStatus = NO_ERRORS
 	),
 	append(HeadStatusPre,DelayStatus,HeadStatus),
+        new_prvariable(NO_INDEX,HVL), % attr var for head var list
+        new_prvariable(NO_INDEX,BVL), % attr var for body var list
 	( no_errors_found(HeadStatus) -> 
 	    compile_body_top(Body,BodyCode1,BodyStatus),
 	    ( no_errors_found(BodyStatus) -> 
+		( is_fldeleteruleop(Op) ->  true
+		;   collect_name_var_pairs(Head,HeadVars),
+		    list_struct(HeadVars,[],HVLValue),
+		    (HeadVars==[] -> true
+		    ; report_dynrule_varlist(HVL,HVLValue)
+		    ),
+		    collect_name_var_pairs(Body,BodyVars),
+		    list_struct(BodyVars,[],BVLValue),
+		    (BodyVars==[] -> true
+		    ; report_dynrule_varlist(BVL,BVLValue)
+		    )
+		),
 	        collect_prdatatypevars([HeadCode,BodyCode1],DTVarsCodeList),
 		conjunct_code(DTVarsCodeList,DTVarsCode),
-		conjunct_code([DTVarsCode,H2BCodeHead,BodyCode1,H2BCodeTail],PureBodyCode),
+		conjunct_code([DTVarsCode,H2BCodeFront,BodyCode1,H2BCodeBack],PureBodyCode),
 
 	        list_struct(HeadCode,[],HeadCodeList),
-                new_prvariable(NO_INDEX,BVL), % body var list
 		construct_defeasible_condition_for_signature_or_dynrule(HeadCode,DescrIdCode,DescrVarsTerm,DefeatCondCode),
 		%% Note: Head cannot contain sensors, so no need to check
 		%% multi-headed rules if sensors mix with non-sensors
@@ -9422,19 +9433,6 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 				   -1, %% RuleNum,
 				   MetaFactDiffList,DefeatCondCode),
 			       RuleCode),
-		( is_fldeleteruleop(Op)
-		->  true
-		;   collect_name_var_pairs(Head,HeadVars),
-		    list_struct(HeadVars,[],HVLValue),
-		    (HeadVars==[] -> true
-		    ; report_dynrule_varlist(HVL,HVLValue)
-		    ),
-		    collect_name_var_pairs(Body,BodyVars),
-		    list_struct(BodyVars,[],BVLValue),
-		    (BodyVars==[] -> true
-		    ; report_dynrule_varlist(BVL,BVLValue)
-		    )
-		),
 		flatten([HeadStatus,BodyStatus],Status)
 	    ;
 		flatten([HeadStatus,BodyStatus],Status)

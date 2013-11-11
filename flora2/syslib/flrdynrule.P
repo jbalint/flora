@@ -112,6 +112,7 @@
 :- import flora_bind_last/2 from flrtrim.
 
 :- import
+	%%flrterm_vars_split/4,
 	flrterm_vars/3,
 	flrnonground/1
    from flora_ground.
@@ -237,13 +238,16 @@ flora_insert_rules(InsOp,[FLSYSRULEUPDATE(RuleId,FileName,DescrVarTerm,RuleNum,D
 	!,
 	inst_body(PureBody,InstBody),
 	%% flrunify_handlers.P defines the unify handler for FLDYNRULEVARCHECK
-        (get_attr(HV,FLDYNRULEVARCHECK,HVars),
-	    get_attr(BV,FLDYNRULEVARCHECK,BVars)
-	->
-	    check_vars(HeadList,PureBody,HVars,BVars,Warns),
+        (get_attr(HV,FLDYNRULEVARCHECK,HVars) -> true
+	; HVars = []
+	),
+	(get_attr(BV,FLDYNRULEVARCHECK,BVars) -> true
+	; BVars = []
+	),
+	(HVars == [], BVars == [] -> true
+	; check_vars(HeadList,PureBody,HVars,BVars,Warns),
 	    sort(Warns,SortedWarns),
 	    flora_show_warnings(SortedWarns)
-	; true
 	),
 	del_attr(HV,FLDYNRULEVARCHECK),
 	del_attr(BV,FLDYNRULEVARCHECK),
@@ -708,8 +712,7 @@ singleton_vars(AllVars,[_H|L],SL) :-
 is_singleton([],_V,_Cnt) :- !.
 is_singleton([H|L],V,Cnt) :-
         (H==V ->
-            (Cnt==1 ->
-                fail
+            (Cnt==1 -> fail
             ;
                 is_singleton(L,V,1)
             )
@@ -733,8 +736,8 @@ singleton_warning([H|L],NamedHVars,NamedBVars,Warns) :-
         singleton_warning(L,NamedHVars,NamedBVars,RestWarns).
 
 get_var_name(H,[N=V|NVs],Name) :-
-        ( H==V ->
-            Name=N
+        ( H==V -> Name=N
+	; get_attr(H,FLDYNRULEVARCHECK,[HN=HV]), HV==V, HN==N -> Name=N
         ;
             get_var_name(H,NVs,Name)
         ).

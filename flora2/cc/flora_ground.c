@@ -61,6 +61,7 @@
 
 inline static int is_flora_form(prolog_term term, int ignore_negative);
 inline static int is_flora_tnot_predicate(prolog_term pterm);
+static int is_ignorable_functor(prolog_term pterm);
 inline static int local_ground(CPtr term);
 inline static int local_ground_cyc(CTXTc Cell term, int cycle_action);
 inline static prolog_term trim(CPtr pterm);
@@ -342,7 +343,8 @@ void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail, Integer ignore_negative
 #endif
     arity = (int) get_arity(get_str_psc(pterm));
     // if it is FLORA_NAF_PREDICATE(Call,FreeVars,File,Line), get vars from Call only
-    if (is_flora_tnot_predicate((prolog_term) pterm) && arity == FLORA_NAF_ARITY) {
+    if (is_flora_tnot_predicate((prolog_term) pterm)
+	&& arity == FLORA_NAF_ARITY) {
       term_vars(clref_val(pterm)+1,pvars,pvarstail,ignore_negative);
 #ifdef FG_DEBUG
       fprintf(stderr,"pvars: %s\n",
@@ -352,6 +354,8 @@ void term_vars(CPtr pterm, CPtr* pvars, CPtr* pvarstail, Integer ignore_negative
 #endif
       return;
     }
+    if (is_ignorable_functor((prolog_term) pterm))
+	return;
     if (arity == 0)
       return;
     for (j=1; j < arity; j++) {
@@ -432,10 +436,13 @@ void term_vars_split(CPtr pterm,
   case XSB_STRUCT:
     arity = (int) get_arity(get_str_psc(pterm));
     // if it is FLORA_NAF_PREDICATE(Call,FreeVars,File,Line), get vars from Call only
-    if (is_flora_tnot_predicate((prolog_term) pterm) && arity == FLORA_NAF_ARITY) {
+    if (is_flora_tnot_predicate((prolog_term) pterm)
+	&& arity == FLORA_NAF_ARITY) {
       term_vars_split(clref_val(pterm)+1,pvars,pvarstail,pattrvars,pattrvarstail,ignore_negative);
       return;
     }
+    if (is_ignorable_functor((prolog_term) pterm))
+	return;
     if (arity == 0)
       return;
     for (j=1; j < arity; j++) {
@@ -499,6 +506,13 @@ static inline int is_flora_tnot_predicate(prolog_term pterm)
   char *functor;
   functor = extern_p2c_functor(pterm);
   return (strncmp(functor, FLORA_NAF_PREDICATE, FLORA_NAF_LEN)==0);
+}
+
+static int is_ignorable_functor(prolog_term pterm)
+{
+  char *functor;
+  functor = extern_p2c_functor(pterm);
+  return (strncmp(functor, "flora_put_attr", 14)==0);
 }
 
 
