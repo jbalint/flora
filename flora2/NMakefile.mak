@@ -58,23 +58,23 @@ OPTIONS = [optimize,ti_all]
 ## cc is handled specially, by makeflora
 ALL::  $(ALLOBJS)
 	cd closure
-	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
 	cd ..\includes
-	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
 	cd ..\genincludes
-	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
 	cd ..\syslib
-	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
 	cd ..\lib
-	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
 	cd ..\AT
-	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
 	cd ..\debugger
-	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
 	cd ..\pkgs
-	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
 	cd ..\demos
-	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)"
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
 	cd ..
 
 CLEAN : CLEANTEMP

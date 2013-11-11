@@ -13,6 +13,7 @@ if [%2] == [] (if not exist genincludes\flrtable.flh goto floranotcompilederror)
 @set PROLOG=%1
 call %PROLOG% -e "halt." > null 2>&1 || goto xsbinstallerror
 call %PROLOG% -e "[flrdepstest]. halt." > null 2>&1 || goto xsbsourceserror
+del null
 
 REM This for-loop causes recompilation of all .flr files by cleaning out the
 REM .xsb\flora-* directories
