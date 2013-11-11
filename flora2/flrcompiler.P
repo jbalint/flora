@@ -3619,12 +3619,12 @@ compile_fact(Head,RuleDiffList,SigDiffList,FactDiffList,MetaFactDiffList,Status)
 		%% no explicit id given: just generate new rule id
 		approx_flindex(Head,RuleIdx),
 		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_RULE,DescrIdCode,DescrVarsTerm,MetaFactDiffList,_),
-		split_ruleheads_add_rulesig(HeadCodeList,
-					    BodyCode,FL_TRUE,FL_TRUE,
-					    DescrIdCode,DescrVarsTerm,
-					    RuleDiffList,
-					    SigDiffList,
-					    []),
+		split_heads_add_sig_make_rule(HeadCodeList,
+					      BodyCode,FL_TRUE,FL_TRUE,
+					      DescrIdCode,DescrVarsTerm,
+					      RuleDiffList,
+					      SigDiffList,
+					      []),
 		FactDiffList = _F-_F, %% empty fact diff list
 		(has_context(compiling_udf_definition) -> S2 = NO_ERRORS
 		%% for UDFs, variables are checked separately
@@ -4840,12 +4840,12 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	    ; RealPostBody = PostBody
 	    ),
 	    ( no_errors_found(BodyStatus) ->
-		split_ruleheads_add_rulesig(HeadCodeList,
-					    PureBodyCode,PreBody,RealPostBody,
-					    DescriptorIdCode,DescrVarsTerm,
-					    RuleList-RuleTail,
-					    SigDiffList,
-					    Status1),
+		split_heads_add_sig_make_rule(HeadCodeList,
+					      PureBodyCode,PreBody,RealPostBody,
+					      DescriptorIdCode,DescrVarsTerm,
+					      RuleList-RuleTail,
+					      SigDiffList,
+					      Status1),
 		( no_errors_found(Status1), \+ has_context(compiling_udf_definition)
 		%% for UDFS checking of variables is done separately
 		->
@@ -4863,7 +4863,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	!.
 
 /****************************************************************************
-  split_ruleheads_add_rulesig(+HeadCodeList,+PureBodyCode,+PreBody,+PostBody,+DescriptorIdCode,+DescrVarsTerm,-RuleDiffList,-SigDiffList,-Status)
+  split_heads_add_sig_make_rule(+HeadCodeList,+PureBodyCode,+PreBody,+PostBody,+DescriptorIdCode,+DescrVarsTerm,-RuleDiffList,-SigDiffList,-Status)
 
   HeadCodeList is a list of atoms in the rule head. BodyCode is the formula
   in the rule body. This procedure splits the list of atoms in the rule
@@ -4874,17 +4874,13 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 
   Note: delay checker is NOT added to the body in signatures
 ****************************************************************************/
-
-split_ruleheads_add_rulesig([H],PureBodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,[RuleCode|R]-R,[InsSigCode|S]-S,NO_ERRORS) :-
+split_heads_add_sig_make_rule([H],PureBodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,[RuleCode|R]-R,[InsSigCode|S]-S,NO_ERRORS) :-
 	!,
 	%% Only a single atom appears in the rule head.
-	construct_defeasible_condition_for_signature_or_dynrule(H,DescriptorIdCode,DescrVarsTerm,DefeatCond),
-	insert_rule_signature_onehead(H,PureBodyCode,PreBody,PostBody,(DescriptorIdCode,DescrVarsTerm,DefeatCond),InsSigCode),
-	construct_static_defeasible_condition(H,DescriptorIdCode,DescrVarsTerm,DefeatCondWithHead),
-	add_defeasible_condition_to_body(DefeatCondWithHead,PureBodyCode,PreBody,PostBody,NewBody),
-	rule_struct(H,NewBody,RuleCode).
+	make_insert_rulesig_code(H,PureBodyCode,PreBody,PostBody,(DescriptorIdCode,DescrVarsTerm),NULL,InsSigCode),
+	finalize_rule_code(H,PureBodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,RuleCode).
 
-split_ruleheads_add_rulesig(HeadList,PureBodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,[IntermedRuleCode|RuleCodeList]-RuleListTail,[InsSigCode|SigList]-SigList,Status) :-
+split_heads_add_sig_make_rule(HeadList,PureBodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,[IntermedRuleCode|RuleCodeList]-RuleListTail,[InsSigCode|SigList]-SigList,Status) :-
 	%% Multiple atoms appear in the rule head.
 	%% Generate a temp rule.
 	collect_prvars(HeadList,HeadVars),
@@ -4894,48 +4890,49 @@ split_ruleheads_add_rulesig(HeadList,PureBodyCode,PreBody,PostBody,DescriptorIdC
 	head_caller_info_structure(CallerVarObj),
 	append(HeadVars,[CallerVarObj],HeadVarsAndCaller),
 	N1 is N+1,
-	newpredicate_struct(Name,N1,HeadVarsAndCaller,Newpredicate),
-        insert_rule_signature_multihead(HeadList,PureBodyCode,PreBody,PostBody,(DescriptorIdCode,DescrVarsTerm),Newpredicate,InsSigCode),
+	newpredicate_struct(Name,N1,HeadVarsAndCaller,NewIntermediatePred),
+        make_insert_rulesig_code(HeadList,PureBodyCode,PreBody,PostBody,(DescriptorIdCode,DescrVarsTerm),NewIntermediatePred,InsSigCode),
 	%% new intermediate rule
-	rule_struct(Newpredicate,PureBodyCode,IntermedRuleCode),
+	rule_struct(NewIntermediatePred,PureBodyCode,IntermedRuleCode),
 	%% Split the head of this intermediate rule.
-	rule_difflist(HeadList,Newpredicate,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,RuleCodeList-RuleListTail,Status).
+	make_headrules_for_multiheaded_rule(HeadList,NewIntermediatePred,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,RuleCodeList-RuleListTail,Status).
 
 
 /*
-   Splits multi-headed rules and adds defeasible condition to each rule
+   Splits multi-headed rules and adds defeasible condition to each rule.
+   If the original rule was head1,head2,head3 :- body then
+   split_heads_add_sig_make_rule/9 created the BRIDGE RULE of the form
+      NewIntermedPred :- body
+   and make_headrules_for_multiheaded_rule/8 creates HEAD RULES of the form
+      head1:- PreBody,NewIntermedPred,PostBody,DefeatCond.
+      head2:- PreBody,NewIntermedPred,PostBody,DefeatCond.
+      head3:- PreBody,NewIntermedPred,PostBody,DefeatCond.
 */
-rule_difflist([],_B,_PreB,_PostB,_IdCode,_DescrVarsTerm,CodeList-CodeList,NO_ERRORS) :- !.
-rule_difflist([H|L],B,PreB,PostB,IdCode,DescrVarsTerm,[HC|LC]-T,Status) :-
-	construct_static_defeasible_condition(H,IdCode,DescrVarsTerm,DefeatCond),
-	add_defeasible_condition_to_body(DefeatCond,B,PreB,PostB,NewB),
-	rule_struct(H,NewB,HC),
-	rule_difflist(L,B,PreB,PostB,IdCode,DescrVarsTerm,LC-T,Status).
+make_headrules_for_multiheaded_rule([],_IP,_PreB,_PostB,_IdCode,_DescrVarsTerm,CodeList-CodeList,NO_ERRORS) :- !.
+make_headrules_for_multiheaded_rule([H|RestH],IntermedPred,PreB,PostB,IdCode,DescrVarsTerm,[HeadRuleCode|LC]-T,Status) :-
+	finalize_rule_code(H,IntermedPred,PreB,PostB,IdCode,DescrVarsTerm,HeadRuleCode),
+	make_headrules_for_multiheaded_rule(RestH,IntermedPred,PreB,PostB,IdCode,DescrVarsTerm,LC-T,Status).
 
-insert_rule_signature_onehead(_Head,_Body,_PreBody,_PostBody,_,NULL) :-
+
+/*
+   For static rules only. Creates the query
+   ?- fllibinsrulesig(....).
+   which is added to the compiled file. When the file is loaded,
+   the signature for that static rule is added to the rule registry.
+*/
+make_insert_rulesig_code(_HeadList,_Body,_PreBody,_PostBody,_,_Newpred,NULL) :-
 	(has_context(compiling_udf_definition)
 	; has_permaoption(FLSUPPRESS_RULESIGNS_OPTION)
 	),
 	!.
-insert_rule_signature_onehead(Head,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,DefeatCond),Code) :-
-        insert_rulesig_struct(Head,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,DefeatCond),NULL,CCode),
-        query_struct(CCode,Code).
-
-insert_rule_signature_multihead(_HeadList,_Body,_PreBody,_PostBody,_,_Newpred,NULL) :-
-	(has_context(compiling_udf_definition)
-	; has_permaoption(FLSUPPRESS_RULESIGNS_OPTION)
+make_insert_rulesig_code(Head,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm),Newpred,Code) :-
+	(is_list(Head) -> list_struct(Head,[],HeadCode)
+	; HeadCode = Head
 	),
-	!.
-insert_rule_signature_multihead(HeadList,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm),Newpred,Code) :-
-        list_struct(HeadList,[],HeadListCode),
-	construct_defeasible_condition_for_signature_or_dynrule(HeadList,DescrIdCode,DescrVarsTerm,DefeatCond),
-        insert_rulesig_struct(HeadListCode,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,DefeatCond),Newpred,CCode),
+	construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVarsTerm,DefeatCond),
+        insert_rulesig_struct(HeadCode,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,DefeatCond),Newpred,CCode),
         query_struct(CCode,Code).
 
-
-%% add_defeasible_condition_to_body(+DefeatCondCode,+BodyCode,+PreBody,+PostBody,-NewBodyCode)
-add_defeasible_condition_to_body(DefeatCondCode,BodyCode,PreBody,PostBody,NewBodyCode) :-
-	conjunct_code([PreBody,BodyCode,DefeatCondCode,PostBody],NewBodyCode).
 
 %% DefeatCondCode = FL_UNDEFEATED(DescrIdCode,FileName,VarsCode,NewVar,ThisModule)
 %% FL_UNDEFEATED is modularized Prolog predicate
@@ -5010,6 +5007,12 @@ construct_static_defeasible_condition(HeadCode,DescrIdCode,DescrVarsTerm,Delayed
 	    DelayedDefeatCondCode = true
 	),
 	!.
+
+finalize_rule_code(H,BodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,RuleCode) :-
+	construct_static_defeasible_condition(H,DescriptorIdCode,DescrVarsTerm,DefeatCondWithHead),
+	%% conjunct body components
+	conjunct_code([PreBody,BodyCode,DefeatCondWithHead,PostBody],NewBody),
+	rule_struct(H,NewBody,RuleCode).
 
 
 /****************************************************************************
