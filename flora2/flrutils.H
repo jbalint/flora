@@ -260,6 +260,10 @@
    from flrdescriptor_support.
 
 :- import
+	flora_clear_runtime_uriprefixes/1
+   from flrprefixdef.
+
+:- import
 	query_signature_member/3,
 	matching_query_signature/4,
 	rule_signature_member/3,
@@ -359,7 +363,7 @@
 
 	reset_modules_for_shell/1,
 	reset_modules_for_file/1,
-	reset_modules_for_load/1,
+	reset_modules_for_load/2,
 	reset_modules_for_add/1,
 
 	flora_get_textual_info/3,
