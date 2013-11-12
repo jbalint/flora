@@ -2,7 +2,7 @@
 
 # Create a XSB/FLORA-2 bundle tarball 
 
-# Should have a top dir that contains .XSB and ./flora2
+# Should have a top dir that contains ./XSB and ./flora2
 # in which this script is to be run
 
 # Untar using
@@ -117,7 +117,7 @@ CVS
 *.tmp
 EOF
 
-tar cvf flora2/flora2bundle.tar --exclude-from=$EXCLUDEFILE $files
+tar cvf flora2/flora2bundle.tar --exclude-from=$EXCLUDEFILE $files --transform 's,^.,flora2bundle,'
 
 gzip -f flora2/flora2bundle.tar
 

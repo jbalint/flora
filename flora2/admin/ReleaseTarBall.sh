@@ -92,6 +92,6 @@ CVS
 *-old
 EOF
 
-tar cvf flora2/flora2.tar --exclude-from=$EXCLUDEFILE $files
+tar cvf flora2/flora2.tar --exclude-from=$EXCLUDEFILE $files --transform 's,^.,flora2release,'
 
 gzip -f flora2/flora2.tar
