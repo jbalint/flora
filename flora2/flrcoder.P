@@ -87,9 +87,6 @@ is_prcallervar(PRCALLERVAR(PRCALLERVAR)).
 is_prdyncallervar(PRDYNCALLERVAR(PRDYNCALLERVAR)).
 is_prfilenameinruleidvar(PRFILENAMEINRULEIDVAR(PRFILENAMEINRULEIDVAR)).
 
-%%is_prthisruleid(PRTHISRULEIDVAR(PRTHISRULEIDVAR)).
-%%is_prthisdynruleid(PRTHISDYNRULEIDVAR(PRTHISDYNRULEIDVAR)).
-
 is_prworkspaceterm(PRWORKSPACETERM(WSTerm),WSTerm).
 
 %% with textual information
@@ -121,6 +118,9 @@ is_prdatatypelist(PRdtlist,List) :-
 	PRdtlist = PRDATATYPELIST(List).
 
 is_table_directive(PRTABLE(PredSpecList), PredSpecList).
+
+is_prquantifier(PRQUANTIFIER(QuantifierType,FormCode,FreVarObjs),
+		QuantifierType,FormCode,FreVarObjs).
 
 %% construct datatype object to be used at runtime (new)
 %% datatype_struct(-ParsedDT,+TypeName,-DTObject)
@@ -159,7 +159,6 @@ is_goallogic(PRAND(Goal1,Goal2),FL_AND_CONNECTIVE,2,[Goal1,Goal2]) :- !.
 is_goallogic(PROR(Goal1,Goal2),FL_OR_CONNECTIVE,2,[Goal1,Goal2]) :- !.
 is_goallogic(PRPLGNAF(Goal),FL_PLGNAF,1,[Goal]) :- !.
 is_goallogic(PRRULELOGNAF(Goal,FreeVars,Line,File),FLORA_NAF_PREDICATE,4,[Goal,FreeVars,Line,File]) :- !.
-%%is_goallogic(PRCALL(Var),call,1,[Var]) :- !.
 %% with textual information
 is_goallogic(PRCUT(_I),FL_CUT,0,[]) :- !.
 
@@ -842,18 +841,6 @@ flora_write_struct(Term,_Context,[]) :-
 	!,
 	flora_write_atom(FLORA_HEADLIT_CALLER_VAR_NAME).
 
-/*
-flora_write_struct(Term,_Context,[]) :-
-	is_prthisruleid(Term),
-	!,
-	flora_write_atom(FLORA_THIS_RULEID_VAR_NAME).
-
-flora_write_struct(Term,_Context,[]) :-
-	is_prthisdynruleid(Term),
-	!,
-	flora_write_atom(FLORA_THIS_DYNRULEID_VAR_NAME).
-*/
-
 flora_write_struct(Term,_Context,[]) :-
 	is_prdyncallervar(Term),
 	!,
@@ -905,6 +892,11 @@ flora_write_struct(Term,Context,Status) :-
 	  coder_write_structlist(Args,Context,Status),
 	  put(CH_RPAREN)
         ).
+
+%% any quantifiers that sipped through are eliminated
+flora_write_struct(Term,Context,Status) :-
+	is_prquantifier(Term,_Quant,Formula,_FreeVars),
+	flora_write_struct(Formula,Context,Status).
 
 flora_write_struct(Term,_Context,Status) :-
 	is_prdatatype(Term,Sort,Literal,Index),
@@ -1756,19 +1748,6 @@ flora_build_struct(Term,_DWS,_Context,VarList,Code,(_V,NO_INDEX),[]) :-
 	!,
 	coder_build_variable(Term,VarList,Code).
 
-/*
-%% "thisruleid" primitive
-flora_build_struct(Term,_DWS,_Context,VarList,Code,(_V,NO_INDEX),[]) :-
-	is_prthisruleid(Term),
-	!,
-	coder_build_variable(Term,VarList,Code).
-
-flora_build_struct(Term,_DWS,_Context,VarList,Code,(_V,NO_INDEX),[]) :-
-	is_prthisdynruleid(Term),
-	!,
-	coder_build_variable(Term,VarList,Code).
-*/
-
 %% We don't display the value of the special caller variable in the shell.
 %% Instead, we bind all occurrences of this variable in a rule to the same var
 flora_build_struct(Term,_DWS,_Context,VarList,Code,(_V,NO_INDEX),[]) :-
@@ -1844,6 +1823,11 @@ flora_build_struct(Term,DWS,Context,VarList,Code,(CodeInd,NO_INDEX),Status) :-
 	  Code =.. [F|ACode],
 	  CodeInd =.. [F|ACodeInd]
         ).
+
+%% any quantifiers that sipped through are eliminated
+flora_build_struct(Term,DWS,Context,VarList,Code,CodeInd,Status) :-
+	is_prquantifier(Term,_Quant,Formula,_FreeVars),
+	flora_build_struct(Formula,DWS,Context,VarList,Code,CodeInd,Status).
 
 flora_build_struct(Term,DWS,Context,VarList,Code,(CodeInd,NO_INDEX),Status) :-
 	is_prcall(Term,VarTerm),
