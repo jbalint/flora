@@ -28,6 +28,7 @@
 #include "flora_terms.flh"
 
 :- import
+	memberchk/2,
 	subset/2,
 	length/2,
 	append/3

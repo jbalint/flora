@@ -847,7 +847,8 @@ flexport_unwrap_term((WS,Term,Modules,Updtag),WS,Term,Modules,Updtag).
 flexport_struct(DynamicModule,Term,Modules,Updtag,FLEXPORT(DynamicModule,Term,Modules,FLATOM(Updtag,_I))).
 flexport_struct_list(TermList,FLEXPORT_LIST(TermList)).
 
-flprefixdef_struct(PrefixName,PrefixStr,FLPREFIXDEF(PrefixName,PrefixStr)).
+%% Locality: global/local - whether the IRI prefix is local or global
+flprefixdef_struct(PrefixName,Locality,PrefixStr,FLPREFIXDEF(PrefixName,Locality,PrefixStr)).
 
 fldynrule_struct(Head,Body,Descriptors,FLDYNRULE(Head,Body,Descriptors)).
 
@@ -2558,35 +2559,42 @@ parse_cmpoptlist([H|T],[HCode|TCode],Status) :-
     :- uriprefix A="abcd",B="efgh",....
 ****************************************************************************/
 prefixdef_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[T],_If,_Ip),Code,Status) :-
-	get_name(Funct,FL_PREFIXDEF),
+	get_name(Funct,Name),
+	%% Locality=local/global. Local prefixes aren't inherited by added files
+	(Name == FL_PREFIXDEF -> Locality = global
+	; Name == FL_LOCALPREFIXDEF -> Locality = local
+	),
 	comma_separated_canoterm_to_list(T,TermList),
-	prefixdef_parse_term_list(TermList,Code,Status),
+	prefixdef_parse_term_list(TermList,Locality,Code,Status),
 	!.
 
 %% error case.
 prefixdef_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,_Args,If,_Ip),[],Status) :-
-	get_name(Funct,FL_PREFIXDEF),
+	get_name(Funct,Name),
+	memberchk(Name,[FL_PREFIXDEF,FL_LOCALPREFIXDEF]),
 	!,
 	parsing_error(If,ERROR_PREFIX_DEF,Status).
 
 /****************************************************************************
- prefixdef_parse_term_list(+TermList,-CodeList,-Status)
+ prefixdef_parse_term_list(+TermList,+Locality,-CodeList,-Status)
+ Locality: local/global
 ***************************************************************************/
-prefixdef_parse_term_list([],[],NO_ERRORS) :- !.
+prefixdef_parse_term_list([],_,[],NO_ERRORS) :- !.
 
-prefixdef_parse_term_list([H|T],Code,Status) :-
-	prefixdef_parse_term(H,HCode,HStatus),
+prefixdef_parse_term_list([H|T],Locality,Code,Status) :-
+	prefixdef_parse_term(H,Locality,HCode,HStatus),
 	( HStatus == NO_ERRORS ->
-		prefixdef_parse_term_list(T,TCode,Status),
+		prefixdef_parse_term_list(T,Locality,TCode,Status),
 	        append(HCode,TCode,Code)
 	;
 		Status = HStatus
 	).
 
 /****************************************************************************
- prefixdef_parse_term(+CanoniTerm,-Code,-Status)
+ prefixdef_parse_term(+CanoniTerm,+Locality,-Code,-Status)
+ Locality: local/global. Local prefixes are not inherited by added files
  ****************************************************************************/
-prefixdef_parse_term(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),[Code],Status) :-
+prefixdef_parse_term(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),Locality,[Code],Status) :-
 	get_name(Funct,FL_UNIVEQ), 
 	N==2, 
 	!,
@@ -2601,7 +2609,7 @@ prefixdef_parse_term(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),[Code],Status
 	      ; is_obj_builtin_identifier_struct(PrefixBody,BodyCode,_)
 	      )
 	    -> 
-		flprefixdef_struct(NameCode,BodyCode,Code),
+		flprefixdef_struct(NameCode,Locality,BodyCode,Code),
 		Status = NO_ERRORS
 
 	    ; get_index(PrefixBody,Index_Body),
@@ -2613,7 +2621,7 @@ prefixdef_parse_term(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),[Code],Status
 	).
 
 %% error case
-prefixdef_parse_term(CANOTERM(_Funct,_N,_FL_PARENTHESIS,_Args,If,_Ip),[],Status) :-
+prefixdef_parse_term(CANOTERM(_Funct,_N,_FL_PARENTHESIS,_Args,If,_Ip),_,[],Status) :-
 	parsing_error(If,ERROR_PREFIX_DEF,Status).
 
 

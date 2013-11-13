@@ -137,7 +137,8 @@ is_flstrict_rule_default(FLSTRICT_RULE_DEFAULT).
 is_verbatim(FLVERBATIM(Instruction),Instruction).
 is_suppress_rulesigns(FLSUPPRESS_RULESIGNS).
 
-is_flprefixdef(FLPREFIXDEF(PrefixName,PrefixStr),PrefixName,PrefixStr).
+%% Locality: global/local - whether the IRI prefix is local or global
+is_flprefixdef(FLPREFIXDEF(PrefixName,Locality,PrefixStr),PrefixName,Locality,PrefixStr).
 
 is_importmodule(FLIMPORTMOD(Module),Module).
 
@@ -3310,13 +3311,19 @@ compile_direct(DirectTerm,_Idx,CodeList,NO_ERRORS) :-
 	!.
 
 %% prefix definition
-compile_direct(DirectTerm,_Idx,[Code],NO_ERRORS) :-
-	is_flprefixdef(DirectTerm,PrefixName,PrefixExpansion),
+compile_direct(DirectTerm,_Idx,Code,NO_ERRORS) :-
+	is_flprefixdef(DirectTerm,PrefixName,Locality,PrefixExpansion),
 	!,
 	FLLIBPREFIXDEF(PrefixName,PrefixExpansion),
 	thismodule_struct(ThisModule),
-	florasyslib_struct(FLLIBPREFIXDEF,3,[ThisModule,PrefixName,PrefixExpansion],Code1),
-	query_struct(Code1,Code).
+	(Locality == global
+	->
+	    florasyslib_struct(FLLIBPREFIXDEF,3,[ThisModule,PrefixName,PrefixExpansion],Code1),
+	    query_struct(Code1,QCode),
+	    Code = [QCode]
+	%% prefix local to file, not inheritable
+	; Code = []
+	).
 
 %% :- compiler_options
 compile_direct(DirectTerm,_Idx,Code,Status) :-
@@ -9713,7 +9720,9 @@ compile_execdirect(DirectTerm,WS,Code,Status) :-
 	;   %% Ensure that prefix definition is recorded in the current module
 	    %% to be used in other modules. For instance, if somebody make a
 	    %% reference to prefix#local@module
-	    is_flprefixdef(DirectTerm,PrefixName,PrefixExpansion) ->
+	    %% Executable prefix directives are always global
+	    %% and recorded in the registry.
+	    is_flprefixdef(DirectTerm,PrefixName,_Locality,PrefixExpansion) ->
 	    florasyslib_struct(FLLIBPREFIXDEF,3,[Mod,PrefixName,PrefixExpansion],Code),
 	    Status = NO_ERRORS
 
