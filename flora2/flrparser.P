@@ -1069,8 +1069,8 @@ flconjunct_struct(Cond1,Cond2,FLCONJUNCT(Cond1,Cond2)).
 
 fldisjunct_struct(Cond1,Cond2,FLDISJUNCT(Cond1,Cond2)).
 
-flnaf_struct(Goal,FLPLGNAF(Goal)).
-flnot_struct(Goal,FLRULELOGNAF(Goal)).
+flprlgnaf_struct(Goal,FLPLGNAF(Goal)).
+flrulelognaf_struct(Goal,FLRULELOGNAF(Goal)).
 flneg_struct(Goal,Index,FLNEG(Goal,Index)).
 
 flquantifier_struct(Quant,VarNames,FormulaCode,Idx,
@@ -1480,9 +1480,7 @@ exec_directive(CanoniTerm,FloraModSpec,Code,Status) :-
 
 %% comma_separated_canoterm_to_list/2 dose the opposite conversion
 list_to_canoterm_conjunct([H],H,_If,_Ip) :- !.
-list_to_canoterm_conjunct([H|Tail],
-		 CANOTERM(Funct,2,FL_PARENTHESIS,[H,TailConj],If,Ip),
-		 If, Ip) :-
+list_to_canoterm_conjunct([H|Tail],CANOTERM(Funct,2,FL_PARENTHESIS,[H,TailConj],If,Ip),If,Ip) :-
 	get_name(Funct,FL_COMMA),
 	list_to_canoterm_conjunct(Tail,TailConj,If,Ip).
 
@@ -3217,14 +3215,20 @@ parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),WS,DWS,Code,Statu
 	  Status = S
         ).
 
-parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,[G],_If,_Ip),WS,DWS,Code,Status) :-
+%% \+, naf
+parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	(is_plgnafop(F); is_rulelognafop(F)),
 	set_context(parsing_default_negation),
 	!, % Module name is distributive over negation.
-	parse_rule_body(G,WS,DWS,C,Status),
-	( Status == NO_ERRORS ->
-	    (is_plgnafop(F) -> flnaf_struct(C,Code); flnot_struct(C,Code))
+	(N > 1 -> list_to_canoterm_conjunct(Args, Conjunct, If, Ip),
+	    parse_rule_body(Conjunct,WS,DWS,C,Status)
+	; Args = [Arg] -> parse_rule_body(Arg,WS,DWS,C,Status)
+	),
+	(Status == NO_ERRORS ->
+	    (is_plgnafop(F) -> flprlgnaf_struct(C,Code)
+	    ; flrulelognaf_struct(C,Code)
+	    )
 	;
 	    true
         ),
@@ -3358,8 +3362,7 @@ parse_rule_body(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_atom(Funct,Atom),
 	is_reifyop(Atom),
 	!,
-	(N > 1
-	-> list_to_canoterm_conjunct(Args, Conjunct, If, Ip),
+	(N > 1 -> list_to_canoterm_conjunct(Args, Conjunct, If, Ip),
 	    parse_rule_body(Conjunct,WS,DWS,Code,Status)
 	;  Args = [Arg] -> parse_rule_body(Arg,WS,DWS,Code,Status)
 	;  parsing_error(Ip,EXP_ARGS,Status)
@@ -3850,7 +3853,7 @@ parse_body_notuniveqform(CANOTERM(_Funct,2,FL_PARENTHESIS,Args,_If,_Ip),WS,DWS,C
 	protect_reification(distribute_workspace(Args,WS,DWS,[LCode,RCode],Status)),
 	(Status == NO_ERRORS
 	-> fluniveqform_struct(LCode,RCode,Code1),
-	    flnaf_struct(Code1,Code)
+	    flprlgnaf_struct(Code1,Code)
 	; true
 	).
 
@@ -5293,8 +5296,7 @@ parse_pure_term(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	get_atom(Funct,Atom),
 	is_reifyop(Atom),
 	!,
-	(N > 1
-	-> list_to_canoterm_conjunct(Args,Conjunct,If,Ip),
+	(N > 1 -> list_to_canoterm_conjunct(Args,Conjunct,If,Ip),
 	    parse_reify(Conjunct,DWS,Code,Status)
 	;  Args = [Arg] -> parse_reify(Arg,DWS,Code,Status)
 	;  parsing_error(Ip,EXP_ARGS,Status)
@@ -5658,8 +5660,7 @@ parse_body_pathexp(CANOTERM(Funct,N,FL_BRACE,[Arg|Rest],If,Ip),_TransFlag,DWS,Co
 	get_atom(Funct,Atom),
 	is_reifyop(Atom),
 	!,
-	(N > 1 
-	-> list_to_canoterm_conjunct([Arg|Rest], Conjunct, If, Ip),
+	(N > 1 -> list_to_canoterm_conjunct([Arg|Rest], Conjunct, If, Ip),
 	    parse_reify(Conjunct,DWS,Code,Status)
 	;
 	    parse_reify(Arg,DWS,Code,Status)
@@ -5761,20 +5762,21 @@ parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Code,Statu
 	  Status = S
         ).
 
-%% This parses not foo->bar, not foo, \+ foo->bar, or \+ foo inside the [...]
+%% This parses obj[naf foo->bar], obj[naf foo], obj[\+foo->bar], or obj[\+foo] 
 %% in object specifications
 parse_body_objspec(CANOTERM(Funct,1,FL_PARENTHESIS,[G],If,_Ip),DWS,Code,Status) :-
 	get_atom(Funct,F),
 	(is_plgnafop(F); is_rulelognafop(F); is_negop(F)),
 	!, %% negation
 	%% NEG is not a default negation
-	((is_plgnafop(F) ; is_rulelognafop(F)) -> set_context(parsing_default_negation)
+	( (is_plgnafop(F) ; is_rulelognafop(F))
+	-> set_context(parsing_default_negation)
 	; true
 	),
 	parse_body_objspec(G,DWS,C,Status),
 	( Status == NO_ERRORS ->
-	    (is_plgnafop(F) -> flnaf_struct(C,Code)
-	    ; is_rulelognafop(F) -> flnot_struct(C,Code)
+	    (is_plgnafop(F) -> flprlgnaf_struct(C,Code)
+	    ; is_rulelognafop(F) -> flrulelognaf_struct(C,Code)
 	    ; flneg_struct(C,If,Code)
 	    )
 	;
@@ -6403,8 +6405,7 @@ parse_head_pathexp(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code,Sta
 	get_atom(Funct,Atom),
 	is_reifyop(Atom),
 	!,
-	(N > 1
-	-> list_to_canoterm_conjunct(Args,Conjunct,If,Ip),
+	(N > 1 -> list_to_canoterm_conjunct(Args,Conjunct,If,Ip),
 	    parse_reify(Conjunct,DWS,Code,Status)
 	;  Args = [Arg] -> parse_reify(Arg,DWS,Code,Status)
 	;  parsing_error(Ip,EXP_ARGS,Status)
@@ -7199,8 +7200,7 @@ parse_db_pathexp(_Mode,CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code
 	get_atom(Funct,Atom),
 	is_reifyop(Atom),
 	!,
-	(N > 1
-	-> list_to_canoterm_conjunct(Args,Conjunct,If,Ip),
+	(N > 1 -> list_to_canoterm_conjunct(Args,Conjunct,If,Ip),
 	    parse_reify(Conjunct,DWS,Code,Status)
 	;  Args = [Arg] -> parse_reify(Arg,DWS,Code,Status)
 	;  parsing_error(Ip,EXP_ARGS,Status)
