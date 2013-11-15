@@ -612,7 +612,9 @@ flora_load_system_module_util(Module) :-
 	    ;  true
 	    ),
 	    flora_file_op(localname,FlrFile,ShortFlrFile),
-	    assert(flora_load_registry(FlrFile,Module,ShortFlrFile,load)),
+	    flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
+	    retractall(flora_load_registry(FlrFile,Module,_,_,load)),
+	    assert(flora_load_registry(FlrFile,Module,ShortFlrFile,WSXWAMFileTime,load)),
 	    consult(WSXWAMFile),
 	    flora_clear_xpp_options
 	;
@@ -650,11 +652,17 @@ flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 
 	util_addWSXWAM_filename(FlrFile,Module,WSXWAMFile),
 	!,
-        ( util_file_newerthan(AddPFile,FlrFile),
+        (flora_load_registry(FlrFile,Module,ShortFlrFile,LoadModTime,add),
+	    flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
+	    WSXWAMFileTime = LoadModTime,
+	    flora_file_op(newerthan,WSXWAMFile,FlrFile),
+	    flora_file_op(newerthan,WSXWAMFile,AddPFile)
+	-> SkipRest = true,
+	    flora_loader_message('~w has been added to module ~w earlier',[FlrFile,Module])
+	; util_file_newerthan(AddPFile,FlrFile),
 	    user_patch_file(UsrPatchFile),
 	    util_file_newerthan(AddPFile,UsrPatchFile)
-	-> flora_loader_msg_nl,
-	    true
+	-> flora_loader_msg_nl
 	;
 	    (ReportingType == print
 	    -> util_compile_file_add(FlrFile,Module,AddPFile,FDBFile,FLDFile,
@@ -670,6 +678,9 @@ flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 	),
 	!,
 	( FileStatus == FLORA_FAILURE -> true %% ReportingType \== print
+	; SkipRest == true -> %% already added and uptodate
+	    ErrList = [],
+	    FileStatus = FLORA_SUCCESS
 	; ( %% FileStatus \== FLORA_FAILURE
 	      (var(FileStatus) -> FileStatus = FLORA_SUCCESS ; true),
 	      flora_loader_message('Adding ~w to module ~w',[FlrFile,Module]),
@@ -697,7 +708,9 @@ flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 		  util_rename_file(AddXWAMFile,WSXWAMFile)
 	      ),
 	      flora_file_op(localname,FlrFile,ShortFlrFile),
-	      assert(flora_load_registry(FlrFile,Module,ShortFlrFile,add)),
+	      flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
+	      retractall(flora_load_registry(FlrFile,Module,_,_,add)),
+	      assert(flora_load_registry(FlrFile,Module,ShortFlrFile,WSXWAMFileTime,add)),
 	      flora_measure_time(
 				 consult(WSXWAMFile),
 				 ['Done adding ', FlrFile, '. CPU time used:']
@@ -736,11 +749,17 @@ flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 
 	util_WSXWAM_filename(FlrFile,Module,WSXWAMFile),
 	!,
-        ( util_file_newerthan(MPFile,FlrFile),
+        ( flora_load_registry(FlrFile,Module,ShortFlrFile,LoadModTime,load),
+	    flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
+	    WSXWAMFileTime = LoadModTime,
+	    flora_file_op(newerthan,WSXWAMFile,FlrFile),
+	    flora_file_op(newerthan,WSXWAMFile,MPFile)
+	-> SkipRest = true,
+	    flora_loader_message('~w has been loaded into module ~w earlier',[FlrFile,Module])
+	; util_file_newerthan(MPFile,FlrFile),
 	    user_patch_file(UsrPatchFile),
 	    util_file_newerthan(MPFile,UsrPatchFile)
-	-> flora_loader_msg_nl,
-	    true
+	-> flora_loader_msg_nl
 	;
 	    (ReportingType == print
 	    -> util_compile_file(FlrFile,Module,MPFile,FDBFile,FLDFile,FLMFile,FLSFile,FLS2File,FLTFile,FTXFile,FileStatus)
@@ -759,6 +778,9 @@ flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 	flora_cleanup_registry(Module),
 
 	(FileStatus == FLORA_FAILURE -> true %% ReportingType \== print
+	; SkipRest == true -> %% already loaded and uptodate
+	    ErrList = [],
+	    FileStatus = FLORA_SUCCESS
 	; ( %% FileStatus \== FLORA_FAILURE
 	      (var(FileStatus) -> FileStatus = FLORA_SUCCESS ; true),
 	      flora_loader_message('Loading ~w into module ~w',[FlrFile,Module]),
@@ -783,7 +805,9 @@ flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 	      ),
 	      flora_call_hooks(Module,LOADTOMODULE,FlrFile,before,AroundHookLink),
 	      flora_file_op(localname,FlrFile,ShortFlrFile),
-	      assert(flora_load_registry(FlrFile,Module,ShortFlrFile,load)),
+	      flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
+	      retractall(flora_load_registry(FlrFile,Module,_,_,load)),
+	      assert(flora_load_registry(FlrFile,Module,ShortFlrFile,WSXWAMFileTime,load)),
 	      %% We clear out UDF preds before loading (NOT adding!) modules.
 	      %% See comment about this where flora_cleanup_udf/1 is defined.
 	      %% Note: cleaning up UDFs *cannot* be done from within
@@ -941,7 +965,6 @@ flora_locate_file(In,Loc) :-
   returns true if File1 exists and is newer than File2. File2 already exists.
 *************************************************************************/
 util_file_newerthan(File1,File2) :-
-	flora_file_op(exists,File1),
 	flora_file_op(newerthan,File1,File2).
 
 
@@ -4678,7 +4701,7 @@ flora_cleanup_registry(Module) :-
 	(retract(flora_defeasible_module_registry(Module,_)) -> true
 	; true
 	),
-	retractall(flora_load_registry(_,Module,_,_)).
+	retractall(flora_load_registry(_,Module,_,_,_)).
 
 flora_cleanup_udf(Module) :-
 	(Module == FLORA_DEFAULT_WORKSPACE ->
