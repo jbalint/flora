@@ -117,13 +117,13 @@ for file in $file_list ; do
     curr_logsize=$(stat -c %s "$LOG_FILE")
     echo -n "Progress: $((100*$curr_logsize/$LOG_FILE_SIZE))% " >&3
     if [ $(($num%4)) = 0 ]; then
-	echo -n "| \\r" >&3
+	echo -n " | \\r" >&3
     elif [ $(($num%4)) = 1 ]; then
-	echo -n "/ \\r" >&3
+	echo -n " / \\r" >&3
     elif [ $(($num%4)) = 2 ]; then
-	echo -n "-- \\r" >&3
+	echo -n " ~ \\r" >&3
     elif [ $(($num%4)) = 3 ]; then
-	echo -n "\\ \\r" >&3
+	echo -n " \\ \\r" >&3
     fi
 done
 

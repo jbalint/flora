@@ -32,4 +32,6 @@
 
 :- import flora_decode_goal_as_atom/2 from flrdecode.
 
+:- import flora_imported_module_registry/2 from flrregistry.
+
 :- export flora_undefined_predicate_hook/3.
