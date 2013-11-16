@@ -408,7 +408,8 @@ util_rename_file(F1,F2) :-
 	    flora_file_op(rename,F1,F2), !
 	;
 	    flora_abort(['something wrong -- cannot rename file ',F1,' to ',F2,
-			 '. Aborting.'])
+			 '. Aborting.'],
+			FLORA_ABORT_NOTRACE)
 	).
 
 
@@ -611,11 +612,9 @@ flora_load_system_module_util(Module) :-
 	    -> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
 	    ;  true
 	    ),
-	    flora_file_op(localname,FlrFile,ShortFlrFile),
-	    flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
-	    retractall(flora_load_registry(FlrFile,Module,_,_,load)),
-	    assert(flora_load_registry(FlrFile,Module,ShortFlrFile,WSXWAMFileTime,load)),
+	    update_load_registry(FlrFile,WSXWAMFile,Module,load),
 	    consult(WSXWAMFile),
+	    check_for_import_cyclicity,
 	    flora_clear_xpp_options
 	;
 	  flora_stderr_nl,
@@ -652,7 +651,7 @@ flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 
 	util_addWSXWAM_filename(FlrFile,Module,WSXWAMFile),
 	!,
-        (flora_load_registry(FlrFile,Module,ShortFlrFile,LoadModTime,add),
+        (flora_load_registry(FlrFile,Module,_,LoadModTime,add),
 	    flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
 	    WSXWAMFileTime = LoadModTime,
 	    flora_file_op(newerthan,WSXWAMFile,FlrFile),
@@ -707,14 +706,12 @@ flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 		),
 		  util_rename_file(AddXWAMFile,WSXWAMFile)
 	      ),
-	      flora_file_op(localname,FlrFile,ShortFlrFile),
-	      flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
-	      retractall(flora_load_registry(FlrFile,Module,_,_,add)),
-	      assert(flora_load_registry(FlrFile,Module,ShortFlrFile,WSXWAMFileTime,add)),
+	      update_load_registry(FlrFile,WSXWAMFile,Module,add),
 	      flora_measure_time(
 				 consult(WSXWAMFile),
 				 ['Done adding ', FlrFile, '. CPU time used:']
 				),
+	      check_for_import_cyclicity,
 	      flora_clear_xpp_options
 	  )
 	),
@@ -749,7 +746,7 @@ flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 
 	util_WSXWAM_filename(FlrFile,Module,WSXWAMFile),
 	!,
-        ( flora_load_registry(FlrFile,Module,ShortFlrFile,LoadModTime,load),
+        ( flora_load_registry(FlrFile,Module,_,LoadModTime,load),
 	    flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
 	    WSXWAMFileTime = LoadModTime,
 	    flora_file_op(newerthan,WSXWAMFile,FlrFile),
@@ -774,14 +771,14 @@ flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 	),
 	!,
 	
-	%% clean up the registry before loading, but not adding
-	flora_cleanup_registry(Module),
-
 	(FileStatus == FLORA_FAILURE -> true %% ReportingType \== print
 	; SkipRest == true -> %% already loaded and uptodate
 	    ErrList = [],
 	    FileStatus = FLORA_SUCCESS
 	; ( %% FileStatus \== FLORA_FAILURE
+	      %% clean up the registry before loading, but not adding
+	      flora_cleanup_registry(Module),
+
 	      (var(FileStatus) -> FileStatus = FLORA_SUCCESS ; true),
 	      flora_loader_message('Loading ~w into module ~w',[FlrFile,Module]),
 	      ( util_file_newerthan(WSXWAMFile,MPFile) -> true
@@ -804,10 +801,7 @@ flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 		util_rename_file(MainXWAMFile,WSXWAMFile)
 	      ),
 	      flora_call_hooks(Module,LOADTOMODULE,FlrFile,before,AroundHookLink),
-	      flora_file_op(localname,FlrFile,ShortFlrFile),
-	      flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
-	      retractall(flora_load_registry(FlrFile,Module,_,_,load)),
-	      assert(flora_load_registry(FlrFile,Module,ShortFlrFile,WSXWAMFileTime,load)),
+	      update_load_registry(FlrFile,WSXWAMFile,Module,load),
 	      %% We clear out UDF preds before loading (NOT adding!) modules.
 	      %% See comment about this where flora_cleanup_udf/1 is defined.
 	      %% Note: cleaning up UDFs *cannot* be done from within
@@ -822,6 +816,7 @@ flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 				 consult(WSXWAMFile),
 				 ['Done loading ', FlrFile, '. CPU time used:']
 				),
+	      check_for_import_cyclicity,
 	      flora_call_hooks(Module,LOADTOMODULE,FlrFile,after,AroundHookLink),
 	      flora_clear_xpp_options
 	  )
@@ -889,7 +884,8 @@ flora_locate_file(FL_URL(InFile),ExtType,ExtFile) :-
 	    ;
 		flora_abort(['cannot create the Web cache directory: ',
 			     UserWebCache,
-			     ' HTTP interface will become inoperational'])
+			     ' HTTP interface will become inoperational'],
+			    FLORA_ABORT_NOTRACE)
 	    )
 	),
 	flora_concat_atoms([UserWebCache,S,DirEnc],InFileCacheDirectory),
@@ -899,7 +895,8 @@ flora_locate_file(FL_URL(InFile),ExtType,ExtFile) :-
 	    ;
 		flora_abort(['cannot create a Web cache subdirectory: ',
 			     InFileCacheDirectory,
-			     ' HTTP interface will become nonoperational'])
+			     ' HTTP interface will become nonoperational'],
+			    FLORA_ABORT_NOTRACE)
 	    )
 	),
 	%% $HOME/.xsb/flora/www_cache/encoded_web_directory/web_file
@@ -998,7 +995,8 @@ util_hidden_aux_file_base(File,AuxBase) :-
 	; ( flora_file_op(mkdir,AuxDir) -> true
 	  ;
 	      flora_abort(['cannot create the FLORA-2 auxiliary folder for storing compiled files: ',
-			   AuxDir, '. Aborting.'])
+			   AuxDir, '. Aborting.'],
+			  FLORA_ABORT_NOTRACE)
 	  )
 	).
 
@@ -4701,7 +4699,8 @@ flora_cleanup_registry(Module) :-
 	(retract(flora_defeasible_module_registry(Module,_)) -> true
 	; true
 	),
-	retractall(flora_load_registry(_,Module,_,_,_)).
+	retractall(flora_load_registry(_,Module,_,_,_)),
+	retractall(flora_imported_module_registry(Module,_)).
 
 flora_cleanup_udf(Module) :-
 	(Module == FLORA_DEFAULT_WORKSPACE ->
@@ -4914,6 +4913,25 @@ load_textual_info(FTXFile) :-
 	Info = FL_TEXTUAL_INFO_PRED(_X,_Y,_Z,_U,_V,_W),
 	assert((Info :- storage_find_fact(flora_textual_info_trie,Info))).
 
+%% update_load_registry(+FlrFile,+WSXWAMFile,+Module,+Mode)
+%% Mode: add/load
+update_load_registry(FlrFile,WSXWAMFile,Module,Mode) :-
+	flora_file_op(localname,FlrFile,ShortFlrFile),
+	flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
+	retractall(flora_load_registry(FlrFile,Module,_,_,Mode)),
+	assert(flora_load_registry(FlrFile,Module,ShortFlrFile,WSXWAMFileTime,Mode)).
+
+check_for_import_cyclicity :-
+	%% check for cyclic module import
+	findall(X,flora_module_import_closure(X,X),ModList),
+	fmt_write_string(ModStr,'%S',arg(ModList)),
+	(ModList == [] -> true
+	; 
+	    flora_abort(['cyclicity in :- importmodule directives detected involving these modules: ',
+			 ModStr,
+			 '. Restructure before proceeding.'],
+			 FLORA_ABORT_NOTRACE)
+	).
 
 
 /*

@@ -64,6 +64,8 @@
 	install_attribute_portray_hook/3
    from machine.
 
+:- import flora_system_module/1 from flrlibman.
+
 :- import
         %%concat_atom/2,
 	substring/4

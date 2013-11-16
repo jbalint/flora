@@ -24,6 +24,16 @@ do
 	    options=$1
 	    shift
 	    ;;
+     *-logsize*)
+	    shift
+	    logsize=$1
+	    shift
+	    ;;
+     *-logfile*)
+	    shift
+	    logfile=$1
+	    shift
+	    ;;
      *-exclud*)
 	    shift
 	    excluded_tests=$1
@@ -86,7 +96,7 @@ for tst in $testlist ; do
     if test -f core ; then
 	rm -f core
     fi
-    $currdir/test_dir.sh $currdir "$FLORA" "-e segfault_handler(warn). $options"
+    $currdir/test_dir.sh $logsize $logfile $currdir "$FLORA" "-e segfault_handler(warn). $options"
     cd $currdir
   fi
 done

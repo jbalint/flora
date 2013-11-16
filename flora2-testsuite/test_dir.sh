@@ -8,9 +8,11 @@ echo "-------------------------------------------------------"
 echo "--- Running $dir/test_dir.sh                           "
 echo "-------------------------------------------------------"
 
-basedir=$1
-FLORA=$2
-options=$3
+LOG_FILE_SIZE=$1
+LOG_FILE=$2
+basedir=$3
+FLORA=$4
+options=$5
 
 file_list=*.flr
 
@@ -40,6 +42,9 @@ exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
               loadloop_aux1.flr \
               loadloop_aux2.flr \
               loadloop_tbox.flr \
+              importloop_aux1.flr \
+              importloop_aux2.flr \
+              importloop_tbox.flr \
               sensortest_declarations.flr sensortest_usedecl.flr \
               ruleupdates.flr reif_foo.flr \
               callReified_foo.flr callReified_foo2.flr \
@@ -97,7 +102,9 @@ rm -f $basedir/symbols/*/.flora_aux_files/*
 rm -f $basedir/general_tests/prolog/*${OBJEXT}
 
 
+exec 3> /dev/tty
 # run the tests
+num=1
 for file in $file_list ; do
     if member $file "$exclude_list"; then
 	continue
@@ -105,5 +112,18 @@ for file in $file_list ; do
     prog=`basename $file .flr`
     touch $file
     $basedir/test_one_file.sh "$FLORA" "$prog" 
+
+    num=$(($num+1))
+    curr_logsize=$(stat -c %s "$LOG_FILE")
+    echo -n "Progress: $((100*$curr_logsize/$LOG_FILE_SIZE))% " >&3
+    if [ $(($num%4)) = 0 ]; then
+	echo -n "| \\r" >&3
+    elif [ $(($num%4)) = 1 ]; then
+	echo -n "/ \\r" >&3
+    elif [ $(($num%4)) = 2 ]; then
+	echo -n "-- \\r" >&3
+    elif [ $(($num%4)) = 3 ]; then
+	echo -n "\\ \\r" >&3
+    fi
 done
 

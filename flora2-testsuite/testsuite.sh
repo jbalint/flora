@@ -170,11 +170,13 @@ fi
 
 
 if test -f "$LOG_FILE"; then
-  echo "There was an old $LOG_FILE"
-  echo "removing..."
-  rm -f $LOG_FILE
+    LOG_FILE_SIZE=$(stat -c %s "$LOG_FILE")
+    echo "There was an old $LOG_FILE"
+    echo "removing..."
+    rm -f $LOG_FILE
+else
+    LOG_FILE_SIZE=4000000
 fi
-
 
 
 # should parameterize: create a script that given an input file
@@ -185,6 +187,8 @@ echo "Testing $FLORA"
 echo "The log will be left in  $LOG_FILE"
 
 echo "Log for  $FLORA > $LOG_FILE"
+echo ""
+
 (echo "Date-Time: `date +"%y%m%d-%H%M"`" >> $LOG_FILE) || status=failed
 if test -n "$status"; then
 	echo "Date-Time: no date for NeXT..." >> $LOG_FILE
@@ -195,11 +199,13 @@ fi
 
 if test -x /usr/bin/time; then
     /usr/bin/time -f "TESTTIME user: %U, elapsed: %E" \
-	./testall.sh -opts "$options" -exclude "$excluded_tests" \
+	./testall.sh -opts "$options" -logsize $LOG_FILE_SIZE -logfile $LOG_FILE \
+	             -exclude "$excluded_tests" \
 		     -add "$added_tests"  \
 			    $FLORA  >> $LOG_FILE 2>&1
 else
-    ./testall.sh -opts "$options" -exclude "$excluded_tests" \
+    ./testall.sh -opts "$options" -exclude -logsize $LOG_FILE_SIZE -logfile $LOG_FILE \
+	            "$excluded_tests" \
 		    -add "$added_tests"  \
 			    $FLORA  >> $LOG_FILE 2>&1
 fi

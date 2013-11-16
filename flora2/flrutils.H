@@ -182,6 +182,8 @@
 	flora_modular_prolog_registry/3,
 	flora_defeasible_module_registry/2,
 	flora_load_registry/5,
+	flora_module_import_closure/2,
+	flora_imported_module_registry/2,
 	flora_module_registry/1
    from flrregistry.
 
