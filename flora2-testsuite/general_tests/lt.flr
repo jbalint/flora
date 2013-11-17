@@ -1,0 +1,114 @@
+:- iriprefix foo = "http://bar/".
+
+dom({1,2,3}).
+dom2({1,2,3,4,5}).
+
+rrr({1,2,3,4,5}).
+p({1,2}).
+q({1,2,3}).
+
+pp({1,2},1).   p1({1,2},1).
+qq({1,2,3},1). q2({1,3},1).
+               p1(3,{2,3,4,5}).
+               q2(2,{2,3,4,5}).
+
+pp({1,2},3).
+qq({1,2},3).
+qq(3,7).
+
+// DOMAINS are DELIBERATELY placed at the end to test NAF delay
+
+// ****currently t1: undefined, but
+// should be true: forall p->q
+// need to propagate naf through ~~>
+t1 :- naf exists(?X)^(naf ((p(?X) ~~> q(?X)))).
+// **** t2: undefined
+// manual transform of t1
+t2 :- naf exists(?X)^(naf(aux_t2(?X))).
+aux_t2(?X) :- (p(?X) ~~> q(?X)).
+
+// ****currently: t3,t5 - undefined, t4 - true
+// should be true: forall p->q, but we opened up ~~> without propagating naf
+t3 :- naf exists(?X)^(naf(((naf p(?X)) or q(?X)))).
+// manual transform of t3 with adding domain
+t4 :- naf exists(?X)^(naf(aux_t4(?X)), dom(?X)).
+aux_t4(?X) :- naf p(?X) or q(?X).
+// manual transform without adding domain
+t5 :- naf exists(?X)^(naf(aux_t5(?X))).
+aux_t5(?X) :- (naf p(?X) or q(?X)).
+
+// ****t6, t7 - true
+// propagated version
+t6 :- naf exists(?X)^(p(?X) , naf q(?X)).
+// propagated version: same but without exists(?X)
+t7 :- naf ((p(?X) , naf q(?X))).
+
+
+// *** tt1 - undefined
+// should also be true, but the inner naf makes ?Y existential
+tt1 :- naf exists(?X)^(naf (pp(?X,?Y) ~~> qq(?X,?Y))).
+// propagated
+// *** tt2-tt5: true
+tt2 :- naf exists(?X)^(pp(?X,?Y) , naf qq(?X,?Y)).
+tt3 :- naf exists(?Y)^(naf (naf exists(?X)^(pp(?X,?Y) , naf qq(?X,?Y)))).
+tt4 :- naf exists(?Y)^(exists(?X)^(pp(?X,?Y) , naf qq(?X,?Y))).
+tt5 :- naf exists(?Y,?X)^(pp(?X,?Y) , naf qq(?X,?Y)).
+
+// *** tt6: undefined
+// naf exists Y forall X (p1(X,Y) ~~> q2(X,Y))
+tt6 :- naf exists(?Y)^(naf exists(?X)^(p1(?X,?Y), naf q2(?X,?Y))).
+// *** tt7: true
+// tt6 with domain
+tt7 :- naf exists(?Y)^(naf exists(?X)^(p1(?X,?Y), naf q2(?X,?Y)), dom2(?Y)).
+
+// **** tt8: undefined
+// tt7 manually transformed
+tt8 :- naf exists(?Y)^(naf tt8_aux(?Y)).
+tt8_aux(?Y) :- p1(?X,?Y), naf q2(?X,?Y).
+
+// **** r1: true because of the domain
+r1 :- naf exists(?X)^(naf rrr(?X), dom2(?X)).
+// **** r2: undefined
+r2 :- naf exists(?X)^(naf rrr(?X)).
+// **** r3: undefined
+// r2 manually transformed
+r3 :- naf r3_aux(?_X).
+r3_aux(?X) :- naf rrr(?X).
+
+tst1 :- write('test1: ')@_plg,
+	undefined{t1}, undefined{t2},
+	writeln(ok)@_plg.
+tst1 :- true.
+
+tst2 :-  write('test2: ')@_plg,
+	undefined{t3}, undefined{t5}, true{t4},
+	writeln(ok)@_plg.
+tst2 :- true.
+
+tst3 :-  write('test3: ')@_plg,
+	true{t6}, true{t7},
+	writeln(ok)@_plg.
+tst3 :- true.
+
+tst4 :-  write('test4: ')@_plg,
+	undefined{tt1}, true{tt2}, true{tt3}, true{tt4},
+	writeln(ok)@_plg.
+tst4 :- true.
+
+tst5 :-  write('test5: ')@_plg,
+	true{tt5}, undefined{tt6}, true{tt7}, undefined{tt8},
+	writeln(ok)@_plg.
+tst5 :- true.
+
+tst6 :-  write('test6: ')@_plg,
+	true{r1}, undefined{r2}, undefined{r3},
+	writeln(ok)@_plg.
+tst6 :- true.
+
+pretest :- tst1, tst2, tst3, tst4, tst5, tst6.
+
+%test :- tell(temp)@_plg(),
+        Method[mustDefine(on)]@_sys,
+        pretest,
+        Method[mustDefine(off)]@_sys,
+        told@_plg().
