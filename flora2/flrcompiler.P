@@ -628,7 +628,7 @@ is_prdisjunct(PROR(L,R),L,R).
   conjunct_struct(+Goal1,+Goal2,-Code)
   disjunct_struct(+Goal1,+Goal2,-Code)
   naf_struct_prolog(+Goal,-Code)
-  naf_struct_flora(+Goal,-Code)
+  naf_struct_flora(+PRGoal,+FreeVars,-Code)
   neg_struct(+Goal,+Idx,-Code,-Status)
   head_neg_struct(+Goal,+Idx,-Code,-Status)
 ****************************************************************************/
@@ -675,7 +675,10 @@ pure_naf_struct_flora(Goal,FreeVars,PRRULELOGNAF(WrappedGoal,FreeVars,Line,CurrF
 %% We can optimize this by passing free variables list. If the list is empty,
 %% we won't delay
 naf_struct_flora(Goal,FreeVars,Code) :-
-	pure_naf_struct_flora(Goal,FreeVars,PureNAFcode),
+	%% must stop delaying before applying NAF!
+	delay_checking_code_for_rulelog_naf(Goal,DelayCheckCode),
+	conjunct_struct(Goal,DelayCheckCode,FullGoal),
+	pure_naf_struct_flora(FullGoal,FreeVars,PureNAFcode),
 	%% delay default negation
 	delay_naf_struct(PureNAFcode,Code).
 
@@ -9875,6 +9878,8 @@ is_unimplemented_neg_negatable_literal(X) :-
 */
 
 
+%% delay_literals_checking_code(+Head,+Body,+DescrVarsTerm,-Code)
+%% Head & Body are FL code. DescrVarsTerm is PR code
 delay_literals_checking_code(Head,Body,DescrVarsTerm,Code) :-
 	collect_flvars(Head,HeadVars1),
 	collect_flvars(Body,BodyVars1),
@@ -9908,6 +9913,20 @@ delay_literals_checking_code(Head,Body,DescrVarsTerm,Code) :-
 			   [ParserBodyVars,ParserHeadVars],
 			   Code,_OidCode,_ACode,[],_Status)
 	),
+	!.
+
+%% delay_checking_code_for_rulelog_naf(+PRBody,-Code)
+%% This is like delay_literals_checking_code/4 but is used only for the
+%% inside of flora_naf. It takes PR-code as argument, not FL-code
+delay_checking_code_for_rulelog_naf(PRBody,Code) :-
+	collect_prvars(PRBody,PRBodyVars),
+	prvar_to_flvar_struct_list(PRBodyVars,FLBodyVars),
+	remove_dupflvars(FLBodyVars,BodyVars),
+	is_fllist(ParserBodyVars,BodyVars,[],NO_INDEX),
+	is_fllist(ParserHeadVars,[],[],NO_INDEX),
+	compile_prlgterm(FLORA_DELAY_CHECKER,2,
+			   [ParserBodyVars,ParserHeadVars],
+			   Code,_OidCode,_ACode,[],_Status),
 	!.
 
 

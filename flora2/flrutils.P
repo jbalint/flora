@@ -583,9 +583,7 @@ flora_load_system_module_util(Module) :-
 	    util_mainP_filename(FlrFile,PFile),
 	    util_WSXWAM_filename(FlrFile,Module,WSXWAMFile),
 	    !,
-	    ( util_file_newerthan(PFile,FlrFile)
-	    ->
-		true
+	    ( skip_recompile(FlrFile,PFile) -> true
 
 	    ; flora_file_op(exists,FlrFile) ->
 		flora_compile_then_prolog_compile(FlrFile,Module)
@@ -651,17 +649,10 @@ flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 
 	util_addWSXWAM_filename(FlrFile,Module,WSXWAMFile),
 	!,
-        (flora_load_registry(FlrFile,Module,_,LoadModTime,add),
-	    flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
-	    WSXWAMFileTime = LoadModTime,
-	    flora_file_op(newerthan,WSXWAMFile,FlrFile),
-	    flora_file_op(newerthan,WSXWAMFile,AddPFile)
-	-> SkipRest = true,
+        (skip_loading(FlrFile,AddPFile,WSXWAMFile,Module) ->
+	    SkipRest = true,
 	    flora_loader_message('~w has been added to module ~w earlier',[FlrFile,Module])
-	; util_file_newerthan(AddPFile,FlrFile),
-	    user_patch_file(UsrPatchFile),
-	    util_file_newerthan(AddPFile,UsrPatchFile)
-	-> flora_loader_msg_nl
+	; skip_recompile(FlrFile,AddPFile) -> flora_loader_msg_nl
 	;
 	    (ReportingType == print
 	    -> util_compile_file_add(FlrFile,Module,AddPFile,FDBFile,FLDFile,
@@ -746,17 +737,10 @@ flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 
 	util_WSXWAM_filename(FlrFile,Module,WSXWAMFile),
 	!,
-        ( flora_load_registry(FlrFile,Module,_,LoadModTime,load),
-	    flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
-	    WSXWAMFileTime = LoadModTime,
-	    flora_file_op(newerthan,WSXWAMFile,FlrFile),
-	    flora_file_op(newerthan,WSXWAMFile,MPFile)
-	-> SkipRest = true,
+        ( skip_loading(FlrFile,MPFile,WSXWAMFile,Module) ->
+	    SkipRest = true,
 	    flora_loader_message('~w has been loaded into module ~w earlier',[FlrFile,Module])
-	; util_file_newerthan(MPFile,FlrFile),
-	    user_patch_file(UsrPatchFile),
-	    util_file_newerthan(MPFile,UsrPatchFile)
-	-> flora_loader_msg_nl
+	; skip_recompile(FlrFile,MPFile) -> flora_loader_msg_nl
 	;
 	    (ReportingType == print
 	    -> util_compile_file(FlrFile,Module,MPFile,FDBFile,FLDFile,FLMFile,FLSFile,FLS2File,FLTFile,FTXFile,FileStatus)
@@ -4912,6 +4896,19 @@ load_textual_info(FTXFile) :-
 	see(OldF),
 	Info = FL_TEXTUAL_INFO_PRED(_X,_Y,_Z,_U,_V,_W),
 	assert((Info :- storage_find_fact(flora_textual_info_trie,Info))).
+
+skip_loading(FlrFile,PFile,WSXWAMFile,Module) :-
+	flora_load_registry(FlrFile,Module,_,LoadModTime,load),
+	flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
+	WSXWAMFileTime = LoadModTime,
+	flora_file_op(newerthan,WSXWAMFile,FlrFile),
+	flora_file_op(newerthan,WSXWAMFile,PFile),
+	skip_recompile(FlrFile,PFile).
+
+skip_recompile(FlrFile,PFile) :-
+	util_file_newerthan(PFile,FlrFile),
+	user_patch_file(UsrPatchFile),
+	util_file_newerthan(PFile,UsrPatchFile).
 
 %% update_load_registry(+FlrFile,+WSXWAMFile,+Module,+Mode)
 %% Mode: add/load
