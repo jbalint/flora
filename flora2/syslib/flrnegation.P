@@ -148,7 +148,9 @@ exists_not(_Vars,Goal):- neg(Goal).
 %% Try neg Goal
 FLORA_NAF_PREDICATE(Goal,_FreeVars,_Line,_File) :-
 	%%DBGOUTLN(initial_goal2=Goal),
-	flora_unwrap_negation_nocheck(Goal,UnwrappedGoal),
+	flora_unwrap_negation_nocheck(Goal,UnwrappedGoal_pre),
+	strip_delay_checker(UnwrappedGoal_pre,UnwrappedGoal),
+	%%DBGOUTLN(unwrapped_goal=UnwrappedGoal),
 	%% UnwrappedGoal might be a FLLIBMODLIT - materialize
 	FLLIBMODOBJ(UnwrappedGoal,MaterializedUnwrappedGoal),
 	%% neg Goal
@@ -176,13 +178,14 @@ exists_not(Vars,Goal):-
 	u_not(Goal).
 */
 FLORA_NAF_PREDICATE(Goal,FreeVarsTerm,Line,File) :-
+	%%DBGOUTLN(initial_goal3=Goal),
 	flora_unwrap_negation_nocheck(Goal,UnwrappedGoal),
 	functor(Goal,FL_Tabled_Unnumber_Call_PredName,_),
 	flrwrapper:flora_get_symbol_module(FL_Tabled_Unnumber_Call_PredName,Module),
 	%% FreeVarsTerm was originally a varlist, but may have been instantiated
 	flrterm_vars(FreeVarsTerm,FreeVarList,0), %% 0: include vars under naf
 	%%DBGOUTLN(freevars_=FreeVarList),
-	%%DBGOUTLN(goal_____=Goal),
+	%%DBGOUTLN(unwrappedgoal=UnwrappedGoal),
 	FreeVarList \= [],
 	flora_apply_negation_wrapper(quazi_forall(FreeVarList,UnwrappedGoal),Module,QuaziForallGoal),
 	naf_exists(QuaziForallGoal,Line,File),
@@ -258,6 +261,11 @@ flora_unwrap_negation(Call,Call).
 flora_unwrap_negation_nocheck(Call,Unwrapped) :-
 	%%arg(1,Call,Unwrapped).
 	term_arg(Call,1,Unwrapped).
+
+strip_delay_checker((OutGoal, FLORA_DELAY_CHECKER(_,_)),OutGoal) :-
+	nonvar(OutGoal),
+	!.
+strip_delay_checker(InGoal,InGoal).
 
 
 flora_apply_negation_wrapper(Goal,Workspace,GoalWrapped) :-

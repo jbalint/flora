@@ -36,6 +36,10 @@
 	flora_concat_atoms/2
     from flrporting.
 
+:- import
+	flora_generalize_last/2
+   from flrtrim.
+
 :- import term_psc/2, term_new/2, psc_name/2 from machine.
 
 :- import

@@ -129,6 +129,7 @@
         flora_check_dynmod_type_consistency/1,
         is_ws_distributive/3,
 	bind_head_in_defeat_condition/2,
+	is_naf_literal/2,
         is_caller_distributive/3,
         is_caller_distributive/4.
 
@@ -248,6 +249,10 @@ get_canonical_form(FLLIBMODLIT(Wrap,Term,Mod,_Caller),Canon) :-
                 flora_abort([Message,'transactional predicate expected'])
             )
 
+	; (Term = FL_NEG_Atm(TermArg) ; Term = WRAP_HILOG(FL_NEG_Atm,TermArg)), TermArg =.. [WRAP_HILOG|_] ->
+	    negate_libmod_wrapper(Wrap,NWrap),
+	    get_canonical_form(FLLIBMODLIT(NWrap,TermArg,Mod,_Caller), Canon)
+
         ; Term =.. [WRAP_HILOG|As] ->
             append(As,[_],ArgsOut),
 	    ( var(Mod) -> 
@@ -258,10 +263,6 @@ get_canonical_form(FLLIBMODLIT(Wrap,Term,Mod,_Caller),Canon) :-
 	        flora_module_predicate(BodyWrap,ArgsOut,Mod,Callable),
 	        Canon = FLCANON(GenericWrap,ArgsOut,Mod,Callable,PredType)
             )
-
-	; Term =.. [FL_NEG_Atm,TermArg], TermArg =.. [WRAP_HILOG|_] ->
-	    negate_libmod_wrapper(Wrap,NWrap),
-	    get_canonical_form(FLLIBMODLIT(NWrap,TermArg,Mod,_Caller), Canon)
         ).
 
 
@@ -1000,6 +1001,10 @@ flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_TRANSLIBMOD,Term,_M,_C)) :-
 	),
         !.
 
+flora_check_dynmod_type_consistency(FLLIBMODLIT(_,Term,_M,_C)) :-
+	is_naf_literal(Term,_),
+	!.
+
 flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_LIBMOD,Term,M,_C)) :-
         !,
         flora_abort([Term,'@',M, ': the idiom ?Variable@module requires that the variable is bound to a HiLog term or a non-transactional formula']).
@@ -1117,3 +1122,26 @@ negate_libmod_wrapper(FL_LIBMOD,FL_NEGLIBMOD).
 negate_libmod_wrapper(FL_NEGLIBMOD,FL_LIBMOD).
 
 flora_assert(X,Y,Z) :- assert(X,Y,Z).
+
+is_naf_literal(FLLIBNAFDELAY(Lit),PosLit) :-
+	nonvar(Lit),
+	!,
+	is_naf_literal(Lit,PosLit).
+is_naf_literal(FLLIBMODLIT(Wrap,WRAP_HILOG(FL_RULELOGNAF,PosLit),Mod,Caller),
+	       FLLIBMODLIT(Wrap,PosLit,Mod,Caller)) :-
+	!.
+is_naf_literal(FLLIBMODLIT(_Wrap,NegLit,_Mod,_Caller), PosLit) :-
+	nonvar(NegLit),
+	is_naf_literal(NegLit,PosLit),
+	!.
+is_naf_literal(NegLit,PosLit) :-
+	nonvar(NegLit),
+	functor(NegLit,FLORA_NAF_PREDICATE,_),
+	arg(1,NegLit,PrePosLit),
+	flrnegation:flora_unwrap_negation(PrePosLit,PosLit_pre),
+	strip_delay_checker(PosLit_pre,PosLit).
+
+strip_delay_checker((OutGoal, FLORA_DELAY_CHECKER(_,_)),OutGoal) :-
+	nonvar(OutGoal),
+	!.
+strip_delay_checker(InGoal,InGoal).
