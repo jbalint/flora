@@ -149,11 +149,11 @@ is_flsymbolcontext(FLSYMBOLCONTEXT(PredList),PredList).
 is_flconjunct(FLCONJUNCT(L,R),L,R).
 is_fldisjunct(FLDISJUNCT(L,R),L,R).
 
+is_flneg(FLNEG(Goal,Idx),Goal,Idx).
 is_flplgnaf(FLPLGNAF(Goal),Goal).
 is_flrulelognaf(FLRULELOGNAF(Goal),Goal).
-is_flneg(FLNEG(Goal,Idx),Goal,Idx).
-is_default_negation(Term,Goal,FL_RULELOGNAF) :- is_flrulelognaf(Term,Goal), !.
-is_default_negation(Term,Goal,FL_PLGNAF)  :- is_flplgnaf(Term,Goal).
+is_default_negation(FLPLGNAF(Goal),Goal,FL_PLGNAF).
+is_default_negation(FLRULELOGNAF(Goal),Goal,FL_RULELOGNAF).
 
 is_fllogicquantifier(FLQUANTIFIER(Quant,VarNames,FormulaCode,Idx),
 		     Quant,VarNames,FormulaCode,Idx).
@@ -660,10 +660,14 @@ ignore_null_and_true(FL_TRUE) :- !.
 ignore_null_and_false(NULL) :-!.
 ignore_null_and_false(FL_FALSE).
 
-quantifier_struct(QuantifierType,FormCode,FreVarObjs,
-		  PRQUANTIFIER(QuantifierType,FormCode,FreVarObjs)).
-is_prquantifier(PRQUANTIFIER(QuantifierType,FormCode,FreVarObjs),
-		QuantifierType,FormCode,FreVarObjs).
+quantifier_struct(QuantifierType,FormCode,QuantVarObjs,FreVarObjs,
+		  PRQUANTIFIER(QuantifierType,FormCode,QuantVarObjs,FreVarObjs)).
+is_prquantifier(PRQUANTIFIER(QuantifierType,FormCode,QuantVarObjs,FreeVarObjs),
+		QuantifierType,FormCode,QuantVarObjs,FreeVarObjs).
+
+is_existentialquant(FL_EXISTS)    :- !.
+is_existentialquant(FL_EXIST)     :- !.
+is_universalquant(FL_FORALL)    :- !.
 
 %% \+
 naf_struct_prolog(Goal,PRPLGNAF(Goal)).
@@ -672,8 +676,7 @@ pure_naf_struct_flora(Goal,FreeVars,PRRULELOGNAF(WrappedGoal,FreeVars,Line,CurrF
 	code_line_and_file_by_prterm(Goal,Line,CurrFileName),
 	modularized_pratom_struct(FL_TABLED_UNNUMBER_CALL,NO_INDEX,FunCode),
 	prologterm_struct(FunCode,1,[Goal],WrappedGoal).
-%% We can optimize this by passing free variables list. If the list is empty,
-%% we won't delay
+%% We should optimize this: If FreeVars list is empty,don't delay!!
 naf_struct_flora(Goal,FreeVars,Code) :-
 	%% must stop delaying before applying NAF!
 	delay_checking_code_for_rulelog_naf(Goal,DelayCheckCode),
@@ -681,6 +684,11 @@ naf_struct_flora(Goal,FreeVars,Code) :-
 	pure_naf_struct_flora(FullGoal,FreeVars,PureNAFcode),
 	%% delay default negation
 	delay_naf_struct(PureNAFcode,Code).
+
+extract_goal_from_prrulelognaf(NafStruct,Goal) :-
+	is_prrulelognaf(NafStruct,WrappedNafStruct,_,_,_),
+	is_prologterm(WrappedNafStruct,_,1,[UnwrappedNafStruct]),
+	is_prconjunct(UnwrappedNafStruct,Goal,_DelayChecker).
 
 %% delay struct
 delay_struct(Index,DelayOp,Args,Code) :-
@@ -700,8 +708,55 @@ delay_defeat_struct(Index,DefeatCond,Headvars,HeadvarNames,DynHead,Code) :-
 			  Code).
 
 delay_naf_struct(PureNAFcode,Code) :-
-	prologterm_struct(FLLIBNAFDELAY,1,[PureNAFcode],
-			  Code).
+	prologterm_struct(FLLIBNAFDELAY,1,[PureNAFcode],Code).
+is_delay_naf_struct(DelayStruct,NAFCode) :-
+	is_prologterm(DelayStruct,_,1,[NAFCode]).
+is_prrulelognaf(PRRULELOGNAF(WrappedGoal,FreeVars,Line,CurrFileName),
+		WrappedGoal,FreeVars,Line,CurrFileName).
+
+%% propagate_rulelog_naf(+Goal,+FreeVars,-Code)
+%% propagates NAF through connectives
+propagate_rulelog_naf(PRAND(Goal1,Goal2),FreeVars,PROR(Code1,Code2)) :-
+	!,
+	propagate_rulelog_naf(Goal1,FreeVars,Code1),
+	propagate_rulelog_naf(Goal2,FreeVars,Code2).
+propagate_rulelog_naf(PROR(Goal1,Goal2),FreeVars,PRAND(Code1,Code2)) :-
+	!,
+	propagate_rulelog_naf(Goal1,FreeVars,Code1),
+	propagate_rulelog_naf(Goal2,FreeVars,Code2).
+propagate_rulelog_naf(Goal,_FreeVars,Code) :-
+	is_delay_naf_struct(Goal,PRRuleLogNaf),
+	!,
+	extract_goal_from_prrulelognaf(PRRuleLogNaf,Code).
+
+propagate_rulelog_naf(Goal,FreeVars,Code) :-
+	is_florasyslib_struct(Goal,_Idx,FLLIBIFTHEN,_N,[_Mod,Cond,Then|_]),
+	!,
+	propagate_rulelog_naf(Then,FreeVars,ThenNaffed),
+	conjunct_struct(Cond,ThenNaffed,Code).
+
+propagate_rulelog_naf(Goal,FreeVars,Code) :-
+	is_florasyslib_struct(Goal,_I,FLLIBIFTHENELSE,_,[_M,Cond,Then,Else|_]),
+	!,
+	propagate_rulelog_naf(Then,FreeVars,ThenNaffed),
+	propagate_rulelog_naf(Else,FreeVars,ElseNaffed),
+	conjunct_code([Cond,ThenNaffed,ElseNaffed],Code).
+
+propagate_rulelog_naf(Goal,FreeVars,Code) :-
+	is_prquantifier(Goal,Quantifier,Formula,QuantVarObjs,FreeVarObjList),
+	!,
+	(is_existentialquant(Quantifier) ->
+	    naf_struct_flora(Goal,FreeVarObjList,Code)
+	; is_universalquant(Quantifier) ->
+	    append(QuantVarObjs,FreeVarObjList,InnerFreeVarObjList),
+	    propagate_rulelog_naf(Formula,InnerFreeVarObjList,InnerCode),
+	    naf_struct_flora(InnerCode,FreeVarObjList,Code)
+	; propagate_rulelog_naf(Formula,FreeVars,Code)
+	).
+
+%% catch-all: nothing left to propagate
+propagate_rulelog_naf(Goal,FreeVars,Code) :-
+	naf_struct_flora(Goal,FreeVars,Code).
 
 neg_struct(PRAND(Goal1,Goal2),Idx,PRAND(Goal1,Struct2),Status) :-
 	is_body_neg_passthrough_literal(Goal1),
@@ -2373,6 +2428,12 @@ namevars([Index-Name|L],[NV|NVs]) :-
 
   remove_dupflvars(+SortedVarsList,-Vars)
   Remove duplicates of variables in SortedVarsList
+
+  get_quantification_info(+QuantGoal,-Quantifier,-Formula,-QuantVars,-FreeVars)
+  QuantGoal is PR code of a (possibly) quantified formula
+  Formula is the formula being quantified
+  Vars free vars in Formula (which are not quantified in QuantGoal)
+       It is a PR-list structure
 ****************************************************************************/
 singleton_flvars([],[]) :- !.
 
@@ -2418,6 +2479,19 @@ remove_dupflvars_aux([H|T],[H|TT]) :-
 	remove_named_flvar(T,Name,Vars),
 	remove_dupflvars_aux(Vars,TT).
 
+%% QuantGoal is PR code
+get_quantification_info(QuantGoal,Quantifier,Formula,QuantVarObjs,FreeVarObjs) :-
+	(is_prquantifier(QuantGoal,Quantifier,Formula,QuantVarObjs,FreeVarObjList)
+	-> list_struct(FreeVarObjList,[],FreeVarObjs)
+	;  Formula = QuantGoal,
+	    Quantifier = NULL,
+	    %% if no quantifier, use all vars minus dontcare/callervars
+	    collect_prvars(QuantGoal,AllVars),
+	    remove_prdontcare_and_caller_vars(AllVars,FreeVarObjList1),
+	    %% this is used if naf-exists is nested deep inside the code
+	    remove_existential_vars(FreeVarObjList1,FreeVarObjList),
+	    list_struct(FreeVarObjList,[],FreeVarObjs)
+	).
 
 /****************************************************************************
   singleton_warning(+VarList,-WarnList,-WarnTail)
@@ -5128,24 +5202,27 @@ compile_body(ParserTerm,Code,Status) :-
 	).
 
 compile_body(ParserTerm,Code,Status) :-
-	is_default_negation(ParserTerm,G,NAFType),
+	is_flplgnaf(ParserTerm,G),
 	!,
 	set_context(compiling_default_negation),
 	compile_body(G,GCode,Status),
 	( no_errors_found(Status) ->
-	    (is_prquantifier(GCode,_Quant,FormCode,FreeVarObjList)
-	    -> list_struct(FreeVarObjList,[],FreeVarObjs)
-	    ;  FormCode = GCode,
-		%% if no quantifier, use all vars minus dontcare/callervars
-		collect_prvars(GCode,AllVars),
-		remove_prdontcare_and_caller_vars(AllVars,FreeVarObjList1),
-		%% this is used if naf-exists is nested deep inside the code
-		remove_existential_vars(FreeVarObjList1,FreeVarObjList),
-		list_struct(FreeVarObjList,[],FreeVarObjs)
-	    ),
-	    (NAFType == FL_RULELOGNAF
-	    -> naf_struct_flora(FormCode,FreeVarObjs,Code)
-	    ; naf_struct_prolog(FormCode,Code)
+	    get_quantification_info(GCode,_Quantifier,FormCode,_QuantVars,_FreeVars),
+	    naf_struct_prolog(FormCode,Code)
+	; true
+	),
+	clear_context(compiling_default_negation).
+
+compile_body(ParserTerm,Code,Status) :-
+	is_flrulelognaf(ParserTerm,G),
+	!,
+	set_context(compiling_default_negation),
+	compile_body(G,GCode,Status),
+	( no_errors_found(Status) ->
+	    get_quantification_info(GCode,Quantifier,FormCode,_QuantVars,FreeVarObjs),
+	    (is_existentialquant(Quantifier) ->
+		naf_struct_flora(FormCode,FreeVarObjs,Code)
+	    ; propagate_rulelog_naf(FormCode,FreeVarObjs,Code)
 	    )
 	; true
 	),
@@ -5181,13 +5258,13 @@ compile_body(ParserTerm,Code,Status) :-
 
 	(QuantVarNames == FL_STAR -> RenamedFormCode = FormCode
 	; rename_prvariables(QuantVarNames,NEWEXISTENTIALVAR,FormCode,
-			     RenamedFormCode,_RenamedQuantVars)
+			     RenamedFormCode,RenamedQuantVars)
 	),
 	flatten([S1,S2,S3],Status),
 	!,
 	( no_errors_found(Status) ->
 	    %% Create code for compiled quantification.
-	    quantifier_struct(FL_EXISTS,RenamedFormCode,FreeVarObjs,Code)
+	    quantifier_struct(FL_EXISTS,RenamedFormCode,RenamedQuantVars,FreeVarObjs,Code)
 	;
 	    true
 	).
@@ -7392,16 +7469,8 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	set_context(compiling_default_negation),
 	compile_body_specbody(Object,G,WS,OidCode,GCode,BodyFrontList,Status),
 	( no_errors_found(Status) -> 
-	    (is_prquantifier(GCode,_Quant,FormCode,FreeVarObjList)
-	    -> list_struct(FreeVarObjList,[],FreeVarObjs)
-	    ;  FormCode = GCode,
-		%% if no quantifier, use all vars minus dontcare/callervars
-		collect_prvars(GCode,AllVars),
-		remove_prdontcare_and_caller_vars(AllVars,FreeVarObjList1),
-		%% this is used if naf-exists is nested deep inside the code
-		remove_existential_vars(FreeVarObjList1,FreeVarObjList),
-		list_struct(FreeVarObjList,[],FreeVarObjs)
-	    ),
+	    %% Only _Quantifier=NULL or Exists are allowed
+	    get_quantification_info(GCode,_Quantifier,FormCode,_QuantVars,FreeVarObjs),
 	    conjunct_struct(OidCode,FormCode,CombinedCode),
 	    (NAFType == FL_RULELOGNAF
 	    -> naf_struct_flora(CombinedCode,FreeVarObjs,Code)
@@ -7451,14 +7520,14 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	remove_existential_vars(FreeVarObjs_aux2,FreeVarObjs),
 	
 	rename_prvariables(QuantVarNames,NEWEXISTENTIALVAR,FormCode,
-			   RenamedFormCode,_RenamedQuantVars),
+			   RenamedFormCode,RenamedQuantVars),
 
 	!,
 	flatten([S1,S2,S3],Status),
 	( no_errors_found(Status) -> 
 	    %% Create the code for compiled quantification.
 	    conjunct_struct(OidCode,RenamedFormCode,CombinedCode),
-	    quantifier_struct(FL_EXISTS,CombinedCode,FreeVarObjs,Code)
+	    quantifier_struct(FL_EXISTS,CombinedCode,RenamedQuantVars,FreeVarObjs,Code)
 	;
 	    true
 	).
