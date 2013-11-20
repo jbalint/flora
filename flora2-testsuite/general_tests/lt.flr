@@ -18,24 +18,28 @@ qq(3,7).
 
 // DOMAINS are DELIBERATELY placed at the end to test NAF delay
 
-// ****currently t1: undefined, but
-// should be true: forall p->q
-// need to propagate naf through ~~>
+// **** t1: true
+// forall p->q
 t1 :- naf exists(?X)^(naf ((p(?X) ~~> q(?X)))).
+ut1 :- forall(?X)^(p(?X) ~~> q(?X)).
 // **** t2: undefined
 // manual transform of t1
 t2 :- naf exists(?X)^(naf(aux_t2(?X))).
 aux_t2(?X) :- (p(?X) ~~> q(?X)).
+ut2 :- forall(?X)^aux_t2(?X).
 
-// ****currently: t3,t5 - undefined, t4 - true
+// ****t5 - undefined, t3,t4 - true
 // should be true: forall p->q, but we opened up ~~> without propagating naf
 t3 :- naf exists(?X)^(naf(((naf p(?X)) or q(?X)))).
+ut3 :- forall(?X)^(naf p(?X) or q(?X)).
 // manual transform of t3 with adding domain
 t4 :- naf exists(?X)^(naf(aux_t4(?X)), dom(?X)).
 aux_t4(?X) :- naf p(?X) or q(?X).
+ut4 :- forall(?X)^(aux_t4(?X) ; naf dom(?X)).
 // manual transform without adding domain
 t5 :- naf exists(?X)^(naf(aux_t5(?X))).
 aux_t5(?X) :- (naf p(?X) or q(?X)).
+ut5 :- forall(?X)^(aux_t5(?X)).
 
 // ****t6, t7 - true
 // propagated version
@@ -44,46 +48,67 @@ t6 :- naf exists(?X)^(p(?X) , naf q(?X)).
 t7 :- naf ((p(?X) , naf q(?X))).
 
 
-// *** tt1 - undefined
-// should also be true, but the inner naf makes ?Y existential
+// *** tt1 - true
 tt1 :- naf exists(?X)^(naf (pp(?X,?Y) ~~> qq(?X,?Y))).
 // propagated
 // *** tt2-tt5: true
 tt2 :- naf exists(?X)^(pp(?X,?Y) , naf qq(?X,?Y)).
 tt3 :- naf exists(?Y)^(naf (naf exists(?X)^(pp(?X,?Y) , naf qq(?X,?Y)))).
+utt3 :- forall(?Y)^(naf exists(?X)^(pp(?X,?Y) , naf qq(?X,?Y))).
 tt4 :- naf exists(?Y)^(exists(?X)^(pp(?X,?Y) , naf qq(?X,?Y))).
 tt5 :- naf exists(?Y,?X)^(pp(?X,?Y) , naf qq(?X,?Y)).
+utt5 :- forall(?Y,?X)^(naf(pp(?X,?Y) , naf qq(?X,?Y))).
 
 // *** tt6: undefined
 // naf exists Y forall X (p1(X,Y) ~~> q2(X,Y))
 tt6 :- naf exists(?Y)^(naf exists(?X)^(p1(?X,?Y), naf q2(?X,?Y))).
-// *** tt7: true
-// tt6 with domain
+utt6 :- forall(?Y)^exists(?X)^(p1(?X,?Y), naf q2(?X,?Y)).
+// *** tt7: true (tt6 with domain)
+// *** utt7 should be equivalent
 tt7 :- naf exists(?Y)^(naf exists(?X)^(p1(?X,?Y), naf q2(?X,?Y)), dom2(?Y)).
+utt7 :- forall(?Y)^(exists(?X)^(p1(?X,?Y), naf q2(?X,?Y)) ; naf dom2(?Y)).
 
 // **** tt8: undefined
 // tt6 manually transformed
 tt8 :- naf exists(?Y)^(naf tt8_aux(?Y)).
 tt8_aux(?Y) :- p1(?X,?Y), naf q2(?X,?Y).
+utt8 :- forall(?Y)^tt8_aux(?Y).
 
 // **** r1: true because of the domain
 r1 :- naf exists(?X)^(naf rrr(?X), dom2(?X)).
+ur1 :- forall(?X)^(rrr(?X) ; naf dom2(?X)).
 // **** r2: undefined
 r2 :- naf exists(?X)^(naf rrr(?X)).
+ur2 :- forall(?X)^rrr(?X).
 // **** r3: undefined
 // r2 manually transformed
 r3 :- naf r3_aux(?_X).
 r3_aux(?X) :- naf rrr(?X).
+// ur3 - should be undefined
+ur3 :- forall(?X)^(naf r3_aux(?X)).
+// ur4: equivalent to ur3 - undefined
+ur4 :- naf exists(?X)^r3_aux(?X).
 
 tst1 :- write('test1: ')@_plg,
 	true{t1}, undefined{t2},
 	writeln(ok)@_plg.
 tst1 :- true.
 
+// the u-tests should have the same meaning as the t-tests
+utst1 :- write('utest1: ')@_plg,
+	true{ut1}, undefined{ut2},
+	writeln(ok)@_plg.
+utst1 :- true.
+
 tst2 :-  write('test2: ')@_plg,
 	true{t3}, true{t4}, undefined{t5},
 	writeln(ok)@_plg.
 tst2 :- true.
+
+utst2 :-  write('utest2: ')@_plg,
+	true{ut3}, true{ut4}, undefined{ut5},
+	writeln(ok)@_plg.
+utst2 :- true.
 
 tst3 :-  write('test3: ')@_plg,
 	true{t6}, true{t7},
@@ -95,20 +120,37 @@ tst4 :-  write('test4: ')@_plg,
 	writeln(ok)@_plg.
 tst4 :- true.
 
+utst4 :-  write('utest4: ')@_plg,
+	true{utt3}, true{utt5},
+	writeln(ok)@_plg.
+utst4 :- true.
+
 tst5 :-  write('test5: ')@_plg,
 	true{tt5}, undefined{tt6}, true{tt7}, undefined{tt8},
 	writeln(ok)@_plg.
 tst5 :- true.
+
+utst5 :-  write('utest5: ')@_plg,
+	undefined{utt6}, true{utt7}, undefined{utt8},
+	writeln(ok)@_plg.
+utst5 :- true.
 
 tst6 :-  write('test6: ')@_plg,
 	true{r1}, undefined{r2}, undefined{r3},
 	writeln(ok)@_plg.
 tst6 :- true.
 
+utst6 :-  write('utest6: ')@_plg,
+	true{ur1}, undefined{ur2}, undefined{ur3}, undefined{ur4},
+	writeln(ok)@_plg.
+utst6 :- true.
+
 pretest :- tst1, tst2, tst3, tst4, tst5, tst6.
+upretest :- utst1, utst2, utst4, utst5, utst6.
 
 %test :- tell(temp)@_plg(),
         Method[mustDefine(on)]@_sys,
         pretest,
+	upretest,
         Method[mustDefine(off)]@_sys,
         told@_plg().

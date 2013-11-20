@@ -24,6 +24,7 @@
 
 
 :- import
+	memberchk/2,
 	length/2
    from basics.
 

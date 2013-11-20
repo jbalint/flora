@@ -40,7 +40,7 @@
 
 #define NEWVAR	        	 newvar
 #define NEWDONTCAREVAR	       	 newdontcarevar
-#define NEWEXISTENTIALVAR      	 newexistentialvar
+#define NEWQUANTIFIEDVAR       	 newquantvar
 #define NEWCALLERVAR	       	 newcallervar
 #define SKOLEMSYMVAR	       	 skolemsymvar
 #define NEWUDFPREDVAR	         newudfpredvar
@@ -568,6 +568,10 @@ approx_prindex(PROR(First,Second),I)          :- !,
 	(approx_prindex(First,I), I \= NO_INDEX
 	-> true
 	; approx_prindex(Second,I)).
+approx_prindex(PRBAND(First,Second),I)         :- !,
+	(approx_prindex(First,I), I \= NO_INDEX
+	-> true
+	; approx_prindex(Second,I)).
 approx_prindex(PRRULE(Head,_),I)              :- !, approx_prindex(Head,I).
 approx_prindex(PRFACT(Head),I)                :- !, approx_prindex(Head,I).
 approx_prindex(PRREIFY(F),I)                  :- !, approx_prindex(F,I).
@@ -623,10 +627,12 @@ table_directive_struct(SpecList,PRTABLE(SpecList)).
 
 is_prconjunct(PRAND(L,R),L,R).
 is_prdisjunct(PROR(L,R),L,R).
+%%is_prstrong_conjunct(PRBAND(L,R),L,R).
 
 /****************************************************************************
   conjunct_struct(+Goal1,+Goal2,-Code)
   disjunct_struct(+Goal1,+Goal2,-Code)
+  strong_conjunct_struct(+Goal1,+Goal2,-Code)
   naf_struct_prolog(+Goal,-Code)
   naf_struct_flora(+PRGoal,+FreeVars,-Code)
   neg_struct(+Goal,+Idx,-Code,-Status)
@@ -654,6 +660,17 @@ disjunct_struct(Goal1,Goal2,Goal1) :-
 	!.
 disjunct_struct(Goal1,Goal2,PROR(Goal1,Goal2)).
 
+strong_conjunct_struct(Goal1,Goal2,Goal2) :-
+	%% NULL and FL_TRUE are both dummy code that is ignored
+	nonvar(Goal1),
+	ignore_null_and_true(Goal1),
+	!.
+strong_conjunct_struct(Goal1,Goal2,Goal1) :-
+	nonvar(Goal2),
+	ignore_null_and_true(Goal2),
+	!.
+strong_conjunct_struct(Goal1,Goal2,PRBAND(Goal1,Goal2)).
+
 ignore_null_and_true(NULL) :- !.
 ignore_null_and_true(FL_TRUE) :- !.
 
@@ -667,7 +684,7 @@ is_prquantifier(PRQUANTIFIER(QuantifierType,FormCode,QuantVarObjs,FreeVarObjs),
 
 is_existentialquant(FL_EXISTS)    :- !.
 is_existentialquant(FL_EXIST)     :- !.
-is_universalquant(FL_FORALL)    :- !.
+%%is_universalquant(FL_FORALL)    :- !.
 
 %% \+
 naf_struct_prolog(Goal,PRPLGNAF(Goal)).
@@ -710,7 +727,7 @@ delay_defeat_struct(Index,DefeatCond,Headvars,HeadvarNames,DynHead,Code) :-
 delay_naf_struct(PureNAFcode,Code) :-
 	prologterm_struct(FLLIBNAFDELAY,1,[PureNAFcode],Code).
 is_delay_naf_struct(DelayStruct,NAFCode) :-
-	is_prologterm(DelayStruct,_,1,[NAFCode]).
+	is_prologterm(DelayStruct,FLLIBNAFDELAY,1,[NAFCode]).
 is_prrulelognaf(PRRULELOGNAF(WrappedGoal,FreeVars,Line,CurrFileName),
 		WrappedGoal,FreeVars,Line,CurrFileName).
 
@@ -743,18 +760,14 @@ propagate_rulelog_naf(Goal,FreeVars,Code) :-
 	conjunct_code([Cond,ThenNaffed,ElseNaffed],Code).
 
 propagate_rulelog_naf(Goal,FreeVars,Code) :-
-	is_prquantifier(Goal,Quantifier,Formula,QuantVarObjs,FreeVarObjList),
+	is_prquantifier(Goal,Quantifier,Formula,_QuantVarListObj,FreeVarListObj),
 	!,
 	(is_existentialquant(Quantifier) ->
-	    naf_struct_flora(Goal,FreeVarObjList,Code)
-	; is_universalquant(Quantifier) ->
-	    append(QuantVarObjs,FreeVarObjList,InnerFreeVarObjList),
-	    propagate_rulelog_naf(Formula,InnerFreeVarObjList,InnerCode),
-	    naf_struct_flora(InnerCode,FreeVarObjList,Code)
+	    naf_struct_flora(Goal,FreeVarListObj,Code)
 	; propagate_rulelog_naf(Formula,FreeVars,Code)
 	).
 
-%% catch-all: nothing left to propagate
+%% catch-all: nothing left to propagate, including the case of PRBAND conjuncts
 propagate_rulelog_naf(Goal,FreeVars,Code) :-
 	naf_struct_flora(Goal,FreeVars,Code).
 
@@ -896,6 +909,7 @@ head_neg_struct(_Goal,Idx,_Code,[Err]) :-
 
 
 ignorable_negated_head_conjunct(Goal) :-
+	%% PRMVDCONDEF and PRIMVDCONDEF occur only in rule heads
 	(is_prmvdcondef(Goal) ; is_primvdcondef(Goal)),
 	!.
 ignorable_negated_head_conjunct(Goal) :-
@@ -1108,6 +1122,7 @@ special_variable_struct(Type,PRSPECIALVAR(Type)).
 
 list_struct(List,Term,Index,PRLIST(List,Term,Index)).
 list_struct(List,Term,PRLIST(List,Term,NO_INDEX)).
+%%is_prlist(PRLIST(List,Term,Index),List,Term,Index).
 
 workspace_struct(P,WS,PRWORKSPACE(P,WS)).
 is_prworkspace(PRWORKSPACE(P,WS),P,WS).
@@ -1729,7 +1744,7 @@ sigattspec_struct(LiteralContext,Object,AttObj,RefType,ValObj,Code) :-
 	!.
 
 
-%% cardinality constraints in the body
+%% cardinality constraint QUERY in the body. Not negatable with NEG
 sigattconstr_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,RefType,Code) :-
 	( is_mvdsigspecop(RefType) ->
 	    mvdcon_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,Code) 
@@ -1740,7 +1755,7 @@ sigattconstr_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,RefType,Code)
 	!.
 
 
-%% cardinality constraints in the head
+%% cardinality constraint definition in the head. Not negatable with NEG
 sigattcondef_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,RefType,ValObj,Code) :-
 	( is_mvdsigspecop(RefType) ->
 	    mvdcondef_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,ValObj,Code) 
@@ -1872,11 +1887,11 @@ imvdtolistspec_struct(Object,AttObj,ValObj,PRIMVDTOLIST(Object,AttObj,ValObj,Cal
 body_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
 	%% Index is the approximate textual information
 	%% for the new variable that represents an oid.
-	%% Here we use existential variables so that if we get something like
+	%% Here we use quantified variables so that if we get something like
 	%% naf bill.has(moo)[type->bar] then the var corresponding to
 	%% bill.has(moo) will be treated as existential and so there will not be
 	%% a delay because of its unboundedness.
-	new_existential_prvariable(Index,Val),
+	new_quantified_prvariable(Index,Val),
 	( is_mvdrefop(RefType) ->
 	    mvdspec_struct(BODYLITERAL,Obj,Att,Val,Code)
 	;
@@ -1885,7 +1900,7 @@ body_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
         ),
 	!.
 
-%% if it is the same with body_objref_struct, combine them later
+%% may combine with body_objref_struct
 head_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
 	new_prvariable(Index,Val), 
         ( is_mvdrefop(RefType) -> 	 
@@ -1994,8 +2009,8 @@ new_dontcare_prvariable(Index,VarObj) :-
 	flora_new_varobj(NEWDONTCAREVAR,Index,VarObj).
 new_caller_prvariable(Index,VarObj) :-
 	flora_new_varobj(NEWCALLERVAR,Index,VarObj).
-new_existential_prvariable(Index,VarObj) :-
-	flora_new_varobj(NEWEXISTENTIALVAR,Index,VarObj).
+new_quantified_prvariable(Index,VarObj) :-
+	flora_new_varobj(NEWQUANTIFIEDVAR ,Index,VarObj).
 %% creates new transactional variable
 new_dontcare_prtransactionalvar(Index,VarObj) :-
 	flora_new_transactionalvarobj(NEWDONTCAREVAR,Index,VarObj).
@@ -2360,8 +2375,8 @@ remove_prdontcare_vars(InVars,OutVars) :-
 remove_caller_vars(InVars,OutVars) :-
 	remove_prvars(NEWCALLERVAR,InVars,OutVars).
 
-remove_existential_vars(InVars,OutVars) :-
-	remove_prvars(NEWEXISTENTIALVAR,InVars,OutVars).
+remove_quantified_vars(InVars,OutVars) :-
+	remove_prvars(NEWQUANTIFIEDVAR ,InVars,OutVars).
 
 remove_prdontcare_and_caller_vars(In,Out) :-
 	remove_prvars(NEWDONTCAREVAR,In,Intermed),
@@ -2480,17 +2495,18 @@ remove_dupflvars_aux([H|T],[H|TT]) :-
 	remove_dupflvars_aux(Vars,TT).
 
 %% QuantGoal is PR code
-get_quantification_info(QuantGoal,Quantifier,Formula,QuantVarObjs,FreeVarObjs) :-
-	(is_prquantifier(QuantGoal,Quantifier,Formula,QuantVarObjs,FreeVarObjList)
-	-> list_struct(FreeVarObjList,[],FreeVarObjs)
+get_quantification_info(QuantGoal,Quantifier,Formula,QuantVarListObj,FreeVarListObj) :-
+	(is_prquantifier(QuantGoal,Quantifier,Formula,QuantVarListObj,FreeVarListObj)
+	-> true
 	;  Formula = QuantGoal,
 	    Quantifier = NULL,
 	    %% if no quantifier, use all vars minus dontcare/callervars
 	    collect_prvars(QuantGoal,AllVars),
 	    remove_prdontcare_and_caller_vars(AllVars,FreeVarObjList1),
 	    %% this is used if naf-exists is nested deep inside the code
-	    remove_existential_vars(FreeVarObjList1,FreeVarObjList),
-	    list_struct(FreeVarObjList,[],FreeVarObjs)
+	    remove_quantified_vars(FreeVarObjList1,FreeVarObjList),
+	    list_struct(FreeVarObjList,[],FreeVarListObj),
+	    list_struct([],[],QuantVarListObj)
 	).
 
 /****************************************************************************
@@ -5222,15 +5238,15 @@ compile_body(ParserTerm,Code,Status) :-
 	    get_quantification_info(GCode,Quantifier,FormCode,_QuantVars,FreeVarObjs),
 	    (is_existentialquant(Quantifier) ->
 		naf_struct_flora(FormCode,FreeVarObjs,Code)
-	    ; propagate_rulelog_naf(FormCode,FreeVarObjs,Code)
+	    ; %% naked NAF, without quantification
+		propagate_rulelog_naf(FormCode,FreeVarObjs,Code)
 	    )
 	; true
 	),
 	clear_context(compiling_default_negation).
 
 compile_body(ParserTerm,Code,Status) :-
-	is_fllogicquantifier(ParserTerm,FL_EXISTS,QuantVarNames,Formula,Idx),
-	has_context(compiling_default_negation),
+	is_fllogicquantifier(ParserTerm,QuantType,QuantVarNames,Formula,Idx),
 	!,
 	%% no quantified don't care vars (?,?_) allowed
 	(memberchk(FL_ANON_VAR,QuantVarNames) ->
@@ -5254,17 +5270,29 @@ compile_body(ParserTerm,Code,Status) :-
 	),
 	remove_prdontcare_and_caller_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
 	%% this is used if naf-exists is nested deep inside the code
-	remove_existential_vars(FreeVarObjs_aux2,FreeVarObjs),
+	remove_quantified_vars(FreeVarObjs_aux2,FreeVarObjs),
 
 	(QuantVarNames == FL_STAR -> RenamedFormCode = FormCode
-	; rename_prvariables(QuantVarNames,NEWEXISTENTIALVAR,FormCode,
+	; rename_prvariables(QuantVarNames,NEWQUANTIFIEDVAR ,FormCode,
 			     RenamedFormCode,RenamedQuantVars)
 	),
 	flatten([S1,S2,S3],Status),
 	!,
 	( no_errors_found(Status) ->
 	    %% Create code for compiled quantification.
-	    quantifier_struct(FL_EXISTS,RenamedFormCode,RenamedQuantVars,FreeVarObjs,Code)
+	    list_struct(RenamedQuantVars,[],RenamedQuantVarsListObj),
+	    (QuantType==FL_EXISTS ->
+		list_struct(FreeVarObjs,[],FreeVarListObj),
+		quantifier_struct(QuantType,RenamedFormCode,RenamedQuantVarsListObj,FreeVarListObj,Code)
+	    ;
+		%% QuantType==FL_FORALL: compile as naf exists naf
+		append(RenamedQuantVars,FreeVarObjs,AllVars_pre),
+		remove_prdontcare_and_caller_vars(AllVars_pre,AllVars),
+		list_struct(AllVars,[],AllVarsListObj),
+		propagate_rulelog_naf(RenamedFormCode,AllVarsListObj,Code1),
+		list_struct(FreeVarObjs,[],FreeVarListObj),
+		naf_struct_flora(Code1,FreeVarListObj,Code)
+	    )
 	;
 	    true
 	).
@@ -5306,7 +5334,11 @@ compile_body(ParserTerm,Code,Status) :-
 	detach_flworkspace(ParserTerm,P,WS),
 	compile_body_literal(P,WS,OidCode,SpecCode,BodyFrontList,Status),
 	conjunct_code(BodyFrontList,BodyFrontCode),
-	conjunct_code([BodyFrontCode,OidCode,SpecCode],Code).
+	%% generaly we should use strong conjunction for OidCode+SpecCode
+	%% coming out of compile_body_literal/6, if this code can appear
+	%% under NAF. This is because OidCode+SpecCode usually share variables.
+	strong_conjunct_struct(OidCode,SpecCode,BodyLitCode),
+	conjunct_struct(BodyFrontCode,BodyLitCode,Code).
 
 
 /****************************************************************************
@@ -5970,7 +6002,12 @@ compile_udf_body_literal(Funct,Predicate,PCode,PBodyFrontList,Status) :-
 	),
 	set_context(compiling_udf_hilog(Funct)),
 	compile_body_literal(Predicate,FL_THISMODULE,OidCode,SpecCode,PBodyFrontList,Status),
-	conjunct_struct(OidCode,SpecCode,PCode),
+	%% generaly we should use strong conjunction for OidCode+SpecCode
+	%% coming out of compile_body_literal/6, if this code can appear
+	%% under NAF. This is because OidCode+SpecCode usually share variables.
+	%% Here using strong_conjunct_struct/3 is probably an overkill,
+	%% but this has no performance penalty.
+	strong_conjunct_struct(OidCode,SpecCode,PCode),
 	clear_context(compiling_udf_hilog(Funct)),
 	(Clear == yes -> clear_context(no_symbol_check)
 	; true
@@ -6094,7 +6131,12 @@ compile_delayquant(Quant,ConditionWS,Goal,Index,SpecCode,BodyFrontList,Status):-
 	vars_to_var_names(GoalVarList,GoalVarNames),
 	detach_flworkspace(ConditionWS,Condition,WS),
 	compile_body_literal(Condition,WS,OidCode,WSCode,BodyFrontList,S1),
-	conjunct_struct(OidCode,WSCode,ConditionCode),
+	%% generaly we should use strong conjunction for OidCode+WSCode
+	%% coming out of compile_body_literal/6, if this code can appear
+	%% under NAF. This is because OidCode+WSCode usually share variables.
+	%% Here using strong_conjunct_struct/2 for delay conditions is probably
+	%% an overkill, but there is no performance penalty.
+	strong_conjunct_struct(OidCode,WSCode,ConditionCode),
 	(subset(CondVarNames,GoalVarNames) ->
 	    ( no_errors_found(S1) ->
 		compile_body(Goal,GoalCode,S2),
@@ -6834,7 +6876,7 @@ compile_body_pathexp(ParserTerm,WS,Object,OidCode,Code,BodyFrontList,Status) :-
 	( is_flobjref(ParserTerm,ObjTerm,RefType,AttTerm) ->
 	    BodyFrontList = [],
 	    compile_body_objref(ObjTerm,RefType,AttTerm,WS,Object,
-			   OidCode,Code,Status)
+				OidCode,Code,Status)
 
 	; is_flobjspec(ParserTerm,ObjTerm,Spec) ->
 	    compile_body_objspec(ObjTerm,Spec,WS,Object,OidCode,Code,
@@ -7517,9 +7559,9 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	%% remove don't care vars, since no need to delay because of them
 	remove_prdontcare_and_caller_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
 	%% this is used if naf-exists is nested deep inside the code
-	remove_existential_vars(FreeVarObjs_aux2,FreeVarObjs),
+	remove_quantified_vars(FreeVarObjs_aux2,FreeVarObjs),
 	
-	rename_prvariables(QuantVarNames,NEWEXISTENTIALVAR,FormCode,
+	rename_prvariables(QuantVarNames,NEWQUANTIFIEDVAR ,FormCode,
 			   RenamedFormCode,RenamedQuantVars),
 
 	!,
@@ -7527,7 +7569,9 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	( no_errors_found(Status) -> 
 	    %% Create the code for compiled quantification.
 	    conjunct_struct(OidCode,RenamedFormCode,CombinedCode),
-	    quantifier_struct(FL_EXISTS,CombinedCode,RenamedQuantVars,FreeVarObjs,Code)
+	    list_struct(RenamedQuantVars,[],RenamedQuantVarsListObj),
+	    list_struct(FreeVarObjs,[],FreeVarObjsListObj),
+	    quantifier_struct(FL_EXISTS,CombinedCode,RenamedQuantVarsListObj,FreeVarObjsListObj,Code)
 	;
 	    true
 	).
@@ -9989,7 +10033,8 @@ delay_literals_checking_code(Head,Body,DescrVarsTerm,Code) :-
 %% inside of flora_naf. It takes PR-code as argument, not FL-code
 delay_checking_code_for_rulelog_naf(PRBody,Code) :-
 	collect_prvars(PRBody,PRBodyVars),
-	prvar_to_flvar_struct_list(PRBodyVars,FLBodyVars),
+	remove_prdontcare_and_caller_vars(PRBodyVars,PurePRBodyVars),
+	prvar_to_flvar_struct_list(PurePRBodyVars,FLBodyVars),
 	remove_dupflvars(FLBodyVars,BodyVars),
 	is_fllist(ParserBodyVars,BodyVars,[],NO_INDEX),
 	is_fllist(ParserHeadVars,[],[],NO_INDEX),
@@ -10121,9 +10166,10 @@ merge_status([S|Rest],T) :-
     rename_prvariables(+VarNameList,+VarType,+OldFormula,-NewFormula,-NewVarList)
        Replaces each occurrence of each variable in VarNameList with
        a newly created variable (the same for different occurrences of the
-       same var name. Returns a new formula and the variable objects used
+       same var name) of type VarType.
+       Returns a new formula and the variable objects used
        in the substitutions.
-       VarType: NEWVAR, NEWDONTCAREVAR, NEWCALLERVAR, NEWEXISTENTIALVAR
+       VarType: NEWVAR, NEWDONTCAREVAR, NEWCALLERVAR, NEWQUANTIFIEDVAR 
     rename_one_prvariable(+VarName,+NewVarObj,+Body,-NewBody),
        Replaces each occurrence of a a var object having VarName
        as the variable name with NewVarObj. Returns the newly created formula.
