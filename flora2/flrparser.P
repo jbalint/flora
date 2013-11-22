@@ -724,8 +724,10 @@ is_user_defined_function_inside_typo(CANOTERM(Funct,_,_,[CANOTERM(Funct2,2,_,[_,
 	(
 	  get_name(Funct3,FL_LEFTNAFIMPLY) ;
 	  get_name(Funct3,FL_RIGHTNAFIMPLY) ;
+	  get_name(Funct3,FL_NAFIFF) ;
 	  get_name(Funct3,FL_LEFTNEGIMPLY) ;
 	  get_name(Funct3,FL_RIGHTNEGIMPLY) ;
+	  get_name(Funct3,FL_NEGIFF) ;
 	  get_name(Funct3,FL_MVDSIGARROW) ;
 	  get_name(Funct3,FL_MVDARROW) ;
 	  get_name(Funct3,FL_LT) ;
@@ -3435,6 +3437,12 @@ parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[IfPart,ThenPart],_If,_Ip),WS,DW
 	!,
 	leftNAF_implication(IfPart,ThenPart,WS,DWS,Code,Status).
 
+%% Parse the a<~~>b form of if-then
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[IfPart,ThenPart],_If,_Ip),WS,DWS,Code,Status) :-
+	get_name(Funct,FL_NAFIFF),
+	!,
+	naf_iff(IfPart,ThenPart,WS,DWS,Code,Status).
+
 %% Parse the a<==b form of if-then (using NEG instead of NAF)
 parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[ThenPart,IfPart],_If,_Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,FL_LEFTNEGIMPLY),
@@ -3446,6 +3454,12 @@ parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[IfPart,ThenPart],_If,_Ip),WS,DW
 	get_name(Funct,FL_RIGHTNEGIMPLY),
 	!,
 	leftNEG_implication(IfPart,ThenPart,WS,DWS,Code,Status).
+
+%% Parse the a<==>b form of if-then (using NEG instead of NAF)
+parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[IfPart,ThenPart],_If,_Ip),WS,DWS,Code,Status) :-
+	get_name(Funct,FL_NEGIFF),
+	!,
+	neg_iff(IfPart,ThenPart,WS,DWS,Code,Status).
 
 %% Parse the ~ meta predicate
 parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
@@ -3782,6 +3796,7 @@ parse_body_ifthenelse(CanoniTerm,WS,DWS,[],[],Code,Status) :-
 
 /*****************************************************************************
    leftNAF_implication(+IfPart,+ThenPart,+WS,+DWS,-Code,-Status)
+   naf_iff(+Left,+Right,+WS,+DWS,-Code,-Status)
    If-then expressed using <~~ (naf-implication)
 *****************************************************************************/
 leftNAF_implication(IfPart,ThenPart,WS,DWS,Code,Status) :-
@@ -3798,9 +3813,21 @@ leftNAF_implication(IfPart,ThenPart,WS,DWS,Code,Status) :-
 	).
 
 
+naf_iff(Left,Right,WS,DWS,Code,Status) :-
+	leftNAF_implication(Left,Right,WS,DWS,Code1,Status1),
+	leftNAF_implication(Right,Left,WS,DWS,Code2,Status2),
+	append(Status1,Status2,Status),
+	(Status == NO_ERRORS ->
+	    flconjunct_struct(Code1,Code2,Code)
+	; true
+	).
+
+
 /*****************************************************************************
    leftNEG_implication(+IfPart,+ThenPart,+WS,+DWS,-Code,-Status)
+   neg_iff(+Left,+Right,+WS,+DWS,-Code,-Status)
    If-then expressed using <== (neg-implication)
+   Also <==>
 *****************************************************************************/
 leftNEG_implication(IfPart,ThenPart,WS,DWS,Code,Status) :-
 	parse_rule_body(IfPart,WS,DWS,IfCode,Stat1),
@@ -3817,6 +3844,14 @@ leftNEG_implication(IfPart,ThenPart,WS,DWS,Code,Status) :-
 	    Status = Stat1
 	).
 
+neg_iff(Left,Right,WS,DWS,Code,Status) :-
+	leftNEG_implication(Left,Right,WS,DWS,Code1,Status1),
+	leftNEG_implication(Right,Left,WS,DWS,Code2,Status2),
+	append(Status1,Status2,Status),
+	(Status == NO_ERRORS ->
+	    flconjunct_struct(Code1,Code2,Code)
+	; true
+	).
 
 
 /****************************************************************************
