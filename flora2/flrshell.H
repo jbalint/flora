@@ -48,6 +48,7 @@
 :- import
 	flora_slash/1,
 	flora_concat_atoms/2,
+	flora_get_counter/2,
 	flora_set_counter/2,
 	flora_module_path_get/1,
 	flora_module_path_add/1,

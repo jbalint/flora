@@ -42,6 +42,21 @@ flora_shell_loop :-
 
 flora_shell_loop_body :-
 	(flora_banner_control(noprompt) ; flora_shell_prompt),
+	flora_process_shell_command(Status),
+	flora_loop_guard(Status).
+
+flora_embedded_shell_loop :-
+	flora_init_embedded_shell,
+	repeat,
+	catch(flora_embedded_shell_loop_body,
+	      Exception,
+	      flora_shell_loop_handler(Exception)).
+
+flora_embedded_shell_loop_body :-
+	flora_process_shell_command(Status),
+	flora_embedded_loop_guard(Status).
+
+flora_process_shell_command(Status) :-
 	flora_shell_command_line(Code,Options,Status),
 	( flora_good_command(Status) ->
 	    findall(SysLibOp,member(FLSYSLIB(SysLibOp),Options),SysLibList),
@@ -55,8 +70,7 @@ flora_shell_loop_body :-
 	    )
 	;
 	  true
-        ),
-	flora_loop_guard(Status).
+        ).
 
 
 flora_shell_loop_handler(Error) :-
@@ -174,14 +188,21 @@ flora_init_shell :-
 	flora_load_library(FLLIBDISPLAY),
 	flora_load_library(FLLIBIMPORTEDCALLS),
 	flora_load_library(FLLIBUNIFYHANDLERS),
-	flloadtrailer([FL_EQUALITY(NONE)],FLORA_DEFAULT_WORKSPACE),
+	(flora_get_counter(flora_rc_file_loaded,1) -> true
+	; flloadtrailer([FL_EQUALITY(NONE)],FLORA_DEFAULT_WORKSPACE)
+	),
 	(flora_banner_control(nobanner) ; flora_welcome_msg),
 	'_all',
 	'_chatter',
 	flora_set_counter(flora_shell_loaded,1),
+	flora_set_counter(flora_shell_first_loop,1),
 	flora_clear_runtime_uriprefixes,  %% just a precaution
 	!.
 
+flora_init_embedded_shell :-
+	flloadtrailer([FL_EQUALITY(NONE)],FLORA_DEFAULT_WORKSPACE),
+	'_all',
+	'_nochatter'.
 
 /*********************************************************************/
 flora_welcome_msg :-
@@ -197,6 +218,14 @@ flora_welcome_msg :-
 
 
 /*********************************************************************/
+%% On the first loop Flora gets []-list of tokens and returns no code
+%% with the noop status. This causes an extra prompt to be output.
+%% The flora_shell_first_loop trick eliminates this extra prompt.
+flora_shell_prompt :-
+	flora_get_counter(flora_shell_first_loop,1),
+	!,
+	flora_stdfdbk_string('~n'),
+	flora_set_counter(flora_shell_first_loop,0).
 flora_shell_prompt :- flora_stdfdbk_string('flora2 ?- ').
 
 
@@ -213,11 +242,17 @@ flora_loop_guard(Status) :-
 	    )
 	;
 	    %% We have to throw -- can't fail -- because we don't want
-	    %% backtracking over the executed goal. Instead, we want
+	    %% backtracking over the executed goals. Instead, we want
 	    %% to return to FLORA's top level
 	    throw(FLORA_TOP_LEVEL)
 	).
 
+flora_embedded_loop_guard(Status) :-
+	( flora_end_of_input(Status) ->
+	    throw(END_OF_FLORA_SHELL)
+	;
+	    throw(FLORA_TOP_LEVEL)
+	).
 
 /*********************************************************************/
 #mode save

@@ -28,6 +28,7 @@
 #include "flag_defs_xsb.h"
 %% must define it here because at this point the include path of gpp is not set
 #define FLORA_COMPILATION_COUNTER flora_compile_id
+#define FLORA_ABORT_NOTRACE       '_$flora_abort_notrace'
 
 :- import
 	flora_import_predicate/4
@@ -44,18 +45,21 @@
 	flora_user_module_registry/1
    from flrregistry.
 
-:- import flora_sysmod_file/3 from flrlibman.
 :- import flora_call_string_command/5 from flrcallflora.
 
 :- import
-	flora_abort/1,
+	flora_abort/2,
+	flora_file_op/2,
 	flora_concat_atoms/2,
 	flora_set_counter/2,
 	flora_get_counter/2,
 	flora_slash/1
    from flrporting.
 
-:- import flora_shell_loop/0 from usermod.
+:- import
+	flora_embedded_shell_loop/0,
+	flora_shell_loop/0
+   from usermod.
 
 :- import hide_this_show/2 from usermod.
 
@@ -64,6 +68,7 @@
 :- import search_module/6 from consult.
 
 :- import
+	getenv/2,
 	stat_set_flag/2,
 	slash/1
    from machine.
@@ -149,7 +154,9 @@ bootstrap_flora :-
 	[flrcommon_definitions],
 	[cc_config],
 	%% flrimportedcalls is used by flora_query, if called directly from XSB
-	[flrimportedcalls].
+	[flrimportedcalls],
+	consult(flrshell),
+	load_rc_file.
 
 bootstrap_flora.
 
@@ -171,6 +178,18 @@ flora_set_star_indexing_depth(X) :-
 	),
 	stat_set_flag(MAXTOINDEX_FLAG,XX).
 
+load_rc_file :-
+	machine:getenv('FLORA_RC_FILE',File),
+	flora_file_op(isplain,File),
+	flora_file_op(readable,File),
+	!,
+	flora_set_counter(flora_rc_file_loaded,1),
+	seeing(OldFile),
+	see(File),
+	flora_embedded_shell_loop,
+	see(OldFile).
+load_rc_file.
+
 /*****************************************************************************/
 unstrap_flora :-
 	flora_configuration(includedirs,IncludeDirs),
@@ -190,7 +209,6 @@ flora_shell :-
 	notrace,
 	( flora_get_counter(flora_shell_loaded,1), !
 	;
-	  consult(flrshell),
 	  flora_shell_loop
 	).
 
@@ -241,14 +259,16 @@ flora_shell :-
 '_flimport'(as(What,from(AsWhat,FileMod))) :-
 	!,
 	process_import_statement(What,AsWhat,FileMod).
-'_flimport'(X) :- flora_abort(['Invalid _flimport syntax: ', X]).
+'_flimport'(X) :- flora_abort(['Invalid _flimport syntax: ', X],
+			      FLORA_ABORT_NOTRACE).
 
 process_import_statement(What,AsWhat,FileMod) :-
 	(atom(FileMod)  % in this case FileMod is a module name
 	-> ('_isloaded'(FileMod)
 	   -> flora_import_predicate(What,AsWhat,_,FileMod)
 	   ;  flora_abort(['Trying to import hilog predicate ', What,
-		     ' from a nonloaded FLORA-2 module ', FileMod])
+			   ' from a nonloaded FLORA-2 module ', FileMod],
+			  FLORA_ABORT_NOTRACE)
 	   )
 	; FileMod = File>>Module 
 	-> flora_import_predicate(What,AsWhat,File,Module)
