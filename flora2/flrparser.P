@@ -1081,6 +1081,7 @@ fldelayquant_struct(Quant,Cond,Goal,Index,FLDELAYQUANTIFIER(Quant,Cond,Goal,Inde
 flhypothetical_struct(Op,Goal,Index,FLHYPOTHETICAL(Op,Goal,Index)).
 
 flload_struct(List,FLLOAD(List)).
+fladd_struct(List,FLADD(List)).
 
 flconstraint_struct(Constr,FLCONSTRAINT(Constr)).
 
@@ -1308,6 +1309,10 @@ clear_context(X) :-
 	!,
 	flora_set_counter(X,0).
 clear_context(_).
+
+flora_reset_parser :-
+	retractall(FLORA_INCLUDE_DEPENDENCY(_,_)),
+	flora_abolish_table_predicate(FLORA_INCLUDE_DEPENDENCY_CLOSURE(_,_)).
 
 
 /****************************************************************************
@@ -2918,17 +2923,18 @@ parse_gpp_markup(CanoniTerm,NO_ERRORS) :-
 
 parse_gpp_markup(CANOTERM(Funct,3,FL_PARENTHESIS,[Arg1,Arg2,Arg3],_If,_Ip),Status) :-
 	get_name(Funct,FLORA_GPP_MARKUP),
+	(flora_current_compile_filename(CurrFile,full) ; true),
 	!,
 	( ( get_name(Arg3,'') ->
 	      %% This is the top level file name. Reset line number.
 	      flora_reset_charpos
-
+	  
 	  ; get_name(Arg3,'1') ->
 	      %% This is the beginning of an included file.
 	      get_name(Arg2,FileName),
 	      %% This pushes new file on the file stack
 	      flora_begin_file(FileName)
-
+	  
 	  ; get_name(Arg3,'2') ->
 	      %% This is the end of an included file.
 	      get_integer(Arg1,LineNumber),
@@ -2936,6 +2942,10 @@ parse_gpp_markup(CANOTERM(Funct,3,FL_PARENTHESIS,[Arg1,Arg2,Arg3],_If,_Ip),Statu
 	      flora_end_file(LineNumber)
 	  ),
 	  Status = NO_ERRORS,
+	  (nonvar(CurrFile), nonvar(FileName) ->
+	      assert(FLORA_INCLUDE_DEPENDENCY(CurrFile,FileName))
+	  ; true
+	  ),
 	  !
 	;
 	  Status=[error(ERROR_GPP)]
@@ -4244,6 +4254,31 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,Code,Status) :-
 	    parsing_error(Ip,ERROR_WSNAME,Status)
 	).
 
+%% _load(...)
+parse_body_literal(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,_If,Ip),_DWS,Code,Status) :-
+	get_name(Funct,FL_LOAD),
+	!,
+	( Args == []
+	-> parsing_error(Ip,ERROR_LOADLIST,Status)
+	;
+	  parse_loadlist(Args,[],Ip,C,Status),
+	  (Status == NO_ERRORS -> flload_struct(C,Code)
+	  ; true
+	  )
+	).
+
+%% _add(...)
+parse_body_literal(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,_If,Ip),_DWS,Code,Status) :-
+	get_name(Funct,FL_ADD),
+	!,
+	( Args == []
+	-> parsing_error(Ip,ERROR_LOADLIST,Status)
+	;
+	  parse_loadlist(Args,[],Ip,C,Status),
+	  (Status == NO_ERRORS -> fladd_struct(C,Code)
+	  ; true
+	  )
+	).
 
 %% simple generic primitive like primName{Args}
 parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,_Ip),DWS,Code,Status) :-
@@ -4399,7 +4434,9 @@ parse_body_literal(CANOLIST(L,T,_N,I,_Ib),_DWS,Code,Status) :-
 	-> parsing_error(I,ERROR_LOADLIST,Status)
 	;
 	  parse_loadlist(L,T,I,C,Status),
-	  (Status == NO_ERRORS -> flload_struct(C,Code); true)
+	  (Status == NO_ERRORS -> flload_struct(C,Code)
+	  ; true
+	  )
 	).
 
 %% {...} at the top level -- constraint
@@ -7972,3 +8009,7 @@ merge_status([S|Rest],T) :-
 	; T = S
 	).
 
+FLORA_INCLUDE_DEPENDENCY_CLOSURE(X,Y) :- FLORA_INCLUDE_DEPENDENCY(X,Y).
+FLORA_INCLUDE_DEPENDENCY_CLOSURE(X,Y) :-
+	FLORA_INCLUDE_DEPENDENCY(X,Z),
+	FLORA_INCLUDE_DEPENDENCY_CLOSURE(Z,Y).

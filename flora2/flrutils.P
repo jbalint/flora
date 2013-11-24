@@ -109,15 +109,15 @@ flora_compile_add(OrigFile,Module) :-
 	!.
 
 /**********************************************************************
-  flora_add_module_dyn(+File,+Module)
+  flora_add_module_dyn(+File,+Module,+HostFile)
   File must be a FLORA file.
 **********************************************************************/
 %% standard variant:
-flora_add_module_dyn(OrigInFile,Module)  :- 
-	flora_add_module_dyn(OrigInFile,Module,print,_FileStatus,_ErrList).
+flora_add_module_dyn(OrigInFile,Module,HostFile)  :- 
+	flora_add_module_dyn(OrigInFile,Module,HostFile,print,_FileStatus,_ErrList).
 
 %% variant for external applications
-flora_add_module_dyn(OrigInFile,Module,ReportingType,FileStatus,ErrList) :-
+flora_add_module_dyn(OrigInFile,Module,HostFile,ReportingType,FileStatus,ErrList) :-
 	flora_check_filename(OrigInFile,InFile),
 	valid_flora_module_name(Module),
 	(\+ '_isloaded'(Module)
@@ -133,8 +133,8 @@ flora_add_module_dyn(OrigInFile,Module,ReportingType,FileStatus,ErrList) :-
 	),
 	get_user_program_maybe(InFile,File),
 	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
-	    (ReportingType == print -> flora_fladd(FlrFile,Module)
-	    ; flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList)
+	    (ReportingType == print -> flora_fladd(FlrFile,Module,HostFile)
+	    ; flora_fladd(FlrFile,Module,HostFile,ReportingType,FileStatus,ErrList)
 	    )
 	;
 	  flrfilename_error(InFile),
@@ -146,30 +146,33 @@ flora_add_module_dyn(OrigInFile,Module,ReportingType,FileStatus,ErrList) :-
 
 
 /**********************************************************************
-  flora_add_module_dyn(+File)
+  flora_add_module_dyn(+File,+HostFile)
   File must be a FLORA file.
 **********************************************************************/
-flora_add_module_dyn(InFile) :-
-	flora_add_module_dyn(InFile,FLORA_DEFAULT_WORKSPACE).
+flora_add_module_dyn(InFile,HostFile) :-
+	flora_add_module_dyn(InFile,FLORA_DEFAULT_WORKSPACE,HostFile).
 	
 
 /**********************************************************************
-  flora_load_module_util(+File,+Module,+ReportingType,-FileStatus,-ErrList)
+  flora_load_module_util(+OrigInFile,+Module,+HostFile) :-
+  flora_load_module_util(+OrigFile,+Module,+HostFile,+ReportingType,-FileStatus,-ErrList)
   ReportingType: expected print/list
   File must be a FLORA file.
+  HostFile: file from which File is loaded.
+            HostFile may be FL_SHELL_FICTITIOUS_FILENAME.
 **********************************************************************/
 %% standard variant:
-flora_load_module_util(OrigInFile,Module) :-
-	flora_load_module_util(OrigInFile,Module,print,_FileStatus,_ErrList).
+flora_load_module_util(OrigInFile,Module,HostFile) :-
+	flora_load_module_util(OrigInFile,Module,HostFile,print,_FileStatus,_ErrList).
 
 %% variant for external applications
-flora_load_module_util(OrigInFile,Module,ReportingType,FileStatus,ErrList) :-
+flora_load_module_util(OrigInFile,Module,HostFile,ReportingType,FileStatus,ErrList) :-
 	flora_check_filename(OrigInFile,InFile),
 	valid_flora_module_name(Module),
 	get_user_program_maybe(InFile,File),
 	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
-	    (ReportingType == print ->flora_flload(FlrFile,Module)
-	    ; flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList)
+	    (ReportingType == print ->flora_flload(FlrFile,Module,HostFile)
+	    ; flora_flload(FlrFile,Module,HostFile,ReportingType,FileStatus,ErrList)
 	    )
 	;
 	  flrfilename_error(InFile),
@@ -181,15 +184,22 @@ flora_load_module_util(OrigInFile,Module,ReportingType,FileStatus,ErrList) :-
 
 
 /**********************************************************************
-  flora_load_module_util(+File)
+  flora_load_module_util(+File,+HostFile)
+
+  HostFile: file from which File is loaded.
+            HostFile may be FL_SHELL_FICTITIOUS_FILENAME.
   File may be a FLORA file, Prolog file, or OBJ file.
+  This is why this predicate is more complicated than flora_load_module_util/3,
+  which expects only FLORA files.
 **********************************************************************/
-flora_load_module_util(OrigInFile) :-
+flora_load_module_util(OrigInFile,HostFile) :-
 	flora_check_filename(OrigInFile,InFile),
 	get_user_program_maybe(InFile,File),
 	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
-	    flora_flload(FlrFile,FLORA_DEFAULT_WORKSPACE)
+	    %% Load FLORA file
+	    flora_flload(FlrFile,FLORA_DEFAULT_WORKSPACE,HostFile)
 
+	%% Load Prolog file
 	; flora_locate_file(File,PROLOG_PFILE_EXT,PFile) ->
 	    flora_loader_msg_nl,
 	    flora_loader_message('Consulting ~w',[PFile]),
@@ -211,11 +221,13 @@ flora_load_module_util(OrigInFile) :-
 	    consult(PFile),
 	    flora_clear_xpp_options
 
+	%% Load OBJ file
 	; flora_locate_file(File,PROLOG_OBJFILE_EXT,OBJFile) ->
 	    flora_loader_msg_nl,
 	    flora_loader_message('Consulting ~w',[OBJFile]),
 	    consult(OBJFile)
 
+	%% The error cases
 	; parse_filename(File,_,_,Ext), 
           Ext \== '', Ext \== PROLOG_OBJFILE_EXT, Ext \== PROLOG_PFILE_EXT, Ext \== FLORA_FILE_EXT,
 	  flora_file_op(exists,File)
@@ -430,7 +442,7 @@ flora_compile_then_prolog_compile_add(FlrFile,Module) :-
 	util_addFLS_filename(FlrFile,FLSFile),
 	util_addFLS2_filename(FlrFile,FLS2File),
 	util_addFLT_filename(FlrFile,FLTFile),
-	util_addFTX_filename(FlrFile,FTXFile),
+	util_FTX_filename(FlrFile,FTXFile),
 	util_compile_file_add(FlrFile,Module,AddPFile,FDBFile,FLDFile,
 			      %%FLMFile,
 			      FLSFile,FLS2File,FLTFile,FTXFile,Status),
@@ -610,7 +622,7 @@ flora_load_system_module_util(Module) :-
 	    -> flora_add_xpp_options('-D FLORA_INCREMENTAL_TABLING ')
 	    ;  true
 	    ),
-	    update_load_registry(FlrFile,WSXWAMFile,Module,load),
+	    update_load_registry(FlrFile,WSXWAMFile,Module,FL_SHELL_FICTITIOUS_FILENAME,load),
 	    consult(WSXWAMFile),
 	    check_for_import_cyclicity,
 	    flora_clear_xpp_options
@@ -625,17 +637,17 @@ flora_load_system_module_util(Module) :-
 
 
 /*************************************************************************
-  flora_fladd(+FlrFile,+Module)
-  flora_fladd(+FlrFile,+Module,+ReportingType,-FileStatus,-ErrList)
+  flora_fladd(+FlrFile,+Module,+HostFile)
+  flora_fladd(+FlrFile,+Module,+HostFile,+ReportingType,-FileStatus,-ErrList)
   ReportingType: expected print/list
 
   Need to make sure the GPP options are cleared when this predicate is
   finished.
 *************************************************************************/
-flora_fladd(FlrFile,Module) :-
-	flora_fladd(FlrFile,Module,print,_FileStatus,_ErrList).
+flora_fladd(FlrFile,Module,HostFile) :-
+	flora_fladd(FlrFile,Module,HostFile,print,_FileStatus,_ErrList).
 
-flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
+flora_fladd(FlrFile,Module,HostFile,ReportingType,FileStatus,ErrList) :-
 	util_addP_filename(FlrFile,AddPFile),
 	util_addXWAM_filename(FlrFile,AddXWAMFile),
 	util_addFDB_filename(FlrFile,FDBFile),
@@ -645,11 +657,11 @@ flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 	util_addFLS_filename(FlrFile,FLSFile),
 	util_addFLS2_filename(FlrFile,FLS2File),
 	util_addFLT_filename(FlrFile,FLTFile),
-	util_addFTX_filename(FlrFile,FTXFile),
+	util_FTX_filename(FlrFile,FTXFile),
 
 	util_addWSXWAM_filename(FlrFile,Module,WSXWAMFile),
 	!,
-        (skip_loading(FlrFile,AddPFile,WSXWAMFile,Module) ->
+        (skip_loading(FlrFile,AddPFile,WSXWAMFile,Module,add) ->
 	    SkipRest = true,
 	    flora_loader_message('~w has been added to module ~w earlier',[FlrFile,Module])
 	; skip_recompile(FlrFile,AddPFile) -> flora_loader_msg_nl
@@ -697,7 +709,7 @@ flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 		),
 		  util_rename_file(AddXWAMFile,WSXWAMFile)
 	      ),
-	      update_load_registry(FlrFile,WSXWAMFile,Module,add),
+	      update_load_registry(FlrFile,WSXWAMFile,Module,HostFile,add),
 	      flora_measure_time(
 				 consult(WSXWAMFile),
 				 ['Done adding ', FlrFile, '. CPU time used:']
@@ -710,7 +722,8 @@ flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 
 
 /*************************************************************************
-  flora_flload(+FlrFile,+Module,+ReportingType,-FileStatus,-Status)
+  flora_flload(+FlrFile,+Module,+HostFile,+ReportingType,-FileStatus,-Status)
+  flora_flload(+FlrFile,+Module,+HostFile)
   Always succeeds, if there are errors FileStatus = FLORA_FAILURE
   ReportingType: print or list
 
@@ -718,11 +731,11 @@ flora_fladd(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
   finished.
 *************************************************************************/
 %% standard variant:
-flora_flload(FlrFile,Module) :-
-	flora_flload(FlrFile,Module,print,_FileStatus,_ErrList).
+flora_flload(FlrFile,Module,HostFile) :-
+	flora_flload(FlrFile,Module,HostFile,print,_FileStatus,_ErrList).
 
 %% variant for external applications
-flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
+flora_flload(FlrFile,Module,HostFile,ReportingType,FileStatus,ErrList) :-
 	util_mainP_filename(FlrFile,MPFile),
 	util_mainXWAM_filename(FlrFile,MainXWAMFile),
 	util_FDB_filename(FlrFile,FDBFile),
@@ -737,7 +750,7 @@ flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 
 	util_WSXWAM_filename(FlrFile,Module,WSXWAMFile),
 	!,
-        ( skip_loading(FlrFile,MPFile,WSXWAMFile,Module) ->
+        ( skip_loading(FlrFile,MPFile,WSXWAMFile,Module,load) ->
 	    SkipRest = true,
 	    flora_loader_message('~w has been loaded into module ~w earlier',[FlrFile,Module])
 	; skip_recompile(FlrFile,MPFile) -> flora_loader_msg_nl
@@ -785,7 +798,7 @@ flora_flload(FlrFile,Module,ReportingType,FileStatus,ErrList) :-
 		util_rename_file(MainXWAMFile,WSXWAMFile)
 	      ),
 	      flora_call_hooks(Module,LOADTOMODULE,FlrFile,before,AroundHookLink),
-	      update_load_registry(FlrFile,WSXWAMFile,Module,load),
+	      update_load_registry(FlrFile,WSXWAMFile,Module,HostFile,load),
 	      %% We clear out UDF preds before loading (NOT adding!) modules.
 	      %% See comment about this where flora_cleanup_udf/1 is defined.
 	      %% Note: cleaning up UDFs *cannot* be done from within
@@ -996,6 +1009,7 @@ util_hidden_aux_file_base(File,AuxBase) :-
   util_addFLS2_filename(+File,-FLS2File)
   util_addFLT_filename(+File,-FLTFile)
   util_addFTX_filename(+File,-FTXFile)  -- textual info for graphics support
+  util_addFPJ_filename(+File,-FPJFile)  -- #include file dependency
 *************************************************************************/
 util_addP_filename(File,AddPFile) :-
 	util_hidden_aux_file_base(File,AuxBase),
@@ -1040,10 +1054,17 @@ util_addFLT_filename(File,FLTFile) :-
 	util_hidden_aux_file_base(File,AuxBase),
 	flora_concat_atoms([AuxBase,'#for_add.',FLORA_FLT_EXT],FLTFile).
 
+/*
 %% identical to util_FTX_filename
 util_addFTX_filename(File,FTXFile) :-
 	util_hidden_aux_file_base(File,AuxBase),
 	flora_concat_atoms([AuxBase,'.',FLORA_FTX_EXT],FTXFile).	
+
+%% identical to util_FPJ_filename
+util_addFPJ_filename(File,FPJFile) :-
+	util_hidden_aux_file_base(File,AuxBase),
+	flora_concat_atoms([AuxBase,'.',FLORA_FPJ_EXT],FPJFile).	
+*/
 
 
 /*************************************************************************
@@ -1059,6 +1080,7 @@ util_addFTX_filename(File,FTXFile) :-
   util_WSXWAM_filename(+File,+WS,-WSXWAMFile)
   util_dump_filename(+File,-DFile)
   util_FTX_filename(+File,-FTXFile)   -- textual info for graphics support
+  util_FPJ_filename(+File,-FPJFile)  -- #include file dependency
 *************************************************************************/
 util_mainP_filename(File,MPFile) :-
 	util_hidden_aux_file_base(File,AuxBase),
@@ -1114,6 +1136,10 @@ util_FLT_filename(File,FLTFile) :-
 util_FTX_filename(File,FTXFile) :-
 	util_hidden_aux_file_base(File,AuxBase),
 	flora_concat_atoms([AuxBase,'.',FLORA_FTX_EXT],FTXFile).
+
+util_FPJ_filename(File,FPJFile) :-
+	util_hidden_aux_file_base(File,AuxBase),
+	flora_concat_atoms([AuxBase,'.',FLORA_FPJ_EXT],FPJFile).
 
 util_FLR_filename(File,FlrFile) :-
 	parse_filename(File,_,Base,_),
@@ -1355,6 +1381,7 @@ reset_modules_for_file(FullFileName) :-
 	flora_reset_lexer(FullFileName),
 	flora_reset_operator,
 	flora_reset_prolog,
+	flora_reset_parser,
 	flora_reset_compiler(file),
 	flora_set_counter(flora_shell_mode,0),
 	retractall(flora_compiler_environment(_,_)),
@@ -1382,7 +1409,7 @@ reset_modules_for_shell :-
 	flora_reset_compiler(shell),
 	flora_set_counter(flora_shell_mode,1),
 	retractall(flora_compiler_environment(_,_)),
-	assert(flora_compiler_environment(file,userin)),
+	assert(flora_compiler_environment(file,FL_SHELL_FICTITIOUS_FILENAME)),
 	(retract(util_stop_merging(true)) ; true),
 	!.
 
@@ -1482,6 +1509,8 @@ util_compile_file_add(InputFile,Module,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLT
 	    util_remove_file_carefully(FLSFile),
 	    util_remove_file_carefully(FLS2File),
 	    util_remove_file_carefully(FTXFile),
+	    util_FPJ_filename(InputFile,FPJFile),
+	    util_remove_file_carefully(FPJFile),
 	    util_WS_filename(PFile,FLORA_DEFAULT_WORKSPACE,PROLOG_OBJFILE_EXT,Main_XWAMfile),
 	    util_remove_file_carefully(Main_XWAMfile),
 	    util_WS_filename(DBFile,FLORA_DEFAULT_WORKSPACE,FLORA_FDB_EXT,Main_DBfile),
@@ -1526,6 +1555,7 @@ generate_code_add(CompiledRuleList,CompiledFactList,CompiledQueryList,CompiledLa
 	; FLTFileOrStatus = FLTFile
 	),
 	util_save_textual_info(TextualInfoList,FTXFile),
+	util_save_include_file_info(InputFile),
 	%%flora_divide_program(CompiledRuleList,RuleList,FactList),
 	sort(FileOptionList,FileOptions),
 	flora_measure_time(
@@ -1747,6 +1777,8 @@ util_compile_file(InputFile,Module,PFile,DBFile,FLDFile,FLMFile,FLSFile,FLS2File
 	    util_remove_file_carefully(FLSFile),
 	    util_remove_file_carefully(FLS2File),
 	    util_remove_file_carefully(FTXFile),
+	    util_FPJ_filename(InputFile,FPJFile),
+	    util_remove_file_carefully(FPJFile),
 	    util_WS_filename(PFile,FLORA_DEFAULT_WORKSPACE,PROLOG_OBJFILE_EXT,Main_XWAMfile),
 	    util_remove_file_carefully(Main_XWAMfile),
 	    util_WS_filename(DBFile,FLORA_DEFAULT_WORKSPACE,FLORA_FDB_EXT,Main_DBfile),
@@ -1792,6 +1824,7 @@ generate_code(CompiledRuleList,CompiledSigList,CompiledFactList,CompiledQueryLis
 	; FLTFileOrStatus = FLTFile
 	),
 	util_save_textual_info(TextualInfoList,FTXFile),
+	util_save_include_file_info(InputFile),
 	sort(FileOptionList,FileOptions),
 	flora_measure_time(
 			   generate_Pfile(PFile,
@@ -2083,7 +2116,7 @@ flora_loaddyn_data(OrigInFile,Module,Ext) :-
 	%% FLS2 files are usually absent
 	; Ext == FLORA_FLS2_EXT -> true
 	;
-	    flora_concat_atoms(['file ', InFileAbs, ' does not exist'], ErrMsg),
+	    flora_concat_atoms(['file ', InFileAbs, ' does not exist - recompile'], ErrMsg),
 	    flora_abort(ErrMsg,FLORA_ABORT_NOTRACE)
 	),
 	!.
@@ -4683,7 +4716,7 @@ flora_cleanup_registry(Module) :-
 	(retract(flora_defeasible_module_registry(Module,_)) -> true
 	; true
 	),
-	retractall(flora_load_registry(_,Module,_,_,_)),
+	retractall(flora_load_registry(_,Module,_,_,_,_)),
 	retractall(flora_imported_module_registry(Module,_)).
 
 flora_cleanup_udf(Module) :-
@@ -4838,6 +4871,25 @@ util_write_textual_info([TextInfo|TextualInfoList]) :-
 	write_canonical(TextInfo), put(CH_DOT), nl,
 	util_write_textual_info(TextualInfoList).
 
+util_save_include_file_info(FlrFile) :- %% does not matter which file is passed
+	util_FPJ_filename(FlrFile,FPJFile),
+	telling(OldFile),
+	tell(FPJFile),
+	flora_current_out_line('%% #include info for source file: ~w~n~n',
+			       [FlrFile]),
+	repeat,
+	(FLORA_INCLUDE_DEPENDENCY_CLOSURE(File,Included),
+	    write_canonical(FLORA_INCLUDE_PRJ_INFO(File,Included)),
+	    put(CH_DOT), nl,
+	    fail
+	%% the next write adds a dummy record -- just so
+	%% that we'll be able to always check if the file is loaded
+	; write_canonical(FLORA_INCLUDE_PRJ_INFO(FlrFile, FL_SHELL_FICTITIOUS_FILENAME)),
+	    put(CH_DOT), nl
+	),
+	told,
+	tell(OldFile).
+
 util_save_query_code(QueryList,Status) :-
 	flora_current_out_line('~n~n%%%%%%%%%%%%%%%%%%%%%%% Queries found in the source file %%%%%%%%%%%%%%%%%%%%%%%'),
 	flora_current_out_line('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%~n'),
@@ -4897,26 +4949,57 @@ load_textual_info(FTXFile) :-
 	Info = FL_TEXTUAL_INFO_PRED(_X,_Y,_Z,_U,_V,_W),
 	assert((Info :- storage_find_fact(flora_textual_info_trie,Info))).
 
-skip_loading(FlrFile,PFile,WSXWAMFile,Module) :-
-	flora_load_registry(FlrFile,Module,_,LoadModTime,load),
+skip_loading(FlrFile,PFile,WSXWAMFile,Module,Mode) :-
+	flora_load_registry(FlrFile,Module,_,LoadModTime,Mode,_),
 	flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
 	WSXWAMFileTime = LoadModTime,
 	flora_file_op(newerthan,WSXWAMFile,FlrFile),
 	flora_file_op(newerthan,WSXWAMFile,PFile),
-	skip_recompile(FlrFile,PFile).
+	skip_recompile(FlrFile,PFile),
+	\+ dependent_file_changed(FlrFile),
+	\+ included_file_changed(FlrFile,PFile).
 
 skip_recompile(FlrFile,PFile) :-
 	util_file_newerthan(PFile,FlrFile),
 	user_patch_file(UsrPatchFile),
-	util_file_newerthan(PFile,UsrPatchFile).
+	util_file_newerthan(PFile,UsrPatchFile),
+	\+ included_file_changed(FlrFile,PFile).
 
-%% update_load_registry(+FlrFile,+WSXWAMFile,+Module,+Mode)
+%% is there a load-dependent file that changed since loading?
+dependent_file_changed(FlrFile) :-
+	flora_load_deps_closure(FlrFile,Dependent),
+	flora_load_registry(Dependent,_Module,_,DependentLoadTime,_Mode,_),
+	flora_file_op(modtime,Dependent,DependentModTime),
+	DependentModTime >= DependentLoadTime.
+
+%% is there a load-dependent file that changed since loading?
+%% if FPJFile or FTXFile files were deleted after compiling,
+%% then this will cause a recompile.
+%% If they were deleted after loading then no recompile.
+included_file_changed(FlrFile,PFile) :-
+	util_FPJ_filename(FlrFile,FPJFile),
+	(FLORA_INCLUDE_PRJ_INFO(FlrFile,_) -> true %% already loaded
+	; \+ flora_file_op(exists,FPJFile) -> true
+	; util_FTX_filename(FlrFile,FTXFile),
+	    \+ flora_file_op(exists,FTXFile) -> true
+	; load_dyn(FPJFile)
+	),
+	flora_file_op(modtime,PFile,PFileModTime),
+	!,
+	( %% PRJ file is stale - recompile
+	    \+ FLORA_INCLUDE_PRJ_INFO(FlrFile,_) -> true
+	; FLORA_INCLUDE_PRJ_INFO(FlrFile,Dependent),
+	    flora_file_op(modtime,Dependent,DependentModTime),
+	    DependentModTime >= PFileModTime
+	).
+
+%% update_load_registry(+FlrFile,+WSXWAMFile,+Module,+HostFile,+Mode)
 %% Mode: add/load
-update_load_registry(FlrFile,WSXWAMFile,Module,Mode) :-
+update_load_registry(FlrFile,WSXWAMFile,Module,HostFile,Mode) :-
 	flora_file_op(localname,FlrFile,ShortFlrFile),
 	flora_file_op(modtime,WSXWAMFile,WSXWAMFileTime),
-	retractall(flora_load_registry(FlrFile,Module,_,_,Mode)),
-	assert(flora_load_registry(FlrFile,Module,ShortFlrFile,WSXWAMFileTime,Mode)).
+	retractall(flora_load_registry(FlrFile,Module,_,_,Mode,HostFile)),
+	assert(flora_load_registry(FlrFile,Module,ShortFlrFile,WSXWAMFileTime,Mode,HostFile)).
 
 check_for_import_cyclicity :-
 	%% check for cyclic module import

@@ -27,6 +27,9 @@
 
 #include "flora_terms.flh"
 
+:- dynamic FLORA_INCLUDE_DEPENDENCY/2.
+:- table FLORA_INCLUDE_DEPENDENCY_CLOSURE/2.
+
 :- import
 	memberchk/2,
 	subset/2,
@@ -50,7 +53,7 @@
 :- import flora_error_line/2 from flrprint.
 
 :- import
-	%%flora_current_compile_filename/1,
+	flora_current_compile_filename/2,
 	flora_begin_file/1,
 	flora_end_file/1,
 	flora_reset_charpos/0
@@ -95,7 +98,13 @@
 	flora_simple_primitive/4
    from flrsimpleprimitive.
 
+:- import
+	flora_abolish_table_predicate/1
+   from flrtables.
+
 :- export
+	flora_reset_parser/0,
+	FLORA_INCLUDE_DEPENDENCY_CLOSURE/2,
 	flora_get_flatomvar_name/2,
 	flora_get_flatom_name/2,
 	flora_get_module_from_spec/3,

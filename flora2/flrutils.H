@@ -134,9 +134,14 @@
    from flrprolog.
 
 :- import
+	flora_reset_parser/0,
+	FLORA_INCLUDE_DEPENDENCY_CLOSURE/2,
 	flora_parse_term_external/3,
 	flora_parse/3
    from flrparser.
+
+:- import FLORA_INCLUDE_PRJ_INFO/2 from usermod.
+:- dynamic FLORA_INCLUDE_PRJ_INFO/2.
 
 :- import
 	flora_clear_compilation_permaoptions/0,
@@ -157,7 +162,6 @@
    from flrcompiler.
 
 :- import
-	%%flora_divide_program/3,
 	is_prquery/2,
 	is_prologliblit/4,
 	is_prologliblit/5,
@@ -181,8 +185,9 @@
 	flora_defined_udf_registry/6,
 	flora_modular_prolog_registry/3,
 	flora_defeasible_module_registry/2,
-	flora_load_registry/5,
+	flora_load_registry/6,
 	flora_module_import_closure/2,
+	flora_load_deps_closure/2,
 	flora_imported_module_registry/2,
 	flora_module_registry/1
    from flrregistry.
@@ -293,11 +298,19 @@
 	flora_compile_util/1,
 	flora_compile_util/2,
 	flora_compile_system_module/1,
-	flora_load_module_util/1,
+
 	flora_load_module_util/2,
-	flora_load_module_util/5,
+	flora_load_module_util/3,
+	flora_load_module_util/6,
         flora_save_module_util/1,
         flora_save_module_util/2,
+	
+	flora_add_module_dyn/2,
+	flora_add_module_dyn/3, 
+	flora_add_module_dyn/6,
+	flora_compile_add/2, 
+	flora_compile_add/1,
+
 	FL_DUMP/1,
 	flora_locate_file/3,
 	flloadtrailer/2,
@@ -335,12 +348,6 @@
 	flora_read_descriptor_metafacts_canonical_and_insert/0,
 	flora_load_system_module_util/1,
 	flora_measure_time/2,
-	
-	flora_add_module_dyn/1,
-	flora_add_module_dyn/2, 
-	flora_add_module_dyn/5,
-	flora_compile_add/2, 
-	flora_compile_add/1,
 
 	flora_read_then_parse/2,
 	flora_read_then_parse/3,

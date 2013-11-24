@@ -39,10 +39,10 @@
    from flrprint.
 
 :- import
-	flora_load_module_util/1,
 	flora_load_module_util/2,
-	flora_add_module_dyn/1,
+	flora_load_module_util/3,
 	flora_add_module_dyn/2,
+	flora_add_module_dyn/3,
 	flora_locate_file/3
    from flrutils.
 
@@ -58,11 +58,16 @@
 
 /********************************************************************/
 FLLIBLOAD([],_HostFile,_HostMod,_Rulenum) :- !.
-
 FLLIBLOAD([T|L],HostFile,HostMod,Location) :-
 	!,
 	flora_load_file(T,HostFile,HostMod,Location),
 	\+ (\+ FLLIBLOAD(L,HostFile,HostMod,Location)).
+
+FLLIBADD([],_HostFile,_HostMod,_Rulenum) :- !.
+FLLIBADD([T|L],HostFile,HostMod,Location) :-
+	!,
+	flora_load_file(FL_PLUS(T),HostFile,HostMod,Location),
+	\+ (\+ FLLIBADD(L,HostFile,HostMod,Location)).
 
 
 /*********************************************************************
@@ -88,12 +93,15 @@ flora_load_file(FL_PLUS(T),_,_,_) :-
 	fail.
 
 %% adding files to modules
-flora_load_file(FL_RIGHTTO(FL_PLUS(FileName),Workspace),_HostFile,_HostMod,_Location) :-
+flora_load_file(FL_PLUS(FL_RIGHTTO(FileName,Workspace)),HostFile,HostMod,_Location) :-
+	!,
+	flora_load_file(FL_RIGHTTO(FL_PLUS(FileName),Workspace),HostFile,HostMod,_Location).
+flora_load_file(FL_RIGHTTO(FL_PLUS(FileName),Workspace),HostFile,_HostMod,_Location) :-
 	!,
 	%% Don't check module overriding - we are adding rules
-	%%flora_check_module_overriding(FileName,Workspace,_HostFile,_HostMod,_Location),
+	%%flora_check_module_overriding(FileName,Workspace,HostFile,_HostMod,_Location),
 	( atom(Workspace) ->
-	    flora_add_module_dyn(FileName,Workspace)
+	    flora_add_module_dyn(FileName,Workspace,HostFile)
 	;
 	    flora_stderr_nl,
 	    ( var(Workspace) ->
@@ -108,12 +116,12 @@ flora_load_file(FL_RIGHTTO(FL_PLUS(FileName),Workspace),_HostFile,_HostMod,_Loca
 	    fail
         ).
 
-flora_load_file(FL_PLUS(T),_HostFile,_HostMod,_Location) :-
+flora_load_file(FL_PLUS(T),HostFile,_HostMod,_Location) :-
 	%% Don't check module overriding - we are adding rules
-	%%flora_check_module_overriding(T,FLORA_DEFAULT_WORKSPACE,_HostFile,_HostMod,_Location),
+	%%flora_check_module_overriding(T,FLORA_DEFAULT_WORKSPACE,HostFile,_HostMod,_Location),
 	(atom(T) ; P2H_CONVERSION(FL_URL(TT),T), atom(TT)),
 	!,
-	flora_add_module_dyn(T).
+	flora_add_module_dyn(T,HostFile).
 
 %% Replacing contents of modules
 flora_load_file(T,_,_,_) :-
@@ -127,7 +135,7 @@ flora_load_file(FL_RIGHTTO(FileName,Workspace),HostFile,HostMod,Location) :-
 	!,
 	flora_check_module_overriding(FileName,Workspace,HostFile,HostMod,Location),
 	( atom(Workspace) ->
-	    flora_load_module_util(FileName,Workspace)
+	    flora_load_module_util(FileName,Workspace,HostFile)
 	;
 	    flora_stderr_nl,
 	    ( var(Workspace) ->
@@ -146,7 +154,7 @@ flora_load_file(T,HostFile,HostMod,Location) :-
 	(atom(T) ; P2H_CONVERSION(FL_URL(TT),T), atom(TT)),
 	!,
 	flora_check_module_overriding(T,FLORA_DEFAULT_WORKSPACE,HostFile,HostMod,Location),
-	flora_load_module_util(T).
+	flora_load_module_util(T,HostFile).
 
 flora_load_file(X,_,_,_) :-
 	flora_stderr_nl,
@@ -161,7 +169,7 @@ flora_load_file(X,_,_,_) :-
 /***************************************************************************
   Don't allow a module to load into itself
 ***************************************************************************/
-flora_check_module_overriding(_LoadFile,_Workspace,userin,main,_Location) :-
+flora_check_module_overriding(_LoadFile,_Workspace,FL_SHELL_FICTITIOUS_FILENAME,main,_Location) :-
 	!.
 
 %% Don't do the check if we are loading a prolog module

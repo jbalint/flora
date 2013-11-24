@@ -164,6 +164,7 @@ is_fldelayquant(FLDELAYQUANTIFIER(Quant,Condition,Goal,Index),
 is_flhypothetical(FLHYPOTHETICAL(Op,Goal,Index),Op,Goal,Index).
 
 is_flload(FLLOAD(LoadList),LoadList).
+is_fladd(FLADD(LoadList),LoadList).
 
 is_flconstraint(FLCONSTRAINT(ConstrBody),ConstrBody).
 
@@ -5881,9 +5882,10 @@ make_symbol_context_status(_,_,_,_,_,_,_,_,_,_,_,NO_ERRORS).
 
 
 /****************************************************************************
-  compile_load(+LoadList,-Code,-Status)
+  compile_load(+LoadList,+Mode,-Code,-Status)
+  Mode: FL_LOAD/FL_ADD
 ****************************************************************************/
-compile_load(LoadList,Code,Status) :-
+compile_load(LoadList,Mode,Code,Status) :-
 	is_fllist(LoadList,L,T,I),
 	%% since complex terms aren't allowed in load lists, we ignore OidCode
 	compile_body_list_obj(L,T,I,FL_THISMODULE,ObjList,_OidCode,OCode,[],Status),
@@ -5891,7 +5893,7 @@ compile_load(LoadList,Code,Status) :-
 	    thismodule_struct(Mod),
 	    %% This is the file being compiled
 	    (flora_compiler_environment(file,ProgramFile), !
-	    ; ProgramFile=userin
+	    ; ProgramFile=FL_SHELL_FICTITIOUS_FILENAME
 	    ),
 	    %% "I" is a token index
 	    flora_nth_token(I,Token),
@@ -5901,7 +5903,10 @@ compile_load(LoadList,Code,Status) :-
 	    %% that loading of a file doesn't override the program
 	    %% in which the loading statement occurs
 	    list_struct([BLN,BCN],[],PositionCode),
-	    florasyslib_struct(I,FLLIBLOAD,
+	    (Mode == FL_LOAD -> Library = FLLIBLOAD
+	    ; Library = FLLIBADD
+	    ),
+	    florasyslib_struct(I,Library,
 			       4,
 			       [ObjList,ProgramFile,Mod,PositionCode],LCode),
 	    conjunct_struct(OCode,LCode,Code)
@@ -6495,7 +6500,12 @@ compile_body_literal(ParserTerm,WS,OidCode,BodyLitCode,BodyFrontList,Status) :-
 	    OidCode=NULL
 
 	; is_flload(ParserTerm,LoadList) ->
-	    compile_load(LoadList,WSCode,Status),
+	    compile_load(LoadList,FL_LOAD,WSCode,Status),
+	    BodyFrontList = [],
+	    OidCode=NULL
+
+	; is_fladd(ParserTerm,LoadList) ->
+	    compile_load(LoadList,FL_ADD,WSCode,Status),
 	    BodyFrontList = [],
 	    OidCode=NULL
 

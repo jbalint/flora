@@ -68,6 +68,7 @@
 	flora_end_file/1,
         flora_compile_filename_by_token/2,
 	flora_current_compile_filename/1,
+	flora_current_compile_filename/2,
 	is_alpha/1,
 	is_alpha_or_underscore/1,
 	is_digit/1,
