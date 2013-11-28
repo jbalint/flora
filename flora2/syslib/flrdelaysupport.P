@@ -334,11 +334,19 @@ flora_execute_delayed_calls(InstantiatedBodyVars,HeadVars) :-
 %% scan all vars repeatedly, eliminating attributed vars,
 %% until no more attributed vars left. Execute attached triggers on the way.
 extract_triggers_and_execute_all(AllVars,HeadVars) :-
+	ground(AllVars),
+	!.
+extract_triggers_and_execute_all(AllVars,HeadVars) :-
 	is_acyclic(AllVars),
+	extract_triggers_and_execute_all_aux(AllVars,HeadVars).
+extract_triggers_and_execute_all_aux(AllVars,HeadVars) :-
 	flrterm_vars_split(AllVars, RegVars, AttrVars,0), %% 1: ignore vars in negation
 	(AttrVars == [] -> true
 	; extract_triggers_and_execute(AttrVars,HeadVars),
-	    extract_triggers_and_execute_all(RegVars,HeadVars)
+	    %% Note: we do need to check non-attributed RegVars because after
+	    %% extract_triggers_and_execute/2 on AttrVars some RegVars may
+	    %% become attributed! E.g., test 11 in delaytests/test_delays.flr
+	    extract_triggers_and_execute_all_aux(RegVars,HeadVars)
 	).
 
 extract_triggers_and_execute([],_HeadVars) :- !.
@@ -349,7 +357,7 @@ extract_triggers_and_execute([Var|RestBodyVars],HeadVars) :-
 	extract_triggers_and_execute(RestBodyVars,HeadVars).
 
 get_var_triggers(Var,HeadVars,Triggers) :-
-	(aliased_to_head(Var,HeadVars) -> Triggers = []
+	(aliased_to_head(HeadVars,Var) -> Triggers = []
 	; get_attr(Var,flrwhen,Triggers)
 	->  %% remove attrs to avoid delayed lit calling itself repeatedly
 	    %% during its own work (eg, if it instantiates a when-variable)
@@ -358,8 +366,8 @@ get_var_triggers(Var,HeadVars,Triggers) :-
 	),
 	!.
 
-aliased_to_head(V,[H|_HV]):- V == H, !.
-aliased_to_head(V,[_|H]):- aliased_to_head(V,H).
+aliased_to_head([H|_HV],V):- V == H, !.
+aliased_to_head([_|H],V):- aliased_to_head(V,H).
 
 call_trigger_list([]) :- !.
 /*

@@ -169,7 +169,7 @@ if test -f "$RES_FILE"; then
 fi
 
 
-LOG_FILE_SIZE=4000000
+LOG_FILE_SIZE=500000
 if test -f "$LOG_FILE"; then
     LOG_FILE_SIZE=$(stat -c %s "$LOG_FILE")
     echo "There was an old $LOG_FILE"
@@ -178,8 +178,8 @@ if test -f "$LOG_FILE"; then
 fi
 
 # if was broken in the middle, give a reasonable size
-if [ $(($LOG_FILE_SIZE < 3000000)) ]; then
-    LOG_FILE_SIZE=4000000
+if [ $(($LOG_FILE_SIZE < 300000)) ]; then
+    LOG_FILE_SIZE=400000
 fi
 
 
