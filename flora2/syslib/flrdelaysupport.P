@@ -34,7 +34,7 @@
 
 :- import
 	%%flrtrim_last/2,
-	%%flrground/1,
+	flrground_cyc/1,
 	flrterm_vars/3,
 	%% this one separates regular from attributed vars
 	flrterm_vars_split/4
@@ -333,14 +333,18 @@ flora_execute_delayed_calls(InstantiatedBodyVars,HeadVars) :-
 
 %% scan all vars repeatedly, eliminating attributed vars,
 %% until no more attributed vars left. Execute attached triggers on the way.
-extract_triggers_and_execute_all(AllVars,HeadVars) :-
-	ground(AllVars),
+%% We make this safe for cyclic terms to avoid user surprises
+extract_triggers_and_execute_all(AllVars,_HeadVars) :-
+	flrground_cyc(AllVars),
 	!.
+extract_triggers_and_execute_all(AllVars,_HeadVars) :-
+	is_cyclic(AllVars),
+	!,
+	fail.
 extract_triggers_and_execute_all(AllVars,HeadVars) :-
-	is_acyclic(AllVars),
 	extract_triggers_and_execute_all_aux(AllVars,HeadVars).
 extract_triggers_and_execute_all_aux(AllVars,HeadVars) :-
-	flrterm_vars_split(AllVars, RegVars, AttrVars,0), %% 1: ignore vars in negation
+	flrterm_vars_split(AllVars, RegVars, AttrVars,0), %% 1: ignore vars in negative lits
 	(AttrVars == [] -> true
 	; extract_triggers_and_execute(AttrVars,HeadVars),
 	    %% Note: we do need to check non-attributed RegVars because after

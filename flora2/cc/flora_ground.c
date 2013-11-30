@@ -74,6 +74,7 @@ inline static void term_vars_split(CPtr pterm,
 				   CPtr* pvars, CPtr* pvarstail,
 				   CPtr* pattrvars, CPtr* pattrvarstail,
 				   Integer ignore_negative);
+//extern xsbBool is_cyclic(CTXTdeclc Cell);
 
 #ifdef FG_DEBUG
 static char *pterm2string(CTXTdeclc prolog_term term);
@@ -202,6 +203,9 @@ DllExport xsbBool call_conv flrterm_vars_split (CTXTdecl)
   fprintf(stderr,"term_vars_split: pterm=%s\n", pterm2string(CTXTc pterm));
 #endif
 
+  /* we should really check for acyclicity while traversing pterm in
+     term_vars_split */
+  //if (is_cyclic(CTXTc (Cell) pterm)) return FALSE;
   term_vars_split((CPtr)pterm,
 		  (CPtr *)&vars, (CPtr*)&tail,
 		  (CPtr *)&attrvars, (CPtr*)&attrtail,
@@ -573,6 +577,7 @@ static char *pterm2string(CTXTdeclc prolog_term term)
 #endif
 
 
+// ask Terry what to do in the multi-threaded case here
 #ifndef MULTI_THREAD
 CTptr cycle_trail = 0;
 int cycle_trail_size = 0;

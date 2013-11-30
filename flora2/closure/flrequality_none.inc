@@ -129,7 +129,7 @@ FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,[Caller|_]) :-
 	        (
 	          X = Y
 		/*
-		; %% this delays WRAP_DIFFOBJEQL untol X or Y is bound
+		; %% this delays WRAP_DIFFOBJEQL until X or Y is bound
 		  FLLIBDELAYEDLITERAL(WRAP_DIFFOBJEQL,
 		                      NULL,NULL,
 		                      [X,Y,WRAP_DIFFOBJEQL(X,Y,Caller)])
