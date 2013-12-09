@@ -279,22 +279,22 @@ store_query_in_cache(QString,QCode,QArgs) :-
    There can be some uncertainty regarding the file if different files
    loaded into the same module happen to have a rule with the same local
    id and unifiable heads, so multiple results will be returned in this case.
-   This can be solved only by adding the file information to the tracing
-   argument of the Flora-2 calls, i.e., changing FL_TRACING/2 to FL_TRACING/4.
+   This can be solved only by adding the explicit file info to the tracing
+   arguments in FL_CONTEXT/3 in the Flora-2 calls.
    We didn't do it because even the current tracing info slows XSB by
-   a significant factor. So, adding file names to FL_TRACING/2 would
+   a significant factor. So, adding file names to FL_CONTEXT/3 would
    further slow it down.
 ******************************************************************************/
 traced_call(Goal,CalledRuleId,CalledFile,Module) :-
 	is_flora_callable_literal(Goal),
 	!,
-	flora_bind_last(Goal,CallerInfo),
+	flora_bind_last(Goal,FWContext),
 	(flora_decode_module_name(Goal,Module) -> true
 	; Module = NULL
 	),
-	CallerInfo = [CallingModule|_],
-	NewCallerInfo = [CallingModule|_],
-	flora_replace_last(Goal,NewCallerInfo,OutGoal),
+	FWContext = FL_CONTEXT(CallingModule,_,_),
+	NewFWContext = FL_CONTEXT(CallingModule,_,_),
+	flora_replace_last(Goal,NewFWContext,OutGoal),
 	call(OutGoal),
 	get_goal_caller_id(OutGoal,CalledRuleId),
 	(Module \= NULL,
@@ -307,8 +307,8 @@ traced_call(Goal,_,NULL,NULL) :-
 
 %% gets goal's rule id, if available, and the called-rule id
 get_goal_caller_id(Goal,CalledId) :-
-	flora_bind_last(Goal,CallerInfo),
-	(CallerInfo = [_Module,FL_TRACING(CalledId,_)] -> true
+	flora_bind_last(Goal,FWContext),
+	(FWContext = FL_CONTEXT(_Module,CalledId,_) -> true
 	; true
 	).
 

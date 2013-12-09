@@ -796,7 +796,7 @@ decode_update_literals([FLSYSDBUPDATE(Lit,_Storage,_Module)|T],[LitCode,Comma|TC
 	decode_literal_internal(Lit,LitCode,0,0),
 	(T == [] -> Comma = '' ; Comma = ', '),
 	decode_update_literals(T,TCode).
-decode_update_literals([FLSYSRULEUPDATE(Id,_,_DescrVarTerm,_,_DescrMetaFacts,Head,Body,_,_,_PreBody,_PostBody,_DefeatCond)|T],
+decode_update_literals([FLSYSRULEUPDATE(Id,_,_DescrVarTerm,_,_DescrMetaFacts,Head,Body,_,_,_DTvars,_H2BF,_H2BB,_PreBody,_PostBody,_DefeatCond)|T],
 		       [[RuleIdCode, HeadCode,' :- ', BodyCode],Comma|TCode])
       :-
 	!,
@@ -1149,7 +1149,7 @@ decode_literal_internal((NameOrVar FL_UNIVEQ Var),[NameCode,' = ?',Var],_Level,_
 	!.
 
 %% This occurs when you have hilog-lit@Module, where Module is a var
-decode_literal_internal(FLLIBMODLIT(HlgWrapper,Args,Module,_Caller),Code,Level,Depth) :-
+decode_literal_internal(FLLIBMODLIT(HlgWrapper,Args,Module,_FWContext),Code,Level,Depth) :-
 	(HlgWrapper == WRAP_NONTABLED_HILOG
 	; HlgWrapper == FLBodyPREFIX(WRAP_NONTABLED_HILOG)
 	),
@@ -1174,14 +1174,14 @@ decode_literal_internal(FLLIBMODLIT(HlgWrapper,Args,Module,_Caller),Code,Level,D
             Code = ['%',TCode]
         ).
 
-decode_literal_internal(FLLIBMODLIT(WRAP_NONTABLED_HILOG,Args,Module,_Caller),
-			[FLLIBMODLIT(WRAP_NONTABLED_HILOG,Args,Module,_Caller),
+decode_literal_internal(FLLIBMODLIT(WRAP_NONTABLED_HILOG,Args,Module,_FWContext),
+			[FLLIBMODLIT(WRAP_NONTABLED_HILOG,Args,Module,_FWContext),
 			 PlgCode],
 			_Level,_Depth) :-
 	!,
 	PlgCode = '@_prolog'.
 
-decode_literal_internal(FLLIBMODLIT(HlgWrapper,Args,Module,_Caller),Code,Level,Depth) :-
+decode_literal_internal(FLLIBMODLIT(HlgWrapper,Args,Module,_FWContext),Code,Level,Depth) :-
 	(HlgWrapper == WRAP_TABLED_HILOG, !
 	; HlgWrapper == FLNEGPREFIX(WRAP_TABLED_HILOG), !
 	; HlgWrapper == FLBodyPREFIX(WRAP_TABLED_HILOG), !
@@ -1203,8 +1203,8 @@ decode_literal_internal(FLLIBMODLIT(HlgWrapper,Args,Module,_Caller),Code,Level,D
 	    decode_tabled_hilog_call(Basename,ArgList,Module,Code,Level,Depth1)
 	).
 
-decode_literal_internal(FLLIBMODLIT(WRAP_TABLED_HILOG,Args,Module,_Caller),
-			[FLLIBMODLIT(WRAP_TABLED_HILOG,Args,Module,_Caller),
+decode_literal_internal(FLLIBMODLIT(WRAP_TABLED_HILOG,Args,Module,_FWContext),
+			[FLLIBMODLIT(WRAP_TABLED_HILOG,Args,Module,_FWContext),
 			 PlgCode],
 			_Level,_Depth) :-
 	!,
@@ -1212,7 +1212,7 @@ decode_literal_internal(FLLIBMODLIT(WRAP_TABLED_HILOG,Args,Module,_Caller),
 
 
 %% This occurs when you have ?X@..., i.e., the literal part is a variable
-decode_literal_internal(FLLIBMODLIT(LibmodWrap,Args,Module,_Caller),
+decode_literal_internal(FLLIBMODLIT(LibmodWrap,Args,Module,_FWContext),
 			[ReifyStart,Modifier,ArgCode,ModuleCode,ReifyEnd],
 			Level,Depth) :-
 	(LibmodWrap == FL_LIBMOD -> Modifier = '', !
@@ -1240,7 +1240,7 @@ decode_literal_internal(FLLIBMODLIT(LibmodWrap,Args,Module,_Caller),
 	).
 
 %% This occurs when you have flogic-lit@Module, where Module is a var
-decode_literal_internal(FLLIBMODLIT(Basename,Args,Module,_Caller),Code,Level,Depth) :-
+decode_literal_internal(FLLIBMODLIT(Basename,Args,Module,_FWContext),Code,Level,Depth) :-
 	!,
 	Depth1 is Depth+1,
 	%% Don't increment nesting level
@@ -1248,7 +1248,7 @@ decode_literal_internal(FLLIBMODLIT(Basename,Args,Module,_Caller),Code,Level,Dep
 
 
 %% This occurs when you have hilog-lit@Module, where Module is a var
-decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,_HeadBodyContext,WRAP_NONTABLED_HILOG,Args,Module,_Caller,ResultObj),
+decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,_HeadBodyContext,WRAP_NONTABLED_HILOG,Args,Module,_FWContext,ResultObj),
 			['(',ResCode,'=','${',Code,'})'],Level,Depth) :-
 	nonvar(Args),
 	!,
@@ -1265,7 +1265,7 @@ decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,_HeadBodyContext,WRAP_NONTA
 	),
 	decode_literal_internal(ResultObj,ResCode,1,Depth1).
 
-decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,WRAP_NONTABLED_HILOG,Args,Module,_Caller,ResultObj),
+decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,WRAP_NONTABLED_HILOG,Args,Module,_FWContext,ResultObj),
 			['(', ResCode,' = ${%',ArgCode,ModuleCode, '})'],_Level,Depth) :-
         !,
 	Depth1 is Depth+1,
@@ -1274,7 +1274,7 @@ decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,WRAP_NONTABLED_HILOG,Args,M
 	workspace_code(Module,ModuleCode).
 
 %% This occurs when you have hilog-lit@Module, where Module is a var
-decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,WRAP_TABLED_HILOG,Args,Module,_Caller,ResultObj),
+decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,WRAP_TABLED_HILOG,Args,Module,_FWContext,ResultObj),
 			['(', ResCode,'=','${',Code,'})'],Level,Depth) :-
 	nonvar(Args),
 	!,
@@ -1291,7 +1291,7 @@ decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,WRAP_TABLED_HILOG,Args,Modu
 	decode_literal_internal(ResultObj,ResCode,1,Depth1).
 
 
-decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,WRAP_TABLED_HILOG,Args,Module,_Caller,ResultObj),
+decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,WRAP_TABLED_HILOG,Args,Module,_FWContext,ResultObj),
 			['(', ResCode,' = ${',Lparen,ArgCode,Lparen,ModuleCode,'})'],_Level,Depth) :-
 	!,
 	Depth1 is Depth+1,
@@ -1304,7 +1304,7 @@ decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,WRAP_TABLED_HILOG,Args,Modu
 
 
 %% This occurs when you have X@..., i.e., the literal part is a variable
-decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,LibmodWrap,Args,Module,_Caller,ResultObj),
+decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,LibmodWrap,Args,Module,_FWContext,ResultObj),
 			['(',ResCode, '=', '${',Lparen,Modifier,ArgCode,Rparen,ModuleCode,'})'],
 			_Level,Depth) :-
 	(LibmodWrap == FL_LIBMOD -> Modifier = '', !
@@ -1323,7 +1323,7 @@ decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,LibmodWrap,Args,Module,_Cal
 	).
 
 %% This occurs when we have flogic-lit@Module, where Module is a var
-decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,Basename,Args,Module,_Caller,ResultObj),
+decode_literal_internal(FLLIBMODOBJ(_HeadBodyContext,Basename,Args,Module,_FWContext,ResultObj),
 			['(',ResCode,'=',Code,')'],_Level,Depth) :-
 	!,
 	Depth1 is Depth+1,
@@ -1592,7 +1592,7 @@ decode_literal_internal(call(Subcall),[ReifyStart,'call(',SubcallCode,')',ReifyE
 	Depth1 is Depth+1,
 	flora_decode_goal(Subcall,SubcallCode,Depth1).
 
-decode_literal_internal(FLSYSRULEUPDATE(Id,_,_DescrVarTerm,_,_DescrMetaFacts,Head,Body,_,_,_PreBody,_PostBody,_DefeatCond),
+decode_literal_internal(FLSYSRULEUPDATE(Id,_,_DescrVarTerm,_,_DescrMetaFacts,Head,Body,_,_,_DTvars,_H2BF,_H2BB,_PreBody,_PostBody,_DefeatCond),
 			[ReifyStart,RuleIdCode,HeadCode, ' :- ', BodyCode, ReifyEnd],
 			Level, Depth) :-
 	!,
@@ -1675,7 +1675,7 @@ decode_literal_internal(CallIn,Code,Level,Depth) :-
 	    ; Type == (neg_flogic)
 	    -> decode_negated_molecule(BasenameOrPred,Args,WS,Code,Level,Depth1)
 	    ; Type == (flora), length(Args,Arity),
-		%% need to get rid of the Caller argument
+		%% need to get rid of the FWContext argument
 		Arity1 is Arity-1,
 		((flora_modular_prlgdef(BasenameOrPred,Arity1)
 		 ; flora_modular_prlgdef(BasenameOrPred,Arity1,WS)
@@ -1685,7 +1685,7 @@ decode_literal_internal(CallIn,Code,Level,Depth) :-
 		),
 		decode_prolog_call([BasenameOrPred,Args1,Arity1],WS,Code,Depth1)
 	    ; Type == (neg_flora)
-	    -> %% need to get rid of the Caller argument
+	    -> %% need to get rid of the FWContext argument
 		length(Args,Arity), Arity1 is Arity-1, flrtrim_last(Args,Args1),
 		decode_prolog_call([neg(BasenameOrPred),Args1,Arity1],WS,Code,Depth1)
 	    ;	%% cannot decode

@@ -123,22 +123,22 @@ flora_storage_insertfacts_bt(ThisModuleName,[FLSYSDBUPDATE(P,StorageName,Module)
 
 %% FL_BTINSERT{X@M) where X is unbound
 %% also FL_BTINSERT{%X@M}  and FL_BTINSERT{neg X@M}
-flora_storage_insertfacts_bt(_ThisModuleName,[FLLIBMODLIT(Wrap,Var,_ModuleName1,_Caller)|_T]) :-
+flora_storage_insertfacts_bt(_ThisModuleName,[FLLIBMODLIT(Wrap,Var,_ModuleName1,_FWContext)|_T]) :-
         var(Var),
 	(Wrap == FL_LIBMOD ; Wrap == FL_NEGLIBMOD ; Wrap == FL_TRANSLIBMOD),
         !,
 	flora_abort(['uninstantiated argument in ',FL_BTINSERT,'{...}']).
 
-flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,(First,Rest),ModuleName1,Caller)|T]) :-
+flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,(First,Rest),ModuleName1,FWContext)|T]) :-
 	(Wrap == FL_LIBMOD ; Wrap == FL_NEGLIBMOD ; Wrap == FL_TRANSLIBMOD),
 	!,
-        flora_check_dynmod_type_consistency(FLLIBMODLIT(Wrap,(First,Rest),ModuleName1,Caller)),
+        flora_check_dynmod_type_consistency(FLLIBMODLIT(Wrap,(First,Rest),ModuleName1,FWContext)),
         ( First = FLLIBMODOBJ(_Ctxt,_F,_A,_MN,_C,O) ->
             First,
             ( O=FLLIBMODLIT(_,_,_,_) ->
                 flora_abort(['uninstantiated predicate in an argument positition in ',FL_BTINSERT,'{...}'])
             ;
-                flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,Rest,ModuleName1,Caller)])
+                flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,Rest,ModuleName1,FWContext)])
             )
         ;
             First = FL_COMMA(FLLIBMODOBJ(Ctxt,F,A,MN,C,O),MoreObj) ->
@@ -146,17 +146,17 @@ flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,(First,Rest),Modul
             ( O=FLLIBMODLIT(_,_,_,_) ->
                 flora_abort(['uninstantiated predicate in an argument positition in ',FL_BTINSERT,'{...}'])
             ;
-                flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,(MoreObj,Rest),ModuleName1,Caller)])
+                flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(Wrap,(MoreObj,Rest),ModuleName1,FWContext)])
             )
 	;
 	    flora_storage_insertfacts_bt(ThisModuleName,[First,Rest])
         ),
 	flora_storage_insertfacts_bt(ThisModuleName,T).
 
-flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(F,Args,ModuleName1,Caller)|T]) :-
+flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(F,Args,ModuleName1,FWContext)|T]) :-
 	!,
 	P2H_CONVERSION(ModuleName,ModuleName1),
-	(get_canonical_form(FLLIBMODLIT(F,Args,ModuleName,Caller), FLCANON(_,_,NewMod,P,_)) -> 
+	(get_canonical_form(FLLIBMODLIT(F,Args,ModuleName,FWContext), FLCANON(_,_,NewMod,P,_)) -> 
 	    flora_storage_check_module_name(NewMod)
 	;
 	    flora_decode_goal_as_atom(Args,AtomArgs),
@@ -176,10 +176,10 @@ flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODLIT(F,Args,ModuleName1,Call
 	flora_storage_insertfacts_bt(ThisModuleName,T)
 	).
 
-flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODOBJ(Ctxt,F,Args,ModuleName1,Caller,O)|T]) :-
+flora_storage_insertfacts_bt(ThisModuleName,[FLLIBMODOBJ(Ctxt,F,Args,ModuleName1,FWContext,O)|T]) :-
 	!,
 	P2H_CONVERSION(ModuleName,ModuleName1),
-	FLLIBMODOBJ(Ctxt,F,Args,ModuleName,Caller,O),
+	FLLIBMODOBJ(Ctxt,F,Args,ModuleName,FWContext,O),
         ( O=FLLIBMODLIT(_,_,_,_) ->
             flora_abort(['uninstantiated predicate in an argument positition in ',FL_BTINSERT,'{...}'])
         ;
@@ -292,7 +292,7 @@ FLLIBBTDELETE(ThisModuleName,[FLSYSDBUPDATE(P,StorageName,Module)],true) :-
 	flora_db_find_base(StorageName,P),
 	flora_internal_db_delete_bt(StorageName,P).
 
-FLLIBBTDELETE(ThisModuleName,[FLLIBMODLIT(Wrap,Var,ModuleName,_Caller)],true) :-
+FLLIBBTDELETE(ThisModuleName,[FLLIBMODLIT(Wrap,Var,ModuleName,_FWContext)],true) :-
         var(Var),
 	(Wrap == FL_LIBMOD ; Wrap == FL_NEGLIBMOD ; Wrap == FL_TRANSLIBMOD),
         %% FL_BTDELETE any predicate in ModuleName
@@ -381,7 +381,7 @@ FLLIBBTDELETEALL(ThisModuleName,[FLSYSDBUPDATE(P,StorageName,Module)],true) :-
         flora_check_export_registry(ThisModuleName,Module,P,FLEXPORT_UPDATABLE),
 	flora_storage_deleteall_bt(ThisModuleName,P,StorageName).
 
-FLLIBBTDELETEALL(ThisModuleName,[FLLIBMODLIT(Wrap,Var,ModuleName,_Caller)],true) :-
+FLLIBBTDELETEALL(ThisModuleName,[FLLIBMODLIT(Wrap,Var,ModuleName,_FWContext)],true) :-
         var(Var),
 	(Wrap == FL_LIBMOD ; Wrap == FL_NEGLIBMOD ; Wrap == FL_TRANSLIBMOD),
         %% FL_BTDELETE all predicates in Modulename
@@ -462,26 +462,26 @@ flora_bterase_facts(ThisModuleName,[H|Fs]) :-
 flora_bterase_one_fact(ThisModuleName,Fact,StorageName) :-
 	Fact =.. [Funct|Args],
 	( flora_is_flogic_wrapper(Funct,ModuleName,Base) ->
-	    ( Base == WRAP_ISA     -> Args=[O,_C,_Caller]
-	    ; Base == WRAP_SUB     -> Args=[O,_C,_Caller]
-	    ; Base == WRAP_MVD     -> Args=[_S,_A,O,_Caller]
-	    ; Base == WRAP_IMVD    -> Args=[_S,_IA,O,_Caller]
-	    ; Base == WRAP_METH    -> Args=[O,_M,_Caller]
-	    ; Base == WRAP_IMETH   -> Args=[O,_IM,_Caller]
-	    ; Base == WRAP_EXISTS  -> Args=[O,_Caller]
-	    ; Base == WRAP_MVDDEF  -> Args=[O,_A,_Caller]
-	    ; Base == WRAP_IMVDDEF -> Args=[O,_IA,_Caller]
-	    ; Base == WRAP_TRAN    -> Args=[O,_T,_Caller]
-	    ; Base == WRAP_MVDSIG  -> Args=[_S,_AS,O,_Caller]
-	    ; Base == WRAP_IMVDSIG -> Args=[_S,_IAS,O,_Caller]
-	    ; Base == WRAP_BOOLSIG  -> Args=[O,_A,_Caller]
-	    ; Base == WRAP_IBOOLSIG -> Args=[O,_IA,_Caller]
-	    ; Base == WRAP_TRANSIG  -> Args=[O,_A,_Caller]
-	    ; Base == WRAP_ITRANSIG -> Args=[O,_IA,_Caller]
-	    ; Base == WRAP_MVDCONDEF  -> Args=[_S,_AS,O,_O2,_Caller]
-	    ; Base == WRAP_IMVDCONDEF -> Args=[_S,_IAS,O,_O2,_Caller]
-	    ; Base == WRAP_MVDCON  -> Args=[_S,_AS,O,_O2,_Caller]
-	    ; Base == WRAP_IMVDCON -> Args=[_S,_IAS,O,_O2,_Caller]
+	    ( Base == WRAP_ISA     -> Args=[O,_C,_FWContext]
+	    ; Base == WRAP_SUB     -> Args=[O,_C,_FWContext]
+	    ; Base == WRAP_MVD     -> Args=[_S,_A,O,_FWContext]
+	    ; Base == WRAP_IMVD    -> Args=[_S,_IA,O,_FWContext]
+	    ; Base == WRAP_METH    -> Args=[O,_M,_FWContext]
+	    ; Base == WRAP_IMETH   -> Args=[O,_IM,_FWContext]
+	    ; Base == WRAP_EXISTS  -> Args=[O,_FWContext]
+	    ; Base == WRAP_MVDDEF  -> Args=[O,_A,_FWContext]
+	    ; Base == WRAP_IMVDDEF -> Args=[O,_IA,_FWContext]
+	    ; Base == WRAP_TRAN    -> Args=[O,_T,_FWContext]
+	    ; Base == WRAP_MVDSIG  -> Args=[_S,_AS,O,_FWContext]
+	    ; Base == WRAP_IMVDSIG -> Args=[_S,_IAS,O,_FWContext]
+	    ; Base == WRAP_BOOLSIG  -> Args=[O,_A,_FWContext]
+	    ; Base == WRAP_IBOOLSIG -> Args=[O,_IA,_FWContext]
+	    ; Base == WRAP_TRANSIG  -> Args=[O,_A,_FWContext]
+	    ; Base == WRAP_ITRANSIG -> Args=[O,_IA,_FWContext]
+	    ; Base == WRAP_MVDCONDEF  -> Args=[_S,_AS,O,_O2,_FWContext]
+	    ; Base == WRAP_IMVDCONDEF -> Args=[_S,_IAS,O,_O2,_FWContext]
+	    ; Base == WRAP_MVDCON  -> Args=[_S,_AS,O,_O2,_FWContext]
+	    ; Base == WRAP_IMVDCON -> Args=[_S,_IAS,O,_O2,_FWContext]
 	    )
 	;
 	  true

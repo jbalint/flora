@@ -34,84 +34,84 @@
 
 /* First, make sure that data types are handled quickly and not tabled */
 
-WRAP_OBJEQL(X,Y,_CallerInfo) :-
+WRAP_OBJEQL(X,Y,_FWContext) :-
 	%% when experimenting with subsumptive tabling, need to disable
 	%% attibuted vars, since their combo has not been implemented yet
 	%% Also replace equality with unification to simplify the tests
 	flrutils:flora_experimenting_with(no_attr_vars),
 	X=Y,
 	!.
-WRAP_OBJEQL(X,Y,_CallerInfo) :- (integer(X); integer(Y)), !, X=Y.
-WRAP_OBJEQL(X,Y,_CallerInfo) :-
+WRAP_OBJEQL(X,Y,_FWContext) :- (integer(X); integer(Y)), !, X=Y.
+WRAP_OBJEQL(X,Y,_FWContext) :-
         (flora_datatype_name(X,FL_INTEGER); flora_datatype_name(Y,FL_INTEGER)),
 	!,
 	X=Y.
-WRAP_OBJEQL(X,Y,_CallerInfo) :-
+WRAP_OBJEQL(X,Y,_FWContext) :-
         (flora_datatype_name(X,FL_LONG); flora_datatype_name(Y,FL_LONG)),
 	!,
 	X=Y.
-WRAP_OBJEQL(X,Y,_CallerInfo) :-
+WRAP_OBJEQL(X,Y,_FWContext) :-
         (flora_datatype_name(X,FL_STRING); flora_datatype_name(Y,FL_STRING)),
 	!,
 	X=Y.
-WRAP_OBJEQL(X,Y,_CallerInfo) :-
+WRAP_OBJEQL(X,Y,_FWContext) :-
         (flora_datatype_name(X,FL_IRI); flora_datatype_name(Y,FL_IRI)),
 	!,
 	X=Y.
-WRAP_OBJEQL(X,Y,_CallerInfo) :-
+WRAP_OBJEQL(X,Y,_FWContext) :-
         (flora_datatype_name(X,FL_BOOL); flora_datatype_name(Y,FL_BOOL)),
 	!,
 	X=Y.
 
 %% The rest of the axioms: transitivity, reflexivity, symmetry
-WRAP_OBJEQL(X,Y,_CallerInfo) :- X=Y.
-%%WRAP_OBJEQL(X,Y,_Caller) :- (nonvar(X); nonvar(Y)), X=Y.
-WRAP_OBJEQL(X,Y,[Caller|_]) :- WRAP_DIFFOBJEQL(X,Y,[Caller|_]).
+WRAP_OBJEQL(X,Y,_FWContext) :- X=Y.
+%%WRAP_OBJEQL(X,Y,_FWContext) :- (nonvar(X); nonvar(Y)), X=Y.
+WRAP_OBJEQL(X,Y,FL_CONTEXT(Caller,_,_)) :- WRAP_DIFFOBJEQL(X,Y,FL_CONTEXT(Caller,_,_)).
 
 %% WRAP_DIFFOBJEQL means X,Y are equal, but not identical
-WRAP_DIFFOBJEQL(X,Y,[Caller|_]) :-
-	FLTRAILERPREFIX(WRAP_OBJEQL)(X,Y,[Caller|_]),
+WRAP_DIFFOBJEQL(X,Y,FL_CONTEXT(Caller,_,_)) :-
+	FLTRAILERPREFIX(WRAP_OBJEQL)(X,Y,FL_CONTEXT(Caller,_,_)),
 	X \= Y.
 
-WRAP_DIFFOBJEQL(X,Y,[Caller|_]) :-
-	FLTRAILERPREFIX(WRAP_OBJEQL)(Y,X,[Caller|_]),
+WRAP_DIFFOBJEQL(X,Y,FL_CONTEXT(Caller,_,_)) :-
+	FLTRAILERPREFIX(WRAP_OBJEQL)(Y,X,FL_CONTEXT(Caller,_,_)),
 	X \= Y.
 
 %% transitivity of equality
-WRAP_DIFFOBJEQL(X,Y,[Caller|_]) :-
-	WRAP_DIFFOBJEQL(X,Z,[Caller|_]),
-	WRAP_DIFFOBJEQL(Z,Y,[Caller|_]),
+WRAP_DIFFOBJEQL(X,Y,FL_CONTEXT(Caller,_,_)) :-
+	WRAP_DIFFOBJEQL(X,Z,FL_CONTEXT(Caller,_,_)),
+	WRAP_DIFFOBJEQL(Z,Y,FL_CONTEXT(Caller,_,_)),
 	X \= Y.
 
 
 /* neg WRAP_OBJEQL  */
-FLNEGPREFIX(WRAP_OBJEQL)(X,Y,[Caller|_]) :-
-        FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,[Caller|_]).
+FLNEGPREFIX(WRAP_OBJEQL)(X,Y,FL_CONTEXT(Caller,_,_)) :-
+        FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,FL_CONTEXT(Caller,_,_)).
 
-FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,[Caller|_]) :-
-	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(X,Y,[Caller|_]),
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,FL_CONTEXT(Caller,_,_)) :-
+	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(X,Y,FL_CONTEXT(Caller,_,_)),
 	X \= Y.
 
-FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,[Caller|_]) :-
-	FLNEGPREFIX(WRAP_OBJEQL)(Y,X,[Caller|_]),
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,FL_CONTEXT(Caller,_,_)) :-
+	FLNEGPREFIX(WRAP_OBJEQL)(Y,X,FL_CONTEXT(Caller,_,_)),
 	X \= Y.
 
-FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,[Caller|_]) :-
-	FLTRAILERPREFIX(WRAP_SUB)(X,Y,[Caller|_]).
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,FL_CONTEXT(Caller,_,_)) :-
+	FLTRAILERPREFIX(WRAP_SUB)(X,Y,FL_CONTEXT(Caller,_,_)).
 
 /* neg WRAP_DIFFOBJEQL  */
 %% WRAP_DIFFOBJEQL means X,Y are unequal and not identical
-FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,[Caller|_]) :-
-	WRAP_DIFFOBJEQL(X,V,[Caller|_]),
-	WRAP_DIFFOBJEQL(Y,W,[Caller|_]),
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,FL_CONTEXT(Caller,_,_)) :-
+	WRAP_DIFFOBJEQL(X,V,FL_CONTEXT(Caller,_,_)),
+	WRAP_DIFFOBJEQL(Y,W,FL_CONTEXT(Caller,_,_)),
 	X \= Y,
-	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(V,W,[Caller|_]).
+	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(V,W,FL_CONTEXT(Caller,_,_)).
 
-FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,[Caller|_]) :-
-	WRAP_DIFFOBJEQL(X,V,[Caller|_]),
-	WRAP_DIFFOBJEQL(Y,W,[Caller|_]),
+FLNEGPREFIX(WRAP_DIFFOBJEQL)(X,Y,FL_CONTEXT(Caller,_,_)) :-
+	WRAP_DIFFOBJEQL(X,V,FL_CONTEXT(Caller,_,_)),
+	WRAP_DIFFOBJEQL(Y,W,FL_CONTEXT(Caller,_,_)),
 	X \= Y,
-	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(W,V,[Caller|_]).
+	FLNEGTRAILERPREFIX(WRAP_OBJEQL)(W,V,FL_CONTEXT(Caller,_,_)).
 
 
 /*

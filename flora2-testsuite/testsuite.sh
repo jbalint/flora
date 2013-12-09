@@ -177,9 +177,9 @@ if test -f "$LOG_FILE"; then
     rm -f $LOG_FILE
 fi
 
-# if was broken in the middle, give a reasonable size
-if [ $(($LOG_FILE_SIZE < 300000)) ]; then
-    LOG_FILE_SIZE=400000
+# if the tests were canceled in the middle, give a reasonable size estimate
+if [ $LOG_FILE_SIZE -le 450000 ]; then
+    LOG_FILE_SIZE=550000
 fi
 
 

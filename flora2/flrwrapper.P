@@ -273,7 +273,7 @@ flora_get_symbol_module(Funct,Module) :-
   flora_is_transactional_wrapper(+Wrap)
 *****************************************************************************/
 flora_is_neg_wrapper(Wrapper) :-
-	flora_match_substring(FL_NEGPREFIX,Wrapper,forward,0,_).
+	flora_match_substring(FL_NEGPREFIX,Wrapper,forward,_,_).
 
 flora_is_transactional_wrapper(WRAP_NONTABLED_HILOG) :- !.
 flora_is_transactional_wrapper(FLBodyPREFIX(WRAP_NONTABLED_HILOG)) :- !.
@@ -447,7 +447,7 @@ flora_decode_predicate(Call,CallType,ModuleName,
 	    WrapPrefix=FL_EMPTYPREFIX,
 	    WrapBase=Wrapper
         ),
-	(flora_match_substring(FL_NEGPREFIX,WrapPrefix,forward,0,_)
+	(flora_match_substring(FL_NEGPREFIX,WrapPrefix,forward,_,_)
 	-> Negated = yes
 	; Negated = no
 	),
@@ -567,7 +567,7 @@ flora_canonic_wrapper_symbol(Wrap,Canonic) :-
 	flora_get_substring(Wrap,S,-1,Base),
 	flora_is_base_wrapper(Base),
 	!,
-	(flora_match_substring(FL_NEGPREFIX,Wrap,forward,0,_)
+	(flora_match_substring(FL_NEGPREFIX,Wrap,forward,_,_)
 	-> negate_wrapper(Base,Canonic)
 	; Canonic = Base
 	).
@@ -672,9 +672,20 @@ flora_module_name_error(ModuleName) :-
 	flora_abort([ModuleName, ': Invalid FLORA-2 module name']).
 
 negate_wrapper(Wrap,NegWrap) :-
-	(flora_match_substring(FL_NEGPREFIX,Wrap,forward,0,End)
-	-> flora_get_substring(Wrap,End, -1,NegWrap)
-	; flora_concat_atoms([FL_NEGPREFIX,Wrap],NegWrap)
+	(flora_match_substring(FL_NEGPREFIX,Wrap,forward,Beg,End)
+	%% Wrap is negative
+	-> flora_get_substring(Wrap,End, -1,BaseWrap),
+	    flora_get_substring(Wrap,0,Beg,Prefix),
+	    flora_concat_atoms([Prefix,BaseWrap],NegWrap)
+	; %% Wrap is positive, with a dyna^, dynz^ prefix
+	    (flora_match_substring(FL_DYNAPREFIX,Wrap,forward,0,End)
+	    ; flora_match_substring(FL_DYNZPREFIX,Wrap,forward,0,End)
+	    )
+	-> flora_get_substring(Wrap,0,End,Prefix),
+	    flora_get_substring(Wrap,End,-1,BaseWrap),
+	    flora_concat_atoms([Prefix,FL_NEGPREFIX,BaseWrap],NegWrap)
+	%% Wrap is positive, without dyna^, dynz^ prefixes
+	;  flora_concat_atoms([FL_NEGPREFIX,Wrap],NegWrap)
 	),
 	!.
 
@@ -691,10 +702,10 @@ negate_predicate(Pred,NPred) :-
 	    flora_module_predicate(NWrap,ArgL,ModName,NPred)
 	;
 	    %% FLLIBMODLIT(FL_LIBMOD,...) or FLLIBMODLIT(FL_NEGLIBMOD,...)
-	    Pred = FLLIBMODLIT(Subwrapper,Arg,ModName,Caller),
+	    Pred = FLLIBMODLIT(Subwrapper,Arg,ModName,FWContext),
 	    memberchk(Subwrapper,[FL_LIBMOD,FL_NEGLIBMOD]),
 	    negate_wrapper(Subwrapper,NSubwrapper),
-	    NPred = FLLIBMODLIT(NSubwrapper,Arg,ModName,Caller)
+	    NPred = FLLIBMODLIT(NSubwrapper,Arg,ModName,FWContext)
 	).
 
 
@@ -749,6 +760,10 @@ flora_unscramble_atom(Scrambled,Unscrambled) :-
 
 %% Prepend FLORA_MODULE_PREFIX, ', Module,' to argument
 %% same as flora_module_predicate_symbol
+flora_modularize_atom(PRDYNMODATOM(Atom),Module,Prefixed) :-
+	!,
+	fmt_write_string(Prefixed,'%s''%s''%s%s',
+			 args(FLORA_MODULE_PREFIX,Module,FL_DYNZPREFIX,Atom)).
 flora_modularize_atom(Atom,Module,Prefixed) :-
 	fmt_write_string(Prefixed,'%s''%s''%s',
 			 args(FLORA_MODULE_PREFIX,Module,Atom)).

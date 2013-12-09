@@ -41,7 +41,7 @@
 #define NEWVAR	        	 newvar
 #define NEWDONTCAREVAR	       	 newdontcarevar
 #define NEWQUANTIFIEDVAR       	 newquantvar
-#define NEWCALLERVAR	       	 newcallervar
+#define NEWFLCONTEXTVAR	       	 newcontextvar
 #define SKOLEMSYMVAR	       	 skolemsymvar
 #define NEWUDFPREDVAR	         newudfpredvar
 #define NEWPREDICATE_COUNTER   	 '_$$''''global_newpredicate_counter'
@@ -641,42 +641,38 @@ is_prdisjunct(PROR(L,R),L,R).
 ****************************************************************************/
 conjunct_struct(Goal1,Goal2,Goal2) :-
 	%% NULL and FL_TRUE are both dummy code that is ignored
-	nonvar(Goal1),
-	ignore_null_and_true(Goal1),
+	ignore_var_null_true(Goal1),
 	!.
 conjunct_struct(Goal1,Goal2,Goal1) :-
-	nonvar(Goal2),
-	ignore_null_and_true(Goal2),
+	ignore_var_null_true(Goal2),
 	!.
 conjunct_struct(Goal1,Goal2,PRAND(Goal1,Goal2)).
 
 disjunct_struct(Goal1,Goal2,Goal2) :-
 	%% NULL and FL_FALSE are both dummy code that is ignored
-	nonvar(Goal1),
-	ignore_null_and_false(Goal1),
+	ignore_var_null_false(Goal1),
 	!.
 disjunct_struct(Goal1,Goal2,Goal1) :-
-	nonvar(Goal2),
-	ignore_null_and_false(Goal2),
+	ignore_var_null_false(Goal2),
 	!.
 disjunct_struct(Goal1,Goal2,PROR(Goal1,Goal2)).
 
 strong_conjunct_struct(Goal1,Goal2,Goal2) :-
 	%% NULL and FL_TRUE are both dummy code that is ignored
-	nonvar(Goal1),
-	ignore_null_and_true(Goal1),
+	ignore_var_null_true(Goal1),
 	!.
 strong_conjunct_struct(Goal1,Goal2,Goal1) :-
-	nonvar(Goal2),
-	ignore_null_and_true(Goal2),
+	ignore_var_null_true(Goal2),
 	!.
 strong_conjunct_struct(Goal1,Goal2,PRBAND(Goal1,Goal2)).
 
-ignore_null_and_true(NULL) :- !.
-ignore_null_and_true(FL_TRUE) :- !.
+ignore_var_null_true(V) :- var(V), !.
+ignore_var_null_true(NULL) :- !.
+ignore_var_null_true(FL_TRUE) :- !.
 
-ignore_null_and_false(NULL) :-!.
-ignore_null_and_false(FL_FALSE).
+ignore_var_null_false(V) :- var(V), !.
+ignore_var_null_false(NULL) :-!.
+ignore_var_null_false(FL_FALSE).
 
 quantifier_struct(QuantifierType,FormCode,QuantVarObjs,FreVarObjs,
 		  PRQUANTIFIER(QuantifierType,FormCode,QuantVarObjs,FreVarObjs)).
@@ -817,7 +813,7 @@ neg_struct(Goal,_Idx,Code,[]) :-
 	    (is_pratom(WS,Mod,_) ; is_prbuiltin_identifier(WS,Mod,_))
 	->
 	    %% to check if this is a negatable prolog, reduce arity by 1:
-	    %% modularized prolog has one extra caller argument
+	    %% modularized prolog has one extra FL_CONTEXT argument
 	    Arity1 is Arity-1,
 	    flora_negatable_prlgdef(Atom,Arity1,NegAtm),
 	    modularized_pratom_struct(NegAtm,Mod,Idx,FCode),
@@ -826,7 +822,7 @@ neg_struct(Goal,_Idx,Code,[]) :-
 	    is_modularized_pratom(Struct,Atom,Idx)
 	->
 	    %% to check if this is a negatable prolog, reduce arity by 1:
-	    %% modularized prolog has one extra caller argument
+	    %% modularized prolog has one extra FL_CONTEXT argument
 	    Arity1 is Arity-1,
 	    flora_negatable_prlgdef(Atom,Arity1,NegAtm),
 	    modularized_pratom_struct(NegAtm,Idx,FCode),
@@ -848,11 +844,11 @@ neg_struct(Goal,_Idx,Code,[]) :-
 	    has_context(goal_reification)
 	-> % When variable is negated under ~, as in ?X ~ neg ?Y.
 	    thismodule_struct(ThisModule),
-	    body_caller_info_structure(ThisModule,CallerInfo),
+	    body_context_info_structure(ThisModule,FWContext),
 	    %% ...:-...,neg ?X, is compiled into
-	    %%    FLLIBMODLIT(neg_libmod_wrapper,X,FL_INVALIDMODULE,CallerInfo)
+	    %%    FLLIBMODLIT(neg_libmod_wrapper,X,FL_INVALIDMODULE,FWContext)
 	    atomobj_struct(FL_INVALIDMODULE,Mod),
-	    florasyslib_struct(Idx,FLNEGLIBMODLIT,3,[Goal,Mod,CallerInfo],Code)
+	    florasyslib_struct(Idx,FLNEGLIBMODLIT,3,[Goal,Mod,FWContext],Code)
 	;   Code = PRNEG(Goal)
 	).
 
@@ -864,7 +860,7 @@ head_neg_struct(Goal,Idx,Code,Status) :-
 	%% where the second conjunct is a cardinality constraint in a signature.
 	%% In the latter case, the constraint is ignored.
 	%% Any other conjunction is an error.
-	conjunct_struct(Goal1,Goal2,Goal),
+	is_prconjunct(Goal,Goal1,Goal2),
 	ignorable_negated_head_conjunct(Goal2),
 	!,
 	head_neg_struct(Goal1,Idx,Code,Status).
@@ -882,12 +878,13 @@ head_neg_struct(Goal,_Idx,NegGoal,[]) :-
 	is_prologterm(Goal,Struct,Arity,Args),
 	is_modularized_pratom(Struct,Atom,Idx),
 	%% to check if this is a negatable prolog, reduce arity by 1:
-	%% modularized prolog has one extra caller argument
+	%% modularized prolog has one extra FL_CONTEXT argument
 	Arity1 is Arity-1,
-	flora_negatable_prlgdef(Atom,Arity1,NegAtm),
-	modularized_pratom_struct(NegAtm,Idx,FCode),
+	flora_negatable_prlgdef(Atom,Arity1,NegAtom),
+	modularized_pratom_struct(NegAtom,Idx,FCode),
 	prologterm_struct(FCode,Arity,Args,NegGoal),
 	!.
+%% normal case
 head_neg_struct(Goal,_Idx,PRNEG(Goal),[]) :-
 	is_head_neg_negatable_literal(Goal),
 	!.
@@ -896,9 +893,9 @@ head_neg_struct(Goal,Idx,Code,[]) :-
 	is_prvariable(Goal,_VarName,_Idx),
 	!,
 	%% When variable is neg-negated (inside an update op)
-	head_caller_info_structure(CallerInfo),
+	head_context_info_structure(FWContext),
 	atomobj_struct(FL_INVALIDMODULE,Mod),
-	florasyslib_struct(Idx,FLNEGLIBMODLIT,3,[Goal,Mod,CallerInfo],Code).
+	florasyslib_struct(Idx,FLNEGLIBMODLIT,3,[Goal,Mod,FWContext],Code).
 
 head_neg_struct(Goal,_Idx,Code,[]) :-
 	is_florasyslib_struct(Goal,Idx,FLNEGLIBMODLIT,N,Args),
@@ -979,23 +976,32 @@ disjunct_code([Goal|GList],ConjGoal) :-
 %% atomobj_struct/2
 atomobj_struct(FLATOM(Atm,I),PRATOM(Atm,I)) :- !.
 atomobj_struct(FLBUILTIN_IDENTIFIER(Atm,I),PRATOM(Atm,I)) :- !.
-%%atomobj_struct(FLMODULARIZEDATOM(Atm,I),PRMODULARIZEDATOM(Atm,I)) :- !.
 atomobj_struct(Atm,PRATOM(Atm,NO_INDEX)) :- atomic(Atm).
 %% atomobj_struct/3
 atomobj_struct(Atm,Index,PRATOM(Atm,Index)).
 
 %% A prolog atom that has FLORA-2 prefix and workspace in it.
 %% This one is for THIS_WORKSPACE
+modularized_pratom_struct(Atom,Idx,PRMODULARIZEDATOM(PRDYNMODATOM(Atom),Idx)) :-
+	has_context(compiling_for_addition),
+	has_context(compiling_headliteral),
+	\+has_context(compiling_udf_definition),
+	\+has_context(goal_reification),
+	!.
 modularized_pratom_struct(Atom,Idx,PRMODULARIZEDATOM(Atom,Idx)).
 %%  Mod is expected to be an atom
+modularized_pratom_struct(Atom,Mod,Idx,PRMODULARIZEDATOM(PRDYNMODATOM(Atom),Mod,Idx)) :-
+	has_context(compiling_for_addition),
+	has_context(compiling_headliteral),
+	\+has_context(compiling_udf_definition),
+	\+has_context(goal_reification),
+	!.
 modularized_pratom_struct(Atom,Mod,Idx,PRMODULARIZEDATOM(Atom,Mod,Idx)).
 
-%%modularized_flatom_struct(Atom,Idx,FLMODULARIZEDATOM(Atom,Idx)).
-
+is_modularized_pratom(PRMODULARIZEDATOM(PRDYNMODATOM(Atom),Idx),Atom,Idx) :- !.
+is_modularized_pratom(PRMODULARIZEDATOM(PRDYNMODATOM(Atom),_Mod,Idx),Atom,Idx) :- !.
 is_modularized_pratom(PRMODULARIZEDATOM(Atom,Idx),Atom,Idx) :- !.
 is_modularized_pratom(PRMODULARIZEDATOM(Atom,_Mod,Idx),Atom,Idx) :- !.
-
-%%is_modularized_flatom(FLMODULARIZEDATOM(Atom,Idx),Atom,Idx).
 
 scrambled_atom_struct(Atom,Idx,Struct) :-
 	flora_scramble_atom(Atom,ScrambledA),
@@ -1004,66 +1010,66 @@ scrambled_atom_struct(Atom,Idx,Struct) :-
 transactionalatomobj_struct(FLTRANSACTIONALATOM(Atom,I),PRATOM(Atom,I)) :- !.
 
 
-atomlit_struct(_Context,FLATOM(Atom,I),Code) :-
+atomlit_struct(_LitContext,FLATOM(Atom,I),Code) :-
 	flora_prlgdef(Atom,0),
 	!,
 	atomobj_struct(Atom,I,AtomCode),
 	prologterm_struct(AtomCode,0,[],Code).
-atomlit_struct(Context,FLATOM(Atom,I),Code) :-
+atomlit_struct(LitContext,FLATOM(Atom,I),Code) :-
 	flora_modular_prlgdef(Atom,0),
 	!,
-	splice_in_caller_argument(Context,[],Args),
+	splice_in_FL_CONTEXT_argument(LitContext,[],Args),
 	modularized_pratom_struct(Atom,I,FunCode),
 	prologterm_struct(FunCode,1,Args,Code).
-atomlit_struct(_Context,FLATOM(Atom,I),Code) :-
+atomlit_struct(_LitContext,FLATOM(Atom,I),Code) :-
 	flora_prlgdef(Atom,0,Mod),
 	!,
 	atomobj_struct(Atom,I,AtomCode),
 	prologterm_struct(AtomCode,0,[],Mod,Code).
-atomlit_struct(_Context,FLATOM(Atom,I),Code) :-
+atomlit_struct(_LitContext,FLATOM(Atom,I),Code) :-
 	flora_prlgdef_repl(Atom,0,ReplacementAtm,Mod),
 	!,
 	atomobj_struct(ReplacementAtm,I,AtomCode),
 	prologterm_struct(AtomCode,0,[],Mod,Code).
-atomlit_struct(_Context,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
+atomlit_struct(_LitContext,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
 	flora_prlgdef(Atom,0),
 	!,
 	builtin_identifier_struct(FLBUILTIN_IDENTIFIER(Atom,I),AtomCode),
 	prologterm_struct(AtomCode,0,[],Code).
-atomlit_struct(Context,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
+atomlit_struct(LitContext,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
 	flora_modular_prlgdef(Atom,0),
 	!,
-	splice_in_caller_argument(Context,[],Args),
+	splice_in_FL_CONTEXT_argument(LitContext,[],Args),
 	modularized_pratom_struct(Atom,I,FunCode),
 	prologterm_struct(FunCode,1,Args,Code).
-atomlit_struct(_Context,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
+atomlit_struct(_LitContext,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
 	flora_prlgdef(Atom,0,Mod),
 	!,
 	builtin_identifier_struct(FLBUILTIN_IDENTIFIER(Atom,I),AtomCode),
 	prologterm_struct(AtomCode,0,[],Mod,Code).
-atomlit_struct(_Context,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
+atomlit_struct(_LitContext,FLBUILTIN_IDENTIFIER(Atom,I),Code) :-
 	flora_prlgdef_repl(Atom,0,ReplacementAtm,Mod),
 	!,
 	builtin_identifier_struct(FLBUILTIN_IDENTIFIER(ReplacementAtm,I),AtomCode),
 	prologterm_struct(AtomCode,0,[],Mod,Code).
-atomlit_struct(Context,FLATOM(Atom,I),PRATOMLIT([Atom,Caller],I)) :-
+atomlit_struct(LitContext,FLATOM(Atom,I),PRATOMLIT([Atom,FWContext],I)) :-
 	!,
-	determine_caller_info(Context,Caller).
-atomlit_struct(Context,FLBUILTIN_IDENTIFIER(Atom,I),PRATOMLIT([Atom,Caller],I)) :-
+	determine_context_info(LitContext,FWContext).
+atomlit_struct(LitContext,FLBUILTIN_IDENTIFIER(Atom,I),PRATOMLIT([Atom,FWContext],I)) :-
 	!,
-	determine_caller_info(Context,Caller).
+	determine_context_info(LitContext,FWContext).
 %% This is for the cases of an atomic literal like "abcd"^^foo
-atomlit_struct(Context,Atomspec,PRATOMLIT([Atomspec,Caller],Idx)) :-
+atomlit_struct(LitContext,Atomspec,PRATOMLIT([Atomspec,FWContext],Idx)) :-
 	is_prdatatype(Atomspec,_,_,Idx),
-	determine_caller_info(Context,Caller).
+	determine_context_info(LitContext,FWContext).
 
-transactionalatomlit_struct(Context,FLTRANSACTIONALATOM(Atom,I),PRTRANSACTIONALATOMLIT([Atom,Caller],I)) :-
+transactionalatomlit_struct(LitContext,FLTRANSACTIONALATOM(Atom,I),PRTRANSACTIONALATOMLIT([Atom,FWContext],I)) :-
 	!,
-	determine_caller_info(Context,Caller).
+	determine_context_info(LitContext,FWContext).
 %% This is for the case of an atomic literal like %"abcd"^^foo
-transactionalatomlit_struct(Context,Atomspec,PRTRANSACTIONALATOMLIT([Atomspec,Caller],Idx)) :-
+transactionalatomlit_struct(LitContext,Atomspec,PRTRANSACTIONALATOMLIT([Atomspec,FWContext],Idx)) :-
 	is_prdatatype(Atomspec,_,_,Idx),
-	determine_caller_info(Context,Caller).
+	determine_context_info(LitContext,FWContext).
 
 numobj_struct(FLNUMBER(Number,I),PRNUMBER(Number,I)) :- !.
 numobj_struct(Number,PRNUMBER(Number,NO_INDEX)) :- number(Number).
@@ -1127,7 +1133,6 @@ list_struct(List,Term,PRLIST(List,Term,NO_INDEX)).
 
 workspace_struct(P,WS,PRWORKSPACE(P,WS)).
 is_prworkspace(PRWORKSPACE(P,WS),P,WS).
-newpredicate_struct(Name,N,Args,PRNEWPRED(Name,N,Args)).
 thismodule_struct(PRTHISMODULE(PRTHISMODULE)).
 
 %% TODO: check if we actually need to wrap this with PRWORKSPACETERM
@@ -1154,84 +1159,94 @@ compile_workspace_term(WS, CompiledWS) :-
 %% For dynamic rules - workspace of the rule: (rule)@WS
 %% Otherwise - current module.
 %% Used in rule BODIES
-%% Used only in determine_caller_info/2
-body_caller_info_structure(CallerInfo) :-
+%% Used only in determine_context_info/2
+%% FWContext: Flora-2 wrapper context. Used as the last arg of the wrappers.
+%%            Represents this info: FL_CONTEXT(CallerMod,Id1,Id2)
+%%            In the head: Id1=ThisRuleId, Id2=new context var.
+%%            In the body: Id1= new context var, Id2=ThisRuleId.
+body_context_info_structure(FWContext) :-
 	has_context(dynruleworkspace(WSTerm)),
 	!,
-	body_caller_info_structure(WSTerm,CallerInfo).
-body_caller_info_structure(CallerInfo) :-
+	body_context_info_structure(WSTerm,FWContext).
+body_context_info_structure(FWContext) :-
 	has_context(goal_reification),
 	\+ has_context(rule_reification),
 	!,
-	new_caller_prvariable(NO_INDEX,WSTerm),
+	new_context_prvariable(NO_INDEX,WSTerm),
 	%% with this, reification in the head doesn't unify with the body
 	%%thismodule_struct(WSTerm), 
-	body_caller_info_structure(WSTerm,CallerInfo).
-body_caller_info_structure(CallerInfo) :-
+	body_context_info_structure(WSTerm,FWContext).
+body_context_info_structure(FWContext) :-
 	thismodule_struct(WSTerm),
 	!,
-	body_caller_info_structure(WSTerm,CallerInfo).
+	body_context_info_structure(WSTerm,FWContext).
 
-body_caller_info_structure(CalleModule,CallerInfo) :-
-	caller_tracing_code(body,TracingCode),
-	list_struct([CalleModule,TracingCode],[],CallerInfo).
+body_context_info_structure(CallerModule,FWContext) :-
+	context_tracing_code(body,Id1,Id2),
+	prologterm_struct(FL_CONTEXT,3,[CallerModule,Id1,Id2],FWContext).
 
 
-%% Represents the special variable, which appears in the rule HEAD, that is
-%% bound to the caller name 
-head_caller_info_structure(Caller) :-
+%% FWContext: Flora-2 wrapper context. Used as the last arg of the wrappers.
+%%            Represents this info: FL_CONTEXT(CallerMod,Id1,Id2)
+%%            In the head: Id1=ThisRuleId, Id2=new context var.
+%%            In the body: Id1= new context var, Id2=ThisRuleId.
+head_context_info_structure(FWContext) :-
 	%% In the head of dynamic rules
 	has_context(compiling_dynrule(_)),
 	!,
-	dyn_caller_var_struct(CallerStruct),
-	caller_tracing_code(head,TracingCode),
-	list_struct([CallerStruct,TracingCode], [], Caller).
+	dyn_caller_module_var_struct(CallerModStruct),
+	context_tracing_code(head,Id1,Id2),
+	prologterm_struct(FL_CONTEXT,3,[CallerModStruct,Id1,Id2],FWContext).
 %% In the HEAD of static rules
-head_caller_info_structure(Caller) :-
-	callermod_var_structure(CallerStruct),
-	caller_tracing_code(head,TracingCode),
-	list_struct([CallerStruct,TracingCode], [], Caller).
+head_context_info_structure(FWContext) :-
+	callermod_var_structure(CallerModStruct),
+	context_tracing_code(head,Id1,Id2),
+	prologterm_struct(FL_CONTEXT,3,[CallerModStruct,Id1,Id2],FWContext).
 
-%% This is used when we want variables in the tracing part of the caller info
-var_caller_info_structure(CalleModule,CallerInfo) :-
-	caller_tracing_code(vars,TracingCode),
-	list_struct([CalleModule,TracingCode],[],CallerInfo).
+%% This is used when we want variables in the tracing part of FL_CONTEXT
+var_context_info_structure(CallerModule,FWContext) :-
+	context_tracing_code(vars,Id1,Id2),
+	prologterm_struct(FL_CONTEXT,3,[CallerModule,Id1,Id2],FWContext).
 
 callermod_var_structure(Struct) :-
 	%% In the head of dynamic rules
 	has_context(compiling_dynrule(_)),
 	!,
-	dyn_caller_var_struct(Struct).
+	dyn_caller_module_var_struct(Struct).
 %% In the head of static rules
-callermod_var_structure(Struct) :- caller_var_struct(Struct).
+callermod_var_structure(Struct) :- caller_module_var_struct(Struct).
 
-caller_var_struct(PRCALLERVAR(PRCALLERVAR)).
-dyn_caller_var_struct(PRDYNCALLERVAR(PRDYNCALLERVAR)).
+caller_module_var_struct(PRFLCONTEXTVAR(PRFLCONTEXTVAR)).
+dyn_caller_module_var_struct(PRDYNFLCONTEXTVAR(PRDYNFLCONTEXTVAR)).
 filename_in_ruleid_struct(PRFILENAMEINRULEIDVAR(PRFILENAMEINRULEIDVAR)).
 
-%% Context =  head/body/vars
-caller_tracing_code(Context,TracingCode) :-
+%% LitContext =  head/body/vars
+context_tracing_code(LitContext,Id1,Id2) :-
 	(has_permaoption(no_trace_info) ->
-	    new_caller_prvariable(NO_INDEX,TracingCode)
-	%% next line tests what happens if we have no variables in tracing into
-	%%; true -> atomobj_struct(dummy,TracingCode)
+	    %% Using constants (NULL) as Id1/Id2 saves choicepoint space somehow
+	    %% (see the flora2-performance/wine_ontology/wine2.flr).
+	    %% However, using new vars for Id1/Id2 makes it possible to mix
+	    %% files compiled in production and development mode witout
+	    %% recompilation
+	    %%atomobj_struct(NULL,Id1), Id2=Id1
+	    new_context_prvariable(NO_INDEX,Id1),
+	    new_context_prvariable(NO_INDEX,Id2)
 	;
-	    ( has_context(compiling_dynrule(DescrIdCode)), Context\==vars,
+	    ( has_context(compiling_dynrule(DescrIdCode)), LitContext\==vars,
 		\+ has_context(goal_reification),
 		\+ has_context(compiling_update_literals)
-	    ; has_context(compiling_rule(DescrIdCode)), Context\==vars,
+	    ; has_context(compiling_rule(DescrIdCode)), LitContext\==vars,
 		\+ has_context(goal_reification),
 		\+ has_context(compiling_update_literals)
-	    ; %% Context = vars or is not a (rule, reification, or update)
-		new_caller_prvariable(NO_INDEX,DescrIdCode)
+	    ; %% LitContext = vars or is not a (rule, reification, or update)
+		new_context_prvariable(NO_INDEX,DescrIdCode)
 	    ),
 	    !,
-	    atomobj_struct(FL_TRACING,TraceFunCode),
-	    new_caller_prvariable(NO_INDEX,CalledRuleVar),
-	    (Context == body ->
-		prologterm_struct(TraceFunCode,2,[CalledRuleVar,DescrIdCode],TracingCode)
+	    new_context_prvariable(NO_INDEX,CalledRuleVar),
+	    (LitContext == body ->
+		Id1 = CalledRuleVar, Id2 = DescrIdCode
 	    ;
-		prologterm_struct(TraceFunCode,2,[DescrIdCode,CalledRuleVar],TracingCode)
+		Id1 = DescrIdCode, Id2 = CalledRuleVar
 	    )
 	).
 
@@ -1243,40 +1258,42 @@ thisstorage_struct(fld,PRTHISFLDSTORAGE(PRTHISFLDSTORAGE)).
 floralib_struct(WS,PRFLORALIB(WS)).
 storage_struct(WS,PRFDBSTORAGE(WS)).
 
-%% Construct caller info for a literal.
+%% Construct FL_CONTEXT info for a literal.
 %% Different caler info is created for body and head.
 %% This form is used for cases when a literal can be both in the head and
-%% in the body. In that case, Context is passed to tell which form to use.
+%% in the body. In that case, LitContext is passed to tell which form to use.
 %% When we know if we are in the head or in the body, we use
-%% body_caller_info_structure/1 or head_caller_info_structure/1 directly.
-determine_caller_info(Context,Caller) :-
-	(Context==BODYLITERAL -> body_caller_info_structure(Caller)
-	; Context==HEADLITERAL -> head_caller_info_structure(Caller)
+%% FWContext: Flora-2 wrapper context info: FL_CONTEXT(CallerMod,Id1,Id2),
+%% where Id1, Id2 are tracing info rule Ids
+%% body_context_info_structure/1 or head_context_info_structure/1 directly.
+determine_context_info(LitContext,FWContext) :-
+	(LitContext==BODYLITERAL -> body_context_info_structure(FWContext)
+	; LitContext==HEADLITERAL -> head_context_info_structure(FWContext)
 	%% debug
-	; flora_error_line('[Compiler] BUG: No caller type exists for this context, ~w', [Context]),
+	; flora_error_line('[Compiler] BUG: No FL_CONTEXT can be constructed for this context, ~w', [LitContext]),
 	    throw(FLORA_TOP_LEVEL)
 	),
 	!.
-splice_in_caller_argument(Context,Args,NewArgs) :-
-	determine_caller_info(Context,Caller),
+splice_in_FL_CONTEXT_argument(LitContext,Args,NewArgs) :-
+	determine_context_info(LitContext,FWContext),
 	%% TODO: see if we can get rid of flattening
-	flatten([Args,Caller],NewArgs).
+	flatten([Args,FWContext],NewArgs).
 
 %% special treatment of _overrides/2/4, _opposes/2/4, _cancel/1/2,
 %% and stuff declared as :- prolog or :- table
-termlit_struct(Context,FObj,N,ObjList,Code) :-
+termlit_struct(LitContext,FObj,N,ObjList,Code) :-
 	(is_pratom(FObj,AtomName,Idx)
 	; is_prbuiltin_identifier(FObj,AtomName,Idx)
 	),
 	flora_modular_prlgdef(AtomName,N),
 	!,
-	splice_in_caller_argument(Context,ObjList,Args),
+	splice_in_FL_CONTEXT_argument(LitContext,ObjList,Args),
 	N1 is N+1,
 	modularized_pratom_struct(AtomName,Idx,FunCode),
 	prologterm_struct(FunCode,N1,Args,Code).
 
 %% for things that have prolog name replacement
-termlit_struct(_Context,FObj,N,ObjList,Code) :-
+termlit_struct(_LitContext,FObj,N,ObjList,Code) :-
 	(is_pratom(FObj,AtomName)
 	; is_prbuiltin_identifier(FObj,AtomName)
 	),
@@ -1295,47 +1312,47 @@ termlit_struct(_Context,FObj,N,ObjList,Code) :-
 	-> prologterm_struct(FObj,N,ObjList,Mod,Code)
 	),
 	!.
-termlit_struct(_Context,FObj,N,ObjList,Code) :-
+termlit_struct(_LitContext,FObj,N,ObjList,Code) :-
 	is_pratom(FObj,AtomName,Idx),
 	flora_prlgdef_repl(AtomName,N,ReplacementAtm,Mod),
 	!,
 	is_pratom(ReplFObj,ReplacementAtm,Idx),
 	prologterm_struct(ReplFObj,N,ObjList,Mod,Code).
 
-termlit_struct(_Context,FObj,N,ObjList,Code) :-
+termlit_struct(_LitContext,FObj,N,ObjList,Code) :-
 	is_prbuiltin_identifier(FObj,AtomName,Idx),
 	flora_prlgdef_repl(AtomName,N,ReplacementAtm,Mod),
 	!,
 	is_prbuiltin_identifier(ReplFObj,ReplacementAtm,Idx),
 	prologterm_struct(ReplFObj,N,ObjList,Mod,Code).
 
-termlit_struct(Context,FObj,N,ObjList,PRTERMLIT(FObj,N1,Args)) :-
-	splice_in_caller_argument(Context,ObjList,Args),
+termlit_struct(LitContext,FObj,N,ObjList,PRTERMLIT(FObj,N1,Args)) :-
+	splice_in_FL_CONTEXT_argument(LitContext,ObjList,Args),
 	length(Args,N1),
 	!,
 	%% latent queries - debug
 	(N1 is N+1, !
-	; flora_error_line('[Compiler] BUG: Assertion N=N1 failed in termlit structure: Obj=~w, Arity=~w, Args=~w, Context=~w',
-			   [FObj,N,ObjList,Context]),
+	; flora_error_line('[Compiler] BUG: Assertion N=N1 failed in termlit structure: Obj=~w, Arity=~w, Args=~w, LitContext=~w',
+			   [FObj,N,ObjList,LitContext]),
 	    throw(FLORA_TOP_LEVEL)
 	).
 
-transactionaltermlit_struct(Context,FObj,N,ObjList,PRTRANSACTIONALTERMLIT(FObj,N1,Args)) :-
-	splice_in_caller_argument(Context,ObjList,Args),
+transactionaltermlit_struct(LitContext,FObj,N,ObjList,PRTRANSACTIONALTERMLIT(FObj,N1,Args)) :-
+	splice_in_FL_CONTEXT_argument(LitContext,ObjList,Args),
 	length(Args,N1),
 	!,
 	%% latent queries - debug
 	(N1 is N+1, !
-	; flora_error_line('[Compiler] BUG: Assertion N=N1 failed in transactionaltermlit structure: Obj=~w, Arity=~w, Args=~w, Context=~w',
-			   [FObj,N,ObjList,Context]),
+	; flora_error_line('[Compiler] BUG: Assertion N=N1 failed in transactionaltermlit structure: Obj=~w, Arity=~w, Args=~w, LitContext=~w',
+			   [FObj,N,ObjList,LitContext]),
 	    throw(FLORA_TOP_LEVEL)
 	).
 
 
-caller_binding_code(Binding,Code) :-
-	callermod_var_structure(CallerVar),
+caller_module_binding_code(Binding,Code) :-
+	callermod_var_structure(CallerModVar),
 	atomobj_struct(FL_SILENT_EQUAL,EqCode),
-	prologterm_struct(EqCode,2,[CallerVar,Binding],Code).
+	prologterm_struct(EqCode,2,[CallerModVar,Binding],Code).
 
 
 /*
@@ -1400,18 +1417,18 @@ workspacelit_struct(P,WS,Code) :-
 	(is_flvariable(WS,WSVarName,Index)
 	->
 	    varobj_struct(WSVarName,Index,WSVarCode),
-	    body_caller_info_structure(ThisModuleName,CallerInfo),
+	    body_context_info_structure(ThisModuleName,FWContext),
 	    %% a call to a Flora user module
-	    florasyslib_struct(Index,FLLIBMODLIT,3,[P,WSVarCode,CallerInfo],Code)
+	    florasyslib_struct(Index,FLLIBMODLIT,3,[P,WSVarCode,FWContext],Code)
 
 	%% X@module or X@_module
         %% or %X@module or %X@_module
 	; (is_prvariable(P,_,Index); is_prtransactionalvariable(P,_,Index))
 	->
 	    compile_workspace_term(WS,WSCode),
-	    body_caller_info_structure(ThisModuleName,CallerInfo),
+	    body_context_info_structure(ThisModuleName,FWContext),
 	    %% a call to a module
-	    florasyslib_struct(Index,FLLIBMODLIT,3,[P,WSCode,CallerInfo],Code)
+	    florasyslib_struct(Index,FLLIBMODLIT,3,[P,WSCode,FWContext],Code)
 
 	; is_flatom(WS,WSAtom,Index) ->
 	    atomobj_struct(WSAtom,Index,WSCode),
@@ -1436,19 +1453,19 @@ workspaceobj_struct(P,WS,Object,Code) :-
 	(is_flvariable(WS,WSVarName,Index) ->
 	    varobj_struct(WSVarName,Index,WSVarCode),
 	    new_prvariable(Index,Object),
-	    body_caller_info_structure(ThisModuleName,CallerInfo),
+	    body_context_info_structure(ThisModuleName,FWContext),
 	    %% code to construct the object for foo@X in arg position,
 	    %% i.e., p(foo@X)
-	    florasyslib_struct(Index,FLLIBMODOBJ,5,[FL_BODY,P,WSVarCode,CallerInfo,Object],Code)
+	    florasyslib_struct(Index,FLLIBMODOBJ,5,[FL_BODY,P,WSVarCode,FWContext,Object],Code)
 
 	; is_prvariable(P,_,Index)
 	->
 	    compile_workspace_term(WS,WSCode),
 	    new_prvariable(Index,Object),
-	    body_caller_info_structure(ThisModuleName,CallerInfo),
+	    body_context_info_structure(ThisModuleName,FWContext),
 	    %% code to construct the object for X@... in arg position,
 	    %% i.e., p(X@...)
-	    florasyslib_struct(Index,FLLIBMODOBJ,5,[FL_BODY,P,WSCode,CallerInfo,Object],Code)
+	    florasyslib_struct(Index,FLLIBMODOBJ,5,[FL_BODY,P,WSCode,FWContext,Object],Code)
 
 	; is_flatom(WS,WSAtom,Index) ->
 	    atomobj_struct(WSAtom,Index,WSCode),
@@ -1615,14 +1632,14 @@ clause_struct(Id,DescrVarTerm,MetaFacts,Mode,HeadList,Body,Code) :-
 	report_option(FLSYSLIB(FLLIBUNIVEQFORM),NO_INDEX),
 	florasyslib_struct(FLLIBCLAUSE,6,[Id,DescrVarTerm,MetaFacts,Mode,HeadList,Body],Code).
 
-insert_rulesig_struct(HeadList,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,DefeatCond),Newpred,Code) :-
+insert_rulesig_struct(HeadList,Body,H2BSig,PreBody,PostBody,DescrIdCode,DescrVarsTerm,DefeatCond,Code) :-
 	thismodule_struct(WS),
 	get_current_compile_file(File),
 	(approx_prindex(DescrIdCode,Idx), Idx > 0 -> true
 	; approx_prindex(HeadList,Idx)
 	),
 	flora_token_rulenum(Idx,StmtNum), %% rulenum within file
-	florasyslib_struct(FLLIBINSRULESIG,11,[DescrIdCode,File,DescrVarsTerm,WS,StmtNum,HeadList,Body,PreBody,PostBody,DefeatCond,Newpred],Code).
+	florasyslib_struct(FLLIBINSRULESIG,11,[DescrIdCode,File,DescrVarsTerm,WS,StmtNum,HeadList,Body,H2BSig,PreBody,PostBody,DefeatCond],Code).
 
 insert_syslib(FL_INSERT,FLLIBINSERT) :- !.
 insert_syslib(FL_INSERTALL,FLLIBINSERTALL) :- !.
@@ -1716,8 +1733,8 @@ hypothetical_struct(Op,Goal,Index,Code) :-
 hypothetical_syslib(FL_POSSIBLE,FLLIBHYPOTHETICAL)      :- !.
 hypothetical_syslib(FL_IMPOSSIBLE,FLLIBHYPOTHETICAL)    :- !.
 
-objexists_struct(Context,Obj,PREXISTS(Obj,Caller)) :-
-	determine_caller_info(Context,Caller).
+objexists_struct(LitContext,Obj,PREXISTS(Obj,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
 
 birelate_struct(LiteralContext,Obj1,RelType,Obj2,Code) :-
 	( is_isaspecop(RelType) ->
@@ -1727,11 +1744,11 @@ birelate_struct(LiteralContext,Obj1,RelType,Obj2,Code) :-
         ),
 	!.
 
-isaspec_struct(Context,Obj1,Obj2,PRISA(Obj1,Obj2,Caller)) :-
-	determine_caller_info(Context,Caller).
+isaspec_struct(LitContext,Obj1,Obj2,PRISA(Obj1,Obj2,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
 
-subspec_struct(Context,Obj1,Obj2,PRSUB(Obj1,Obj2,Caller)) :-
-	determine_caller_info(Context,Caller).
+subspec_struct(LitContext,Obj1,Obj2,PRSUB(Obj1,Obj2,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
 
 
 sigattspec_struct(LiteralContext,Object,AttObj,RefType,ValObj,Code) :-
@@ -1766,35 +1783,35 @@ sigattcondef_struct(LiteralContext,Object,AttObj,LowerObj,UpperObj,RefType,ValOb
 	),
 	!.
 
-mvdsigspec_struct(Context,Object,AttObj,ValObj,PRMVDSIG(Object,AttObj,ValObj,Caller)) :-
-	determine_caller_info(Context,Caller).
-imvdsigspec_struct(Context,Object,AttObj,ValObj,PRIMVDSIG(Object,AttObj,ValObj,Caller)) :-
-	determine_caller_info(Context,Caller).
+mvdsigspec_struct(LitContext,Object,AttObj,ValObj,PRMVDSIG(Object,AttObj,ValObj,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
+imvdsigspec_struct(LitContext,Object,AttObj,ValObj,PRIMVDSIG(Object,AttObj,ValObj,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
 
 %% This is for cardinality constraints in the body
-mvdcon_struct(Context,Object,AttObj,LowerObj,UpperObj,PRMVDCON(Object,AttObj,LowerObj,UpperObj,Caller)) :-
-	determine_caller_info(Context,Caller).
-imvdcon_struct(Context,Object,AttObj,LowerObj,UpperObj,PRIMVDCON(Object,AttObj,LowerObj,UpperObj,Caller)) :-
-	determine_caller_info(Context,Caller).
+mvdcon_struct(LitContext,Object,AttObj,LowerObj,UpperObj,PRMVDCON(Object,AttObj,LowerObj,UpperObj,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
+imvdcon_struct(LitContext,Object,AttObj,LowerObj,UpperObj,PRIMVDCON(Object,AttObj,LowerObj,UpperObj,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
 
 %% This is for cardinality constraints in the head
-mvdcondef_struct(Context,Object,AttObj,LowerObj,UpperObj,ValObj,PRMVDCONDEF(Object,AttObj,LowerObj,UpperObj,ValObj,Caller)) :-
-	determine_caller_info(Context,Caller).
-imvdcondef_struct(Context,Object,AttObj,LowerObj,UpperObj,ValObj,PRIMVDCONDEF(Object,AttObj,LowerObj,UpperObj,ValObj,Caller)) :-
-	determine_caller_info(Context,Caller).
+mvdcondef_struct(LitContext,Object,AttObj,LowerObj,UpperObj,ValObj,PRMVDCONDEF(Object,AttObj,LowerObj,UpperObj,ValObj,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
+imvdcondef_struct(LitContext,Object,AttObj,LowerObj,UpperObj,ValObj,PRIMVDCONDEF(Object,AttObj,LowerObj,UpperObj,ValObj,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
 
-is_prmvdcondef(PRMVDCONDEF(_Object,_AttObj,_LowerObj,_UpperObj,_Type,_Caller)).
-is_primvdcondef(PRIMVDCONDEF(_Object,_AttObj,_LowerObj,_UpperObj,_Type,_Caller)).
+is_prmvdcondef(PRMVDCONDEF(_Object,_AttObj,_LowerObj,_UpperObj,_Type,_FWContext)).
+is_primvdcondef(PRIMVDCONDEF(_Object,_AttObj,_LowerObj,_UpperObj,_Type,_FWContext)).
 
-boolsig_struct(Context,Object,AttObj,PRBOOLSIG(Object,AttObj,Caller)):-
-	determine_caller_info(Context,Caller).
-iboolsig_struct(Context,Object,AttObj,PRIBOOLSIG(Object,AttObj,Caller)):-
-	determine_caller_info(Context,Caller).
+boolsig_struct(LitContext,Object,AttObj,PRBOOLSIG(Object,AttObj,FWContext)):-
+	determine_context_info(LitContext,FWContext).
+iboolsig_struct(LitContext,Object,AttObj,PRIBOOLSIG(Object,AttObj,FWContext)):-
+	determine_context_info(LitContext,FWContext).
 
-transig_struct(Context,Object,AttObj,PRTRANSIG(Object,AttObj,Caller)):-
-	determine_caller_info(Context,Caller).
-itransig_struct(Context,Object,AttObj,PRITRANSIG(Object,AttObj,Caller)):-
-	determine_caller_info(Context,Caller).
+transig_struct(LitContext,Object,AttObj,PRTRANSIG(Object,AttObj,FWContext)):-
+	determine_context_info(LitContext,FWContext).
+itransig_struct(LitContext,Object,AttObj,PRITRANSIG(Object,AttObj,FWContext)):-
+	determine_context_info(LitContext,FWContext).
 
 
 %% This is for ->, *-> when the attribute is defined,
@@ -1821,14 +1838,14 @@ sigattdef_struct(LiteralContext,Object,AttObj,RefType,Code) :-
 	!.
 
 
-mvddef_struct(Context,Object,AttObj,PRMVDDEF(Object,AttObj,Caller)) :-
-	determine_caller_info(Context,Caller).
-imvddef_struct(Context,Object,AttObj,PRIMVDDEF(Object,AttObj,Caller)) :-
-	determine_caller_info(Context,Caller).
-mvdsigdef_struct(Context,Object,AttObj,PRMVDSIGDEF(Object,AttObj,Caller)) :-
-	determine_caller_info(Context,Caller).
-imvdsigdef_struct(Context,Object,AttObj,PRIMVDSIGDEF(Object,AttObj,Caller)) :-
-	determine_caller_info(Context,Caller).
+mvddef_struct(LitContext,Object,AttObj,PRMVDDEF(Object,AttObj,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
+imvddef_struct(LitContext,Object,AttObj,PRIMVDDEF(Object,AttObj,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
+mvdsigdef_struct(LitContext,Object,AttObj,PRMVDSIGDEF(Object,AttObj,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
+imvdsigdef_struct(LitContext,Object,AttObj,PRIMVDSIGDEF(Object,AttObj,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
 
 mvdattspec_struct(LiteralContext,Object,AttObj,RefType,ValObj,Code) :-
 	( is_mvdspecop(RefType) ->
@@ -1839,10 +1856,10 @@ mvdattspec_struct(LiteralContext,Object,AttObj,RefType,ValObj,Code) :-
         ),
 	!.
 
-mvdspec_struct(Context,Object,AttObj,ValObj,PRMVD(Object,AttObj,ValObj,Caller)) :-
-	determine_caller_info(Context,Caller).
-imvdspec_struct(Context,Object,AttObj,ValObj,PRIMVD(Object,AttObj,ValObj,Caller)) :-
-	determine_caller_info(Context,Caller).
+mvdspec_struct(LitContext,Object,AttObj,ValObj,PRMVD(Object,AttObj,ValObj,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
+imvdspec_struct(LitContext,Object,AttObj,ValObj,PRIMVD(Object,AttObj,ValObj,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
 
 %% for +>> and *+>>
 %% appears only in the rule body
@@ -1857,14 +1874,14 @@ incattspec_struct(Object,AttObj,RefType,ValObj,Code) :-
 
 %% +>>
 %% appears only in the rule body
-mvdincspec_struct(Object,AttObj,ValObj,PRMVDINC(Object,AttObj,ValObj,CallerInfo)) :-
+mvdincspec_struct(Object,AttObj,ValObj,PRMVDINC(Object,AttObj,ValObj,FWContext)) :-
 	thismodule_struct(ThisModule),
-	body_caller_info_structure(ThisModule,CallerInfo).
+	body_context_info_structure(ThisModule,FWContext).
 %% *+>>
 %% appears only in the rule body
-imvdincspec_struct(Object,AttObj,ValObj,PRIMVDINC(Object,AttObj,ValObj,CallerInfo)) :-
+imvdincspec_struct(Object,AttObj,ValObj,PRIMVDINC(Object,AttObj,ValObj,FWContext)) :-
 	thismodule_struct(ThisModule),
-	body_caller_info_structure(ThisModule,CallerInfo).
+	body_context_info_structure(ThisModule,FWContext).
 
 %% ->->, *->->
 %% appears only in the rule body
@@ -1877,12 +1894,12 @@ tolistattspec_struct(Object,AttObj,RefType,ValObj,Code) :-
         ),
 	!.
 
-mvdtolistspec_struct(Object,AttObj,ValObj,PRMVDTOLIST(Object,AttObj,ValObj,CallerInfo)) :-
+mvdtolistspec_struct(Object,AttObj,ValObj,PRMVDTOLIST(Object,AttObj,ValObj,FWContext)) :-
 	thismodule_struct(ThisModule),
-	body_caller_info_structure(ThisModule,CallerInfo).
-imvdtolistspec_struct(Object,AttObj,ValObj,PRIMVDTOLIST(Object,AttObj,ValObj,CallerInfo)) :-
+	body_context_info_structure(ThisModule,FWContext).
+imvdtolistspec_struct(Object,AttObj,ValObj,PRIMVDTOLIST(Object,AttObj,ValObj,FWContext)) :-
 	thismodule_struct(ThisModule),
-	body_caller_info_structure(ThisModule,CallerInfo).
+	body_context_info_structure(ThisModule,FWContext).
 
 %% This is called when someting like a.b[] is compiled.
 body_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
@@ -1913,15 +1930,15 @@ head_objref_struct(Obj,RefType,Att,Index,Val,Code) :-
 	!. 	 
  	 
 
-methspec_struct(Context,Obj,Meth,PRMETH(Obj,Meth,Caller)) :-
-	determine_caller_info(Context,Caller).
-imethspec_struct(Context,Obj,IMeth,PRIMETH(Obj,IMeth,Caller)) :-
-	determine_caller_info(Context,Caller).
-transpec_struct(Context,Obj,Tran,PRTRAN(Obj,Tran,Caller)) :-
-	determine_caller_info(Context,Caller).
+methspec_struct(LitContext,Obj,Meth,PRMETH(Obj,Meth,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
+imethspec_struct(LitContext,Obj,IMeth,PRIMETH(Obj,IMeth,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
+transpec_struct(LitContext,Obj,Tran,PRTRAN(Obj,Tran,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
 
-objeql_struct(Context,O1,O2,PROBJEQL(O1,O2,Caller)) :-
-	determine_caller_info(Context,Caller).
+objeql_struct(LitContext,O1,O2,PROBJEQL(O1,O2,FWContext)) :-
+	determine_context_info(LitContext,FWContext).
 
 
 ifthenelse_struct(Cond,Then,Else,Code) :-
@@ -1956,11 +1973,13 @@ constraint_struct(ConstrCode,PRCONSTRAINT(ConstrCode)).
   reset_newpredicate/0
   new_predicate(-Name)
 ****************************************************************************/
-reset_newpredicate :- flora_set_counter(NEWPREDICATE_COUNTER,1).
+%%reset_newpredicate :- flora_set_counter(NEWPREDICATE_COUNTER,1).
 
+/*
 new_predicate(Name) :-
 	flora_increment_counter(NEWPREDICATE_COUNTER,1,OldVal,_NewVal),
 	flora_concat_items([NEWPREDICATE_SYM,OldVal],Name).
+*/
 
 /****************************************************************************
   reset_default_ruleid/0
@@ -1970,8 +1989,10 @@ reset_default_ruleid :- flora_set_counter(DEFAULT_RULE_ID,1).
 
 increment_default_ruleid :-
 	flora_increment_counter(DEFAULT_RULE_ID,1,_,_).
+%% static default rule Ids are even numbers
 current_default_ruleid(RuleId) :-
-	flora_get_counter(DEFAULT_RULE_ID,RuleId).
+	flora_get_counter(DEFAULT_RULE_ID,N),
+	RuleId is 2*N.
 
 
 /****************************************************************************
@@ -2008,8 +2029,8 @@ new_prvariable(Index,VarObj) :-
 	flora_new_varobj(NEWVAR,Index,VarObj).
 new_dontcare_prvariable(Index,VarObj) :-
 	flora_new_varobj(NEWDONTCAREVAR,Index,VarObj).
-new_caller_prvariable(Index,VarObj) :-
-	flora_new_varobj(NEWCALLERVAR,Index,VarObj).
+new_context_prvariable(Index,VarObj) :-
+	flora_new_varobj(NEWFLCONTEXTVAR,Index,VarObj).
 new_quantified_prvariable(Index,VarObj) :-
 	flora_new_varobj(NEWQUANTIFIEDVAR ,Index,VarObj).
 %% creates new transactional variable
@@ -2339,7 +2360,7 @@ vars_contains([H1|T1],[H2|T2]) :-
 
 
 /*****************************************************************************
-             remove_caller_vars(+InList,-OutList)
+             remove_FL_CONTEXT_vars(+InList,-OutList)
              remove_prvars(+InList,-OutList)
       Removes all the do not care variables from InList.
       InList can be a list of parser or compiler vars.
@@ -2373,15 +2394,15 @@ remove_prvars(Prefix,[H|T1],[H|T2]) :-
 remove_prdontcare_vars(InVars,OutVars) :-
 	remove_prvars(NEWDONTCAREVAR,InVars,OutVars).
 */
-remove_caller_vars(InVars,OutVars) :-
-	remove_prvars(NEWCALLERVAR,InVars,OutVars).
+remove_FL_CONTEXT_vars(InVars,OutVars) :-
+	remove_prvars(NEWFLCONTEXTVAR,InVars,OutVars).
 
 remove_quantified_vars(InVars,OutVars) :-
 	remove_prvars(NEWQUANTIFIEDVAR ,InVars,OutVars).
 
-remove_prdontcare_and_caller_vars(In,Out) :-
+remove_prdontcare_and_FL_CONTEXT_vars(In,Out) :-
 	remove_prvars(NEWDONTCAREVAR,In,Intermed),
-	remove_prvars(NEWCALLERVAR,Intermed,Out).
+	remove_prvars(NEWFLCONTEXTVAR,Intermed,Out).
 
 
 /****************************************************************************
@@ -2501,9 +2522,9 @@ get_quantification_info(QuantGoal,Quantifier,Formula,QuantVarListObj,FreeVarList
 	-> true
 	;  Formula = QuantGoal,
 	    Quantifier = NULL,
-	    %% if no quantifier, use all vars minus dontcare/callervars
+	    %% if no quantifier, use all vars minus dontcare/contextvars
 	    collect_prvars(QuantGoal,AllVars),
-	    remove_prdontcare_and_caller_vars(AllVars,FreeVarObjList1),
+	    remove_prdontcare_and_FL_CONTEXT_vars(AllVars,FreeVarObjList1),
 	    %% this is used if naf-exists is nested deep inside the code
 	    remove_quantified_vars(FreeVarObjList1,FreeVarObjList),
 	    list_struct(FreeVarObjList,[],FreeVarListObj),
@@ -2533,6 +2554,7 @@ singleton_warning([V|L],WarnList,WarnTail) :-
 
 /****************************************************************************
   unbound_warning(+VarList,-WarnList,-WarnTail)
+  unbound_warning(+VarList,-WarnList,?WarnTail,+WarningMessage) :-
   Warnings are not generated for variables beginning with an underscore.
 ****************************************************************************/
 unbound_warning(VarList,WarnList,WarnTail) :-
@@ -2566,11 +2588,14 @@ check_head_vars_for_safety(HeadTermList,BodyTerm,Status) :-
 	singleton_flvars(SortedVars,SingletonVars),
 	singleton_warning(SingletonVars,Status,WarnTail),
 	subtract_vars(HeadVars,BodyVars,UnboundVars),
-	%% Don't issue the unboundedness var warning for facts
-	(BodyTerm \== [] -> unbound_warning(UnboundVars,WarnTail,[])
-	; var(Status) -> Status = NO_ERRORS
-	; WarnTail = []
+	(BodyTerm == [] -> unbound_warning(UnboundVars,WarnTail,[],UNBOUND_VAR_IN_FACT)
+	; unbound_warning(UnboundVars,WarnTail,[])
 	),
+	%% Don't issue the unboundedness var warning for facts
+	%%(BodyTerm \== [] -> unbound_warning(UnboundVars,WarnTail,[])
+	%%; var(Status) -> Status = NO_ERRORS
+	%%; WarnTail = []
+	%%),
 	!.
 
 
@@ -2746,7 +2771,7 @@ prepare_to_compile_rule :-
   The compiler is reset usially once per file.
 ****************************************************************************/
 flora_reset_compiler(Purpose) :-
-	reset_newpredicate,
+	%%reset_newpredicate,
 	reset_rulenum,
 	(Purpose == file -> reset_default_ruleid
 	; true
@@ -2792,12 +2817,11 @@ flora_compile_add(ParserTermList,RuleDiffList,FactDiffList,QueryDiffList,LatentQ
 	(ruleoid(_,_,1) -> referenced_once(Stat1,Status) ;  Status=Stat1),
 	clear_ruleoid,
 #ifdef SHOW_COMPILE_ADD_OUTPUT
-	DBGOUTLN('------------result of add_compilation-------------'),
+	DBGOUTLN('------------result of compile_add-----------------'),
 	DBGOUTLN(rules=RuleDiffList),
 	DBGOUTLN(facts=FactDiffList),
 	DBGOUTLN(queries=QueryDiffList),
 	DBGOUTLN(latent_queries=LatentQueryDiffList),
-	DBGOUTLN(metafacts=MetaFactDiffList),
 	%%DBGOUTLN(udfs =UDFPredsDiffList),
 	DBGOUTLN(status=Status),
 	DBGOUTLN('--------------------------------------------------'),
@@ -3085,17 +3109,20 @@ compile_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffL
 	    LatentQueryList = _LQ-_LQ
 
 	; is_flfact(ParserTerm,Head) ->
-	    %% DefaultMetaFactDiffList is empty diff list if Head is a real
-	    %% fact. If Head is compliled as a rule then it is the
-	    %% default metafact list.
+	    %% DefaultMetaFactDiffList is empty diff list Var-Var
+	    %% if Head is a real fact.
+	    %% If Head is compliled as a rule then it is the default metafact
+	    %% list (i.e., contains rule enabler, tag and type properties).
 	    %% We have to keep DefaultMetaFactDiffList as an argument to
 	    %% compile_fact because we don't know at this pint if ParserTerm
 	    %% is going to turn into a rule and thus can't know if
 	    %% DefaultMetaFactDiffList will be empty or not.
-	    compile_fact(Head,RuleDiffList,SigDiffList,FactDiffList,DefaultMetaFactDiffList,Status),
-	    %% currently MetaFactDiffList is always a var here, since annotated
+	    compile_fact(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,DefaultMetaFactDiffList,Status),
+	    %% currently MetaFactDiffList is always a Var1-Var2 here,
+	    %% since annotated
 	    %% facts are converted to rules by the parser.
 	    %% But in the future this may change, we we take precaution
+	    %% Here we unify the MetaFactDiffList with DefaultMetaFactDiffList
 	    (var(DescriptorIdCode) -> MetaFactDiffList = DefaultMetaFactDiffList
 	    ; true
 	    ),
@@ -3317,7 +3344,7 @@ table_option(P/N/_Idx,PMod/N2) :-
 	!,
 	scrambled_atom_struct(P,NO_INDEX,PMod).
 table_option(P/N/_Idx,PMod/N1) :-
-	N1 is N+1, %% because of the caller argument
+	N1 is N+1, %% because of the context argument
 	modularized_pratom_struct(P,NO_INDEX,PMod).
 skip_sensor_spec(P/N/_Idx,_) :-
 	has_permaoption(defsensor(P,N)),
@@ -3526,8 +3553,10 @@ compile_symbol_context_list([H|L],Status) :-
 
 /****************************************************************************
   compile_symbol_literal(+ParserTerm,-Status)
-  compile_symbol_literal(+ParserTerm,+Context,-Status)
+  compile_symbol_literal(+ParserTerm,+SymContext,-Status)
   compile a symbol for which compiler does NOT check context usage
+  SymContext here is FUNCTION_SYMBOL,PREDICATE_SYMBOL,UDF_SYMBOL,
+            ANY_SYMBOL_CONTEXT, etc.
 ****************************************************************************/
 compile_symbol_literal(ParserTerm,Status) :-
 	( is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
@@ -3559,15 +3588,15 @@ compile_symbol_literal(ParserTerm,Status) :-
 	),
 	!.
 
-compile_symbol_literal(ParserTerm,WS,Context,Status) :-
+compile_symbol_literal(ParserTerm,WS,SymContext,Status) :-
 	( is_fltransactionalterm(ParserTerm,Funct,N,Args) ->
-	    compile_symbol_term(Funct,N,Args,WS,Context,TRANSACTIONAL_SYMBOL,Status)
+	    compile_symbol_term(Funct,N,Args,WS,SymContext,TRANSACTIONAL_SYMBOL,Status)
 	; is_flterm(ParserTerm,Funct,N,Args) ->
-	    compile_symbol_term(Funct,N,Args,WS,Context,NONTRANSACTIONAL_SYMBOL,Status)
+	    compile_symbol_term(Funct,N,Args,WS,SymContext,NONTRANSACTIONAL_SYMBOL,Status)
 	; is_flatom(ParserTerm,_Atom) ->
-	    compile_symbol_term(ParserTerm,0,NULL,WS,Context,NONTRANSACTIONAL_SYMBOL,Status)
+	    compile_symbol_term(ParserTerm,0,NULL,WS,SymContext,NONTRANSACTIONAL_SYMBOL,Status)
 	; is_fltransactionalatom(ParserTerm,_Atom) ->
-	    compile_symbol_term(ParserTerm,0,NULL,WS,Context,TRANSACTIONAL_SYMBOL,Status)
+	    compile_symbol_term(ParserTerm,0,NULL,WS,SymContext,TRANSACTIONAL_SYMBOL,Status)
 	;
 	    approx_flindex(Funct,Index),
 	    compiling_error(Index,ERROR_SYMBOL,Err),
@@ -3576,23 +3605,25 @@ compile_symbol_literal(ParserTerm,WS,Context,Status) :-
 	!.
 
 /****************************************************************************
-  compile_symbol_term(+Funct,+N,+Args,+WS,+Context,+Transactional,-Status)
+  compile_symbol_term(+Funct,+N,+Args,+WS,+SymContext,+Transactional,-Status)
+  SymContext here is FUNCTION_SYMBOL,PREDICATE_SYMBOL,UDF_SYMBOL,
+            ANY_SYMBOL_CONTEXT, etc.
 ****************************************************************************/
-compile_symbol_term(Funct,0,_Args,FL_THISMODULE,_Context,NONTRANSACTIONAL_SYMBOL,NO_ERRORS) :-
+compile_symbol_term(Funct,0,_Args,FL_THISMODULE,_SymContext,NONTRANSACTIONAL_SYMBOL,NO_ERRORS) :-
 	flora_get_flatomvar_name(Funct,FLORA_WARNOFF),
 	set_turnoff_symbol_warnings_flag(FLORA_WARNOFF),
 	!.
 
-compile_symbol_term(Funct,0,_Args,FL_THISMODULE,_Context,NONTRANSACTIONAL_SYMBOL,NO_ERRORS) :-
+compile_symbol_term(Funct,0,_Args,FL_THISMODULE,_SymContext,NONTRANSACTIONAL_SYMBOL,NO_ERRORS) :-
 	flora_get_flatomvar_name(Funct,FLORA_CONSTOFF),
 	set_turnoff_symbol_warnings_flag(FLORA_CONSTOFF),
 	!.
 
-compile_symbol_term(Funct,N,Args,WS,Context,Transactional,Status) :-
+compile_symbol_term(Funct,N,Args,WS,SymContext,Transactional,Status) :-
 	flora_get_flatomvar_name(Funct,Name),
 	(symbol_star_argument(Args) ->
 		(N==1 ->
-		    add_nowarn_symbol(Name,FL_STAR,WS,Context,Transactional),
+		    add_nowarn_symbol(Name,FL_STAR,WS,SymContext,Transactional),
 		    Status = NO_ERRORS
 		;
 		    approx_flindex(Funct,Index),
@@ -3600,7 +3631,7 @@ compile_symbol_term(Funct,N,Args,WS,Context,Transactional,Status) :-
 		    Status = [Err]
 		)
 	;
-		add_nowarn_symbol(Name,N,WS,Context,Transactional),
+		add_nowarn_symbol(Name,N,WS,SymContext,Transactional),
 		Status = NO_ERRORS
 	).
 
@@ -3693,81 +3724,45 @@ compile_defsensor_direct(SensCall,DelayCond,Code,Status) :-
         fact to become a rule. However, we strip annotations from facts in
 	the parser, so no need here to take rule tag/meta info into account.
 ****************************************************************************/
-compile_fact(Head,RuleDiffList,SigDiffList,FactDiffList,MetaFactDiffList,Status) :-
+compile_fact(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,MetaFactDiffList,Status) :-
 	set_context(compiling_facts),
 	compile_head(Head,HeadCode,H2BCodeFront,H2BCodeBack,HeadStat),
 	!,
-	( no_errors_found(S) ->
-	    ( H2BCodeFront == NULL, H2BCodeBack == NULL ->
-		compile_factlist(Head,HeadCode,RuleDiffList,FactDiffList,S2),
-		SigDiffList = _Sign-_Sign,
-		MetaFactDiffList = _M-_M
-	    ; %% fact became static rule
-	        compile_conjunct2list(HeadCode,HeadCodeList),
-		conjunct_struct(H2BCodeFront,H2BCodeBack,H2BCode),
-		(H2BCode == NULL -> flatom_struct(FL_TRUE,NO_INDEX,BodyCode)
-		; BodyCode = H2BCode
-		),
-		%% no explicit id given: just generate new rule id
-		approx_flindex(Head,RuleIdx),
-		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_RULE,DescrIdCode,DescrVarsTerm,MetaFactDiffList,_),
-		split_heads_add_sig_make_rule(HeadCodeList,
-					      BodyCode,FL_TRUE,FL_TRUE,
-					      DescrIdCode,DescrVarsTerm,
-					      RuleDiffList,
-					      SigDiffList,
-					      []),
-		FactDiffList = _F-_F, %% empty fact diff list
-		(has_context(compiling_udf_definition) -> S2 = NO_ERRORS
-		%% for UDFs, variables are checked separately
-		; check_head_vars_for_safety(Head,[],S2)
-		)
+	( no_errors_found(HeadStat) ->
+	    compile_factlist(HeadCode,DescriptorIdCode,DescrVarsTerm,H2BCodeFront,H2BCodeBack,RuleDiffList,FactDiffList),
+	    SigDiffList = _Sign-_Sign,
+	    MetaFactDiffList = _M-_M,
+	    (has_context(compiling_udf_definition) -> S2 = NO_ERRORS
+	    %% for UDFs, variables are checked separately
+	    ; check_head_vars_for_safety(Head,[],S2)
 	    ),
 	    append(HeadStat,S2,Status)
         ;
-	  Status=S
+	  Status=HeadStat
 	),
 	!,
 	clear_context(compiling_facts).
 
 compile_fact_add(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,MetaFactDiffList,Status) :-
 	set_context(compiling_facts), 
-	compile_head(Head,HeadCode,H2BCodeFront,H2BCodeBack,S),
+	compile_head(Head,HeadCode,H2BCodeFront,H2BCodeBack,HeadStat),
 	!,
-	( no_errors_found(S) ->
-	    ( H2BCodeFront == NULL, H2BCodeBack == NULL,
-		\+has_context(converting_fact2rule) ->
-		clear_context(converting_fact2rule),
-		compile_factlist(Head,HeadCode,RuleDiffList,FactDiffList,S2),
-		MetaFactDiffList = _M-_M
-	    ; %%% fact became a rule due to code in arguments: compile as a rule
-	        %% if compiling for addition, just insert the rule: no need
-		%% to add signature, as signatures are added when such rules
-		%% are inserted at compile time
-		clear_context(converting_fact2rule),
-		%% NOTE: Here we just FAKE the body to be TRUE!
-		%% We don't need H2BCodeFront+H2BCodeBack because below we
-		%% recompile using compile_rule_add/8, so compile_head/5 will
-		%% be called again and create proper body.
-		%%conjunct_struct(H2BCodeFront,H2BCodeBack,H2BCode1),
-		flatom_struct(FL_TRUE,NO_INDEX,H2BCode),
-		%% no explicit id given: just generate new rule id
-		compile_rule_add(Head,H2BCode,
-				 DescriptorIdCode,DescrVarsTerm,
-				 RuleDiffList,FactDiffList,
-				 MetaFactDiffList,S2)
+	( no_errors_found(HeadStat) ->
+	    compile_factlist_add(HeadCode,DescriptorIdCode,DescrVarsTerm,H2BCodeFront,H2BCodeBack,RuleDiffList,FactDiffList,MetaFactDiffList),
+	    (has_context(compiling_udf_definition) -> S2 = NO_ERRORS
+	    %% for UDFs, variables are checked separately
+	    ; check_head_vars_for_safety(Head,[],S2)
 	    ),
-	    append(S,S2,Status)
+	    append(HeadStat,S2,Status)
         ;
-	    Status=S
+	    Status=HeadStat
 	),
 	!,
-	clear_context(converting_fact2rule),
 	clear_context(compiling_facts).
 
 
 /****************************************************************************
-  compile_factlist(+FactList,+FactListCode,-RuleDifferenceList,-FactDifferenceList,-Status)
+  compile_factlist(+FactListCode,+DescriptorIdCode,+DescrVarsTerm,+H2BCodeFront,+H2BCodeBack,-RuleDifferenceList,-FactDifferenceList)
 
   This predicate takes a conjunction of atoms and splits into a
   difference list.
@@ -3775,30 +3770,31 @@ compile_fact_add(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,M
   If a fact is declared as a prolog term, it is put into the rule list,
   so it would be dumped as a normal Prolog fact rather than be put in a trie.
 ****************************************************************************/
-compile_factlist(FactList,FactListCode,RuleDifferenceList,FactDifferenceList,Status) :-
-	compile_factlist1(FactListCode,RuleDifferenceList,FactDifferenceList),
-	( %% UDF vars are checked elsewhere
-	    has_context(compiling_udf_definition) -> Status = NO_ERRORS
-	; %% check fact vars for safety
-	    collect_flvars(FactList,HeadVars), HeadVars \== []
-	-> %% for facts we can do a fast check for var safety
-	    unbound_warning(HeadVars,S1,[],UNBOUND_VAR_IN_FACT),
-	    singleton_flvars(HeadVars,SingletonVars),
-	    singleton_warning(SingletonVars,S2,[]),
-	    append(S1,S2,Status)
-	;  Status = NO_ERRORS
-	).
-compile_factlist1(NULL,RuleList-RuleList,FactList-FactList) :- !.
-
-compile_factlist1(ConjunctCode,RuleList-RuleListTail,FactList-FactListTail) :-
-	conjunct_struct(F1,F2,ConjunctCode),
+compile_factlist([],_,_,_,_,RuleList-RuleList,FactList-FactList) :- !.
+compile_factlist([F|FList],DescriptorIdCode,DescrVarsTerm,[H2BF|H2BCodeFront],[H2BB|H2BCodeBack],RuleList-RuleListTail,FactList-FactListTail) :-
 	!,
-	compile_factlist1(F1,RuleList-RT,FactList-FT),
-	compile_factlist1(F2,RT-RuleListTail,FT-FactListTail).
+	( H2BF == NULL, H2BB == NULL ->
+	    compile_plain_fact(F,RuleList-RT,FactList-FT)
+	; make_rule_from_fact(F,H2BF,H2BB,RuleList-RT),
+	    %% make_rule_from_fact(F,DescriptorIdCode,DescrVarsTerm,H2BF,H2BB,RuleList-RT),
+	    FactList = FT
+	),
+	compile_factlist(FList,DescriptorIdCode,DescrVarsTerm,H2BCodeFront,H2BCodeBack,RT-RuleListTail,FT-FactListTail).
+
+compile_factlist_add([],_,_,_,_,RuleL-RuleL,FactL-FactL,MetaL-MetaL) :- !.
+compile_factlist_add([F|FList],DescrIdCode,DescrVarsTerm,[H2BF|H2BCodeFront],[H2BB|H2BCodeBack],RuleList-RuleListTail,FactList-FactListTail,MetaList-MetaTail) :-
+	!,
+	( H2BF == NULL, H2BB == NULL ->
+	    compile_plain_fact(F,RuleList-RT,FactList-FT),
+	    MetaList = MT
+	; make_dynrule_from_fact(F,DescrIdCode,DescrVarsTerm,H2BF,H2BB,RuleList-RT,MetaList-MT),
+	    FactList = FT
+	),
+	compile_factlist_add(FList,DescrIdCode,DescrVarsTerm,H2BCodeFront,H2BCodeBack,RT-RuleListTail,FT-FactListTail,MT-MetaTail).
 
 %% this is for fact-predicates that the compiler defines as prolog
 %% using flora_define_prolog
-compile_factlist1(F,[FCode|ListTail]-ListTail,FL-FL) :-
+compile_plain_fact(F,[FCode|ListTail]-ListTail,FL-FL) :-
 	is_prologterm(F),
 	!,
 	(has_context(compiling_for_addition)
@@ -3808,9 +3804,14 @@ compile_factlist1(F,[FCode|ListTail]-ListTail,FL-FL) :-
 	; fact_struct(F,FCode)
 	),
 	!.
-
-%% these are just facts, nothing special
-compile_factlist1(F,RL-RL,[FCode|ListTail]-ListTail) :-
+%% these are just facts, possibly conjuncted (eg, as a result of compilation of
+%% a:b[c->d])
+compile_plain_fact(F,RulesList-RTail,FactList-FTail) :-
+	is_prconjunct(F,F1,F2),
+	!,
+	compile_plain_fact(F1,RulesList-RuleTail,FactList-FactTail),
+	compile_plain_fact(F2,RuleTail-RTail,FactTail-FTail).
+compile_plain_fact(F,RL-RL,[FCode|ListTail]-ListTail) :-
 	!,
         collect_prvars(F,FVars),
         get_dynrule_varlist(FVars,L),
@@ -3822,6 +3823,61 @@ compile_factlist1(F,RL-RL,[FCode|ListTail]-ListTail) :-
             fact_struct(AugmentedF,FCode)
         ),
 	!.
+
+
+%% simplified static rules from fact - unused
+make_rule_from_fact(H,H2BF,H2BB,RulesList-RTail) :-
+	is_prconjunct(H,H1,H2),
+	!,
+	make_rule_from_fact(H1,H2BF,H2BB,RulesList-RuleTail),
+	make_rule_from_fact(H2,H2BF,H2BB,RuleTail-RTail).
+make_rule_from_fact(H,H2BF,H2BB,[Rule|RT]-RT) :-
+	conjunct_struct(H2BF,H2BB,FullBody),
+	rule_struct(H,FullBody,Rule).
+
+make_dynrule_from_fact(H,DescrIdCode,DescrVarsTerm,H2BF,H2BB,RulesList-RTail,Meta) :-
+	is_prconjunct(H,H1,H2),
+	!,
+	make_dynrule_from_fact(H1,DescrIdCode,DescrVarsTerm,H2BF,H2BB,RulesList-RuleTail,Meta),
+	make_dynrule_from_fact(H2,DescrIdCode,DescrVarsTerm,H2BF,H2BB,RuleTail-RTail,Meta).
+make_dynrule_from_fact(H,DescrIdCode,DescrVarsTerm,H2BF,H2BB,[Code|RT]-RT,MetafactsDiffList) :-
+	approx_prindex(H,RuleIdx),
+	/*
+	(var(DescrIdCode) ->
+	    compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_ADDRULE,DescrIdCode,DescrVarsTerm,_MetaFactDiffList,_)
+	; true
+	),
+	*/
+	get_current_stmt_number_for_descriptor(RuleIdx,StmtNum),
+	%% CHECK!!!!! Rule enabler for facts-turned-rules? Needed?
+	construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_ADDRULE,RuleEnablerTest,FileName),
+	list_struct([H],[],HeadCodeList),
+	list_struct([H2BF],[],H2BCodeFrontList),
+	list_struct([H2BB],[],H2BCodeBackList),
+	list_struct([FL_TRUE],[],PostBodyList), %% delay checker
+	MetafactsDiffList = MetafactsList - [],
+	list_struct(MetafactsList,[],MetaFactCode),
+	list_struct([],[],EmptyListCode), %% empty list
+	HVL = EmptyListCode,
+	HBL = EmptyListCode,
+	PreBody = RuleEnablerTest,
+	florasyslib_struct(FLSYSRULEUPDATE,15,
+			   [DescrIdCode,FileName,DescrVarsTerm,
+			    StmtNum,
+			    MetaFactCode, %% Meta facts
+			    HeadCodeList,
+			    FL_TRUE, %% Body
+			    HVL,HBL, %% HVL,HBL
+			    FL_TRUE, %% DTvarscode
+			    H2BCodeFrontList,H2BCodeBackList,
+			    PreBody,
+			    PostBodyList, %% postbody, delay checker
+			    FL_TRUE], %% defeat condition
+			   RuleCode),
+	list_struct([RuleCode],[],RuleCodeList),
+	updaterule_syslib(FL_INSERTRULE_Z,UpdateruleLib),
+	florasyslib_struct(RuleIdx,UpdateruleLib,1,[RuleCodeList],SysLibCode),
+	query_struct(SysLibCode,Code).
 
 add_dynrule_attr_code([],Code,Code) :- !.
 add_dynrule_attr_code([(Var,Val)|L],BCode,NewCode) :-
@@ -3878,8 +3934,8 @@ compile_query(Body,QueryList-QueryTail,Status) :-
 	    conjunct_code(DTVarsCodeList,DTVarsCode),
 	    conjunct_struct(DTVarsCode,BCode,BodyCode),
 	    thismodule_struct(ThisMod),
-	    %% code to bind the Caller variable to the calling module
-	    caller_binding_code(ThisMod,CallerBindingCode),
+	    %% code to bind the CallerMod variable to the calling module
+	    caller_module_binding_code(ThisMod,CallerBindingCode),
 	    conjunct_struct(CallerBindingCode,BodyCode,AugmentedBodyCode),
 	    collect_name_var_pairs(Body,NV),
 	    list_struct(NV,[],NVCode),
@@ -3903,8 +3959,8 @@ compile_latent_query(DescrIdCode,MetaFactDiffList,Body,Mode,LatentQueryList-Late
 	    conjunct_code(DTVarsCodeList,DTVarsCode),
 	    conjunct_struct(DTVarsCode,BCode,LatentQueryBodyCode),
 	    thismodule_struct(ThisMod),
-	    %% code to bind the Caller variable to the calling module
-	    caller_binding_code(ThisMod,CallerBindingCode),
+	    %% code to bind the CallerMod variable to the calling module
+	    caller_module_binding_code(ThisMod,CallerBindingCode),
 	    construct_rule_enabling_test(DescrIdCode,Mode,LatentQueryEnablerTest,_),
 	    conjunct_struct(CallerBindingCode,LatentQueryEnablerTest,PreLatentQueryCode),
 	    get_current_compile_file(File),
@@ -4465,6 +4521,9 @@ construct_rule_enabling_query(DescrIdCode,FileName,Mode,RuleEnablerMetaTerm) :-
 
 %% like construct_rule_enabling_query/4 but generates file name for itself
 %% used as the first subgoal in rules, queries, latent queries
+construct_rule_enabling_test(_DescrIdCode,_Mode,FL_TRUE,_FileName) :-
+	has_context(compiling_udf_definition),
+	!.
 construct_rule_enabling_test(DescrIdCode,Mode,RuleEnablerMetaTerm,FileName) :-
 	get_current_compile_file_for_descriptor(FileName,Mode),
 	construct_rule_enabling_query(DescrIdCode,FileName,Mode,RuleEnablerMetaTerm).
@@ -4529,7 +4588,7 @@ compile_export_predicate(ExportTerm,Code,Status) :-
 	%% compile_fact expects the argument to be a list, so
 	%% ParseBodyTerm is put in a list.
 	%% Uninitialized arguments are taken care of at run-time.
-	compile_fact([ParseBodyTerm],_,_,ListBodyTermCode,_M-_M,StatusFact),
+	compile_fact([ParseBodyTerm],_,_,_,_,ListBodyTermCode,_M-_M,StatusFact),
 	compile_body_pathexp(ModuleList,FL_THISMODULE,ModuleListCode,_,_,[],_StatusModule),
 	compile_body_pathexp(IsUpdatable,FL_THISMODULE,IsUpdatableCode,_,_,[],_StatusUpd),
 	( WS == FL_THISMODULE -> StatusWS = NO_ERRORS
@@ -4636,7 +4695,7 @@ compile_udf_definition(Function,Body,ReturnValue,CodeList-ListTail,FactDiffList,
 	    new_udf_predicate(Funct,FunctCompiled,FunctName,UDFCode,N,Args,NewHead,NewHeadPredName,NewHeadPredArity,NewReturnValue,NewHeadCode,FStatus),
 	    ( no_errors_found(FStatus) -> 
 		( \+ has_permaoption(udf_option(FunctName,N,UDFCode,NewHeadPredName,NewHeadCode)) ->
-		    %% +1 for the caller argument
+		    %% +1 for the FL_CONTEXT argument
 		    NewHeadPredArity1 is NewHeadPredArity+1,
 		    UDFPreds = [(NewHeadPredName,NewHeadPredArity1),UDFPredsTail],
 		    set_permaoption(udf_option(FunctName,N,UDFCode,NewHeadPredName,NewHeadCode))
@@ -4900,46 +4959,34 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	    set_context(no_symbol_check)
 	; true
 	),
-	compile_head_top(Head,HeadCode,H2BCodeFront,H2BCodeBack,HeadStatusPre),
+	compile_head_top(Head,HeadCode,H2BCodeFront,H2BCodeBack,HeadStatus),
 	(has_context(compiling_udf_definition) ->
 	    %% done compiling UDF definition head
 	    clear_context(block_udf_expansion),
 	    clear_context(no_symbol_check)
 	; true
 	),
-	compile_conjunct2list(HeadCode,HeadCodeList),
-	no_mixed_sensor_nonsensor_heads(HeadCodeList,Head,DelayStatus),
-	append(HeadStatusPre,DelayStatus,HeadStatus),
 	( no_errors_found(HeadStatus) ->
-	    compile_body_top(Body,BCode1,BodyStatus),
-	    collect_prdatatypevars([HeadCodeList,BCode1],DTVarsCodeList),
-	    conjunct_code(DTVarsCodeList,DTVarsCode),
-	    conjunct_code([DTVarsCode,H2BCodeFront,BCode1,H2BCodeBack],BCode),
-	    %% should not add delay-checker to sensor rules
-	    (all_defined_as_sensors(HeadCodeList) -> DelayCheckCode = NULL
-	    ; delay_literals_checking_code(Head,Body,DescrVarsTerm,DelayCheckCode)
-	    ),
-	    (has_context(compiling_udf_definition) -> RuleEnablerTest = true
-	    ; construct_rule_enabling_test(DescriptorIdCode,FL_DESCRMODE_RULE,RuleEnablerTest,_)
-	    ),
-	    PreBody = RuleEnablerTest,
-	    PostBody = DelayCheckCode,
-	    (is_prvariable(PostBody) -> RealPostBody = NULL
-	    ; RealPostBody = PostBody
-	    ),
+	    compile_body_top(Body,BCode,BodyStatus),
 	    ( no_errors_found(BodyStatus) ->
-		split_heads_add_sig_make_rule(HeadCodeList,
-					      BCode,PreBody,RealPostBody,
-					      DescriptorIdCode,DescrVarsTerm,
-					      RuleList-RuleTail,
-					      SigDiffList,
-					      Status1),
-		( no_errors_found(Status1), \+ has_context(compiling_udf_definition)
-		%% for UDFS checking of variables is done separately
-		->
-		    check_head_vars_for_safety(Head,Body,VarStatus),
-		    flatten([HeadStatus,BodyStatus,Status1,VarStatus],Status)
-		; Status = Status1
+		make_datatype_vars_code(BCode,BodyDTvarscode),
+		delay_literals_checking_code_list(Head,Body,DescrVarsTerm,DelayCheckCodeList),
+		construct_rule_enabling_test(DescriptorIdCode,FL_DESCRMODE_RULE,RuleEnablerTest,_),
+		PreBody = RuleEnablerTest,
+		PostBodyList = DelayCheckCodeList,
+		make_rules_and_signatures(HeadCode,H2BCodeFront,H2BCodeBack,
+					  BCode,PreBody,PostBodyList,
+					  BodyDTvarscode,
+					  DescriptorIdCode,DescrVarsTerm,
+					  RuleList-RuleTail,
+					  SigDiffList,
+					  FinalStatus),
+		( no_errors_found(FinalStatus),
+		    %% for UDFS checking of variables is done separately
+		    \+ has_context(compiling_udf_definition) ->
+		    check_head_vars_for_safety(Head,Body,VarStat),
+		    flatten([HeadStatus,BodyStatus,FinalStatus,VarStat],Status)
+		; Status = FinalStatus
 		)
 	    ;
 		Status=BodyStatus
@@ -4951,7 +4998,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	!.
 
 /****************************************************************************
-  split_heads_add_sig_make_rule(+HeadCodeList,+BodyCode,+PreBody,+PostBody,+DescriptorIdCode,+DescrVarsTerm,-RuleDiffList,-SigDiffList,-Status)
+  make_rules_and_signatures(+HeadCodeList,+H2BFrontList,+H2BBackList,+BodyCode,+PreBody,+PostBodyList,+BodyDTvarscode,+DescriptorIdCode,+DescrVarsTerm,RuleDiffList,SigDiffList,Status)
 
   HeadCodeList is a list of atoms in the rule head. BodyCode is the formula
   in the rule body. This procedure splits the list of atoms in the rule
@@ -4962,73 +5009,64 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 
   Note: delay checker is NOT added to the body in signatures
 ****************************************************************************/
-split_heads_add_sig_make_rule([H],BodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,[RuleCode|R]-R,[InsSigCode|S]-S,NO_ERRORS) :-
-	!,
-	%% Only a single atom appears in the rule head.
-	make_insert_rulesig_code(H,BodyCode,PreBody,PostBody,(DescriptorIdCode,DescrVarsTerm),NULL,InsSigCode),
-	finalize_rule_code(H,BodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,RuleCode).
-
-split_heads_add_sig_make_rule(HeadList,BodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,[IntermedRuleCode|RuleCodeList]-RuleListTail,[InsSigCode|SigList]-SigList,Status) :-
-	%% Multiple atoms appear in the rule head.
-	%% Generate a temp rule.
-	collect_prvars(HeadList,HeadVars),
-	length(HeadVars,N),
-	new_predicate(Name),
-	!,
-	head_caller_info_structure(CallerVarObj),
-	append(HeadVars,[CallerVarObj],HeadVarsAndCaller),
-	N1 is N+1,
-	newpredicate_struct(Name,N1,HeadVarsAndCaller,NewIntermediatePred),
-        make_insert_rulesig_code(HeadList,BodyCode,PreBody,PostBody,(DescriptorIdCode,DescrVarsTerm),NewIntermediatePred,InsSigCode),
-	%% new intermediate rule
-	rule_struct(NewIntermediatePred,BodyCode,IntermedRuleCode),
-	%% Split the head of this intermediate rule.
-	make_headrules_for_multiheaded_rule(HeadList,NewIntermediatePred,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,RuleCodeList-RuleListTail,Status).
-
+make_rules_and_signatures([],_H2BFront,_H2BBack,_BodyCode,_PreBody,_PostBody,_BodyDTvarscode,_DescriptorIdCode,_DescrVarsTerm,Rule-Rule,Sig-Sig,NO_ERRORS) :- !.
+make_rules_and_signatures([H|HList],[H2BF|H2BFrontL],[H2BB|H2BBackL],BodyCode,PreBody,[PostBody|PostBodyList],BodyDTvarscode,DescriptorIdCode,DescrVarsTerm,RulesHead-RTail,SigHead-STail,Status) :-
+	make_one_rule_and_signature(H,H2BF,H2BB,BodyCode,PreBody,PostBody,BodyDTvarscode,DescriptorIdCode,DescrVarsTerm,RulesHead-RulesTail,SigHead-SigTail),
+	make_rules_and_signatures(HList,H2BFrontL,H2BBackL,BodyCode,PreBody,PostBodyList,BodyDTvarscode,DescriptorIdCode,DescrVarsTerm,RulesTail-RTail,SigTail-STail,Status).
 
 /*
-   Splits multi-headed rules and adds defeasible condition to each rule.
-   If the original rule was head1,head2,head3 :- body then
-   split_heads_add_sig_make_rule/9 created the BRIDGE RULE of the form
-      NewIntermedPred :- body
-   and make_headrules_for_multiheaded_rule/8 creates HEAD RULES of the form
-      head1:- PreBody,NewIntermedPred,PostBody,DefeatCond.
-      head2:- PreBody,NewIntermedPred,PostBody,DefeatCond.
-      head3:- PreBody,NewIntermedPred,PostBody,DefeatCond.
+  make_one_rule_and_signature/11 can expect single-literal heads
+  or conjunctions of single literals. These cnjunctions are closely related.
+  For instance, they might come from ?X[?P=>?O] :- ...
+  which involves a conjunction of (mvdsig(....),mvdcondef(.....)) wrappers.
+
+  This is diff from make_rules_and_signatures/11, which takes lists of heads.
 */
-make_headrules_for_multiheaded_rule([],_IP,_PreB,_PostB,_IdCode,_DescrVarsTerm,CodeList-CodeList,NO_ERRORS) :- !.
-make_headrules_for_multiheaded_rule([H|RestH],IntermedPred,PreB,PostB,IdCode,DescrVarsTerm,[HeadRuleCode|LC]-T,Status) :-
-	finalize_rule_code(H,IntermedPred,PreB,PostB,IdCode,DescrVarsTerm,HeadRuleCode),
-	make_headrules_for_multiheaded_rule(RestH,IntermedPred,PreB,PostB,IdCode,DescrVarsTerm,LC-T,Status).
+make_one_rule_and_signature(H,H2BF,H2BB,BodyCode,PreBody,PostBody,BodyDTvarscode,DescriptorIdCode,DescrVarsTerm,RuleList-RTail,SigCode-STail) :-
+	is_prconjunct(H,H1,H2),
+	!,
+	make_one_rule_and_signature(H1,H2BF,H2BB,BodyCode,PreBody,PostBody,BodyDTvarscode,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigCode-SigTail),
+	make_one_rule_and_signature(H2,H2BF,H2BB,BodyCode,PreBody,PostBody,BodyDTvarscode,DescriptorIdCode,DescrVarsTerm,RuleTail-RTail,SigTail-STail).
+make_one_rule_and_signature(H,H2BF,H2BB,BodyCode,PreBody,PostBody,BodyDTvarscode,DescriptorIdCode,DescrVarsTerm,[Rule|RTail]-RTail,[Sig|STail]-STail) :-
+	make_datatype_vars_code(H,HeadDTvarscode),
+	conjunct_struct(HeadDTvarscode,BodyDTvarscode,DTvarscode),
+	construct_static_defeasible_condition(H,DescriptorIdCode,DescrVarsTerm,DefeatCond),
+	conjunct_code([DTvarscode,H2BF,BodyCode,H2BB],BodyForSig),
+	conjunct_code([PreBody,BodyForSig,DefeatCond,PostBody],FullBody),
+	%% H2BSig goes into the rule signature for future use
+	conjunct_struct(H2BF,H2BB,H2BSig),
+	rule_struct(H,FullBody,Rule),
+	make_insert_rulesig_code(H,BodyForSig,H2BSig,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,Sig).
 
 
 /*
    For static rules only. Creates the query
-   ?- fllibinsrulesig(....).
+   ?- FLLIBINSRULESIG(....).
    which is added to the compiled file. When the file is loaded,
    the signature for that static rule is added to the rule registry.
+   Body: includes H2BFront and H2BBack
 */
-make_insert_rulesig_code(_HeadList,_Body,_PreBody,_PostBody,_,_Newpred,NULL) :-
+make_insert_rulesig_code(_HeadCode,_Body,_,_PreBody,_PostBody,_,_,NULL) :-
 	(has_context(compiling_udf_definition)
 	; has_permaoption(FLSUPPRESS_RULESIGNS_OPTION)
 	),
 	!.
-make_insert_rulesig_code(Head,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm),Newpred,Code) :-
-	(is_list(Head) -> list_struct(Head,[],HeadCode)
-	; HeadCode = Head
-	),
-	construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVarsTerm,DefeatCond),
-        insert_rulesig_struct(HeadCode,Body,PreBody,PostBody,(DescrIdCode,DescrVarsTerm,DefeatCond),Newpred,CCode),
+make_insert_rulesig_code(HeadCode,Body,H2BSig,PreBody,PostBody,DescrIdCode,DescrVarsTerm,Code) :-
+	construct_defeasible_condition_for_signature_or_dynrule(HeadCode,DescrIdCode,DescrVarsTerm,DefeatCond),
+        insert_rulesig_struct(HeadCode,Body,H2BSig,PreBody,PostBody,DescrIdCode,DescrVarsTerm,DefeatCond,CCode),
         query_struct(CCode,Code).
 
+make_datatype_vars_code(PRCode,Code) :-
+	collect_prdatatypevars(PRCode,VarsCodeList),
+	conjunct_code(VarsCodeList,Code).
 
 %% DefeatCondCode = FL_UNDEFEATED(DescrIdCode,FileName,VarsCode,NewVar,ThisModule)
 %% FL_UNDEFEATED is modularized Prolog predicate
 %% NewVar is used because this type of defeasible condition is used in rule
 %% signatures and dynamic rules; NewVar is bound to the head at run time.
-construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVarsTerm,DelayedDefeatCondCode) :-
-	(has_permaoption(FLDEFEASIBLE(LibModule)), \+ has_context(compiling_udf_definition)
-	->
+construct_defeasible_condition_for_signature_or_dynrule(HeadCode,DescrIdCode,DescrVarsTerm,DelayedDefeatCondCode) :-
+	(has_permaoption(FLDEFEASIBLE(LibModule)),
+	    \+ has_context(compiling_udf_definition) ->
 	    %% DummyVarObj4Head is unified with Head in
 	    %% flora_record_rule_signature in flrcanon.P and flrdynrule.P
 	    %% This is because the rule head can be a variable bound at runtime.
@@ -5037,21 +5075,22 @@ construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVa
 	    new_prvariable(NO_INDEX,DummyVarObj4Head),
 	    thismodule_struct(ThisModule),
 	    %% create FL_UNDEFEATED(DescrIdCode,FileName,DescrVarsTerm,NewVar,ThisModule)
-	    %% this code makes FL_UNDEFEATED into Prolog predicate
+	    %% this code makes FL_UNDEFEATED into a modularized Prolog predicate
 	    %% It is faster, saves table space
 	    modularized_pratom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
-	    var_caller_info_structure(ThisModule,CallerInfo),
+	    var_context_info_structure(ThisModule,FWContext),
 	    get_current_compile_file_for_descriptor(FileName,FL_DESCRMODE_DYNRULE),
 	    prologterm_struct(UnDefeatFunCode,6,
-			      [DescrIdCode,FileName,DescrVarsTerm,DummyVarObj4Head,ThisModule,CallerInfo],
+			      [DescrIdCode,FileName,DescrVarsTerm,
+			       DummyVarObj4Head,ThisModule,FWContext],
 			      DefeatCondCode),
 	    %% wrap up for delaying the defeasible condition
 	    list_struct([],[],EmptyListObj), %% empty list
-	    ( approx_prindex(Head,HeadIdx) -> true
+	    ( approx_prindex(HeadCode,HeadIdx) -> true
 	    ; HeadIdx=NO_INDEX
 	    ),
 	    delay_defeat_struct(HeadIdx,DefeatCondCode,
-				EmptyListObj,EmptyListObj, %% no code 4 headvars
+				EmptyListObj,EmptyListObj, %% no headvars
 				DummyVarObj4Head,  %% will be bound to head
 				DelayedDefeatCondCode)
 	;
@@ -5065,22 +5104,22 @@ construct_defeasible_condition_for_signature_or_dynrule(Head,DescrIdCode,DescrVa
 %% The difference is that instead of NewVar we insert head code at compile time.
 construct_static_defeasible_condition(HeadCode,DescrIdCode,DescrVarsTerm,DelayedDefeatCondCode) :-
 	(has_permaoption(FLDEFEASIBLE(LibModule)),
-	    \+ has_context(compiling_udf_definition)
-	->
+	    \+ has_context(compiling_udf_definition) ->
 	    %% create FL_UNDEFEATED(DescrIdCode,NewVar,ThisModule)
 	    thismodule_struct(ThisModule),
-	    %% create FL_UNDEFEATED(DescrIdCode,NewVar,ThisModule)
-	    %% this code makes FL_UNDEFEATED into modularized Prolog predicate
+	    %% create FL_UNDEFEATED(DescrIdCode,FileName,DescrVarsTerm,NewVar,ThisModule)
+	    %% this code makes FL_UNDEFEATED into a modularized Prolog predicate
 	    %% It is faster, saves table space
 	    modularized_pratom_struct(FL_UNDEFEATED,LibModule,NO_INDEX,UnDefeatFunCode),
-	    var_caller_info_structure(ThisModule,CallerInfo),
+	    var_context_info_structure(ThisModule,FWContext),
 	    get_current_compile_file(FileName),
 	    prologterm_struct(UnDefeatFunCode,6,
-			      [DescrIdCode,FileName,DescrVarsTerm,HeadCode,ThisModule,CallerInfo],
+			      [DescrIdCode,FileName,DescrVarsTerm,
+			       HeadCode,ThisModule,FWContext],
 			      DefeatCondCode),
 	    %% wrap up for delaying the defeasible condition
 	    collect_prvars(HeadCode,HeadCodeVars1),
-	    remove_caller_vars(HeadCodeVars1,HeadCodeVars),
+	    remove_FL_CONTEXT_vars(HeadCodeVars1,HeadCodeVars),
 	    vars_to_var_names(HeadCodeVars,HeadCodeVarNames),
 	    list_struct(HeadCodeVars,[],HeadCodeVarsStruct),
 	    list_struct(HeadCodeVarNames,[],HeadCodeVarNamesStruct),
@@ -5089,18 +5128,12 @@ construct_static_defeasible_condition(HeadCode,DescrIdCode,DescrVarsTerm,Delayed
 	    ),
 	    delay_defeat_struct(HeadIdx,DefeatCondCode,
 				HeadCodeVarsStruct,HeadCodeVarNamesStruct,
-				NULL, %% head code
+				NULL, %% no dynamic head code
 				DelayedDefeatCondCode)
 	;
 	    DelayedDefeatCondCode = true
 	),
 	!.
-
-finalize_rule_code(H,BodyCode,PreBody,PostBody,DescriptorIdCode,DescrVarsTerm,RuleCode) :-
-	construct_static_defeasible_condition(H,DescriptorIdCode,DescrVarsTerm,DefeatCondWithHead),
-	%% conjunct body components
-	conjunct_code([PreBody,BodyCode,DefeatCondWithHead,PostBody],NewBody),
-	rule_struct(H,NewBody,RuleCode).
 
 
 /****************************************************************************
@@ -5115,7 +5148,7 @@ compile_conjunct2list(ConjunctCode,CodeList) :-
 compile_conjunct2list(NULL,CodeList,CodeList) :- !.
 
 compile_conjunct2list(ConjunctCode,CodeList,ListTail) :-
-	conjunct_struct(C1,C2,ConjunctCode),
+	is_prconjunct(ConjunctCode,C1,C2),
 	!,
 	compile_conjunct2list(C1,CodeList,T1),
 	compile_conjunct2list(C2,T1,ListTail).
@@ -5124,6 +5157,7 @@ compile_conjunct2list(Code,[Code|ListTail],ListTail) :- !.
 
 
 /****************************************************************************
+  compile_head_top(+ParserTermList,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
   compile_head(+ParserTermList,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
   H2BCodeFront - code passed from head to body, which is supposed to be
                  prepended to the code of the body
@@ -5139,7 +5173,7 @@ compile_head_top(ParserTerm,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	compile_head(ParserTerm,Code,H2BCodeFront,H2BCodeBack,Status),
 	clear_context(compiling_head(FlVars)),
 	!.
-compile_head([],NULL,NULL,NULL,NO_ERRORS) :- !.
+compile_head([],[],[],[],NO_ERRORS) :- !.
 
 compile_head([ParserTerm|ParserTermList],Code,H2BCodeFront,H2BCodeBack,Status) :-
 	detach_flworkspace(ParserTerm,P,WS),
@@ -5147,10 +5181,10 @@ compile_head([ParserTerm|ParserTermList],Code,H2BCodeFront,H2BCodeBack,Status) :
 	( no_errors_found(S) ->
 	    compile_head(ParserTermList,PLCode,PLH2BCodeFront,PLH2BCodeBack,S2),
 	    ( no_errors_found(S2) ->
-		    conjunct_struct(PCode,PLCode,Code),
-		    conjunct_struct(PH2BCodeFront,PLH2BCodeFront,H2BCodeFront),
-		    conjunct_struct(PH2BCodeBack,PLH2BCodeBack,H2BCodeBack),
-		    append(S,S2,Status)
+		Code = [PCode|PLCode],
+		H2BCodeFront = [PH2BCodeFront|PLH2BCodeFront],
+		H2BCodeBack = [PH2BCodeBack|PLH2BCodeBack],
+		append(S,S2,Status)
 	     ;
 		Status=S2
 	    )
@@ -5269,7 +5303,7 @@ compile_body(ParserTerm,Code,Status) :-
 	(QuantVarNames == FL_STAR -> FreeVarObjs_aux = []
 	; subtract_varnames_from_vars(FormVarList,QuantVarNames,FreeVarObjs_aux)
 	),
-	remove_prdontcare_and_caller_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
+	remove_prdontcare_and_FL_CONTEXT_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
 	%% this is used if naf-exists is nested deep inside the code
 	remove_quantified_vars(FreeVarObjs_aux2,FreeVarObjs),
 
@@ -5288,7 +5322,7 @@ compile_body(ParserTerm,Code,Status) :-
 	    ;
 		%% QuantType==FL_FORALL: compile as naf exists naf
 		append(RenamedQuantVars,FreeVarObjs,AllVars_pre),
-		remove_prdontcare_and_caller_vars(AllVars_pre,AllVars),
+		remove_prdontcare_and_FL_CONTEXT_vars(AllVars_pre,AllVars),
 		list_struct(AllVars,[],AllVarsListObj),
 		propagate_rulelog_naf(RenamedFormCode,AllVarsListObj,Code1),
 		list_struct(FreeVarObjs,[],FreeVarListObj),
@@ -5623,29 +5657,29 @@ compiling_symbol_warning(_Funct,_Arity,_WS,_SymbolContext,_Transactional,Index,M
 	compiling_warning(Index,Mesg,Warning).
 
 /****************************************************************************
-make_symbol_context_status(+UsedContext,+UsedLine,+UsedFileMsg,+UsedTransactional,+UsedArity,+SymbolName,+SymbolArity,+SymbolWS,+SymbolIndex,+SymbolContext,+SymbolTransactional,-Status)
+make_symbol_context_status(+UsedSymContext,+UsedLine,+UsedFileMsg,+UsedTransactional,+UsedArity,+SymbolName,+SymbolArity,+SymbolWS,+SymbolIndex,+SymbolContext,+SymbolTransactional,-Status)
 ****************************************************************************/
-make_symbol_context_status(_UsedContext,UsedLine,UsedFileMsg,UsedTransactional,_UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,SymbolContext,SymbolTransactional,ContextStatus) :-
+make_symbol_context_status(_UsedSymContext,UsedLine,UsedFileMsg,UsedTransactional,_UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,SymbolContext,SymbolTransactional,SymContextStatus) :-
 	UsedTransactional\=SymbolTransactional,
 	!,
 	(SymbolTransactional==TRANSACTIONAL_SYMBOL
 	-> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SymbolContext,SymbolTransactional,SymbolIndex,
 			     [WARN_TRANSACTIONAL_SYMBOL,ERRLINE_NO,
 			      UsedLine,UsedFileMsg],
-			     ContextStatus)
+			     SymContextStatus)
 	; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SymbolContext,SymbolTransactional,SymbolIndex,
 			    [WARN_NONTRANSACTIONAL_SYMBOL,ERRLINE_NO,
 			     UsedLine,UsedFileMsg],
-			    ContextStatus)
+			    SymContextStatus)
 	).
 
-make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,FUNCTION_SYMBOL,SymbolTransactional,ContextStatus) :-
-	( UsedContext==UDF_SYMBOL, UsedArity\=SymbolArity ->
+make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,FUNCTION_SYMBOL,SymbolTransactional,SymContextStatus) :-
+	( UsedSymContext==UDF_SYMBOL, UsedArity\=SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_FUNC_UDF_ARITY_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==FUNCTION_SYMBOL,
+			      SymContextStatus)
+	; UsedSymContext==FUNCTION_SYMBOL,
 	    UsedArity\=SymbolArity,
 	    %%_UsedTransactional = SymbolTransactional,
 	    %% This prevents things like a+b and X = +1 from causing a warning
@@ -5658,223 +5692,223 @@ make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,U
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_FUNC_ARITY_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
+			      SymContextStatus)
 	;   %% for the following, we warn only if there was prior use as
 	    %% hilog predicate, modular prolog predicate, or sensor
 	    %% with the ***same*** number of arguments
-	    UsedContext==PREDICATE_SYMBOL, UsedArity==SymbolArity,
+	    UsedSymContext==PREDICATE_SYMBOL, UsedArity==SymbolArity,
 	    (\+memberchk(SymbolName,[FL_FALSE,FL_TRUE]) ; UsedArity =\= 0)
 	->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_FUNC_PREDICATE_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==PROLOG_SYMBOL, UsedArity==SymbolArity ->
+			      SymContextStatus)
+	; UsedSymContext==PROLOG_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_FUNC_PROLOG_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==SENSOR_SYMBOL, UsedArity==SymbolArity ->
+			      SymContextStatus)
+	; UsedSymContext==SENSOR_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_FUNC_SENS_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
+			      SymContextStatus)
 /*
-	; UsedContext==BUILTIN_SYMBOL,
+	; UsedSymContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_SYMBOL, ContextStatus)
-	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, ContextStatus)
+	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_SYMBOL, SymContextStatus)
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, SymContextStatus)
 	    )
 */
 	;
-		ContextStatus = NO_ERRORS
+		SymContextStatus = NO_ERRORS
         ),
 	!.
 
-make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,ContextStatus) :-
-	( UsedContext==UDF_SYMBOL, UsedArity==SymbolArity ->
+make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,SymContextStatus) :-
+	( UsedSymContext==UDF_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_PREDICATE_UDF_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==FUNCTION_SYMBOL, UsedArity==SymbolArity,
+			      SymContextStatus)
+	; UsedSymContext==FUNCTION_SYMBOL, UsedArity==SymbolArity,
 	    (\+memberchk(SymbolName,[FL_FALSE,FL_TRUE]) ; UsedArity =\= 0)
 	->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_PREDICATE_FUNC_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==PREDICATE_SYMBOL,
+			      SymContextStatus)
+	; UsedSymContext==PREDICATE_SYMBOL,
 	    %%_UsedTransactional = SymbolTransactional,
 	    UsedArity\=SymbolArity
 	->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==PROLOG_SYMBOL, UsedArity\=SymbolArity ->
+			      SymContextStatus)
+	; UsedSymContext==PROLOG_SYMBOL, UsedArity\=SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_PREDICATE_PROLOG_ARITY_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==SENSOR_SYMBOL, UsedArity==SymbolArity,
+			      SymContextStatus)
+	; UsedSymContext==SENSOR_SYMBOL, UsedArity==SymbolArity,
 	    \+compiling_flrshell_command ->
 	    compiling_error(SymbolIndex,
 			    [ERROR_PREDICATE_SENS_SYMBOL,ERRLINE_NO,
 			     UsedLine,UsedFileMsg],
 			    Err),
-	    ContextStatus = [Err]
-	; UsedContext==SENSOR_SYMBOL, \+compiling_flrshell_command ->
+	    SymContextStatus = [Err]
+	; UsedSymContext==SENSOR_SYMBOL, \+compiling_flrshell_command ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [ERROR_PREDICATE_SENS_SYMBOL,ERRLINE_NO,
 			      UsedLine,UsedFileMsg],
-			      ContextStatus)
+			      SymContextStatus)
 	;
-	    ContextStatus = NO_ERRORS
+	    SymContextStatus = NO_ERRORS
 	),
 	!.
 
-make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,UDF_SYMBOL,SymbolTransactional,ContextStatus) :-
-	( UsedContext==PROLOG_SYMBOL, UsedArity==SymbolArity ->
+make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,UDF_SYMBOL,SymbolTransactional,SymContextStatus) :-
+	( UsedSymContext==PROLOG_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_UDF_PROLOG_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==FUNCTION_SYMBOL,
+			      SymContextStatus)
+	; UsedSymContext==FUNCTION_SYMBOL,
 	    (UsedArity==SymbolArity
 	    -> compiling_error(SymbolIndex,
 			       [ERROR_UDF_SYMBOL, %%WARN_UDF_FUNC_SYMBOL,
 				ERRLINE_NO, UsedLine,UsedFileMsg],
 			       Err),
-		ContextStatus = [Err]
+		SymContextStatus = [Err]
 	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
 				[WARN_UDF_FUNC_ARITY_SYMBOL,ERRLINE_NO,
 				 UsedLine,UsedFileMsg],
-				ContextStatus)
+				SymContextStatus)
 	    )
-	; UsedContext==PREDICATE_SYMBOL,
+	; UsedSymContext==PREDICATE_SYMBOL,
 	    (UsedArity==SymbolArity
 	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
 				 [WARN_UDF_PREDICATE_SYMBOL,ERRLINE_NO,
 				  UsedLine,UsedFileMsg],
-				 ContextStatus)
+				 SymContextStatus)
 	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
 				[WARN_UDF_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
 				 UsedLine,UsedFileMsg],
-				ContextStatus)
+				SymContextStatus)
 	    )
-	; UsedContext==SENSOR_SYMBOL, UsedArity==SymbolArity ->
+	; UsedSymContext==SENSOR_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_UDF_SENSOR_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==BUILTIN_SYMBOL,
+			      SymContextStatus)
+	; UsedSymContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_SYMBOL, ContextStatus)
-	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, ContextStatus)
+	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_SYMBOL, SymContextStatus)
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, SymContextStatus)
 	    )
 	;
-	    ContextStatus = NO_ERRORS
+	    SymContextStatus = NO_ERRORS
 	),
 	!.
 
-make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,SENSOR_SYMBOL,SymbolTransactional,ContextStatus) :-
-	( UsedContext==UDF_SYMBOL, UsedArity==SymbolArity ->
+make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,SENSOR_SYMBOL,SymbolTransactional,SymContextStatus) :-
+	( UsedSymContext==UDF_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_SENSOR_UDF_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==FUNCTION_SYMBOL, UsedArity==SymbolArity ->
+			      SymContextStatus)
+	; UsedSymContext==FUNCTION_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_SENSOR_FUNC_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==PREDICATE_SYMBOL, UsedArity\=SymbolArity ->
+			      SymContextStatus)
+	; UsedSymContext==PREDICATE_SYMBOL, UsedArity\=SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==PREDICATE_SYMBOL, UsedArity==SymbolArity ->
+			      SymContextStatus)
+	; UsedSymContext==PREDICATE_SYMBOL, UsedArity==SymbolArity ->
 	    (\+compiling_flrshell_command ->
 		compiling_error(SymbolIndex,
 			      [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
 			      Err),
-		ContextStatus = [Err]
+		SymContextStatus = [Err]
 	    %% in the FLORA shell just give a warning
 	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
+			      SymContextStatus)
 	    )
-	; UsedContext==SENSOR_SYMBOL, UsedArity\=SymbolArity ->
+	; UsedSymContext==SENSOR_SYMBOL, UsedArity\=SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_SENSOR_ARITY_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==PROLOG_SYMBOL,
+			      SymContextStatus)
+	; UsedSymContext==PROLOG_SYMBOL,
 	    %% prolog symbol that comes from a sensor has 2 more args: file+line
 	    (UsedArity=\=SymbolArity
 	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
 				 [ERROR_SENSOR_PROLOG_SYMBOL,ERRLINE_NO,
 				  UsedLine,UsedFileMsg],
-				 ContextStatus)
+				 SymContextStatus)
 	    ; compiling_error(SymbolIndex,
 			      [ERROR_SENSOR_PROLOG_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
 			      Err),
-	    	ContextStatus=[Err]
+	    	SymContextStatus=[Err]
 	    )
-	; UsedContext==BUILTIN_SYMBOL,
+	; UsedSymContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
 	    -> compiling_error(SymbolIndex, WARN_BUILTIN_SYMBOL, Err),
-	    	ContextStatus=[Err]
-	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, ContextStatus)
+	    	SymContextStatus=[Err]
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, SymContextStatus)
 	    )
 	;
-	    ContextStatus = NO_ERRORS
+	    SymContextStatus = NO_ERRORS
 	),
 	!.
 
-make_symbol_context_status(UsedContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,PROLOG_SYMBOL,SymbolTransactional,ContextStatus) :-
+make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,PROLOG_SYMBOL,SymbolTransactional,SymContextStatus) :-
 	%% MK: can this happen in the FLORA shell?
-	( UsedContext==UDF_SYMBOL, UsedArity==SymbolArity ->
+	( UsedSymContext==UDF_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_error(SymbolIndex,
 			    [ERROR_PROLOG_UDF_SYMBOL,ERRLINE_NO,
 			     UsedLine,UsedFileMsg],
 			    Err),
-		ContextStatus=[Err]
-	; UsedContext==PROLOG_SYMBOL, UsedArity\=SymbolArity ->
+		SymContextStatus=[Err]
+	; UsedSymContext==PROLOG_SYMBOL, UsedArity\=SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PROLOG_SYMBOL,SymbolTransactional,SymbolIndex,
 			      [WARN_PROLOG_ARITY_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
-			      ContextStatus)
-	; UsedContext==FUNCTION_SYMBOL, UsedArity==SymbolArity ->
+			      SymContextStatus)
+	; UsedSymContext==FUNCTION_SYMBOL, UsedArity==SymbolArity ->
 		compiling_error(SymbolIndex,
 				[ERROR_PROLOG_FUNC_SYMBOL,ERRLINE_NO,
 				 UsedLine,UsedFileMsg],
 				Err),
-		ContextStatus=[Err]
-	; UsedContext==PREDICATE_SYMBOL,
+		SymContextStatus=[Err]
+	; UsedSymContext==PREDICATE_SYMBOL,
 	    (UsedArity==SymbolArity
 	    -> compiling_error(SymbolIndex,
 			       [ERROR_PROLOG_PREDICATE_SYMBOL,ERRLINE_NO,
 				UsedLine,UsedFileMsg],
 			       Err),
-	    	ContextStatus=[Err]
+	    	SymContextStatus=[Err]
 	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PROLOG_SYMBOL,SymbolTransactional,SymbolIndex,
 				[WARN_PROLOG_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
 				 UsedLine,UsedFileMsg],
-				ContextStatus)
+				SymContextStatus)
 	    )
-	; UsedContext==BUILTIN_SYMBOL,
+	; UsedSymContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
 	    -> compiling_error(SymbolIndex, WARN_BUILTIN_SYMBOL, Err),
-		    ContextStatus=[Err]
-	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PROLOG_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, ContextStatus)
+		    SymContextStatus=[Err]
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PROLOG_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, SymContextStatus)
 	    )
 	;
-	    ContextStatus = NO_ERRORS
+	    SymContextStatus = NO_ERRORS
 	),
 	!.
 
@@ -6447,16 +6481,16 @@ compile_body_literal(ParserTerm,WS,OidCode,BodyLitCode,BodyFrontList,Status) :-
 	    ->
                 WSCode = V
             ;
-                %% Not for promoting term to predicate, but to bind caller info.
+                %% Not to promote term to predicate, but to bind caller module
                 %% Needed only for calls when a variable occurs by itself in
 		%% the rule body:  ... :- ..., X, ,,,
                 thismodule_struct(ThisModule),
 		%% doesn't matter??
-                body_caller_info_structure(ThisModule,CallerInfo),
+                body_context_info_structure(ThisModule,FWContext),
 		%% ...:-...,X, is compiled into
-		%%    FLLIBMODLIT(libmod_wrapper,X,FL_INVALIDMODULE,CallerInfo)
+		%%    FLLIBMODLIT(libmod_wrapper,X,FL_INVALIDMODULE,FWContext)
                 atomobj_struct(FL_INVALIDMODULE,Module),
-                florasyslib_struct(VIndex,FLLIBMODLIT,3,[V,Module,CallerInfo],WSCode)
+                florasyslib_struct(VIndex,FLLIBMODLIT,3,[V,Module,FWContext],WSCode)
             ),
 	    BodyFrontList = [],
             OidCode=NULL,
@@ -6652,7 +6686,7 @@ compile_body_literal(ParserTerm,WS,OidCode,BodyLitCode,BodyFrontList,Status) :-
 	; is_flcallermodule(ParserTerm,Op,Module) ->
 	    is_flatom(Op,_OpAtom,Index),
 	    compile_atomvar(Module,ModCode),
-	    caller_binding_code(ModCode,WSCode),
+	    caller_module_binding_code(ModCode,WSCode),
 	    BodyFrontList = [],
 	    Status = NO_ERRORS,
 	    OidCode=NULL
@@ -7096,7 +7130,7 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status
 	    ; Suffix == FL_SPECIAL_CALLER_TOKEN
 	    ->
 		new_prvariable(NO_INDEX,Object),
-		caller_binding_code(Object,Code),
+		caller_module_binding_code(Object,Code),
 		Status = NO_ERRORS,
 		BodyFrontList=[]
 	    ; 
@@ -7567,7 +7601,7 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 
 	subtract_varnames_from_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
 	%% remove don't care vars, since no need to delay because of them
-	remove_prdontcare_and_caller_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
+	remove_prdontcare_and_FL_CONTEXT_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
 	%% this is used if naf-exists is nested deep inside the code
 	remove_quantified_vars(FreeVarObjs_aux2,FreeVarObjs),
 	
@@ -7973,12 +8007,12 @@ compute_reification_expr(Formula,Object,OidCode,Status) :-
 	%% If it is compiled into a LIBMODLIT/3, replace with LIBMODOBJ
 	->
             new_prvariable(Index,Object),
-	    %% LIBMODLIT/3 already has the caller argument -- no
+	    %% LIBMODLIT/3 already has the FL_CONTEXT argument -- no
 	    %% need to add it here
-	    Args = [Pred,WS,Caller],
+	    Args = [Pred,WS,FWContext],
 	    (has_context(compiling_headliteral)
-	    -> NewArgs = [FL_HEAD,Pred,WS,Caller,Object]
-	    ;  NewArgs = [FL_BODY,Pred,WS,Caller,Object]
+	    -> NewArgs = [FL_HEAD,Pred,WS,FWContext,Object]
+	    ;  NewArgs = [FL_BODY,Pred,WS,FWContext,Object]
 	    ),
 	    florasyslib_struct(Index,FLLIBMODOBJ,5,NewArgs,OidCode)
 	;
@@ -8620,38 +8654,7 @@ compile_head_termobj(Funct,N,Args,WS,Object,Code,H2BCodeFront,H2BCodeBack,Compil
 compile_head_termlit(Funct,N,Args,WS,Code,H2BCodeFront,H2BCodeBack,CompileStatus) :-
 	verify_symbol_context(Funct,N,WS,PREDICATE_SYMBOL,NONTRANSACTIONAL_SYMBOL,SymbolStatus),
 	set_context(compiling_term_name),
-	compile_head_pathexplist([Funct|Args],WS,[FObj|AObj],ObjCode,H2BCodeFront_pre,H2BCodeBack,PathexpStatus),
-	((H2BCodeFront_pre \== NULL ; H2BCodeBack \== NULL)
-	-> H2BCodeFront = H2BCodeFront_pre
-	; /* compiling modular prolog fact: convert to rule fact :- true.
-	     ONLY FOR ADDITION OF MODULAR PROLOG FACTS
-	     Such rules are compiled by compile_fact_add so they will
-	     be insertable and will not conflict with the staic version
-	     of the same modular prolog fact
-	     For instance: 
-
-	     THIS IS A HACK: Think of a better way. Example:
-	       :- prolog ppp/1.
-               ?- _add(load2).
-               ppp(abc).
-	     ----- load.flr -----
-	       :- prolog ppp/1.
-               ppp(cde).
-
-	      Without this special treatment, there will be an error because
-	      ppp(abc) will be compiled as a static Prolog face and ppp(cde) as
-	      ?- assert(ppp(cde)).
-	      These two will conflict: redefinition of static by dynamic.
-	    */
-	    has_context(compiling_facts),
-	    has_context(compiling_for_addition),
-	    get_flatom_name(Funct,AtomName),
-	    flora_modular_prlgdef(AtomName,N)
-	-> %% FL_TRUE is dummy code, which gets ignored by conjunct_struct/3
-	    H2BCodeFront = NULL,
-	    set_context(converting_fact2rule)
-	; H2BCodeFront = H2BCodeFront_pre
-	),
+	compile_head_pathexplist([Funct|Args],WS,[FObj|AObj],ObjCode,H2BCodeFront,H2BCodeBack,PathexpStatus),
 	( no_errors_found(PathexpStatus) -> 
 	    termlit_struct(HEADLITERAL,FObj,N,AObj,TObj),
 	    attach_workspace(TObj,WS,WSTObj,WSStatus),
@@ -8776,9 +8779,9 @@ compile_head_objspec(ObjTerm,SpecBody,WS,Object,Code,H2BCodeFront,H2BCodeBack,St
 	  ( no_errors_found(S) -> 
 	      compile_head_specbody(Object,SpecBody,WS,SCode,SH2BCodeFront,SH2BCodeBack,Status),
 	      ( no_errors_found(Status) -> 
-		      conjunct_struct(ObjCode,SCode,Code),
-	              conjunct_struct(ObjH2BCodeFront,SH2BCodeFront,H2BCodeFront),
-	              conjunct_struct(ObjH2BCodeBack,SH2BCodeBack,H2BCodeBack)
+		  conjunct_struct(ObjCode,SCode,Code),
+		  conjunct_struct(ObjH2BCodeFront,SH2BCodeFront,H2BCodeFront),
+		  conjunct_struct(ObjH2BCodeBack,SH2BCodeBack,H2BCodeBack)
 	      ; true
 	      )
 	  ;
@@ -9096,6 +9099,10 @@ compile_head_objeql(Obj1,Obj2,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 ****************************************************************************/
 compile_head_neg(PosPart,WS,Idx,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	compile_head_literal(PosPart,WS,PosCode,H2BCodeFront,H2BCodeBack,S),
+	%% compile_head_literal/6 clears the compiling_headliteral context, so
+	%% we reenable it here. This context is used in
+	%% modularized_pratom_struct/3/4
+	set_context(compiling_headliteral),
 	( no_errors_found(S) -> 
 	    head_neg_struct(PosCode,Idx,NegCode,Status1),
 	    attach_workspace(NegCode,WS,Code,WSStatus),
@@ -9104,6 +9111,7 @@ compile_head_neg(PosPart,WS,Idx,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	    )
 	; Status = S
 	),
+	clear_context(compiling_headliteral),
 	!.
 
 
@@ -9188,7 +9196,7 @@ compile_insert_litlist([H|T],Code,Status) :-
 compile_insert_litlist([HWS|T],Code,Status) :-
 	%% regular fact. may have path expression inside
 	detach_flworkspace(HWS,H,WS),
-	compile_head_literal(H,WS,HeadCode1,H2BCodeFront1,H2BCodeBack1,S),
+	compile_head_literal(H,WS,HeadCode,H2BCodeFront,H2BCodeBack,S),
 	!,
 	new_prvariable(NO_INDEX,HVL),
 	new_prvariable(NO_INDEX,BVL),
@@ -9203,11 +9211,11 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 	; report_dynrule_varlist(BVL,BVLValue)
 	),
 	( no_errors_found(S) -> 
-	    ( H2BCodeFront1==NULL, H2BCodeBack1==NULL
+	    ( H2BCodeFront==NULL, H2BCodeBack==NULL
 	    ->
 		compile_insert_litlist(T,TCode,S2),
 		( no_errors_found(S2) -> 
-		   conjunct_struct(HeadCode1,TCode,Code)
+		   conjunct_struct(HeadCode,TCode,Code)
 		; true
 		),
 		append(S,S2,Status)
@@ -9223,23 +9231,32 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_DYNRULE,DescrIdCode,DescrVarsTerm,DefaultMetaFactDiffList,_),
 		set_context(compile_with_var_module),
 		set_context(compiling_dynrule(DescrIdCode)),
-		compile_head_literal(H,WS,HeadCode,H2BCodeFront,H2BCodeBack,S),
+		%% CHECK!!!!
 		compile_conjunct2list(HeadCode,HCode),
 		list_struct(HCode,[],HeadCodeList),
-		conjunct_struct(H2BCodeFront,H2BCodeBack,H2BCode),
 		%% only the vars in the fact-term are to be checked
 		delay_literals_checking_code([],H,DescrVarsTerm,DelayCheckCode),
+		%% CHECK!!!!! Rule enabler for facts-turned-rules?
 		construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_DYNRULE,RuleEnablerTest,FileName),
 		PreBody = RuleEnablerTest,
+		%% CHECK!!!!! Delay checker for inserting facts-turned-rules?
 		PostBody = DelayCheckCode,
 		get_current_stmt_number_for_descriptor(RuleIdx,StmtNum),
 		DefaultMetaFactDiffList = DefaultMetaFactList - [],
 		list_struct(DefaultMetaFactList,[],MetaFactCode),
-		florasyslib_struct(FLSYSRULEUPDATE,12,
+		list_struct([H2BCodeFront],[],H2BCodeFrontList),
+		list_struct([H2BCodeBack],[],H2BCodeBackList),
+		list_struct([PostBody],[],PostBodyList),
+		florasyslib_struct(FLSYSRULEUPDATE,15,
 				   [DescrIdCode,FileName,DescrVarsTerm,
 				    StmtNum,MetaFactCode,
-				    HeadCodeList,H2BCode,HVL,BVL,
-				    PreBody,PostBody,
+				    HeadCodeList,
+				    FL_TRUE,  %% Body
+				    HVL,BVL,
+				    FL_TRUE,  %% DTvarscode
+				    H2BCodeFrontList,H2BCodeBackList,
+				    PreBody,
+				    PostBodyList,
 				    FL_TRUE], %% default defeat condition
 				   HDynruleCode),
 		clear_context(compiling_dynrule(DescrIdCode)),
@@ -9359,15 +9376,53 @@ compile_delete_litlist([HWS|T],CodeList,Status) :-
 	%% compiled into queries.
         set_context(compile_delete),
 	detach_flworkspace(HWS,H,WS),
-	compile_body_literal(H,WS,OidCode,SpecCode,[],S),
-	conjunct_struct(OidCode,SpecCode,HCode),
+	compile_body_literal(H,WS,HOidCode,HSpecCode,[],S),
         clear_context(compile_delete),
 	( no_errors_found(S) -> 
-	    compile_conjunct2list(HCode,HCodeList),
-	    compile_delete_litlist(T,TCodeList,Status),
-	    ( no_errors_found(Status) -> 
-		append(HCodeList,TCodeList,CodeList)
-	    ; true
+	    compile_conjunct2list(HSpecCode,HList),
+	    (HOidCode == NULL -> HWSCode = HList
+	    ;
+		RuleIdx = NO_INDEX,
+		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_DYNRULE,DescrIdCode,DescrVarsTerm,DefaultMetaFactDiffList,_),
+		set_context(compile_with_var_module),
+		set_context(compiling_dynrule(DescrIdCode)),
+		list_struct(HList,[],HeadCodeList),
+		%% CHECK!!!!! Rule enabler for facts-turned-rules?
+		construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_DYNRULE,RuleEnablerTest,FileName),
+		PreBody = RuleEnablerTest,
+		list_struct([FL_TRUE],[],PostBodyList), %% delay checker
+		get_current_stmt_number_for_descriptor(RuleIdx,StmtNum),
+		DefaultMetaFactDiffList = DefaultMetaFactList - [],
+		list_struct(DefaultMetaFactList,[],MetaFactCode),
+		list_struct([],[],EmptyListCode), %% empty list
+		list_struct([HOidCode],[],H2BCodeFrontList),
+		list_struct([NULL],[],H2BCodeBackList),
+		HVL = EmptyListCode,
+		BVL = EmptyListCode,
+		florasyslib_struct(FLSYSRULEUPDATE,15,
+				   [DescrIdCode,FileName,DescrVarsTerm,
+				    StmtNum,
+				    MetaFactCode,
+				    HeadCodeList,
+				    FL_TRUE,  %% Body
+				    HVL,BVL,
+				    FL_TRUE,  %% DTvarscode
+				    H2BCodeFrontList,H2BCodeBackList,
+				    PreBody,
+				    PostBodyList,
+				    FL_TRUE], %% default defeat condition
+				   HWSCode),
+		clear_context(compiling_dynrule(DescrIdCode)),
+		clear_context(compile_with_var_module)
+            ),
+	    compile_delete_litlist(T,TCodeList,S2),
+	    ( no_errors_found(S2) -> 
+		(is_list(HWSCode) ->
+		    append(HWSCode,TCodeList,CodeList)
+		; CodeList = [HWSCode|TCodeList]
+		),
+		append(S,S2,Status)
+	    ; Status=S2
 	    )
 	;
 	  Status=S
@@ -9381,8 +9436,9 @@ compile_delete_litlist([HWS|T],CodeList,Status) :-
   This predicate processes the list of literals in a DB update. For each
   literal, it tries to add the name of the storage trie for the module.
 
-  Note: a DB update can only update a Flora user module or itself. If a
-        Flora system module allows update, it must provide an update interface.
+  Note: a DB update can only update a Flora user module or the update's
+        host module. If a Flora system module allows update,
+	it must provide an update interface.
 ****************************************************************************/
 compile_dbupdate_list([],[]) :- !.
 
@@ -9500,8 +9556,8 @@ compile_dyn_latent_query(Op,DescrIdCode,MetaFactDiffList,Body,LatentQuerySigCode
 	    (BodyVars==[] -> true
 	    ; report_dynrule_varlist(BVL,BVLValue)
 	    ),
-	    %% code to bind the Caller variable to the calling module
-	    caller_binding_code(ThisMod,CallerBindingCode),
+	    %% code to bind the CallerMod variable to the calling module
+	    caller_module_binding_code(ThisMod,CallerBindingCode),
 	    construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_LATENT_DYNQUERY,LatentQueryEnablerTest,_),
 	    conjunct_struct(CallerBindingCode,LatentQueryEnablerTest,PreLatentQueryCode),
 	    get_current_compile_file_for_descriptor(File,FL_DESCRMODE_LATENT_DYNQUERY),
@@ -9527,20 +9583,18 @@ compile_dyn_latent_query(Op,DescrIdCode,MetaFactDiffList,Body,LatentQuerySigCode
 compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,RuleCode,Status) :-
         set_context(compile_with_var_module),
 	set_context(compiling_dynrule(DescrIdCode)),
-	compile_head_top(Head,HeadCode1,H2BCodeFront,H2BCodeBack,HeadStatusPre),
-	compile_conjunct2list(HeadCode1,HeadCode2),
-	remove_empty_list(HeadCode2,HeadCode),
+	compile_head_top(Head,HeadCode,H2BCodeFront,H2BCodeBack,HeadStatusPre),
 	%% no :- prolog predicates in dynamic rule heads
 	(has_prologlit(HeadCode,IdxH)
-	-> compiling_error(IdxH,NO_PROLOG_IN_DYNRULE_HEAD,DelayStatus1),
-	    DelayStatus = [DelayStatus1]
-	; DelayStatus = NO_ERRORS
+	-> compiling_error(IdxH,NO_PROLOG_IN_DYNRULE_HEAD,PlgStatus1),
+	    PlgStatus = [PlgStatus1]
+	; PlgStatus = NO_ERRORS
 	),
-	append(HeadStatusPre,DelayStatus,HeadStatus),
+	append(HeadStatusPre,PlgStatus,HeadStatus),
         new_prvariable(NO_INDEX,HVL), % attr var for head var list
         new_prvariable(NO_INDEX,BVL), % attr var for body var list
 	( no_errors_found(HeadStatus) -> 
-	    compile_body_top(Body,BodyCode1,BodyStatus),
+	    compile_body_top(Body,BodyCode,BodyStatus),
 	    ( no_errors_found(BodyStatus) -> 
 		( is_fldeleteruleop(Op) ->  true
 		;   collect_name_var_pairs(Head,HeadVars),
@@ -9554,11 +9608,13 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 		    ; report_dynrule_varlist(BVL,BVLValue)
 		    )
 		),
-	        collect_prdatatypevars([HeadCode,BodyCode1],DTVarsCodeList),
-		conjunct_code(DTVarsCodeList,DTVarsCode),
-		conjunct_code([DTVarsCode,H2BCodeFront,BodyCode1,H2BCodeBack],PureBodyCode),
+		make_datatype_vars_code(HeadCode,HeadDTvarscode),
+		make_datatype_vars_code(BodyCode,BodyDTvarscode),
+		conjunct_struct(HeadDTvarscode,BodyDTvarscode,DTvarscode),
 
 	        list_struct(HeadCode,[],HeadCodeList),
+	        list_struct(H2BCodeFront,[],H2BCodeFrontList),
+	        list_struct(H2BCodeBack,[],H2BCodeBackList),
 		construct_defeasible_condition_for_signature_or_dynrule(HeadCode,DescrIdCode,DescrVarsTerm,DefeatCondCode),
 		%% Note: Head cannot contain sensors, so no need to check
 		%% multi-headed rules if sensors mix with non-sensors
@@ -9566,18 +9622,23 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 		-> RuleEnablerTest = true, FileName = NULL
 		; construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_DYNRULE,RuleEnablerTest,FileName)
 		),
-		delay_literals_checking_code(Head,Body,DescrVarsTerm,DelayCheckCode),
+		delay_literals_checking_code_list(Head,Body,DescrVarsTerm,DelayCheckCodeList),
 		PreBody = RuleEnablerTest,
-		PostBody = DelayCheckCode,
+		PostBody = DelayCheckCodeList,
+		list_struct(PostBody,[],PostBodyList),
 		approx_prindex(DescrIdCode,RuleIdx),
 		get_current_stmt_number_for_descriptor(RuleIdx,StmtNum),
 		MetaFactDiffList = MetaFactList - [],
 		list_struct(MetaFactList,[],MetaFactCode),
-		florasyslib_struct(FLSYSRULEUPDATE,12,
+		florasyslib_struct(FLSYSRULEUPDATE,15,
 				   [DescrIdCode,FileName,DescrVarsTerm,
 				    StmtNum,MetaFactCode,
-				    HeadCodeList,PureBodyCode,HVL,BVL,
-				    PreBody,PostBody,DefeatCondCode],
+				    HeadCodeList,BodyCode,HVL,BVL,
+				    DTvarscode,
+				    H2BCodeFrontList,H2BCodeBackList,
+				    PreBody,
+				    PostBodyList,
+				    DefeatCondCode],
 				   RuleCode),
 		flatten([HeadStatus,BodyStatus],Status)
 	    ;
@@ -9590,12 +9651,14 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 	clear_context(compiling_dynrule(DescrIdCode)),
         clear_context(compile_with_var_module).
 
+/*
 remove_empty_list([],[]) :- !.
 remove_empty_list([[]|L],NL) :- 
 	!,
 	remove_empty_list(L,NL).
 remove_empty_list([H|L],[H|NL]) :- 
 	remove_empty_list(L,NL).
+*/
 
 %% remove all occurrences of Elt from List.
 %% this is a stop clause for var-terminated lists
@@ -9955,7 +10018,7 @@ is_body_neg_negatable_literal(X) :-
 	!.
 is_body_neg_negatable_literal(X) :-
 	prologterm_atom_arity(X,Atm,Arity1),
-	%% modularized prolog predicates have an extra caller argument
+	%% modularized prolog predicates have an extra FL_CONTEXT argument
 	Arity is Arity1-1,
 	flora_negatable_prlgdef(Atm,Arity,_),
 	!.
@@ -10003,6 +10066,15 @@ is_unimplemented_neg_negatable_literal(X) :-
 
 %% delay_literals_checking_code(+Head,+Body,+DescrVarsTerm,-Code)
 %% Head & Body are FL code. DescrVarsTerm is PR code
+%% CONSIDER SWITCHING TO PR-CODE, as in delay_checking_code_for_rulelog_naf/2
+delay_literals_checking_code_list([],_Body,_DescrVarsTerm,[]) :- !.
+delay_literals_checking_code_list([H|Rest],Body,DescrVarsTerm,[HC|RestC]) :-
+	delay_literals_checking_code(H,Body,DescrVarsTerm,HC),
+	delay_literals_checking_code_list(Rest,Body,DescrVarsTerm,RestC).
+delay_literals_checking_code(Head,_Body,_DescrVarsTerm,NULL) :-
+	%% should not add delay-checker to sensor rules
+	is_defined_as_sensor(Head),
+	!.
 delay_literals_checking_code(Head,Body,DescrVarsTerm,Code) :-
 	collect_flvars(Head,HeadVars1),
 	collect_flvars(Body,BodyVars1),
@@ -10022,16 +10094,13 @@ delay_literals_checking_code(Head,Body,DescrVarsTerm,Code) :-
 	    is_fllist(ParserHeadVars,HeadVars,[],NO_INDEX),
 	    is_fllist(ParserBodyVars,BodyVars,[],NO_INDEX)
 	),
-	%% Optimization: if HeadVars contains BodyVars+DescrVars,
-	%% no delay checking is
-	%% needed for that rule. Instead, we put a var in place of the delay
-	%% checker. In static & dynamic code, this var is ignored in generating
-	%% the corresponding rules. However, dynamic rules are encoded as
-	%% FLSYSRULEUPDATE(Id,FileName,DescrVarTerm,DescrMetaFacts,Head,Body,Hvars,Bvars,PreBody,PostBody,Defeat)
 	%% To match reified rules, we make DelayCheckCode into a new var
-	%% If there will be other stuff in PostBody, we'll have to integrate it.
-	(vars_contains(HeadVars,BodyVars) ->
-	    new_dontcare_prvariable(NO_INDEX,Code)
+	(has_context(rule_reification) -> new_dontcare_prvariable(NO_INDEX,Code)
+	%% Optimization: if HeadVars contains BodyVars+DescrVars,
+	%% no delay checking is needed for that rule.
+	%% Instead, we put NULL in place of the delay checker.
+	%% This NULL is ignored in generating the code.
+	; vars_contains(HeadVars,BodyVars) -> Code = NULL
 	; compile_prlgterm(FLORA_DELAY_CHECKER,2,
 			   [ParserBodyVars,ParserHeadVars],
 			   Code,_OidCode,_ACode,[],_Status)
@@ -10043,7 +10112,7 @@ delay_literals_checking_code(Head,Body,DescrVarsTerm,Code) :-
 %% inside of flora_naf. It takes PR-code as argument, not FL-code
 delay_checking_code_for_rulelog_naf(PRBody,Code) :-
 	collect_prvars(PRBody,PRBodyVars),
-	remove_prdontcare_and_caller_vars(PRBodyVars,PurePRBodyVars),
+	remove_prdontcare_and_FL_CONTEXT_vars(PRBodyVars,PurePRBodyVars),
 	prvar_to_flvar_struct_list(PurePRBodyVars,FLBodyVars),
 	remove_dupflvars(FLBodyVars,BodyVars),
 	is_fllist(ParserBodyVars,BodyVars,[],NO_INDEX),
@@ -10053,34 +10122,6 @@ delay_checking_code_for_rulelog_naf(PRBody,Code) :-
 			   Code,_OidCode,_ACode,[],_Status),
 	!.
 
-
-no_mixed_sensor_nonsensor_heads(CompiledHead,ParsedHead,Status) :-
-	(no_mixed_sensor_nonsensor_heads(CompiledHead) -> Status = NO_ERRORS
-	;  
-	    approx_flindex(ParsedHead,I),
-	    compiling_error(I,MIXED_HEAD_SENSORS,MixStatus),
-	    Status = [MixStatus]
-	).
-
-%% cannot add delay-checking code for some heads but not others.
-%% we check that there is no mixture of sensors (for which delay-checker
-%% is NOT added) and non-sensors (for which delay IS added) here.
-%% Used in conjunction with delay_literals_checking_code/2 when Head \= []
-no_mixed_sensor_nonsensor_heads([]) :- !.
-no_mixed_sensor_nonsensor_heads(HeadList) :-
-	all_defined_as_sensors(HeadList) -> true
-	; \+ some_defined_as_sensors(HeadList),
-	!.
-
-all_defined_as_sensors([]) :- !.
-all_defined_as_sensors([Head|HeadList]) :-
-	is_defined_as_sensor(Head)
-	-> all_defined_as_sensors(HeadList).
-
-some_defined_as_sensors([]) :- !, fail.
-some_defined_as_sensors([Head|HeadList]) :-
-	is_defined_as_sensor(Head) -> true
-	; some_defined_as_sensors(HeadList).
 
 %% sensors can't be in the heads of dynamic rules.
 %% so we need to check only the permaoptions
@@ -10179,7 +10220,7 @@ merge_status([S|Rest],T) :-
        same var name) of type VarType.
        Returns a new formula and the variable objects used
        in the substitutions.
-       VarType: NEWVAR, NEWDONTCAREVAR, NEWCALLERVAR, NEWQUANTIFIEDVAR 
+       VarType: NEWVAR, NEWDONTCAREVAR, NEWFLCONTEXTVAR, NEWQUANTIFIEDVAR 
     rename_one_prvariable(+VarName,+NewVarObj,+Body,-NewBody),
        Replaces each occurrence of a a var object having VarName
        as the variable name with NewVarObj. Returns the newly created formula.
@@ -10254,21 +10295,21 @@ get_index_line(Index,Line) :- flora_token_index_to_line(Index,Line).
 
 
 /****************************************************************************
- add_symbol(+Name,+N,+WS,+Index,+LineNumber,+Context,+Transactional)
- has_symbol(?Name,?N,?WS,?Index,?LineNumber,?Context,?Transactional)
+ add_symbol(+Name,+N,+WS,+Index,+LineNumber,+SymContext,+Transactional)
+ has_symbol(?Name,?N,?WS,?Index,?LineNumber,?SymContext,?Transactional)
  flora_clear_compilation_symbols
- add_nowarn_symbol(+Name,+N,+Context)
- has_nowarn_symbol(+Name,+N,+Context)
+ add_nowarn_symbol(+Name,+N,+SymContext)
+ has_nowarn_symbol(+Name,+N,+SymContext)
 
 Predicates for checking usage of symbols with the same name and arity
 The goal is to generate warnings/errors if the same symbol is used in different
 contexts or a UDF is used before it is declared, etc. 
 ****************************************************************************/
-add_symbol(_Name,_N,_WS,Index,_LineNumber,_Context,_Transactional) :-
+add_symbol(_Name,_N,_WS,Index,_LineNumber,_SymContext,_Transactional) :-
 	%% do not add symbols that are not in the user program
 	(var(Index) ; Index == NO_INDEX),
 	!.
-add_symbol(Name,N,_WS,_Index,_LineNumber,_Context,_Transactional) :-
+add_symbol(Name,N,_WS,_Index,_LineNumber,_SymContext,_Transactional) :-
 	%% do not add builtins
 	flora_nodefp(Name,N),
 	!.
@@ -10276,50 +10317,50 @@ add_symbol(Name,N,_WS,_Index,_LineNumber,_Context,_Transactional) :-
 add_symbol(FL_COMMA,0,_,_,_,_,_) :- !.
 add_symbol(FL_SEMICOLON,0,_,_,_,_,_) :- !.
 add_symbol(FL_MVDARROW,0,_,_,_,_,_) :- !.
-add_symbol(Name,N,_WS,_Index,_LineNumber,_Context,_Transactional) :-
+add_symbol(Name,N,_WS,_Index,_LineNumber,_SymContext,_Transactional) :-
 	%% do not add delayed builtins
 	%%flora_get_flatomvar_name(WS,WSName),
 	%%flora_delayed_literal(Name,N,WSName),
 	flora_delayed_builtin_literal(Name,N),
 	!.
-add_symbol(_Name,_N,_WS,_Index,_LineNumber,_Context,_Transactional) :-
+add_symbol(_Name,_N,_WS,_Index,_LineNumber,_SymContext,_Transactional) :-
 	%% do not add symbols used in shell commands: errors/warnings get
 	%% too confusing for the user
 	compiling_flrshell_command,
 	!.
 %% if checking symbols for constants is off, then do not add constant symbols
-add_symbol(_Name,0,_WS,_Index,_LineNumber,_Context,_Transactional) :-
+add_symbol(_Name,0,_WS,_Index,_LineNumber,_SymContext,_Transactional) :-
 	symbol_warnings_flag(FLORA_CONSTOFF),
 	!.
-add_symbol(Name,N,FL_THISMODULE,Index,LineNumber,Context,Transactional) :-
+add_symbol(Name,N,FL_THISMODULE,Index,LineNumber,SymContext,Transactional) :-
 	!,
-	assert(symbol(Name,N,FL_THISMODULE,Index,LineNumber,Context,Transactional)).
-add_symbol(Name,N,WS,Index,LineNumber,Context,Transactional) :-
+	assert(symbol(Name,N,FL_THISMODULE,Index,LineNumber,SymContext,Transactional)).
+add_symbol(Name,N,WS,Index,LineNumber,SymContext,Transactional) :-
 	is_flvariable(WS,_VarName,_VarIndex),
 	!,
-	assert(symbol(Name,N,WS,Index,LineNumber,Context,Transactional)).
-add_symbol(Name,N,WS,Index,LineNumber,Context,Transactional) :-
+	assert(symbol(Name,N,WS,Index,LineNumber,SymContext,Transactional)).
+add_symbol(Name,N,WS,Index,LineNumber,SymContext,Transactional) :-
 	is_prfloralib(WS,WSName,_),
 	!,
-	assert(symbol(Name,N,WSName,Index,LineNumber,Context,Transactional)).
-add_symbol(Name,N,WS,Index,LineNumber,Context,Transactional) :-
+	assert(symbol(Name,N,WSName,Index,LineNumber,SymContext,Transactional)).
+add_symbol(Name,N,WS,Index,LineNumber,SymContext,Transactional) :-
 	flora_get_flatomvar_name(WS,WSName),
-	assert(symbol(Name,N,WSName,Index,LineNumber,Context,Transactional)).
+	assert(symbol(Name,N,WSName,Index,LineNumber,SymContext,Transactional)).
 
-add_nowarn_symbol(Name,N,FL_THISMODULE,Context,Transactional) :-
+add_nowarn_symbol(Name,N,FL_THISMODULE,SymContext,Transactional) :-
 	!,
-	assert(nowarn_symbol(Name,N,FL_THISMODULE,Context,Transactional)).
-add_nowarn_symbol(Name,N,WS,Context,Transactional) :-
+	assert(nowarn_symbol(Name,N,FL_THISMODULE,SymContext,Transactional)).
+add_nowarn_symbol(Name,N,WS,SymContext,Transactional) :-
 	is_flvariable(WS,_VarName,_VarIndex),
 	!,
-	assert(nowarn_symbol(Name,N,WS,Context,Transactional)).
-add_nowarn_symbol(Name,N,WS,Context,Transactional) :-
+	assert(nowarn_symbol(Name,N,WS,SymContext,Transactional)).
+add_nowarn_symbol(Name,N,WS,SymContext,Transactional) :-
 	is_prfloralib(WS,WSName,_),
 	!,
-	assert(nowarn_symbol(Name,N,WSName,Context,Transactional)).
-add_nowarn_symbol(Name,N,WS,Context,Transactional) :-
+	assert(nowarn_symbol(Name,N,WSName,SymContext,Transactional)).
+add_nowarn_symbol(Name,N,WS,SymContext,Transactional) :-
 	flora_get_flatomvar_name(WS,WSName),
-	assert(nowarn_symbol(Name,N,WSName,Context,Transactional)).
+	assert(nowarn_symbol(Name,N,WSName,SymContext,Transactional)).
 
 has_symbol(Name,Arity,_,NO_INDEX,-1,BUILTIN_SYMBOL,_) :-
 	flora_nodefp(Name,Arity),
@@ -10329,20 +10370,20 @@ has_symbol(Name,Arity,_WS,NO_INDEX,-1,BUILTIN_SYMBOL,_) :-
 	%%flora_delayed_literal(Name,Arity,WSName).
 	flora_delayed_builtin_literal(Name,Arity),
 	!.
-has_symbol(Name,N,WS,Index,LineNumber,Context,Transactional) :-
-	symbol(Name,N,WS,Index,LineNumber,Context,Transactional).
+has_symbol(Name,N,WS,Index,LineNumber,SymContext,Transactional) :-
+	symbol(Name,N,WS,Index,LineNumber,SymContext,Transactional).
 
 
-has_nowarn_symbol(Name,N,WS,Context,Transactional) :-
-	nowarn_symbol(Name,N,WS,Context,Transactional),
+has_nowarn_symbol(Name,N,WS,SymContext,Transactional) :-
+	nowarn_symbol(Name,N,WS,SymContext,Transactional),
 	!.
 
-has_nowarn_any_symbol(Name,N,WS,_Context,Transactional) :-
+has_nowarn_any_symbol(Name,N,WS,_SymContext,Transactional) :-
 	nowarn_symbol(Name,N,WS,ANY_SYMBOL_CONTEXT,Transactional),
 	!.
 
-has_nowarn_any_symbol(Name,N,WS,Context,Transactional) :-
-	has_nowarn_symbol(Name,N,WS,Context,Transactional).
+has_nowarn_any_symbol(Name,N,WS,SymContext,Transactional) :-
+	has_nowarn_symbol(Name,N,WS,SymContext,Transactional).
 
 flora_clear_compilation_symbols :-
         %% following \+ is a workaround for an XSB garbage collection bug:
@@ -10405,21 +10446,21 @@ termlit_replacement(Funct,_N,Funct).
 
 
 %% The Index argument is not used currently
-verify_symbol_context_pairlist([],_Index,_Context,_Trans,NO_ERRORS) :- !.
-verify_symbol_context_pairlist([(P,A,Idx)|PairList],Index,Context,Trans,Status) :-
+verify_symbol_context_pairlist([],_Index,_SymContext,_Trans,NO_ERRORS) :- !.
+verify_symbol_context_pairlist([(P,A,Idx)|PairList],Index,SymContext,Trans,Status) :-
 	%% P can be either the sensor name or (PrologSensor,PrologModule)
 	(P = (PA,_) ; P=PA),
 	!,
 	is_flatom(PObj,PA,Idx),
-	verify_symbol_context(PObj,A,Context,Trans,S1),
-	verify_symbol_context_pairlist(PairList,Index,Context,Trans,S2),
+	verify_symbol_context(PObj,A,SymContext,Trans,S1),
+	verify_symbol_context_pairlist(PairList,Index,SymContext,Trans,S2),
 	append(S2,S1,Status).
-verify_symbol_context_pairlist([P/A/Idx|PairList],Index,Context,Trans,Status) :-
+verify_symbol_context_pairlist([P/A/Idx|PairList],Index,SymContext,Trans,Status) :-
 	(P = (PA,_) ; P=PA),
 	!,
 	is_flatom(PObj,PA,Idx),
-	verify_symbol_context(PObj,A,Context,Trans,S1),
-	verify_symbol_context_pairlist(PairList,Index,Context,Trans,S2),
+	verify_symbol_context(PObj,A,SymContext,Trans,S1),
+	verify_symbol_context_pairlist(PairList,Index,SymContext,Trans,S2),
 	append(S2,S1,Status).
 
 %% this takes predicate-arity pairs without the index

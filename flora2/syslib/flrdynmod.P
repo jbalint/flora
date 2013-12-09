@@ -95,10 +95,10 @@
 
 
 /*********************************************************************
-  FLLIBMODLIT(+Functor,+Args,+ModuleName,+CallerInfo)
+  FLLIBMODLIT(+Functor,+Args,+ModuleName,+Context)
   Functor is either an F-logic/HiLog wrapper or FL_LIBMOD or FL_NEGLIBMOD
 *********************************************************************/
-FLLIBMODLIT(F,Arg,ModuleName,CallerInfo) :-
+FLLIBMODLIT(F,Arg,ModuleName,Context) :-
 	%% If module is a variable, we must protect the call
 	%% from undefinedness checks
 	(var(ModuleName) -> ProtectCall = true ; true),
@@ -119,8 +119,8 @@ FLLIBMODLIT(F,Arg,ModuleName,CallerInfo) :-
 
 	;
 	  flora_check_module_name(ModuleName),
-	  flora_check_dynmod_type_consistency(FLLIBMODLIT(F,Arg,ModuleName,CallerInfo)),
-	  get_libmod_callable(F,Arg,ModuleName,CallerInfo,P),
+	  flora_check_dynmod_type_consistency(FLLIBMODLIT(F,Arg,ModuleName,Context)),
+	  get_libmod_callable(F,Arg,ModuleName,Context,P),
 	  %% Assign an Id for use by both the export & the undefinedness check.
 	  (nonvar(ProtectCall) ->
 	      %% New Id for protecting calls. Unique Id is used because
@@ -167,7 +167,7 @@ FLLIBMODLIT(F,Arg,ModuleName,CallerInfo) :-
 
 
 /*********************************************************************
-  FLLIBMODOBJ(+HeadBodyContext,+Functor,+Args,+ModuleName,+CallerInfo,-Predicate)
+  FLLIBMODOBJ(+HeadBodyContext,+Functor,+Args,+ModuleName,+Context,-Predicate)
 
   HeadBodyContext = FL_HEAD/FL_BODY
   This is used as follows: if we have a nested reification of a module'd
@@ -177,38 +177,38 @@ FLLIBMODLIT(F,Arg,ModuleName,CallerInfo) :-
   ?- libmodobj(?P,foo,?Result), p(?Result).
 *********************************************************************/
 :- import FLLIBDELAYEDLITERAL/4 from usermod.
-FLLIBMODOBJ(FL_HEAD,F,Arg,ModuleName,CallerInfo,Pout) :-
+FLLIBMODOBJ(FL_HEAD,F,Arg,ModuleName,Context,Pout) :-
 	var(ModuleName),
 	!,
-	FLLIBUNIVEQFORM(Pout,FLLIBMODLIT(F,Arg,ModuleName,CallerInfo)).
-FLLIBMODOBJ(_,F,Arg,ModuleName,CallerInfo,Pout) :-
+	FLLIBUNIVEQFORM(Pout,FLLIBMODLIT(F,Arg,ModuleName,Context)).
+FLLIBMODOBJ(_,F,Arg,ModuleName,Context,Pout) :-
 	var(Arg),
 	!,
-	FLLIBUNIVEQFORM(Pout,FLLIBMODLIT(F,Arg,ModuleName,CallerInfo)).
-FLLIBMODOBJ(FL_BODY,F,Arg,ModuleName,CallerInfo,Pout) :-
+	FLLIBUNIVEQFORM(Pout,FLLIBMODLIT(F,Arg,ModuleName,Context)).
+FLLIBMODOBJ(FL_BODY,F,Arg,ModuleName,Context,Pout) :-
 	var(ModuleName),
 	!,
 	FLLIBDELAYEDLITERAL(FL_DELAYQUANT,NULL,NULL,
 			    [wish,(nonvar(ModuleName); nonvar(Pout)),
-			     (FLLIBUNIVEQFORM(Pout,FLLIBMODLIT(F,Arg,ModuleName,CallerInfo)),machine:del_attr(ModuleName,flrwhen))]).
-FLLIBMODOBJ(_Ctxt,F,Arg,ModuleName,CallerInfo,Pout) :-
-	fllibmodobj_internal(F,Arg,ModuleName,CallerInfo,Pout).
+			     (FLLIBUNIVEQFORM(Pout,FLLIBMODLIT(F,Arg,ModuleName,Context)),machine:del_attr(ModuleName,flrwhen))]).
+FLLIBMODOBJ(_Ctxt,F,Arg,ModuleName,Context,Pout) :-
+	fllibmodobj_internal(F,Arg,ModuleName,Context,Pout).
 
 %% This one is used to compute a BODY LIBMODOBJ from a LIBMODLIT
-FLLIBMODOBJ(FLLIBMODLIT(F,Arg,ModuleName,CallerInfo),Pout) :-
+FLLIBMODOBJ(FLLIBMODLIT(F,Arg,ModuleName,Context),Pout) :-
 	!,
-	FLLIBMODOBJ(FL_BODY,F,Arg,ModuleName,CallerInfo,Pout).
+	FLLIBMODOBJ(FL_BODY,F,Arg,ModuleName,Context,Pout).
 %% If not a FLLIBMODLIT - do nothing
 FLLIBMODOBJ(Goal,Goal).
 
-fllibmodobj_internal(F,Arg,ModuleName,CallerInfo,Pout) :-
+fllibmodobj_internal(F,Arg,ModuleName,Context,Pout) :-
         flora_check_module_name(ModuleName),
-	flora_check_dynmod_type_consistency(FLLIBMODLIT(F,Arg,ModuleName,CallerInfo)),
-	%% Use a different var, NewCallerInfo, here. Not CallerInfo.
-	%% We don't want to bind caller info in a reified term.
-	get_libmod_callable(F,Arg,ModuleName,NewCallerInfo,P),
-	(P =FLLIBMODLIT(F,_NArg,ModuleName,NewCallerInfo) ->
-	    Pout = FLLIBMODLIT(F,Arg,ModuleName,NewCallerInfo)
+	flora_check_dynmod_type_consistency(FLLIBMODLIT(F,Arg,ModuleName,Context)),
+	%% Use a different var, NewContext, here. Not Context.
+	%% We don't want to bind FL_CONTEXT info in a reified term.
+	get_libmod_callable(F,Arg,ModuleName,NewContext,P),
+	(P =FLLIBMODLIT(F,_NArg,ModuleName,NewContext) ->
+	    Pout = FLLIBMODLIT(F,Arg,ModuleName,NewContext)
 	;
 	    convert_to_body_literal(P,Pout1),
 	    FLLIBUNIVEQFORM(Pout,Pout1)
@@ -216,26 +216,26 @@ fllibmodobj_internal(F,Arg,ModuleName,CallerInfo,Pout) :-
 
 
 /*********************************************************************
-  get_libmod_callable(+Functor,+Args,+ModuleName,+CallerInfo,-Callable)
+  get_libmod_callable(+Functor,+Args,+ModuleName,+Context,-Callable)
 
   This is common part of FLLIBMODLIT and FLLIBMODOBJ. Takes a term and
   a module and returns a callable structure (molecule or a predicate).
   The input can also be already callable. In this case just return in.
 *********************************************************************/
-get_libmod_callable(FL_LIBMOD,(FL_NEG_Atm(Arg)),ModuleName,CallerInfo,P) :-
-	adjust_caller_info(CallerInfo,RealCallerInfo),
-	get_libmod_callable(FL_NEGLIBMOD,Arg,ModuleName,RealCallerInfo,P),
+get_libmod_callable(FL_LIBMOD,(FL_NEG_Atm(Arg)),ModuleName,Context,P) :-
+	adjust_caller_info(Context,RealContext),
+	get_libmod_callable(FL_NEGLIBMOD,Arg,ModuleName,RealContext,P),
 	!.
-get_libmod_callable(FL_LIBMOD,WRAP_HILOG(FL_NEG_Atm,Arg),ModuleName,CallerInfo,P) :-
-	adjust_caller_info(CallerInfo,RealCallerInfo),
-	get_libmod_callable(FL_NEGLIBMOD,Arg,ModuleName,RealCallerInfo,P),
+get_libmod_callable(FL_LIBMOD,WRAP_HILOG(FL_NEG_Atm,Arg),ModuleName,Context,P) :-
+	adjust_caller_info(Context,RealContext),
+	get_libmod_callable(FL_NEGLIBMOD,Arg,ModuleName,RealContext,P),
 	!.
-get_libmod_callable(FL_NEGLIBMOD,(FL_NEG_Atm(Arg)),ModuleName,CallerInfo,P) :-
-	adjust_caller_info(CallerInfo,RealCallerInfo),
-	get_libmod_callable(FL_LIBMOD,Arg,ModuleName,RealCallerInfo,P),
+get_libmod_callable(FL_NEGLIBMOD,(FL_NEG_Atm(Arg)),ModuleName,Context,P) :-
+	adjust_caller_info(Context,RealContext),
+	get_libmod_callable(FL_LIBMOD,Arg,ModuleName,RealContext,P),
 	!.
-get_libmod_callable(F,Arg,ModuleName,CallerInfoIn,P) :-
-	adjust_caller_info(CallerInfoIn,CallerInfo),
+get_libmod_callable(F,Arg,ModuleName,ContextIn,P) :-
+	adjust_caller_info(ContextIn,Context),
         (
 	  is_list(Arg),
 	  F == FL_LIBMOD,
@@ -244,23 +244,23 @@ get_libmod_callable(F,Arg,ModuleName,CallerInfoIn,P) :-
 	  flora_abort([Arg,': Attempt to call a non-predicate'])
 	; is_list(Arg), %% Term@?WS
 	  !,
-	  %% This case is compiled as FLLIBMODLIT(F,Args,WS,CallerInfo)
+	  %% This case is compiled as FLLIBMODLIT(F,Args,WS,Context)
 	  %% so the caller is already accounted for.
 	  %% P is now made into a Flora wrapper
 	  flora_module_predicate(F,Arg,ModuleName,P),
-	  flora_bind_last(P, CallerInfo)
+	  flora_bind_last(P, Context)
 	; is_libmodlit_control(Arg, [_Wrap,_A,_PredModule,_C]), !,
-	  flora_bind_last(Arg, CallerInfo),
+	  flora_bind_last(Arg, Context),
 	  P = Arg
 	%% is_caller_distributive/3
         ; is_caller_distributive(Arg, _, _), !,
-	  apply_caller_info(Arg,CallerInfo,P)
+	  apply_caller_info(Arg,Context,P)
 	%% is_caller_distributive/4
         ; is_caller_distributive(Arg, _, _, _), !,
-	  apply_caller_info(Arg,CallerInfo,P)
+	  apply_caller_info(Arg,Context,P)
 	%% is_ws_distributive/3
         ; is_ws_distributive(Arg,Op,ArgList), !,
-	  distribute_workspace(F,ArgList,ModuleName,CallerInfo,ArgListOut),
+	  distribute_workspace(F,ArgList,ModuleName,Context,ArgListOut),
 	  (F == FL_NEGLIBMOD -> dual_connective(Op,Op1)
 	  ; Op1 = Op
 	  ),
@@ -272,8 +272,8 @@ get_libmod_callable(F,Arg,ModuleName,CallerInfoIn,P) :-
 	      nonvar(PredModName),
 	      !,
 	      %% Always replace the caller info so as to unbind the
-	      %% tracing part of CallerInfo properly.
-	      flora_replace_last(Arg,CallerInfo,P1),
+	      %% tracing part of Context properly.
+	      flora_replace_last(Arg,Context,P1),
 	      (F == FL_NEGLIBMOD -> negate_predicate(P1,P)
 	      ; P = P1
 	      )
@@ -288,16 +288,16 @@ get_libmod_callable(F,Arg,ModuleName,CallerInfoIn,P) :-
 	      ; F == FL_TRANSLIBMOD -> WrapToUse = FLBodyPREFIX(WRAP_NONTABLED_HILOG)
 	      ),
 	      ( atom(Arg) ->
-		  flora_add_last([Arg],AugmentedArgs,CallerInfo),
+		  flora_add_last([Arg],AugmentedArgs,Context),
 		  ( var(ModuleName) ->
-		      P = FLLIBMODLIT(WrapToUse,AugmentedArgs,ModuleName,CallerInfo)
+		      P = FLLIBMODLIT(WrapToUse,AugmentedArgs,ModuleName,Context)
 		  ;
 		      flora_module_predicate(WrapToUse,AugmentedArgs,ModuleName,P)
 		  )
 	      ; Wrapper == WRAP_HILOG -> %% Note: should be WRAP_HILOG (as in HiLog term) here
-		  flora_add_last(Args,AugmentedArgs,CallerInfo),
+		  flora_add_last(Args,AugmentedArgs,Context),
 		  ( var(ModuleName) ->
-		      P = FLLIBMODLIT(WrapToUse,AugmentedArgs,ModuleName,CallerInfo)
+		      P = FLLIBMODLIT(WrapToUse,AugmentedArgs,ModuleName,Context)
 		  ;
 		      flora_module_predicate(WrapToUse,AugmentedArgs,ModuleName,P)
 		  )
@@ -314,67 +314,54 @@ get_libmod_callable(F,Arg,ModuleName,CallerInfoIn,P) :-
 %% Specifically for FLLIBMODLIT
 is_libmodlit_control(FLLIBMODLIT(W,A,M,C), [W,A,M,C]).
 
-distribute_workspace(_F,[],_Mod,_CallerInfo,[]) :- !.
-distribute_workspace(F,[H|L],Mod,CallerInfo,[FLLIBMODLIT(F,H,Mod,CallerInfo)|NL]) :-
-        distribute_workspace(F,L,Mod,CallerInfo,NL).
+distribute_workspace(_F,[],_Mod,_Context,[]) :- !.
+distribute_workspace(F,[H|L],Mod,Context,[FLLIBMODLIT(F,H,Mod,Context)|NL]) :-
+        distribute_workspace(F,L,Mod,Context,NL).
 
-distribute_caller_info([],_CallerInfo,[]) :- !.
-distribute_caller_info([H|OpArgList],CallerInfo,[Hout|OpArgListOut]) :-
-	adjust_caller_info(CallerInfo,RealCallerInfo),
-	apply_caller_info(H,RealCallerInfo,Hout),
-	distribute_caller_info(OpArgList,CallerInfo,OpArgListOut).
+distribute_caller_info([],_Context,[]) :- !.
+distribute_caller_info([H|OpArgList],Context,[Hout|OpArgListOut]) :-
+	adjust_caller_info(Context,RealContext),
+	apply_caller_info(H,RealContext,Hout),
+	distribute_caller_info(OpArgList,Context,OpArgListOut).
 
-apply_caller_info(Goal,CallerInfo,GoalOut) :-
+apply_caller_info(Goal,Context,GoalOut) :-
 	is_ws_distributive(Goal,Op,GoalArgs),
 	!,
-	distribute_caller_info(GoalArgs,CallerInfo,ArgsOut),
+	distribute_caller_info(GoalArgs,Context,ArgsOut),
 	is_ws_distributive(GoalOut,Op,ArgsOut).
-apply_caller_info(Goal,CallerInfo,GoalOut) :-
+apply_caller_info(Goal,Context,GoalOut) :-
 	is_caller_distributive(Goal,Op,GoalArgs,OtherArgs),
 	!,
-	distribute_caller_info(GoalArgs,CallerInfo,ArgsOut),
+	distribute_caller_info(GoalArgs,Context,ArgsOut),
 	is_caller_distributive(GoalOut,Op,ArgsOut,OtherArgs).
-apply_caller_info(Goal,CallerInfo,GoalOut) :-
+apply_caller_info(Goal,Context,GoalOut) :-
 	is_caller_distributive(Goal,Op,GoalArgs),
 	!,
-	distribute_caller_info(GoalArgs,CallerInfo,ArgsOut),
+	distribute_caller_info(GoalArgs,Context,ArgsOut),
 	is_caller_distributive(GoalOut,Op,ArgsOut).
-apply_caller_info(Goal,CallerInfo,GoalOut) :-
+apply_caller_info(Goal,Context,GoalOut) :-
 	(flora_decode_predicate(Goal,_,Module,_,_,_,_), nonvar(Module)
 	->
-	    flora_bind_last(Goal,CallerInfo),
+	    flora_bind_last(Goal,Context),
 	    GoalOut = Goal
 	; GoalOut = Goal
 	).
 
-%%% adjust_caller_info(+DefaultCallerInfo,-RealCallerInfo)
-%%   In the tracing info,
-%%   FL_TRACING(CalledRuleId,ThisRuleId), unbind CalledRuleId
-:- import FL_TRACING/2 from usermod.
-adjust_caller_info(CallerInfo,RealCallerInfo) :-
-	CallerInfo = [Module,TracingInfo|Rest],
-	RealCallerInfo = [Module,RealTracingInfo|Rest],
-	(var(TracingInfo) -> RealTracingInfo = TracingInfo
-	; TracingInfo = FL_TRACING(_,CallingRuleId)
-	%% replace the Id of the rule being called,
-	%% as they would be different for different literals
-	%% The lack of this replacement was the source of a very subtle,
-	%% hard-to-find bug
-	-> RealTracingInfo = FL_TRACING(_,CallingRuleId)
-	;  RealTracingInfo = TracingInfo
-	).
-/*
-*/
-
+%%% adjust_caller_info(+DefaultContext,-RealContext)
+%%   In the context
+%%   FL_CONTEXT(CallerMod,CalledRuleId,ThisRuleId), unbind CalledRuleId
 %% replace the Id of the rule being called,
 %% as they would be different for different literals
 %% The lack of this replacement was the source of a very subtle,
 %% hard-to-find bug
-/*
-:- import FL_TRACING/2 from usermod.
-adjust_caller_info([Module,FL_TRACING(_,CallingRuleId)|Rest],
-		   [Module,FL_TRACING(_,CallingRuleId)|Rest]).
-*/
+:- import FL_CONTEXT/2 from usermod.
+adjust_caller_info(Context,RealContext) :-
+	Context = FL_CONTEXT(Module,CalledId,CallerId),
+	RealContext = FL_CONTEXT(Module,RealCalledId,CallerId),
+	(var(CalledId) -> RealCalledId = CalledId
+	; RealCalledId = _
+	).
+
 
 dual_connective(FL_AND_CONNECTIVE,FL_OR_CONNECTIVE).
 dual_connective(FL_OR_CONNECTIVE,FL_AND_CONNECTIVE).

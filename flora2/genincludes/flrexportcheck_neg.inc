@@ -24,142 +24,142 @@
 ***************************************************************************/
 
 
-FLNEGBodyPREFIX(WRAP_ISA)(X,Y,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME', FLNEGPREFIX(WRAP_ISA)(X,Y,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_ISA)(X,Y,FWContext) :- 
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME', FLNEGPREFIX(WRAP_ISA)(X,Y,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_SUB)(X,Y,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_SUB)(X,Y,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_SUB)(X,Y,FWContext) :- 
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_SUB)(X,Y,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_METH)(X,Y,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_METH)(X,Y,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_METH)(X,Y,FWContext) :- 
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_METH)(X,Y,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_IMETH)(X,Y,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_IMETH)(X,Y,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_IMETH)(X,Y,FWContext) :- 
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_IMETH)(X,Y,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_BOOLSIG)(X,Y,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_BOOLSIG)(X,Y,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_BOOLSIG)(X,Y,FWContext) :- 
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_BOOLSIG)(X,Y,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_IBOOLSIG)(X,Y,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_IBOOLSIG)(X,Y,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_IBOOLSIG)(X,Y,FWContext) :- 
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_IBOOLSIG)(X,Y,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_MVD)(X,Y,Z,CallerInfo) :-
-	CallerInfo = [Caller|_],
-	flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_MVD)(X,Y,Z,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_MVD)(X,Y,Z,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+	flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_MVD)(X,Y,Z,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_IMVD)(X,Y,Z,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_IMVD)(X,Y,Z,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_IMVD)(X,Y,Z,FWContext) :- 
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_IMVD)(X,Y,Z,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_MVDDEF)(X,Y,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_MVDDEF)(X,Y,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_MVDDEF)(X,Y,FWContext) :- 
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_MVDDEF)(X,Y,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_IMVDDEF)(X,Y,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_IMVDDEF)(X,Y,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_IMVDDEF)(X,Y,FWContext) :- 
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_IMVDDEF)(X,Y,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_MVDSIG)(X,Y,Z,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_MVDSIG)(X,Y,Z,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_MVDSIG)(X,Y,Z,FWContext) :- 
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_MVDSIG)(X,Y,Z,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_MVDSIGDEF)(X,Y,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_MVDSIGDEF)(X,Y,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_MVDSIGDEF)(X,Y,FWContext) :- 
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_MVDSIGDEF)(X,Y,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_IMVDSIG)(X,Y,Z,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_IMVDSIG)(X,Y,Z,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_IMVDSIG)(X,Y,Z,FWContext) :- 
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_IMVDSIG)(X,Y,Z,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_IMVDSIGDEF)(X,Y,CallerInfo) :- 
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_IMVDSIGDEF)(X,Y,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_IMVDSIGDEF)(X,Y,FWContext) :- 
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_IMVDSIGDEF)(X,Y,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,X19,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,X19,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,X19,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,X19,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,FWContext)).
 
-FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,X21,CallerInfo) :-
-	CallerInfo = [Caller|_],
-        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,X21,CallerInfo)).
+FLNEGBodyPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,X21,FWContext) :-
+	FWContext = FL_CONTEXT(Caller,_,_),
+        flora_check_export_registry(Caller, 'FLORA_THIS_MODULE_NAME',  FLNEGPREFIX(WRAP_TABLED_HILOG)(X01,X02,X03,X04,X05,X06,X07,X08,X09,X10, X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,X21,FWContext)).

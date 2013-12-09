@@ -61,7 +61,7 @@
 	flora_fld_storage_name/2
    from flrwrapper.
 
-%% making is_flogic/4 dynamic and indexing on 1+2 makes the coder a bit faster
+%% making is_flogic/4 dynamic and indexing as a trie makes the coder faster
 :- dynamic is_flogic(_,_,_,_).
 :- index(is_flogic/4,trie).
 

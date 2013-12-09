@@ -18,12 +18,12 @@ REM        path-for-\XSB\bin\... has a file extension, e.g., \xsb\bin\wxsb.bat
 
 if exist binary-distribution.txt goto binary
 
-set default_tabling=flrincludes\.flora_default_tabling
-if [%1] == [-S] echo #define FLORA_SUBSUMPTIVE_TABLING > %default_tabling%
+set tabling_method=/* default tabling */
+if [%1] == [-S] set tabling_method=#define FLORA_SUBSUMPTIVE_TABLING
 if [%1] == [-S] shift
-if [%1] == [-I] echo #define FLORA_INCREMENTAL_TABLING > %default_tabling%
+if [%1] == [-I] set tabling_method=#define FLORA_INCREMENTAL_TABLING
 if [%1] == [-I] shift
-if [%1] == [-S] echo #define FLORA_SUBSUMPTIVE_TABLING > %default_tabling%
+if [%1] == [-S] set tabling_method=#define FLORA_SUBSUMPTIVE_TABLING
 if [%1] == [-S] shift
 
 if [%1] == [] goto usage
@@ -41,6 +41,9 @@ if [%1] == [clean] goto end
 call floraconfig.bat %prologcmd% compiling || goto end
 REM This sets %PROLOG%, %PROLOGDIR%, %FLORADIR%
 call .flora_paths.bat
+
+set default_tabling=flrincludes\.flora_default_tabling
+echo %tabling_method%  >  %default_tabling%
 
 cd cc
 if exist *.dll   del *.dll
