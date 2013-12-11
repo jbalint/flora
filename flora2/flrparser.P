@@ -2989,6 +2989,11 @@ parse_udf_return_value(ObjectTerm,_,Status):-
 
   Note: Module name is not allowed in rule head.
 ****************************************************************************/
+
+#if exists("hooks/flrparser_headORhook.P")
+#include "hooks/flrparser_headORhook.P"
+#endif
+
 parse_head(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),CodeList,Status) :-
 	get_atom(Funct,F),
 	( F == FL_AND_CONNECTIVE ->
@@ -3006,6 +3011,12 @@ parse_head(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),CodeList,Status) :-
 
 	; F == FL_OR_CONNECTIVE -> % Disjunction is prohibited.
 	    parsing_error(If,NO_DISJUNCTION,Status)
+	%% ~~>, <~~, <~~> are illegal
+	; memberchk(F,[FL_LEFTNAFIMPLY,FL_RIGHTNAFIMPLY,FL_NAFIFF]) ->
+	    parsing_error(If,NO_NAF_IMPLY,Status)
+	%% ==>, <==, <==> are illegal
+	; memberchk(F,[FL_LEFTNEGIMPLY,FL_RIGHTNEGIMPLY,FL_NEGIFF]) ->
+	    parsing_error(If,NO_NEG_IMPLY,Status)
 
 	; % Module name in rule head is prohibited.
 	  F == FL_AT,
@@ -3098,11 +3109,31 @@ parse_head_literal(CANOTERM(Funct,1,FL_PARENTHESIS,[Arg],If,_Ip),DWS,Code,Status
 	    append(S2,S1,Status)
 	).
 
+#if exists("hooks/flrparser_headquanthook.P")
+#include "hooks/flrparser_headquanthook.P"
+#endif
+
+%% no logical quantifiers in the head
+parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTHESIS,_Vars,_,_),_],_If,_Ip),_DWS,_Code,Status) :-
+	get_atom(Funct,FL_QUANTVARCONNECTOR),
+	get_atom(Quant,QuantAtom,QuantIdx),
+	is_logicalquantifier(QuantAtom,_),
+	!,
+	parsing_error(QuantIdx,NO_QUANTIFIERS_IN_RULE_HEAD,Status).
+
 parse_head_literal(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),_DWS,_Code,Status) :-
 	get_atom(Funct,F),
 	is_negop(F),
 	!,
 	parsing_error(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),NEG_NEGATE_HEAD,Status).
+
+parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
+	get_atom(Funct,F),
+	is_curi_op(F),
+	!,
+	parse_curi(Args,_TransFlag,DWS,CuriCode,Status),
+	flora_get_module_from_spec(DWS,ModuleType,Module),
+	flmodule_struct(CuriCode,Module,ModuleType,Code).
 
 parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),DWS,Code,Status) :-
 	get_atom(Funct,F),
@@ -4319,7 +4350,7 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	DWS==NULL,
 	!,
 	set_context(clause_construct),
-	(   %% whan clause{...} has descriptors then it is parsed either as a
+	(   %% when clause{...} has descriptors then it is parsed either as a
 	    %% single argument [DescrHeadBodyTerm] or [Mode,DescrHeadBodyTerm]
 	    (Args = [RulePattern], ModeCode = NULL
 	    ; Args = [Mode,RulePattern],
@@ -6812,13 +6843,19 @@ parse_dbliteral(_Mode,CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),_DWS,_Code,Sta
 	!,
 	parsing_error(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),NEG_NEGATE_DB,Status).
 	
-parse_dbliteral(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),DWS,Code,Status) :-
+parse_dbliteral(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,[Code],Status) :-
+	get_atom(Funct,F),
+	is_curi_op(F),
+	!,
+	parse_curi(Args,ALLOW_TRANS,DWS,CuriCode,Status),
+	flora_get_module_from_spec(DWS,ModuleType,Module),
+	flmodule_struct(CuriCode,Module,ModuleType,Code).
+
+parse_dbliteral(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),DWS,[Code],Status) :-
 	get_atom(Funct,F),
 	is_datatypeop(F),
 	!,
-	parse_composer_datatype(Args,If,DWS,Code1,Status),
-	Code = [Code1].
-
+	parse_composer_datatype(Args,If,DWS,Code,Status).
 
 parse_dbliteral(Mode,CanoniTerm,DWS,[Code],Status) :-
 	%% now the literal is stripped of commas and workspaces - do
@@ -7203,6 +7240,12 @@ parse_db_pathexp(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,D
 	!,
 	parse_curi(Args,TransFlag,DWS,Code,Status).
 
+parse_db_pathexp(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),_TransFlag,DWS,Code,Status) :-
+	get_atom(Funct,F),
+	is_datatypeop(F),
+	!,
+	parse_composer_datatype([L,R],If,DWS,Code,Status).
+
 parse_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,_DWS,Code,Status) :-
 	get_atom(Funct,FL_AT),
 	!,
@@ -7224,13 +7267,6 @@ parse_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,_D
 	;
 	  parsing_error(R,ERROR_WSNAME,Status)
         ).
-
-parse_db_pathexp(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),_TransFlag,DWS,Code,Status) :-
-	get_atom(Funct,F),
-	is_datatypeop(F),
-	!,
-	parse_composer_datatype([L,R],If,DWS,Code,Status).
-
 
 parse_db_pathexp(Mode,CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,Code,Status) :-
 	!,
@@ -7956,8 +7992,8 @@ parse_curi([Prefix,LocalName],TransFlag,DWS,Code,Status) :-
 	( fixup_object(LocalName,LocalName1)
 	-> %% localname (part after '#') must be string/quotedAtm/identifier
 	    get_atom(LocalName1,LocalNameAtm),
-	    (get_transactionalatom(Prefix,_), TransFlag == ALLOW_TRANS
-	    -> transactional_to_regular(Prefix,PrefixRegular),
+	    (get_transactionalatom(Prefix,_), TransFlag == ALLOW_TRANS,
+		transactional_to_regular(Prefix,PrefixRegular) ->
 		get_atom(PrefixRegular,PrefixName),
 		Stat1 = NO_ERRORS
 	    ; get_transactionalatom(Prefix,_), TransFlag == DISALLOW_TRANS
@@ -7983,8 +8019,8 @@ parse_curi([Prefix,LocalName],TransFlag,DWS,Code,Status) :-
 	),
 	( Stat1 == NO_ERRORS, Stat2 == NO_ERRORS,
 	    ( 
-	      flora_compiletime_uriprefix_expansion(PrefixName,Def), !
-	    ; flora_runtime_uriprefix_expansion(FLORA_DEFAULT_WORKSPACE,PrefixName,Def), !
+	      flora_compiletime_uriprefix_expansion(PrefixName,Def) -> true
+	    ; flora_runtime_uriprefix_expansion(FLORA_DEFAULT_WORKSPACE,PrefixName,Def) -> true
 	    ; flora_runtime_uriprefix_expansion(Mod,PrefixName,Def)
 	    )
 	->  %% expansion found
