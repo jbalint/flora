@@ -115,7 +115,7 @@
 	flora_is_neg_wrapper/1,
 	flora_funct_arity/2.
 
-%% There is a conflict in the way (as) is defined in XSB and FLORA-2, so
+%% There is a conflict in the way "as" is defined in XSB and FLORA-2, so
 %% XSB gives an error if we don't put parens around.
 %% XSB might change its definition and then we'll be ok.
 :- table

@@ -46,7 +46,7 @@
 :- index flora_sysmod_file/3-1.
 :- index flora_library_file/3-1.
 
-:- import flora_error_line/1,
+:- import
 	flora_error_line/2
    from flrprint.
 
