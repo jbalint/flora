@@ -83,14 +83,13 @@ files="./XSB/LICENSE ./XSB/INSTALL ./XSB/INSTALL_PROBLEMS \
     	./flora2/syslibinc/*.flh  \
         ./flora2/java "
 
-cd ../..
 if [ -d ./flora2 -a -d ./XSB ]; then
     flrdir=$currdir/flora2
     xsbdir=$currdir/XSB
 else
     echo "This script is to be run in the flora2/admin folder"
     echo "and both ./XSB & ./flora2 must be in the grandparent folder"
-    exit -1
+    exit 1
 fi
 
 
