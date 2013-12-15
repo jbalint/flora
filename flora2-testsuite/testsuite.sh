@@ -171,7 +171,11 @@ fi
 
 LOG_FILE_SIZE=500000
 if test -f "$LOG_FILE"; then
-    LOG_FILE_SIZE=$(stat -c %s "$LOG_FILE")
+    if [ "$(uname)" = "Darwin" ]; then
+	LOG_FILE_SIZE=$(stat -f %z "$LOG_FILE")
+    else
+	LOG_FILE_SIZE=$(stat -c %s "$LOG_FILE")
+    fi
     echo "There was an old $LOG_FILE"
     echo "removing..."
     rm -f $LOG_FILE
@@ -201,17 +205,25 @@ else
 	NeXT_DATE=0
 fi
 
-if test -x /usr/bin/time; then
-    /usr/bin/time -f "TESTTIME user: %U, elapsed: %E" \
-	./testall.sh -opts "$options" -logsize $LOG_FILE_SIZE -logfile $LOG_FILE \
+# test if /usr/bin/time exists and takes format argument
+/usr/bin/time -f "" echo > /dev/null 2>&1 && formatted_time=yes
+
+if [ "$formatted_time" = "yes" ]; then
+	/usr/bin/time -f "TESTTIME user: %U, elapsed: %E" \
+	       ./testall.sh -opts "$options" \
+	             -logsize $LOG_FILE_SIZE -logfile $LOG_FILE \
 	             -exclude "$excluded_tests" \
 		     -add "$added_tests"  \
 			    $FLORA  >> $LOG_FILE 2>&1
 else
-    ./testall.sh -opts "$options" -exclude -logsize $LOG_FILE_SIZE -logfile $LOG_FILE \
-	            "$excluded_tests" \
+    # Mac and the like, which don't have a decent time function
+    (TIMEFORMAT="TESTTIME user: %U, elapsed: %E" ; \
+	time  \
+	    ./testall.sh -opts "$options" \
+	            -logsize $LOG_FILE_SIZE -logfile $LOG_FILE \
+	            -exclude "$excluded_tests" \
 		    -add "$added_tests"  \
-			    $FLORA  >> $LOG_FILE 2>&1
+			    $FLORA  >> $LOG_FILE 2>&1)
 fi
 
 touch $RES_FILE
