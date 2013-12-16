@@ -59,7 +59,7 @@
 #define FL_UNDEFEATED             "undefeated"
 
 
-inline static int is_flora_form(prolog_term term, int ignore_negative);
+inline static int is_flora_form(prolog_term term, Integer ignore_negative);
 inline static int is_flora_tnot_predicate(prolog_term pterm);
 static int is_ignorable_functor(prolog_term pterm);
 inline static int local_ground(CPtr term);
@@ -481,7 +481,7 @@ static inline xsbBool is_scalar(prolog_term pterm)
 /* Check if pterm represents a formula rather than a term */
 /* If ignore_negative=1, FL_TRUTHVALUE_TABLED_CALL and FL_TABLED_UNNUMBER_CALL
    are considered flora formulas. */
-static inline int is_flora_form(prolog_term pterm, int ignore_negative)
+static inline int is_flora_form(prolog_term pterm, Integer ignore_negative)
 {
   char *functor;
   int has_flora_prefix;
