@@ -30,6 +30,9 @@
 #include "flora_porting.flh"
 #include "flora_exceptions.flh"
 
+#define UNINSTANTIATED_LIT_ERROR   ': attempt to call an uninstantiated literal'
+#define NONPREDICATE_CALL          ': attempt to call a non-predicate'
+
 
 :- import append/3 from basics.
 
@@ -42,7 +45,7 @@
    from flrwrapper.
 
 :- import
-	flora_abort/1,
+	flora_abort/2,
 	flora_increment_counter/4
    from flrporting.
 
@@ -105,16 +108,16 @@ FLLIBMODLIT(F,Arg,ModuleName,Context) :-
 	(
           var(Arg) ->
             (ModuleName==FL_INVALIDMODULE ->
-	        flora_abort([Arg,': Attempt to call uninstantiated literal'])
+	        flora_abort([Arg,UNINSTANTIATED_LIT_ERROR],FLORA_ABORT_NOTRACE)
             ;
-	        flora_abort([Arg,'@',ModuleName,': Attempt to call uninstantiated literal'])
+	        flora_abort([Arg,'@',ModuleName,UNINSTANTIATED_LIT_ERROR],FLORA_ABORT_NOTRACE)
             )
 
         ; Arg=FL_TRANSACTIONAL(NA), var(NA) ->
             (ModuleName==FL_INVALIDMODULE ->
-	        flora_abort([CH_PERCENT,NA,': Attempt to call uninstantiated literal'])
+	        flora_abort([CH_PERCENT,NA,UNINSTANTIATED_LIT_ERROR],FLORA_ABORT_NOTRACE)
             ;
-	        flora_abort([CH_PERCENT,NA,'@',ModuleName,': Attempt to call uninstantiated literal'])
+	        flora_abort([CH_PERCENT,NA,'@',ModuleName,UNINSTANTIATED_LIT_ERROR],FLORA_ABORT_NOTRACE)
             )
 
 	;
@@ -188,6 +191,7 @@ FLLIBMODOBJ(_,F,Arg,ModuleName,Context,Pout) :-
 FLLIBMODOBJ(FL_BODY,F,Arg,ModuleName,Context,Pout) :-
 	var(ModuleName),
 	!,
+	%% delay the evaluation if Module or Predicate are unbound
 	FLLIBDELAYEDLITERAL(FL_DELAYQUANT,NULL,NULL,
 			    [wish,(nonvar(ModuleName); nonvar(Pout)),
 			     (FLLIBUNIVEQFORM(Pout,FLLIBMODLIT(F,Arg,ModuleName,Context)),machine:del_attr(ModuleName,flrwhen))]).
@@ -241,7 +245,7 @@ get_libmod_callable(F,Arg,ModuleName,ContextIn,P) :-
 	  F == FL_LIBMOD,
 	  ModuleName == FL_INVALIDMODULE,
 	  !,
-	  flora_abort([Arg,': Attempt to call a non-predicate'])
+	  flora_abort([Arg,NONPREDICATE_CALL],FLORA_ABORT_NOTRACE)
 	; is_list(Arg), %% Term@?WS
 	  !,
 	  %% This case is compiled as FLLIBMODLIT(F,Args,WS,Context)

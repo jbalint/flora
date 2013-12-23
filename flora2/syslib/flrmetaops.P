@@ -191,6 +191,14 @@ FLLIBUNIVEQFORM(FLSYSDELQUERYSIG(Id,_FileName,_Mod,_DescrMetaFacts,B1),
 	!,
 	FLLIBUNIVEQFORM(B1,B2).
 
+%% delayed negation
+FLLIBUNIVEQFORM(FLLIBNAFDELAY(X),FLLIBNAFDELAY(Y)) :-
+	is_naf_literal(X,XPos),
+	is_naf_literal(Y,YPos),
+	!,
+	XPos = YPos.
+	
+
 FLLIBUNIVEQFORM(X,Y) :-
         X \= FLLIBMODLIT(_,_,_,_), X \= (FLLIBMODLIT(_,_,_,_), _),
         Y \= FLLIBMODLIT(_,_,_,_), Y \= (FLLIBMODLIT(_,_,_,_), _),
@@ -485,7 +493,8 @@ FLLIBMETAUNIV(X,Y) :-
 	       strip_operator_encoding(FunctorArgs,FunctorArgsStripped),
 	       Y = [WRAP_HILOG(hilog,HiLogFunctorName)|FunctorArgsStripped]
 	   ; is_naf_literal(X,PosLit) ->
-	       Y = [WRAP_HILOG(FL_NEGATION,FL_RULELOGNAF),PosLit]
+	       Y = [WRAP_HILOG(FL_NEGATION,FL_RULELOGNAF),YPosLit],
+	       FLLIBUNIVEQFORM(PosLit,YPosLit)
 	   ; is_hypothetical(FullWrapper,_) ->
 	       Args = [HypoOp|Goal],
 	       Y = [WRAP_HILOG(FL_HYPOTHETICAL,HypoOp)|Goal]
@@ -534,14 +543,17 @@ FLLIBMETAUNIV(X,Y) :-
 	   ;   %% FLSYSRULEUPDATE(....) - a reified rule
 	       rule_wrapper(FullWrapper,WrapName)
 	   ->
-	       Args = [Id,FileName,_DescrVarTerm,_RuleNum,DescrMetaFacts,RuleHd,RuleBody,_HV,_BV,_PreBody,_PostBody,_DefeatCond],
+	       %% The arguments must match FLSYSRULEUPDATE(...).
+	       %% Always check when changing FLSYSRULEUPDATE!!!
+	       Args = [Id,FileName,_DescrVarTerm,_RuleNum,DescrMetaFacts,RuleHd,RuleBody,_HV,_BV,__DTvars,_H2BF,_H2BB,_PreBody,_PostBody,_DefeatCond],
 	       Y = [WRAP_HILOG(WrapName,Id,FileName),DescrMetaFacts,RuleHd,RuleBody]
 	   ;   %% FLSYSINSQUERYSIG(....) - a reified latent query
 	       latent_query_wrapper(FullWrapper,WrapName)
 	   ->
 	       Args = [Id,FileName,Mod,_RuleNum,DescrMetaFacts,IC_Body],
 	       Y = [WRAP_HILOG(WrapName,Id,FileName,Mod),DescrMetaFacts,IC_Body]
-	   ; Y = [BaseWrap|Args]
+	   ;
+	       Y = [BaseWrap|Args]
 	   )
 	;
 	    PredType == (hilog)

@@ -690,14 +690,24 @@ pure_naf_struct_flora(Goal,FreeVars,PRRULELOGNAF(WrappedGoal,FreeVars,Line,CurrF
 	code_line_and_file_by_prterm(Goal,Line,CurrFileName),
 	modularized_pratom_struct(FL_TABLED_UNNUMBER_CALL,NO_INDEX,FunCode),
 	prologterm_struct(FunCode,1,[Goal],WrappedGoal).
+
 %% We should optimize this: If FreeVars list is empty,don't delay!!
 naf_struct_flora(Goal,FreeVars,Code) :-
 	%% must stop delaying before applying NAF!
+	(is_florasyslib_struct(Goal, Index,FLLIBMODLIT,_N,Args)
+	%% If it is compiled into a LIBMODLIT/3, replace with LIBMODOBJ
+	->
+	    convert_FLLIBMODLIT_to_FLLIBMODOBJ(Index,Args,GoalCode,LibModObjCode)
+	;
+	    LibModObjCode = NULL,
+	    GoalCode = Goal
+	),
 	delay_checking_code_for_rulelog_naf(Goal,DelayCheckCode),
-	conjunct_struct(Goal,DelayCheckCode,FullGoal),
+	conjunct_struct(GoalCode,DelayCheckCode,FullGoal),
 	pure_naf_struct_flora(FullGoal,FreeVars,PureNAFcode),
 	%% delay default negation
-	delay_naf_struct(PureNAFcode,Code).
+	delay_naf_struct(PureNAFcode,DelayCode),
+	conjunct_struct(LibModObjCode,DelayCode,Code).
 
 extract_goal_from_prrulelognaf(NafStruct,Goal) :-
 	is_prrulelognaf(NafStruct,WrappedNafStruct,_,_,_),
@@ -5164,6 +5174,13 @@ compile_conjunct2list(Code,[Code|ListTail],ListTail) :- !.
   H2BCodeBack - code passed from head to body, which is supposed to be
                 appended to the code of the body
 ****************************************************************************/
+#if exists("hooks/flrhead_flterm_print.P")
+#include "hooks/flrhead_flterm_print.P"
+#endif
+
+#if exists("hooks/flrheadtop_compile.P")
+#include "hooks/flrheadtop_compile.P"
+#else
 compile_head_top(ParserTerm,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	collect_flvars(ParserTerm,FlVars),
 	%% TODO: pass FlVars to compile_head as a parameter
@@ -5173,6 +5190,8 @@ compile_head_top(ParserTerm,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	compile_head(ParserTerm,Code,H2BCodeFront,H2BCodeBack,Status),
 	clear_context(compiling_head(FlVars)),
 	!.
+#endif
+
 compile_head([],[],[],[],NO_ERRORS) :- !.
 
 compile_head([ParserTerm|ParserTermList],Code,H2BCodeFront,H2BCodeBack,Status) :-
@@ -7966,7 +7985,7 @@ compile_body_objeql(Obj1,Obj2,WS,OidCode,Code,Status) :-
 
 
 /****************************************************************************
-  compile_reifyop(+Formula,-Object,-Status)
+  compile_reifyop(+Formula,-Object,-OidCode,-Status)
   Compiling ${...}
 ****************************************************************************/
 /*
@@ -8006,20 +8025,32 @@ compute_reification_expr(Formula,Object,OidCode,Status) :-
 	(is_florasyslib_struct(Object1, Index,FLLIBMODLIT,_N,Args)
 	%% If it is compiled into a LIBMODLIT/3, replace with LIBMODOBJ
 	->
-            new_prvariable(Index,Object),
-	    %% LIBMODLIT/3 already has the FL_CONTEXT argument -- no
-	    %% need to add it here
-	    Args = [Pred,WS,FWContext],
-	    (has_context(compiling_headliteral)
-	    -> NewArgs = [FL_HEAD,Pred,WS,FWContext,Object]
-	    ;  NewArgs = [FL_BODY,Pred,WS,FWContext,Object]
-	    ),
-	    florasyslib_struct(Index,FLLIBMODOBJ,5,NewArgs,OidCode)
+	    convert_FLLIBMODLIT_to_FLLIBMODOBJ(Index,Args,Object,OidCode)
+	; is_prconjunct(Object1,First,Second),
+	    is_florasyslib_struct(First,_,FLLIBMODOBJ,_,_)
+	-> OidCode = First,
+	    Object = Second
 	;
 	    reify_struct(Object1,Object),
 	    OidCode = NULL
 	),
 	!.
+
+%% convert_FLLIBMODLIT_to_FLLIBMODOBJ(+Index,+Args,-LibModObjVar,-PrLibModObj)
+%% Note: both input (Args) and output (LibModObjVar/PrLibModObj) are PR-code.
+%% Take an FLLIBMODLIT florasyslib_struct and make FLLIBMODOBJ code for
+%% computing the variable that replaces FLLIBMODLIT. For instance,
+%%   p($a@?M) ---> FLLIBMODOBJ(...,a,?M,...,LibModObjVar), p(LibModObjVar)
+convert_FLLIBMODLIT_to_FLLIBMODOBJ(Index,Args,LibModObjVar,PrLibModObj) :-
+	new_prvariable(Index,LibModObjVar),
+	%% LIBMODLIT/3 already has the FL_CONTEXT argument -- no
+	%% need to add it here
+	Args = [Pred,WS,FWContext],
+	(has_context(compiling_headliteral)
+	-> NewArgs = [FL_HEAD,Pred,WS,FWContext,LibModObjVar]
+	;  NewArgs = [FL_BODY,Pred,WS,FWContext,LibModObjVar]
+	),
+	florasyslib_struct(Index,FLLIBMODOBJ,5,NewArgs,PrLibModObj).
 
 /****************************************************************************
   compile_truthvalue(+Form,+Op,-OidCode,-Code,-Status)
@@ -9213,9 +9244,15 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 	( no_errors_found(S) -> 
 	    ( H2BCodeFront==NULL, H2BCodeBack==NULL
 	    ->
+		%% If literal is a prolog term, generate code that will simply
+		%% insert this term using adaptive assert
+		(is_prologterm(HeadCode) ->
+		    generate_prolog_liblit(FL_DYNPROLOG_FACT,1,[HeadCode],HeadCode1)
+		; HeadCode1 = HeadCode
+		),
 		compile_insert_litlist(T,TCode,S2),
 		( no_errors_found(S2) -> 
-		   conjunct_struct(HeadCode,TCode,Code)
+		   conjunct_struct(HeadCode1,TCode,Code)
 		; true
 		),
 		append(S,S2,Status)
@@ -9379,9 +9416,17 @@ compile_delete_litlist([HWS|T],CodeList,Status) :-
 	compile_body_literal(H,WS,HOidCode,HSpecCode,[],S),
         clear_context(compile_delete),
 	( no_errors_found(S) -> 
-	    compile_conjunct2list(HSpecCode,HList),
-	    (HOidCode == NULL -> HWSCode = HList
+	    (HOidCode == NULL ->
+		(is_prologterm(HSpecCode) ->
+		    %% This tells flrdbop.P and flrbtdbop.P that this fact is
+		    %% to be asserted as Prolog, not into a trie.
+		    %% Currently the asserts aren't backtrackable: to fix later.
+		    generate_prolog_liblit(FL_DYNPROLOG_FACT,1,[HSpecCode],HWSCode1)
+		; HWSCode1 = HSpecCode
+		),
+		compile_conjunct2list(HWSCode1,HWSCode)
 	    ;
+		compile_conjunct2list(HSpecCode,HList),
 		RuleIdx = NO_INDEX,
 		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_DYNRULE,DescrIdCode,DescrVarsTerm,DefaultMetaFactDiffList,_),
 		set_context(compile_with_var_module),
@@ -10561,7 +10606,7 @@ show_nowarn_symbols.
 :- install_verify_attribute_handler(SETARGATTRIBUTE,
 				    AttrVal,VarBinding,
 				    setarg_unify_handler(AttrVal,VarBinding)).
-:- install_attribute_portray_hook(SETARGATTRIBUTE,Attr,write(attr=Attr)).
+:- install_attribute_portray_hook(SETARGATTRIBUTE,Attr,write(Attr)).
 %% we might not need to check if the attribute value is a list:
 %% this is just a precaution against weird bindings
 setarg_unify_handler(AttrVal,_VarBinding) :- is_list(AttrVal).

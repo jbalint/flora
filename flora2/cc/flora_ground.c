@@ -46,9 +46,7 @@
 #include "deref.h"
 #include "memory_xsb.h"
 
-
-#define FLORA_META_PREFIX         "_$_$_flora'mod"
-#define FLORA_META_PREFIX_LEN     14
+#include "flora_prefix.h"
 
 #define FLORA_NAF_PREDICATE       "flora_naf"
 #define FLORA_NAF_ARITY           4

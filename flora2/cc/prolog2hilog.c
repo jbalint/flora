@@ -49,10 +49,10 @@
 #include "error_xsb.h"
 #include "cinterf.h"
 
-#define FLORA_META_PREFIX         "_$_$_flora'mod"
+#include "flora_prefix.h"
+
 #define FLORA_LIB_PREFIX          "fllib"
 #define FLORA_DATATYPE_FUNC       "_datatype"
-#define FLORA_META_PREFIX_LEN     14
 #define FLORA_LIB_PREFIX_LEN      5
 #define FLORA_DATATYPE_FUNC_LEN   7
 

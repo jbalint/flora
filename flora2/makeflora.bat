@@ -55,6 +55,9 @@ if exist *.a     del *.a
 if exist *.o     del *.o
 if exist *.xwam  del *.xwam
 
+copy flora_prefix.in flora_prefix.h
+if exist hooks\flora_prefix.in  copy hooks\flora_prefix.in flora_prefix.h
+
 if [%1] == [-c]  nmake /nologo /f NMakefile.mak PROLOG=%PROLOG% PROLOGDIR=%PROLOGDIR%
 if [%1] == [-c64]  nmake /nologo /f NMakefile64.mak PROLOG=%PROLOG% PROLOGDIR=%PROLOGDIR%
 
