@@ -379,6 +379,8 @@ static int is_formula(prolog_term term)
 
   functor = extern_p2c_functor(term);
   return
+    (strncmp(functor, ERGO_META_PREFIX, ERGO_META_PREFIX_LEN)==0)
+    ||
     (strncmp(functor, FLORA_META_PREFIX, FLORA_META_PREFIX_LEN)==0)
     ||
     (strncmp(functor, FLORA_LIB_PREFIX, FLORA_LIB_PREFIX_LEN)==0);

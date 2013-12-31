@@ -628,6 +628,7 @@ table_directive_struct(SpecList,PRTABLE(SpecList)).
 
 is_prconjunct(PRAND(L,R),L,R).
 is_prdisjunct(PROR(L,R),L,R).
+%% NAF does not propagate through strong conjunction PRBAND
 %%is_prstrong_conjunct(PRBAND(L,R),L,R).
 
 /****************************************************************************
@@ -710,9 +711,14 @@ naf_struct_flora(Goal,FreeVars,Code) :-
 	conjunct_struct(LibModObjCode,DelayCode,Code).
 
 extract_goal_from_prrulelognaf(NafStruct,Goal) :-
-	is_prrulelognaf(NafStruct,WrappedNafStruct,_,_,_),
-	is_prologterm(WrappedNafStruct,_,1,[UnwrappedNafStruct]),
-	is_prconjunct(UnwrappedNafStruct,Goal,_DelayChecker).
+	extract_goal_from_prrulelognaf(NafStruct,Goal,_,_,_,_).
+
+%% the reversible version of extract_goal_from_prrulelognaf
+extract_goal_from_prrulelognaf(NafStruct,Goal,FreeVars,DelayChecker,Line,File) :-
+	is_prrulelognaf(NafStruct,WrappedNafStruct,FreeVars,Line,File),
+	modularized_pratom_struct(FL_TABLED_UNNUMBER_CALL,NO_INDEX,FunCode),
+	is_prologterm(WrappedNafStruct,FunCode,1,[UnwrappedNafStruct]),
+	is_prconjunct(UnwrappedNafStruct,Goal,DelayChecker).
 
 %% delay struct
 delay_struct(Index,DelayOp,Args,Code) :-
@@ -775,9 +781,13 @@ propagate_rulelog_naf(Goal,FreeVars,Code) :-
 	).
 
 %% catch-all: nothing left to propagate, including the case of PRBAND conjuncts
+%% NAF does not propagate through strong conjunction PRBAND
 propagate_rulelog_naf(Goal,FreeVars,Code) :-
 	naf_struct_flora(Goal,FreeVars,Code).
 
+
+%% neg_struct(+PRgoalIn,+Index,-PRgoalOut,-Status)
+%% Propagation of neg inwards
 neg_struct(PRAND(Goal1,Goal2),Idx,PRAND(Goal1,Struct2),Status) :-
 	is_body_neg_passthrough_literal(Goal1),
 	!,
@@ -790,19 +800,54 @@ neg_struct(PRAND(Goal1,Goal2),Idx,PRAND(Struct1,Goal2),Status) :-
 
 %% unlike naf, neg can appear in the head
 neg_struct(PRAND(Goal1,Goal2),Idx,PROR(Struct1,Struct2),Status) :-
+	!,
 	neg_struct(Goal1,Idx,Struct1,S),
 	( no_errors_found(S) -> 
 	   neg_struct(Goal2,Idx,Struct2,Status)
 	;  Status = S
 	).
 neg_struct(PROR(Goal1,Goal2),Idx,PRAND(Struct1,Struct2),Status) :-
+	!,
 	neg_struct(Goal1,Idx,Struct1,S),
 	( no_errors_found(S) -> 
 	   neg_struct(Goal2,Idx,Struct2,Status)
 	;  Status = S
 	).
+
+%% neg exists(Vars)^Goal -->  naf exists(Vars)^(naf neg Goal)
+neg_struct(Goal,Idx,Code,Status) :-
+	is_prquantifier(Goal,FL_EXISTS,FormCode,QuantVarObjs,FreeVars),
+	!,
+	is_prlist(QuantVarObjs,QuantVarL,_,ListIdx),
+	is_prlist(FreeVars,FreeVarL,_,_),
+	append(QuantVarL,FreeVarL,AllVars),
+	list_struct(AllVars,[],ListIdx,AllVarsListObj),
+	neg_struct(FormCode,Idx,NegFormCode,Status),
+	propagate_rulelog_naf(NegFormCode,AllVarsListObj,Code1),
+	naf_struct_flora(Code1,FreeVars,Code).
+
+%% neg naf foo --> naf neg foo
+neg_struct(Goal,Idx,OutGoal,Status) :-
+	is_delay_naf_struct(Goal,PRRuleLogNaf),
+	!,
+	extract_goal_from_prrulelognaf(PRRuleLogNaf,PosGoal,FreeVars,DelayChecker,Line,File),
+	(is_delay_naf_struct(PosGoal,PosGoalStripped),
+	    extract_goal_from_prrulelognaf(PosGoalStripped,PosPosGoal,_,_,_,_)
+	->  %% it is forall(...)^... translated as naf exists(...)^(naf ...)
+	    %% so neg is pushed as just exists(...)^(neg ...)
+	    %% (and exists is dropped)
+	    neg_struct(PosPosGoal,Idx,OutGoal,Status)
+	;   %% this is just a naf goal, not a forall: push neg past naf
+	    neg_struct(PosGoal,Idx,NegPosGoal,Status),
+	    %% applied in reverse: OutGoal1 is output
+	    extract_goal_from_prrulelognaf(OutGoal1,NegPosGoal,FreeVars,DelayChecker,Line,File),
+	    %% applied in reverse: OutGoal is output
+	    is_delay_naf_struct(OutGoal,OutGoal1)
+	).
+
 %% double negation
 neg_struct(PRNEG(Goal),_Idx,Goal,[]) :- !.
+
 
 /*
 neg_struct(Goal,Idx,_,[Err]) :-
@@ -1139,7 +1184,7 @@ special_variable_struct(Type,PRSPECIALVAR(Type)).
 
 list_struct(List,Term,Index,PRLIST(List,Term,Index)).
 list_struct(List,Term,PRLIST(List,Term,NO_INDEX)).
-%%is_prlist(PRLIST(List,Term,Index),List,Term,Index).
+is_prlist(PRLIST(List,Term,Index),List,Term,Index).
 
 workspace_struct(P,WS,PRWORKSPACE(P,WS)).
 is_prworkspace(PRWORKSPACE(P,WS),P,WS).
@@ -3507,7 +3552,7 @@ compile_ignoredep_list([H|L],[HCode|LCode],Status) :-
 	!.
 
 /****************************************************************************
-  Compile :- flora_compiler_options(OptList)
+  Compile :- compiler_options(OptList) of FLORA (not XSB)
 ****************************************************************************/
 compile_compiler_options([],[],NO_ERRORS) :- !.
 compile_compiler_options([Opt|Rest],Code,Status) :-
@@ -10634,3 +10679,4 @@ multiply_setarg_code(Code,MultCode) :-
 	).
 
 /******************************************************************************/
+

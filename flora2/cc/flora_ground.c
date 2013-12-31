@@ -488,7 +488,9 @@ static inline int is_flora_form(prolog_term pterm, Integer ignore_negative)
 
   functor = extern_p2c_functor(pterm);
   has_flora_prefix =
-    (strncmp(functor,FLORA_META_PREFIX,FLORA_META_PREFIX_LEN)==0);
+    (strncmp(functor, ERGO_META_PREFIX, ERGO_META_PREFIX_LEN)==0
+     ||
+     strncmp(functor,FLORA_META_PREFIX,FLORA_META_PREFIX_LEN)==0);
 
   if (has_flora_prefix && strstr(functor,FL_UNDEFEATED))
     return FALSE;
