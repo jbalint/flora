@@ -26,9 +26,8 @@
 
 :- compiler_options([xpp_on]).
 #include "flag_defs_xsb.h"
-%% must define it here because at this point the include path of gpp is not set
-#define FLORA_COMPILATION_COUNTER flora_compile_id
-#define FLORA_ABORT_NOTRACE       '_$flora_abort_notrace'
+#include "flrincludes/flora_terms.flh"
+#include "flrincludes/flora_exceptions.flh"
 
 #if exists("hooks/flrconsts.flh")
 #include "hooks/flrconsts.flh"
@@ -91,9 +90,11 @@
 %%:- index(hide_this_show/2,trie). % this triggers an error-check in a newer XSB
 
 :- export
-	bootstrap_flora/0,
+	FLBOOTSTRAP/0,
+	'_#flmakesetup'/0,
 	unstrap_flora/0,
-	flora_query/5,
+	FLQUERYCMD/5,
+	FLSHELL/0,
 	flora_shell/0,
 	('_flimport')/1,
 	%%('_load')/1,
@@ -127,12 +128,14 @@
    %% must be after load_dyn(FloraBuildInfoFile)!
    asserta(flora_configuration(installdir,FloraDir)).
 
-#if exists("hooks/flrboot.flh")
-#include "hooks/flrboot.flh"
+'_#flmakesetup' :- FLBOOTSTRAP.
+
+#if exists("hooks/flrboot.P")
+#include "hooks/flrboot.P"
 #else
-bootstrap_flora :-
+FLBOOTSTRAP :-
 	bootstrap_internal.
-bootstrap_flora.
+FLBOOTSTRAP.
 #endif
 
 bootstrap_internal :-
@@ -212,13 +215,17 @@ unstrap_flora :-
 
 
 /*****************************************************************************/
-%% don''t show flora_shell in trace
-:- assert(hide_this_show(flora_shell,0)). 
+%% do not show shell commands in trace
+:- assert(hide_this_show(ergo_shell,0)),
+	assert(hide_this_show(flora_shell,0)),
+	assert(hide_this_show(shell_internal,0)). 
 
 
 /*****************************************************************************/
-flora_shell :-
-	bootstrap_flora,
+flora_shell :- shell_internal.
+
+shell_internal :-
+	FLBOOTSTRAP,
 	notrace,
 	( flora_get_counter(flora_shell_loaded,1), !
 	;
@@ -338,7 +345,7 @@ remove_include_dirs([H|T]) :-
 
 
 /************************************************************************
-    flora_query(+String,+Vars,-Status,-XWamState,-Exception)
+    FLQUERYCMD(+String,+Vars,-Status,-XWamState,-Exception)
 
    Execute a query specified in String.
 
@@ -357,5 +364,5 @@ remove_include_dirs([H|T]) :-
    Exception: is a possible exception during the runtime execution 
               of the command in String.
 *************************************************************************/
-flora_query(String,Vars,Status,XWamState,Exception) :-
+FLQUERYCMD(String,Vars,Status,XWamState,Exception) :-
 	flora_call_string_command(String,Vars,Status,XWamState,Exception).

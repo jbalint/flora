@@ -869,6 +869,9 @@ flsemanticsdirect_struct(A,FLSEMANTICS(AList)) :-
 flsetsemanticsdirect_struct(A,FLSETSEMANTICS(AList)) :-
 	fllist_struct(A,[],NO_INDEX,AList).
 
+flsetruntime_direct_struct(A,FLSETRUNTIME(AList)) :-
+	fllist_struct(A,[],NO_INDEX,AList).
+
 fldefeasible_struct(TheoryModule,FLDEFEASIBLE(TheoryModule)).
 fldefeasible_rule_default_struct(FLDEFEASIBLE_RULE_DEFAULT).
 flstrict_rule_default_struct(FLSTRICT_RULE_DEFAULT).
@@ -1472,6 +1475,7 @@ exec_directive(CanoniTerm,FloraModSpec,Code,Status) :-
 	; defsensor_directive(CanoniTerm,CodeList,Status)
 	; exec_setsemantics_directive(CanoniTerm,CodeList,Status)
 	; exec_semantics_directive(CanoniTerm,CodeList,Status)
+	; exec_setruntime_directive(CanoniTerm,CodeList,Status)
 	; prefixdef_directive(CanoniTerm,CodeList,Status)
 	),
 	!.
@@ -2413,7 +2417,7 @@ exec_setsemantics_directive(CANOTERM(Funct,_N,FL_BRACE,Args,_If,_Ip), [Code],Sta
 	get_name(Funct,FL_SETSEMANTICS),
 	!,
 	parse_semantics_directive_args(DISALLOW_VARIABLES,Args,ArgsCode,Status),
-	(Status = NO_ERRORS -> flsetsemanticsdirect_struct(ArgsCode,Code)
+	(Status == NO_ERRORS -> flsetsemanticsdirect_struct(ArgsCode,Code)
 	;
 	  true
 	).
@@ -2429,11 +2433,75 @@ exec_semantics_directive(CANOTERM(Funct,_N,FL_BRACE,Args,_If,_Ip),
 	get_name(Funct,FL_SEMANTICS),
 	!,
 	parse_semantics_directive_args(ALLOW_VARIABLES,Args,ArgsCode,Status),
-	(Status = NO_ERRORS -> flsemanticsdirect_struct(ArgsCode,Code)
+	(Status == NO_ERRORS -> flsemanticsdirect_struct(ArgsCode,Code)
 	;
 	  true
 	).
 
+/****************************************************************************
+  exec_setruntime_directive(+CanoniTerm,-CodeList,-Status)
+  This is executable setruntime{...} directive for setting timeouts, subgoal
+  depth, answer depth.
+****************************************************************************/
+
+exec_setruntime_directive(CANOTERM(Funct,_N,FL_BRACE,Args,_If,_Ip), [Code],Status) :-
+	get_name(Funct,FL_SETRUNTIME),
+	!,
+	parse_setruntime_directive_args(Args,ArgsCode,Status),
+	(Status == NO_ERRORS -> flsetruntime_direct_struct(ArgsCode,Code)
+	;
+	  true
+	).
+
+parse_setruntime_directive_args([],[],NO_ERRORS) :- !.
+parse_setruntime_directive_args([CANOTERM(F,N,FL_PARENTHESIS,Args,If,Ip)|Rest],[OptCode|RestCode],Status) :-
+	N>0,
+	parse_one_setruntime_directive(CANOTERM(F,N,FL_PARENTHESIS,Args,If,Ip),OptCode,S1),
+	!,
+	(S1 == NO_ERRORS
+	->
+	    parse_setruntime_directive_args(Rest,RestCode,Status)
+	;
+	    Status = S1
+	).
+parse_setruntime_directive_args([CANOTERM(_,_,FL_PARENTHESIS,_,If,_Ip)|_],_,Status) :-
+	parsing_error(If,ERROR_RUNTIMEOPT,Status).
+
+parse_one_setruntime_directive(CANOTERM(F,N,FL_PARENTHESIS,Args,If,Ip),OptCode,Status) :-
+	get_atom(F,FAtom),
+	is_valid_setruntime_option(FAtom,Args),
+	!,
+	(parse_pure_prolog_term(CANOTERM(F,N,FL_PARENTHESIS,Args,If,Ip),usermod,OptCode,_,S1),
+	    S1 == NO_ERRORS
+	-> Status=S1
+	; parsing_error(Ip,ERROR_RUNTIMEOPT,Status)
+	).
+
+
+is_valid_setruntime_option(timeout,[Time,_]) :-
+	get_integer(Time,V),
+	!,
+	V >= 0.
+%% clear timeout
+is_valid_setruntime_option(timeout,[Time]) :-
+	get_integer(Time,0),
+	!.
+is_valid_setruntime_option(timeout,[CANOTERM(Repeating,1,FL_PARENTHESIS,[Num],_,_),_]) :-
+	get_name(Repeating,repeating),
+	get_integer(Num,V),
+	V >= 0,
+	!.
+is_valid_setruntime_option(goaldepth,[TermDepth,ListDepth,_Handler]) :-
+	!,
+	get_integer(TermDepth,VT), VT >= 0,
+	get_integer(ListDepth,VL), VL >= 0.
+is_valid_setruntime_option(answerdepth,[TermDepth,ListDepth,_Handler]) :-
+	!,
+	get_integer(TermDepth,VT), VT >= 0,
+	get_integer(ListDepth,VL), VL >= 0.
+is_valid_setruntime_option(unification,[Arg]) :-
+	get_name(Arg,V),
+	memberchk(V,[fast,correct]).
 
 /****************************************************************************
   defeasible_directive(+CanoniTerm,-CodeList,-Status)

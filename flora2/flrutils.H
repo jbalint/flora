@@ -103,7 +103,7 @@
 :- import flora_call_hooks/5 from flrhooks.
 
 :- import
-	bootstrap_flora/0,
+	FLBOOTSTRAP/0,
 	'_isloaded'/1
    from flora2.
 

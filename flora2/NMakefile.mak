@@ -115,7 +115,7 @@ CLEAN : CLEANTEMP
 
 
 $(PROLOGEXT)$(OBJEXT):
-	"$(PROLOG)" -e "['.\\flora2']. import bootstrap_flora/0 from flora2. bootstrap_flora,mc(%|fF,$(OPTIONS)). halt."
+	"$(PROLOG)" -e "['.\\flora2']. import '_#flmakesetup'/0 from flora2. '_#flmakesetup',mc(%|fF,$(OPTIONS)). halt."
 
 
 .SILENT:

@@ -45,7 +45,10 @@
 	set_prolog_flag/2
    from curr_sym.
 
-:- export FLLIBCATCH/3, FLLIBTHROW/1.
+:- export
+	FLLIBCATCH/3,
+	FLLIBTHROW/1,
+	FLLIBSETRUNTIME/1.
 
 :- export
 	flora_set_gc_margin/1,
@@ -71,6 +74,22 @@ FLLIBTHROW(Error) :-
 	P2H_CONVERSION(ErrorPrlg,Error),
 	throw(ErrorPrlg).
 
+FLLIBSETRUNTIME([]) :- !.
+FLLIBSETRUNTIME([Option|Rest]) :-
+	set_runtime_option(Option),
+	FLLIBSETRUNTIME(Rest).
+
+set_runtime_option(timeout(Opt1,Opt2)) :-
+	flora_set_timeout(Opt1,Opt2).
+set_runtime_option(timeout(0)) :-
+	flora_clear_timeout.
+set_runtime_option(goaldepth(Term,List,Handler)) :-
+	flora_set_subgoal_depth(Term,List,Handler).
+set_runtime_option(answerdepth(Term,List,Handler)) :-
+	flora_set_answer_depth(Term,List,Handler).
+set_runtime_option(unification(Mode)) :-
+	flora_set_unification_mode(Mode).
+
 
 /***************** timeout handling ****************************************/
 
@@ -89,6 +108,8 @@ flora_set_timeout(repeating(Time),Handler) :-
 	flora_clear_timeout,
 	(\+ ((number(Time), Time>0))
 	-> flora_abort(['periodic interrupt must be a positive number of seconds, ', Time], FLORA_ABORT_NOTRACE)
+	; \+compound(Handler)
+	-> flora_abort(['periodic interrupt handler must be a predicate, ', Handler], FLORA_ABORT_NOTRACE)
 	; arg(1,Handler,GoalVar), \+var(GoalVar)
 	-> flora_abort(['periodic interrupt handler must be a predicate with unbound 1st argument, ', Handler], FLORA_ABORT_NOTRACE)
 	;

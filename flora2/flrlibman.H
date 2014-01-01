@@ -24,6 +24,9 @@
 
 
 
+:- compiler_options([xpp_on]).
+
+#include "flora_terms.flh"
 
 :- import flora_configuration/2 from flrregistry.
 
@@ -41,7 +44,7 @@
 	flora_concat_atoms/2
    from flrporting.
 
-:- import bootstrap_flora/0 from flora2.
+:- import FLBOOTSTRAP/0 from flora2.
 
 :- index flora_sysmod_file/3-1.
 :- index flora_library_file/3-1.

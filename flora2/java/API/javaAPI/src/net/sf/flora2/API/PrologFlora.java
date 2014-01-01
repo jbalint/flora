@@ -65,13 +65,13 @@ public class PrologFlora extends FloraConstants
     void initCommandStrings(String FloraRootDir)
     {
 	commands = (new String[] {
-		"(import bootstrap_flora/0 from flora2)",
+		"(import '_#flmakesetup'/0 from flora2)",
 		String.valueOf(String.valueOf((new StringBuffer("asserta(library_directory('")).append(FloraRootDir).append("'))"))),
 		"consult(flora2)",
-		"bootstrap_flora",
+		"'_#flmakesetup'",
 		"consult(flrimportedcalls)",
 		"import ('_load')/1, ('_add')/1 from flora2",
-		"import flora_query/5 from flora2",
+		"import flora_call_string_command/5 from flrcallflora",
 		"import flora_decode_oid_as_atom/2 from flrdecode"
 	    });
     }
@@ -189,7 +189,7 @@ public class PrologFlora extends FloraConstants
 		}
 	}
 	
-    /* Call the flora_query/5 predicate of FLORA-2
+    /* Call the flora_call_string_command/5 predicate of FLORA-2
     ** Binds FLORA-2 variables to the returned values
     ** and returns an array of answers. Each answer is an Interprolog
     ** term model from which variable bindings can be obtained.
@@ -230,10 +230,10 @@ public class PrologFlora extends FloraConstants
     	String listString = "L_rnd=" + varsString + ",";
     	String queryString = "S_rnd='" + cmd + "',";
     	String floraQueryString =
-    		//"findall(TM_rnd,(flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex),buildTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
+    		//"findall(TM_rnd,(flora_call_string_command(S_rnd,L_rnd,_St,_XWamState,_Ex),buildTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)";
     		(loadProgressHandlerPredicate==null?"":loadProgressHandlerPredicate+"('"+cmd+"',"+HEARTBEAT_STAGE_BEGIN+"), ") + // send a first message, so we get some feedback even for fast queries
     		"findall(TM_rnd,("+
-    			"flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex)"+
+    			"flora_call_string_command(S_rnd,L_rnd,_St,_XWamState,_Ex)"+
     			",buildInitiallyFlatTermModel(L_rnd,TM_rnd)),BL_rnd),ipObjectSpec('ArrayOfObject',BL_rnd,LM)" +
     		(loadProgressHandlerPredicate==null?"":", "+loadProgressHandlerPredicate+"('"+cmd+"',"+HEARTBEAT_STAGE_END+")"); // send last message, so we get some final feedback even for fast queries
     		
@@ -269,7 +269,7 @@ public class PrologFlora extends FloraConstants
         StringBuffer sb = new StringBuffer();
 	sb.append(queryString);
 	sb.append(listString);
-        sb.append("flora_query(S_rnd,L_rnd,_St,_XWamState,_Ex)");
+        sb.append("flora_call_string_command(S_rnd,L_rnd,_St,_XWamState,_Ex)");
 
 	if (debug)
 	    System.out.println("simpleFloraCommand: " + sb);

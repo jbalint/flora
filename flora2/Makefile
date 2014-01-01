@@ -176,10 +176,10 @@ init:
 	@echo "file_flush($(STDWARN),_)." >> cmd...
 	@echo "['./flora2']." >> cmd...hdr
 	@echo "retractall(xpp_options(_))." >> cmd...hdr
-	@echo "import bootstrap_flora/0 from flora2." >> cmd...hdr
+	@echo "import '_#flmakesetup'/0 from flora2." >> cmd...hdr
 	@echo "file_reopen($(SVFILE),a,$(STDWARN),_)." >> cmd...hdr
 	@echo "file_clone($(STDWARN),$(STDERR),_)." >> cmd...hdr
-	@echo "bootstrap_flora." >> cmd...hdr
+	@echo "'_#flmakesetup'." >> cmd...hdr
 
 
 finish:

@@ -26,6 +26,7 @@
 :- compiler_options([xpp_on]).
 
 #include "flora_porting.flh"
+#include "flora_terms.flh"
 
 :- import
 	parse_filename/4
@@ -54,7 +55,7 @@
 
 :- import xpp_process_file/3 from parse.
 
-:- import bootstrap_flora/0 from flora2.
+:- import FLBOOTSTRAP/0 from flora2.
 
 :- export flWrapAround/1.
 

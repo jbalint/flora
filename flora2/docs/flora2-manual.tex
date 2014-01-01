@@ -46,11 +46,6 @@
 \newcommand{\ENGINENAME}{flora2}
 \newcommand{\ENGINERUN}{runflora}
 
-\newcommand{\FLSETTIMEOUT}{flora\_set\_timeout}
-\newcommand{\FLCLEARTIMEOUT}{flora\_clear\_timeout}
-\newcommand{\FLSETSUBGOALDEPTH}{flora\_set\_subgoal\_depth}
-\newcommand{\FLSETANSWERDEPTH}{flora\_set\_answer\_depth}
-\newcommand{\FLSETUNIFICATIONMODE}{flora\_set\_unification\_mode}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \newcommand{\prompt}{flora2 ?- }
@@ -377,6 +372,7 @@ Note that XSB \emph{cannot} be compiled in a directory whose path contains
 spaces.  However, once compiled, XSB can be moved to another directory,
 which may contain spaces. No recompilation is necessary after the move.
 
+\sloppy
 Next, check out \FLSYSTEM from its SVN repository at
 \url{http://sourceforge.net/p/flora/src/HEAD/tree/trunk/flora2/} into a
 separate directory \emph{outside} the XSB installation tree.  The \FLSYSTEM
@@ -12835,7 +12831,7 @@ in order to flush the log to the output.
 {\tt \_logforestlow(File, HideOptions)} to skip certain types of low-level 
 log entries. 
 
-\subsection{Call and Answer Depth, Timeouts, Unification
+\subsection{Controlling Call and Answer Depth, Timeouts, Unification
   Mode}\label{sec-timeout}
 
 \index{call depth}
@@ -12851,54 +12847,73 @@ answers. In both cases, limiting the depth can terminate a run-away
 computation.
 Timeouts are useful when it is desirable to stop the computation if it does
 not finish within a preset amount of time.
-To control these features, \FLSYSTEM provides the following predicates.
-
-\paragraph{Timeouts.} The following calls can be used to control various
-types of timeouts:
-%%
-\index{\FLSETTIMEOUT}
-\index{\FLCLEARTIMEOUT}
+To control these features, \FLSYSTEM provides the builtin primitive that
+can appear in any query or rule body:
 %% 
+\index{setruntime{...} primitive}
 \begin{alltt}
-    ?- \FLSETTIMEOUT(\emph{Time},fail)@_prolog(flrerrhandler).
-    ?- \FLSETTIMEOUT(\emph{Time},abort)@_prolog(flrerrhandler).
-    ?- \FLSETTIMEOUT(repeating(\emph{Time})@_prolog,\emph{Handler})@_prolog(flrerrhandler).
-    ?- \FLCLEARTIMEOUT@_prolog(flrerrhandler).
+   ?- setruntime\{\emph{Opt1},\emph{Opt2},...\}
 \end{alltt}
 %% 
-where \emph{Time} is an integer that specifies the number of seconds after
+Several options can be used in the same \texttt{setruntime} command. 
+These options are described below.
+
+\paragraph{Timeouts.} The following \texttt{setruntime\{...\}} options
+can be used to control various types of timeouts:
+%% 
+\index{timeout option}
+\begin{alltt}
+    timeout(\emph{Timeout},fail)
+    timeout(\emph{Timeout},abort)
+    timeout(repeating(\emph{Interval}),\emph{Handler})
+    timeout(0)
+\end{alltt}
+%% 
+where \emph{Timeout} is an integer that specifies the number of seconds after
 which queries should be interrupted. The first form will cause long-running
-queries (those running $> Timeout$) to fail and the second will abort them.
+queries (those running longer than $Timeout$) to fail and the second will
+abort them.
 The third form is a way to interrupt queries periodically in order to
 perform the desired tasks. Namely, the queries will be interrupted each
-\emph{Time} number of seconds and \emph{Handler} will be called at each
+\emph{Interval} number of seconds and \emph{Handler} will be called at each
 interrupt.
-Note that once one of these
-commands is issued, it applies to all subsequent queries.
-The last command resets the timeout to infinity and thus undoes the
-effect of the first three commands.
+The last form removes the timeout restriction.
+Although several of these options can be used within the same
+\texttt{setruntime} command, these options are not combinable, so each
+subsequent option overrides the previous one. 
 
-For the repeated interrupts above, the interrupt handler must satisfy the
-following restrictions:
+Here are some examples:
+%%
+\begin{verbatim}
+    ?- setruntime{timeout(4,fail)}.
+    ?- setruntime{timeout(100,abort)}.
+    ?- setruntime{timeout(repeating(4)),Handler(?)}.
+    ?- setruntime{timeout(0)}.
+\end{verbatim}
+%% 
+Note that once any of these commands is issued, it applies to all
+subsequent queries.  The last command resets the timeout to infinity.
+
+For the repeated timer interrupts above, the interrupt handler must
+satisfy the following restrictions:
 %% 
 \begin{itemize}
-\item   Its first argument must be an unbound variable. This variable will
+\item   The first argument must be an unbound variable. This variable will
   be bound to the query being executed so the handler will know on behalf
   of which goal it is being called.
 \item \emph{Handler} must be either a Prolog predicate defined in some
   Prolog module or a \FLSYSTEM predicate declared using the \texttt{:- prolog}  
-  directive. In the latter case, it should be reified.
+  directive. 
 \end{itemize}
 %% 
 For instance, the following fragment in \FLSYSTEM sets the system for periodic
 timer interrupts:
 %% 
-\begin{alltt}
+\begin{verbatim}
    :- prolog periodic_handler/1.
    periodic_handler(?Goal) :- writeln(aaaaa=?Goal)@_prolog.
-   ?- \FLSETTIMEOUT(repeating(2)@_prolog,
-                        ${periodic_handler(?)})@_prolog(flrerrhandler).
-\end{alltt}
+   ?- setruntime{timeout(repeating(2),periodic_handler(?))}.
+\end{verbatim}
 %% 
 In this example, the \FLSYSTEM predicate \texttt{periodic\_handler/1} will be
 called every two seconds. 
@@ -12907,61 +12922,95 @@ Alternatively, one could define \texttt{periodic\_handler/1} as a Prolog
 predicate in a \texttt{.P} file, e.g., \texttt{foo.P}, and then set
 periodic interrupts as follows:  
 %% 
-\begin{alltt}
+\begin{verbatim}
    ?- ['foo.P'].
-   ?- \FLSETTIMEOUT(repeating(2)@_prolog,
-                        periodic_handler(?)@_prolog)@_prolog(flrerrhandler).
-\end{alltt}
+   ?- setruntime{timeout(repeating(2),periodic_handler(?))}.
+\end{verbatim}
 %% 
 
-\paragraph{Subgoal depth control.} The following calls enable subgoal depth
+\paragraph{Subgoal depth control.} The following options provide subgoal depth
 control:
-%%
-\index{\FLSETSUBGOALDEPTH}
 %% 
+\index{goaldepth option}
 \begin{alltt}
-    ?- \FLSETSUBGOALDEPTH(\emph{TermDepth},\emph{ListDepth},fail)@_prolog(flrerrhandler).
-    ?- \FLSETSUBGOALDEPTH(\emph{TermDepth},\emph{ListDepth},abort)@_prolog(flrerrhandler).
+    goaldepth(\emph{TermDepth},\emph{ListLength},fail)
+    goaldepth(\emph{TermDepth},\emph{ListLength},abort)
+    goaldepth(\emph{TermDepth},\emph{ListLength},abstract)
 \end{alltt}
 %% 
-The \texttt{\FLSETSUBGOALDEPTH} command controls the maximum depth
-of calls during the evaluation. \emph{TermDepth} specifies the depth of
-nesting of all function symbols except lists (lists are considered to be of
-depth 1) and \emph{ListDepth} specifies the maximum length of lists. Number
-0 means infinity. The first form of the above command will fail any subgoal
-whose depth exceeds one of the specified limits. The second form will abort
-the query.  
+These options control the maximum depth of calls during the
+evaluation. \emph{TermDepth} specifies the depth of nesting of all function
+symbols except lists (lists are considered to be of depth 1) and
+\emph{ListLength} specifies the maximum length of lists. The depth or
+length of 0 means infinity.  At present, however, list length setting is
+ignored.
 
-\paragraph{Answer depth control.} The following calls enable the user to
-control the answer depth:
-\index{\FLSETANSWERDEPTH}
+The first form of the above options will fail any subgoal whose
+depth exceeds one of the specified limits. The second form will abort the
+query.  The last form will \emph{perform call abstraction} and replace the
+deeply nested subterms with new variables. Examples:
+%% 
+\begin{verbatim}
+    ?- setruntime{goaldepth(100,1000,fail)}.
+    ?- setruntime{goaldepth(100,1000,abort)}.
+    ?- setruntime{goaldepth(100,1000,abstract)}.
+\end{verbatim}
+%%
+The above options are incompatible, so each subsequent option overrides the
+previous one.
+
+
+\paragraph{Answer depth control.} The following options enable
+answer depth control:
+%% 
+\index{answerdepth option}
 %% 
 \begin{alltt}
-    ?- \FLSETANSWERDEPTH(\emph{TermDepth},\emph{ListDepth},fail)@_prolog(flrerrhandler).
-    ?- \FLSETANSWERDEPTH(\emph{TermDepth},\emph{ListDepth},abort)@_prolog(flrerrhandler).
+    answerdepth(\emph{TermDepth},\emph{ListLength},fail)
+    answerdepth(\emph{TermDepth},\emph{ListLength},abort)
+    answerdepth(\emph{TermDepth},\emph{ListLength},abstract)
 \end{alltt}
 %% 
-This command controls the depth of the returned answers. The meaning of the
-arguments in the same as in the case of \texttt{\FLSETSUBGOALDEPTH}.
+The meaning of the \texttt{fail} and \texttt{abort} options is the same as
+for the goal depth. However, here the list length parameter is \emph{not}
+ignored and is properly controlling the length of lists in the query answers.
+The meaning of the \texttt{abstract} options is that the depth/length of
+terms/lists is limited to the specified numbers. If higher depth/length
+answer-objects are generated, their truth value is set to \emph{undefined}. 
+For instance,
+%% 
+\begin{verbatim}
+    ?- setruntime{answerdepth(100,1000,fail)}.
+    ?- setruntime{answerdepth(100,1000,abort)}.
+    ?- setruntime{answerdepth(100,1000,abstract)}.
+\end{verbatim}
+%%
 
 \paragraph{Unification mode.} The default unification mode in \FLSYSTEM is
 unsound, in general. That is, non-unifiable terms might be unified, as
-explained below. The following calls can be used to change the unification
-mode:
+explained below. The following runtime options can be used to change the
+unification mode:
 %%
-\index{\FLSETUNIFICATIONMODE}
+\index{unification option}
 %% 
 \begin{alltt}
-    ?- \FLSETUNIFICATIONMODE(fast)@_prolog(flrerrhandler).
-    ?- \FLSETUNIFICATIONMODE(correct)@_prolog(flrerrhandler).
+    unification(fast)
+    unification(correct)
 \end{alltt}
 %% 
-This command controls the experimental feature of unification mode.
+For instance,
+%% 
+\begin{verbatim}
+    ?- setruntime{unification(fast)}.
+    ?- setruntime{unification(correct)}.
+\end{verbatim}
+%% 
+These commands controls the experimental feature of unification mode.
 The default unification mode is \texttt{fast}. This is a logically unsound
 mode: it does not do the occurs-check and so the unification
 \texttt{?X = f(?X)} will succeed even though the two terms are not
-unifiable in the classical sense. The \texttt{correct} mode would fail such a
-unification.
+unifiable in the classical sense. Under the \texttt{correct} mode, such a
+unification would fail.
 
 Unifying in the fast mode can lead to hard-to-find errors, although \FLSYSTEM
 makes attempts to limit the damage and the probability of serious problems
