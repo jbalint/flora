@@ -90,11 +90,13 @@ OBJEXT=.xwam
 
 # Remove Prolog, object, and other auxiliary files to make sure we are using
 # the latest compiled sources
+rm -f $basedir/datafiles/*.xwam
+rm -f $basedir/general_tests/prolog/*${OBJEXT}
+
 rm -f $basedir/apptests/.flora_aux_files/*
 rm -f $basedir/apptests/gpmanager/.flora_aux_files/*
 rm -f $basedir/apptests/programs/.flora_aux_files/*
 rm -f $basedir/datafiles/.flora_aux_files/*
-rm -f $basedir/datafiles/*.xwam
 rm -f $basedir/defeasible/*/.flora_aux_files/*
 rm -f $basedir/delaytests/.flora_aux_files/*
 rm -f $basedir/exporttest/.flora_aux_files/*
@@ -103,7 +105,19 @@ rm -f $basedir/functions/*/.flora_aux_files/*
 rm -f $basedir/general_tests/.flora_aux_files/*
 rm -f $basedir/symbols/.flora_aux_files/*
 rm -f $basedir/symbols/*/.flora_aux_files/*
-rm -f $basedir/general_tests/prolog/*${OBJEXT}
+
+rm -f $basedir/apptests/.ergo_aux_files/*
+rm -f $basedir/apptests/gpmanager/.ergo_aux_files/*
+rm -f $basedir/apptests/programs/.ergo_aux_files/*
+rm -f $basedir/datafiles/.ergo_aux_files/*
+rm -f $basedir/defeasible/*/.ergo_aux_files/*
+rm -f $basedir/delaytests/.ergo_aux_files/*
+rm -f $basedir/exporttest/.ergo_aux_files/*
+rm -f $basedir/functions/.ergo_aux_files/*
+rm -f $basedir/functions/*/.ergo_aux_files/*
+rm -f $basedir/general_tests/.ergo_aux_files/*
+rm -f $basedir/symbols/.ergo_aux_files/*
+rm -f $basedir/symbols/*/.ergo_aux_files/*
 
 
 exec 3> /dev/tty

@@ -43,6 +43,10 @@
     from flrporting.
 
 :- import
+	flora_op_synonym/2
+   from flrsynonym.
+
+:- import
 	flrterm_vars_split/4,
 	flratom_char_code/3
    from flora_ground.

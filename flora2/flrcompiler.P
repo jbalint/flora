@@ -911,7 +911,7 @@ neg_struct(Goal,_Idx,Code,[]) :-
 	; is_florasyslib_struct(Goal,Idx,FLNEGLIBMODLIT,N,Args)
 	-> florasyslib_struct(Idx,FLLIBMODLIT,N,Args,Code)
 	; is_prvariable(Goal,_VarName,Idx),
-	    has_context(goal_reification)
+	    has_context(compiling_goal_reification)
 	-> % When variable is negated under ~, as in ?X ~ neg ?Y.
 	    thismodule_struct(ThisModule),
 	    body_context_info_structure(ThisModule,FWContext),
@@ -1056,7 +1056,7 @@ modularized_pratom_struct(Atom,Idx,PRMODULARIZEDATOM(PRDYNMODATOM(Atom),Idx)) :-
 	has_context(compiling_for_addition),
 	has_context(compiling_headliteral),
 	\+has_context(compiling_udf_definition),
-	\+has_context(goal_reification),
+	\+has_context(compiling_goal_reification),
 	!.
 modularized_pratom_struct(Atom,Idx,PRMODULARIZEDATOM(Atom,Idx)).
 %%  Mod is expected to be an atom
@@ -1064,7 +1064,7 @@ modularized_pratom_struct(Atom,Mod,Idx,PRMODULARIZEDATOM(PRDYNMODATOM(Atom),Mod,
 	has_context(compiling_for_addition),
 	has_context(compiling_headliteral),
 	\+has_context(compiling_udf_definition),
-	\+has_context(goal_reification),
+	\+has_context(compiling_goal_reification),
 	!.
 modularized_pratom_struct(Atom,Mod,Idx,PRMODULARIZEDATOM(Atom,Mod,Idx)).
 
@@ -1238,8 +1238,8 @@ body_context_info_structure(FWContext) :-
 	!,
 	body_context_info_structure(WSTerm,FWContext).
 body_context_info_structure(FWContext) :-
-	has_context(goal_reification),
-	\+ has_context(rule_reification),
+	has_context(compiling_goal_reification),
+	\+ has_context(compiling_rule_reification),
 	!,
 	new_context_prvariable(NO_INDEX,WSTerm),
 	%% with this, reification in the head doesn't unify with the body
@@ -1302,10 +1302,10 @@ context_tracing_code(LitContext,Id1,Id2) :-
 	    new_context_prvariable(NO_INDEX,Id2)
 	;
 	    ( has_context(compiling_dynrule(DescrIdCode)), LitContext\==vars,
-		\+ has_context(goal_reification),
+		\+ has_context(compiling_goal_reification),
 		\+ has_context(compiling_update_literals)
 	    ; has_context(compiling_rule(DescrIdCode)), LitContext\==vars,
-		\+ has_context(goal_reification),
+		\+ has_context(compiling_goal_reification),
 		\+ has_context(compiling_update_literals)
 	    ; %% LitContext = vars or is not a (rule, reification, or update)
 		new_context_prvariable(NO_INDEX,DescrIdCode)
@@ -3531,9 +3531,9 @@ compile_direct(DirectTerm,_Idx,Code,Status) :-
 %% :- ignore_depchk
 compile_direct(DirectTerm,_Idx,[Code],Status) :-
 	is_flignoredep(DirectTerm,SpecList),
-        set_context(compile_with_var_module),
+        set_context(compiling_with_var_module),
 	compile_ignoredep_list(SpecList,SCode,Status),
-        clear_context(compile_with_var_module),
+        clear_context(compiling_with_var_module),
         !,
 	( no_errors_found(Status) -> 
 	    ignoredep_struct(SCode,LatentQueryode),
@@ -4049,7 +4049,7 @@ compile_latent_query(DescrIdCode,MetaFactDiffList,Body,Mode,LatentQueryList-Late
 	    %% Note: we do not add delay-checker code FLORA_DELAY_CHECKER
 	    %% in constraints, since it is explicit in FLLIBANSWER
 	    florasyslib_struct(FLLIBINSQUERYSIG,7,[DescrIdCode,File,ThisMod,StmtNum,MetaFactCode,PreLatentQueryCode,LatentQueryBodyCode],LatentQuerySigCodePre),
-	    (has_context(goal_reification) -> LatentQuerySigCode = LatentQuerySigCodePre
+	    (has_context(compiling_goal_reification) -> LatentQuerySigCode = LatentQuerySigCodePre
 	    ; query_struct(LatentQuerySigCodePre,LatentQuerySigCode)
 	    ),
 	    LatentQueryList = [LatentQuerySigCode|LatentQueryTail]
@@ -5515,7 +5515,7 @@ compile_ifthen(Cond,Then,Code,Status) :-
   is treated as Meta, so no oid is passed utside of this term
 ****************************************************************************/
 compile_univeqform(Left,Right,Code,Status) :-
-        set_context(goal_reification),
+        set_context(compiling_goal_reification),
 	compile_body(Left,LeftCode,S1),
 	( no_errors_found(S1) ->
 	    compile_body(Right,RightCode,Status),
@@ -5527,7 +5527,7 @@ compile_univeqform(Left,Right,Code,Status) :-
 	;
 	  Status=S1
 	),
-        clear_context(goal_reification).
+        clear_context(compiling_goal_reification).
 
 
 /****************************************************************************
@@ -5559,7 +5559,7 @@ compile_metauniv(Left,Right,OidCode,Code,Status) :-
   Compiling -->>
 ****************************************************************************/
 compile_prologifthen(Left,Right,Code,Status) :-
-        set_context(goal_reification),
+        set_context(compiling_goal_reification),
 	compile_body(Left,LeftCode,S1),
 	( no_errors_found(S1) ->
 	    compile_body(Right,RightCode,Status),
@@ -5572,7 +5572,7 @@ compile_prologifthen(Left,Right,Code,Status) :-
 	;
 	  Status=S1
 	),
-        clear_context(goal_reification).
+        clear_context(compiling_goal_reification).
 
 
 /****************************************************************************
@@ -5749,8 +5749,17 @@ compiling_symbol_warning(Name,Arity,WS,SymbolContext,Transactional,_Index,_Mesg,
 	suppress_symbol_warning(Name,Arity,WS,SymbolContext,Transactional),
 	!.
 
-compiling_symbol_warning(_Funct,_Arity,_WS,_SymbolContext,_Transactional,Index,Mesg,[Warning]):-
-	compiling_warning(Index,Mesg,Warning).
+compiling_symbol_warning(Funct,_Arity,_WS,_SymbolContext,_Transactional,Index,Mesg,[Warning]):-
+	flora_nth_token(Index,Token),
+	flora_token_text(Token,TextStr,_BLN,_BCN,_ELN,_ECN),
+	atom_codes(TextAtom,TextStr),
+	( TextAtom=Funct -> compiling_warning(Index,Mesg,Warning)
+	; flora_op_synonym(TextAtom,Funct) -> compiling_warning(Index,Mesg,Warning)
+	%% TextAtom is a transactional variant of Funct: don't show Funct twice
+	; TextStr = [CH_PERCENT|TextStr1], atom_codes(Funct,TextStr1)
+	-> compiling_warning(Index,Mesg,Warning)
+	; compiling_warning(Index,[Funct,': '|Mesg],Warning)
+	).
 
 /****************************************************************************
 make_symbol_context_status(+UsedSymContext,+UsedLine,+UsedFileMsg,+UsedTransactional,+UsedArity,+SymbolName,+SymbolArity,+SymbolWS,+SymbolIndex,+SymbolContext,+SymbolTransactional,-Status)
@@ -5760,21 +5769,21 @@ make_symbol_context_status(_UsedSymContext,UsedLine,UsedFileMsg,UsedTransactiona
 	!,
 	(SymbolTransactional==TRANSACTIONAL_SYMBOL
 	-> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SymbolContext,SymbolTransactional,SymbolIndex,
-			     [WARN_TRANSACTIONAL_SYMBOL,ERRLINE_NO,
-			      UsedLine,UsedFileMsg],
-			     SymContextStatus)
+				    [WARN_TRANSACTIONAL_SYMBOL,ERRLINE_NO,
+				     UsedLine,UsedFileMsg],
+				    SymContextStatus)
 	; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SymbolContext,SymbolTransactional,SymbolIndex,
-			    [WARN_NONTRANSACTIONAL_SYMBOL,ERRLINE_NO,
-			     UsedLine,UsedFileMsg],
-			    SymContextStatus)
+				   [WARN_NONTRANSACTIONAL_SYMBOL,ERRLINE_NO,
+				    UsedLine,UsedFileMsg],
+				   SymContextStatus)
 	).
 
 make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,FUNCTION_SYMBOL,SymbolTransactional,SymContextStatus) :-
 	( UsedSymContext==UDF_SYMBOL, UsedArity\=SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_FUNC_UDF_ARITY_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_FUNC_UDF_ARITY_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==FUNCTION_SYMBOL,
 	    UsedArity\=SymbolArity,
 	    %%_UsedTransactional = SymbolTransactional,
@@ -5786,9 +5795,9 @@ make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactiona
 	    )
 	    ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_FUNC_ARITY_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_FUNC_ARITY_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	;   %% for the following, we warn only if there was prior use as
 	    %% hilog predicate, modular prolog predicate, or sensor
 	    %% with the ***same*** number of arguments
@@ -5796,57 +5805,57 @@ make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactiona
 	    (\+memberchk(SymbolName,[FL_FALSE,FL_TRUE]) ; UsedArity =\= 0)
 	->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_FUNC_PREDICATE_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_FUNC_PREDICATE_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==PROLOG_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_FUNC_PROLOG_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_FUNC_PROLOG_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==SENSOR_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_FUNC_SENS_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_FUNC_SENS_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 /*
 	; UsedSymContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_SYMBOL, SymContextStatus)
-	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, SymContextStatus)
+	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex, [WARN_BUILTIN_SYMBOL], SymContextStatus)
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,FUNCTION_SYMBOL,SymbolTransactional,SymbolIndex, [WARN_BUILTIN_ARITY_SYMBOL], SymContextStatus)
 	    )
 */
 	;
-		SymContextStatus = NO_ERRORS
+	    SymContextStatus = NO_ERRORS
         ),
 	!.
 
 make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,PREDICATE_SYMBOL,SymbolTransactional,SymContextStatus) :-
 	( UsedSymContext==UDF_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_PREDICATE_UDF_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_PREDICATE_UDF_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==FUNCTION_SYMBOL, UsedArity==SymbolArity,
 	    (\+memberchk(SymbolName,[FL_FALSE,FL_TRUE]) ; UsedArity =\= 0)
 	->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_PREDICATE_FUNC_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_PREDICATE_FUNC_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==PREDICATE_SYMBOL,
 	    %%_UsedTransactional = SymbolTransactional,
 	    UsedArity\=SymbolArity
 	->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==PROLOG_SYMBOL, UsedArity\=SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_PREDICATE_PROLOG_ARITY_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_PREDICATE_PROLOG_ARITY_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==SENSOR_SYMBOL, UsedArity==SymbolArity,
 	    \+compiling_flrshell_command ->
 	    compiling_error(SymbolIndex,
@@ -5856,9 +5865,9 @@ make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactiona
 	    SymContextStatus = [Err]
 	; UsedSymContext==SENSOR_SYMBOL, \+compiling_flrshell_command ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PREDICATE_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [ERROR_PREDICATE_SENS_SYMBOL,ERRLINE_NO,
-			      UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [ERROR_PREDICATE_SENS_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	;
 	    SymContextStatus = NO_ERRORS
 	),
@@ -5867,9 +5876,9 @@ make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactiona
 make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,UDF_SYMBOL,SymbolTransactional,SymContextStatus) :-
 	( UsedSymContext==PROLOG_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_UDF_PROLOG_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_UDF_PROLOG_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==FUNCTION_SYMBOL,
 	    (UsedArity==SymbolArity
 	    -> compiling_error(SymbolIndex,
@@ -5878,30 +5887,30 @@ make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactiona
 			       Err),
 		SymContextStatus = [Err]
 	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
-				[WARN_UDF_FUNC_ARITY_SYMBOL,ERRLINE_NO,
-				 UsedLine,UsedFileMsg],
-				SymContextStatus)
+				       [WARN_UDF_FUNC_ARITY_SYMBOL,ERRLINE_NO,
+					UsedLine,UsedFileMsg],
+				       SymContextStatus)
 	    )
 	; UsedSymContext==PREDICATE_SYMBOL,
 	    (UsedArity==SymbolArity
 	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
-				 [WARN_UDF_PREDICATE_SYMBOL,ERRLINE_NO,
-				  UsedLine,UsedFileMsg],
-				 SymContextStatus)
+					[WARN_UDF_PREDICATE_SYMBOL,ERRLINE_NO,
+					 UsedLine,UsedFileMsg],
+					SymContextStatus)
 	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
-				[WARN_UDF_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
-				 UsedLine,UsedFileMsg],
-				SymContextStatus)
+				       [WARN_UDF_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
+					UsedLine,UsedFileMsg],
+				       SymContextStatus)
 	    )
 	; UsedSymContext==SENSOR_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_UDF_SENSOR_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_UDF_SENSOR_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
-	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_SYMBOL, SymContextStatus)
-	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, SymContextStatus)
+	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex, [WARN_BUILTIN_SYMBOL], SymContextStatus)
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,UDF_SYMBOL,SymbolTransactional,SymbolIndex, [WARN_BUILTIN_ARITY_SYMBOL], SymContextStatus)
 	    )
 	;
 	    SymContextStatus = NO_ERRORS
@@ -5911,44 +5920,44 @@ make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactiona
 make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactional,UsedArity,SymbolName,SymbolArity,SymbolWS,SymbolIndex,SENSOR_SYMBOL,SymbolTransactional,SymContextStatus) :-
 	( UsedSymContext==UDF_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_SENSOR_UDF_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_SENSOR_UDF_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==FUNCTION_SYMBOL, UsedArity==SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_SENSOR_FUNC_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_SENSOR_FUNC_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==PREDICATE_SYMBOL, UsedArity\=SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==PREDICATE_SYMBOL, UsedArity==SymbolArity ->
 	    (\+compiling_flrshell_command ->
 		compiling_error(SymbolIndex,
-			      [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      Err),
+				[ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
+				 UsedLine,UsedFileMsg],
+				Err),
 		SymContextStatus = [Err]
 	    %% in the FLORA-2 shell just give a warning
 	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				       [ERROR_SENSOR_PREDICATE_SYMBOL,ERRLINE_NO,
+					UsedLine,UsedFileMsg],
+				       SymContextStatus)
 	    )
 	; UsedSymContext==SENSOR_SYMBOL, UsedArity\=SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_SENSOR_ARITY_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_SENSOR_ARITY_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==PROLOG_SYMBOL,
 	    %% prolog symbol that comes from a sensor has 2 more args: file+line
 	    (UsedArity=\=SymbolArity
 	    -> compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex,
-				 [ERROR_SENSOR_PROLOG_SYMBOL,ERRLINE_NO,
-				  UsedLine,UsedFileMsg],
-				 SymContextStatus)
+					[ERROR_SENSOR_PROLOG_SYMBOL,ERRLINE_NO,
+					 UsedLine,UsedFileMsg],
+					SymContextStatus)
 	    ; compiling_error(SymbolIndex,
 			      [ERROR_SENSOR_PROLOG_SYMBOL,ERRLINE_NO,
 			       UsedLine,UsedFileMsg],
@@ -5959,7 +5968,7 @@ make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactiona
 	    (UsedArity==SymbolArity
 	    -> compiling_error(SymbolIndex, WARN_BUILTIN_SYMBOL, Err),
 	    	SymContextStatus=[Err]
-	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, SymContextStatus)
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,SENSOR_SYMBOL,SymbolTransactional,SymbolIndex, [WARN_BUILTIN_ARITY_SYMBOL], SymContextStatus)
 	    )
 	;
 	    SymContextStatus = NO_ERRORS
@@ -5976,9 +5985,9 @@ make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactiona
 		SymContextStatus=[Err]
 	; UsedSymContext==PROLOG_SYMBOL, UsedArity\=SymbolArity ->
 	    compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PROLOG_SYMBOL,SymbolTransactional,SymbolIndex,
-			      [WARN_PROLOG_ARITY_SYMBOL,ERRLINE_NO,
-			       UsedLine,UsedFileMsg],
-			      SymContextStatus)
+				     [WARN_PROLOG_ARITY_SYMBOL,ERRLINE_NO,
+				      UsedLine,UsedFileMsg],
+				     SymContextStatus)
 	; UsedSymContext==FUNCTION_SYMBOL, UsedArity==SymbolArity ->
 		compiling_error(SymbolIndex,
 				[ERROR_PROLOG_FUNC_SYMBOL,ERRLINE_NO,
@@ -5993,15 +6002,15 @@ make_symbol_context_status(UsedSymContext,UsedLine,UsedFileMsg,_UsedTransactiona
 			       Err),
 	    	SymContextStatus=[Err]
 	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PROLOG_SYMBOL,SymbolTransactional,SymbolIndex,
-				[WARN_PROLOG_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
-				 UsedLine,UsedFileMsg],
-				SymContextStatus)
+				       [WARN_PROLOG_PREDICATE_ARITY_SYMBOL,ERRLINE_NO,
+					UsedLine,UsedFileMsg],
+				       SymContextStatus)
 	    )
 	; UsedSymContext==BUILTIN_SYMBOL,
 	    (UsedArity==SymbolArity
 	    -> compiling_error(SymbolIndex, WARN_BUILTIN_SYMBOL, Err),
 		    SymContextStatus=[Err]
-	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PROLOG_SYMBOL,SymbolTransactional,SymbolIndex, WARN_BUILTIN_ARITY_SYMBOL, SymContextStatus)
+	    ; compiling_symbol_warning(SymbolName,SymbolArity,SymbolWS,PROLOG_SYMBOL,SymbolTransactional,SymbolIndex, [WARN_BUILTIN_ARITY_SYMBOL], SymContextStatus)
 	    )
 	;
 	    SymContextStatus = NO_ERRORS
@@ -6185,7 +6194,7 @@ has_UDF(Funct,N,Args,Predicate,ReturnValue,[],NO_ERRORS) :-
 	\+ has_context(compiling_udf_hilog(Funct)),
 	\+ get_flatom_name(Funct,UDFHILOGPREDICATENAME),
 	flora_get_flatom_name(Funct,Name),
-	(flrsynonym:flora_op_synonym(Name,BaseName)
+	(flora_op_synonym(Name,BaseName)
 	; BaseName = Name
 	),
 	find_UDF(BaseName,N,_UDFCode,_PredicateCode),
@@ -6304,22 +6313,7 @@ compile_aggregate(Op,Var,GVars,SortSpec,BodyTerm,Object,Code,Status) :-
 	; conjunct_struct(BodyPureCode,PostBody,BCode)
 	),
 	( no_errors_found(S) -> 
-            (
-	      /* check_aggregate was disabled by changz after adding singleton
-	         checks to dynamic rules. Not clear why she did that. None of
-	         the tests are affected by this, but such a change prevents
-	         checks for grouping/aggregate vars in cases like
-		      ?- insertrule{a :- ?x=count{?k|true@?V}}.
-		 So, we zap changz's change until we find out why it is needed.
-	      */
-	    /*
-	      has_context(compile_with_var_module),
-		\+ has_context(goal_reification) ->
-                S1 = NO_ERRORS
-            ;
-	    */
-	        check_aggregate(Var,GVars,BodyTerm,S1)
-            ),
+	    check_aggregate(Var,GVars,BodyTerm,S1),
 	    ( no_errors_found(S1) -> 
 		compile_body_pathexplist([Var|GVars],FL_THISMODULE,[VarCode|GVarsCode],NULL,NULL,[],NO_ERRORS),
 		list_struct(GVarsCode,[],GVarsListCode),
@@ -6571,10 +6565,12 @@ compile_body_literal(ParserTerm,WS,OidCode,BodyLitCode,BodyFrontList,Status) :-
 	%% Literal variable without @module
 	; is_flvariable(ParserTerm,VName,VIndex), WS == FL_THISMODULE ->
             compile_var(VName,VIndex,V),
-            ( (has_context(compile_with_var_module)
-	      ; has_context(goal_reification)
-	      ; has_context(compile_delete))
-	    ->
+            ( (
+		has_context(compiling_with_var_module)
+	      ; has_context(compiling_goal_reification)
+	      ; has_context(compiling_delete)
+	      )
+	      ->
                 WSCode = V
             ;
                 %% Not to promote term to predicate, but to bind caller module
@@ -6592,7 +6588,7 @@ compile_body_literal(ParserTerm,WS,OidCode,BodyLitCode,BodyFrontList,Status) :-
             OidCode=NULL,
             Status = NO_ERRORS
 
-	%% Variable with @module. E.g., ?- ?X=p, ?X@pqr.
+	%% Variable with @module, where module != _@.  E.g., ?- ?X=p, ?X@qr.
 	; is_flvariable(ParserTerm,VarName,Index) ->
 	    compile_var(VarName,Index,VarCode),
 	    attach_workspace(VarCode,WS,WSCode,Status),
@@ -7128,7 +7124,7 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
-	    ((has_context(goal_reification);has_context(compiling_descriptors(_)))
+	    ((has_context(compiling_goal_reification);has_context(compiling_descriptors(_)))
 	    ->
 		Code = NULL,
 		(compiling_flrshell_command ->
@@ -7155,7 +7151,7 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status
 	    verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,
 				  NONTRANSACTIONAL_SYMBOL,Status),
 	    */
-	    ((has_context(goal_reification);has_context(compiling_descriptors(_)))
+	    ((has_context(compiling_goal_reification);has_context(compiling_descriptors(_)))
 	    ->
 		Code = NULL,
 		(compiling_flrshell_command ->
@@ -8091,16 +8087,16 @@ compute_reification_expr(Formula,Object,OidCode,Status) :-
 	; is_flruleworkspace(Rule,_RealRule,_WS)
 	),
 	!,
-	set_context(rule_reification),
+	set_context(compiling_rule_reification),
         %% singleton/unbound vars are flagged in reified/inserted rules
 	compile_dynrule(FL_INSERTRULE,Rule,Object,Status),
-	clear_context(rule_reification),
+	clear_context(compiling_rule_reification),
 	OidCode=NULL.
 
 compute_reification_expr(Formula,Object,OidCode,Status) :-
-	set_context(goal_reification),
+	set_context(compiling_goal_reification),
 	compile_body(Formula,Object1,Status),
-	clear_context(goal_reification),
+	clear_context(compiling_goal_reification),
 	(is_florasyslib_struct(Object1, Index,FLLIBMODLIT,_N,Args)
 	%% If it is compiled into a LIBMODLIT/3, replace with LIBMODOBJ
 	->
@@ -8151,10 +8147,11 @@ compile_truthvalue(Formula,Op,Code,Status) :-
 compile_tag_primitive(DescriptorParserTerm,HeadList,Code,Status) :-
 	compile_body_pathexp(DescriptorParserTerm,FL_THISMODULE,TagCode,_,_,[],S1),
 	( no_errors_found(S1) -> 
-	    set_context(compile_with_var_module),
+	    set_context(compiling_with_var_module),
 	    set_context(compiling_headliteral),
 	    compile_delete_litlist(HeadList,HLC,Status),
 	    clear_context(compiling_headliteral),
+	    clear_context(compiling_with_var_module),
 	    ( no_errors_found(Status) -> 
 		list_struct(HLC,[],HeadListCode),
 		tagprimitive_struct(TagCode,HeadListCode,Code)
@@ -9345,7 +9342,7 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 		%% attached to rule bodies.
 		approx_flindex(H,RuleIdx),
 		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_DYNRULE,DescrIdCode,DescrVarsTerm,DefaultMetaFactDiffList,_),
-		set_context(compile_with_var_module),
+		set_context(compiling_with_var_module),
 		set_context(compiling_dynrule(DescrIdCode)),
 		%% CHECK!!!!
 		prconjunct2list(HeadCode,HCode),
@@ -9376,7 +9373,7 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 				    FL_TRUE], %% default defeat condition
 				   HDynruleCode),
 		clear_context(compiling_dynrule(DescrIdCode)),
-		clear_context(compile_with_var_module),
+		clear_context(compiling_with_var_module),
 		compile_insert_litlist(T,TCode,S2),
 		( no_errors_found(S2) -> 
 		    conjunct_struct(HDynruleCode,TCode,Code)
@@ -9490,10 +9487,10 @@ compile_delete_litlist([H|T],CodeList,Status) :-
 compile_delete_litlist([HWS|T],CodeList,Status) :-
 	%% Call compile_body_literal because path expressions should be
 	%% compiled into queries.
-        set_context(compile_delete),
+        set_context(compiling_delete),
 	detach_flworkspace(HWS,H,WS),
 	compile_body_literal(H,WS,HOidCode,HSpecCode,[],S),
-        clear_context(compile_delete),
+        clear_context(compiling_delete),
 	( no_errors_found(S) -> 
 	    (HOidCode == NULL ->
 		(is_prologterm(HSpecCode,_,_) ->
@@ -9508,7 +9505,7 @@ compile_delete_litlist([HWS|T],CodeList,Status) :-
 		prconjunct2list(HSpecCode,HList),
 		RuleIdx = NO_INDEX,
 		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_DYNRULE,DescrIdCode,DescrVarsTerm,DefaultMetaFactDiffList,_),
-		set_context(compile_with_var_module),
+		set_context(compiling_with_var_module),
 		set_context(compiling_dynrule(DescrIdCode)),
 		list_struct(HList,[],HeadCodeList),
 		%% CHECK!!!!! Rule enabler for facts-turned-rules?
@@ -9537,7 +9534,7 @@ compile_delete_litlist([HWS|T],CodeList,Status) :-
 				    FL_TRUE], %% default defeat condition
 				   HWSCode),
 		clear_context(compiling_dynrule(DescrIdCode)),
-		clear_context(compile_with_var_module)
+		clear_context(compiling_with_var_module)
             ),
 	    compile_delete_litlist(T,TCodeList,S2),
 	    ( no_errors_found(S2) -> 
@@ -9665,7 +9662,7 @@ compile_dynrule(Op,R,RCode,Status) :-
 %% compile_dyn_ic(+Op,+DescrIdCode,+MetaFactDiffList,+Body,-LatentQueryDiffList,-Status)
 %% op: delete/insert/insertrule/etc.
 compile_dyn_latent_query(Op,DescrIdCode,MetaFactDiffList,Body,LatentQuerySigCode,Status) :-
-	set_context(compile_with_var_module),
+	set_context(compiling_with_var_module),
 	set_context(compiling_dynrule(DescrIdCode)),
 	compile_body_top(Body,BCode,Status),
 	( no_errors_found(Status) -> 
@@ -9699,13 +9696,13 @@ compile_dyn_latent_query(Op,DescrIdCode,MetaFactDiffList,Body,LatentQuerySigCode
 	  true
 	),
 	clear_context(compiling_dynrule(DescrIdCode)),
-	clear_context(compile_with_var_module),
+	clear_context(compiling_with_var_module),
 	!.
 
 %% main workhorse that compiles dynamic rules
 %% compile_dynrule_main(+Op,+Head,+Body,+DescrIdCode,+DescrVarsTerm,+MetaFactDiffList,-RuleCode,-Status) :-
 compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,RuleCode,Status) :-
-        set_context(compile_with_var_module),
+        set_context(compiling_with_var_module),
 	set_context(compiling_dynrule(DescrIdCode)),
 	compile_head_top(Head,rule,HeadCode,H2BCodeFront,H2BCodeBack,HeadStatusPre),
 	%% no :- prolog predicates in dynamic rule heads
@@ -9772,8 +9769,8 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 	    Status=HeadStatus
 	),
 	!,
-	clear_context(compiling_dynrule(DescrIdCode)),
-        clear_context(compile_with_var_module).
+        clear_context(compiling_with_var_module),
+	clear_context(compiling_dynrule(DescrIdCode)).
 
 /*
 remove_empty_list([],[]) :- !.
@@ -9802,7 +9799,7 @@ remove_all(Elt,[H|List],[H|List2]) :-
      !!{...} and !! - immediate execution of delayed literals
 ****************************************************************************/
 compile_stop_delay(_VarList,Idx,_Code,[Err]) :-
-	has_context(goal_reification),
+	has_context(compiling_goal_reification),
 	!,
 	compiling_error(Idx,NO_IMMEDIATE_EXECUTION_OF_DELAY,Err).
 compile_stop_delay(VarList,_Idx,Code,Status) :-
@@ -9848,7 +9845,7 @@ compile_clause(Descriptor,Mode,HeadList,Body,Code,Status) :-
 		compile_atomvar(Mode,ModeCode)
 	    ),
 	    set_context(compiling_clause_primitive),
-	    set_context(compile_with_var_module),
+	    set_context(compiling_with_var_module),
 	    set_context(compiling_headliteral),
 	    compile_delete_litlist(HeadList,HLC,Head_Status),
 	    clear_context(compiling_headliteral),
@@ -9870,7 +9867,7 @@ compile_clause(Descriptor,Mode,HeadList,Body,Code,Status) :-
 	    Status = Descr_Status
         ),
 	!,
-        clear_context(compile_with_var_module),
+        clear_context(compiling_with_var_module),
 	set_context(compiling_clause_primitive).
 
 /****************************************************************************
@@ -10165,7 +10162,7 @@ is_body_neg_negatable_literal(X) :-
 	X = PRVARIABLE(_,_),
 	%% Allow variables to be negated so that
 	%% ?X = ${a[b->c]}, neg ?X would be possible.
-	%%has_context(goal_reification),
+	%%has_context(compiling_goal_reification),
 	!.
 
 is_body_neg_passthrough_literal(FL_TRUE) :- !.
@@ -10215,7 +10212,7 @@ delay_literals_checking_code(Head,Body,DescrVarsTerm,Code) :-
 	append(BodyVars1,DescrFlvars,BodyVars2),
 	remove_dupflvars(HeadVars1,HeadVars),
 	remove_dupflvars(BodyVars2,BodyVars),
-	(has_context(rule_reification),
+	(has_context(compiling_rule_reification),
 	    has_context(compiling_body_pathexp)
 	-> %% use new flvariables
 	    is_flvariable(ParserHeadVars,FL_ANON_VAR,NO_INDEX),
@@ -10225,7 +10222,7 @@ delay_literals_checking_code(Head,Body,DescrVarsTerm,Code) :-
 	    is_fllist(ParserBodyVars,BodyVars,[],NO_INDEX)
 	),
 	%% To match reified rules, we make DelayCheckCode into a new var
-	(has_context(rule_reification) -> new_dontcare_prvariable(NO_INDEX,Code)
+	(has_context(compiling_rule_reification) -> new_dontcare_prvariable(NO_INDEX,Code)
 	%% Optimization: if HeadVars contains BodyVars+DescrVars,
 	%% no delay checking is needed for that rule.
 	%% Instead, we put NULL in place of the delay checker.
@@ -10305,7 +10302,7 @@ get_current_compile_file(CurrFileName) :-
 compiling_flrshell_command :- \+ flora_current_compile_filename(_).
 
 get_current_compile_file_for_descriptor(CurrFileName,_Mode) :-
-	has_context(rule_reification),
+	has_context(compiling_rule_reification),
 	filename_in_ruleid_struct(CurrFileName).
 get_current_compile_file_for_descriptor(CurrFileName,Mode) :-
 	memberchk(Mode,[FL_DESCRMODE_CLAUSE,FL_DESCRMODE_PLAIN_QUERY]),
@@ -10324,8 +10321,8 @@ get_current_compile_file_for_descriptor(CurrFileName,_Mode) :-
 	get_current_compile_file(CurrFileName).
 
 get_current_stmt_number_for_descriptor(StmtIndex,StmtNum) :-
-	(has_context(goal_reification) -> new_prvariable(NO_INDEX,StmtNum)
-	; has_context(rule_reification) -> new_prvariable(NO_INDEX,StmtNum)
+	(has_context(compiling_goal_reification) -> new_prvariable(NO_INDEX,StmtNum)
+	; has_context(compiling_rule_reification) -> new_prvariable(NO_INDEX,StmtNum)
 	; StmtIndex > 0 -> flora_token_rulenum(StmtIndex,StmtNum)
 	; StmtNum = -1
 	).
@@ -10394,7 +10391,7 @@ code_line_and_file_by_prterm(_CompiledTerm,Line,File) :-
 	%% are not used where they are compiled, so the line number
 	%% (and likely) file name are going to be wrong.
 	%% Also, explicit line number & file name will prevent unification.
-	(has_context(goal_reification);has_context(compiling_clause_primitive)),
+	(has_context(compiling_goal_reification);has_context(compiling_clause_primitive)),
 	!,
 	new_prvariable(NO_INDEX,Line),
 	new_prvariable(NO_INDEX,File).
@@ -10408,7 +10405,7 @@ code_line_and_file_by_prterm(CompiledTerm,Line,File) :-
 
 %% Get the line number and file name of code represented by line/position index
 code_line_and_file_by_index(Index,LineVar,FileVar) :-
-	has_context(goal_reification),
+	has_context(compiling_goal_reification),
 	!,
 	%% if reification, file/line should be variables
 	new_flvariable(Index,LineVar,_),
