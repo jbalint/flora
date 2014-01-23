@@ -66,6 +66,7 @@ FLORA_TERMS = $(FLORA_INCLUDES_DIR)/flora_terms.flh
 FLORA_TABLING_METHODS = $(FLORA_INCLUDES_DIR)/flora_tabling_methods.flh
 FLORA_DEFAULT_TABLING = $(FLORA_INCLUDES_DIR)/.flora_default_tabling
 FLORA_ERRORS = $(FLORA_INCLUDES_DIR)/flora_errors.flh
+FLORA_EXCEPTIONS = $(FLORA_INCLUDES_DIR)/flora_exceptions.flh
 FLORA_PORTING = $(FLORA_INCLUDES_DIR)/flora_porting.flh
 FLORA_EXTENSIONS = $(FLORA_INCLUDES_DIR)/flora_extensions.flh
 FLORA_WRAP = $(FLORA_INCLUDES_DIR)/flora_wrap.flh
@@ -141,7 +142,7 @@ ${FLORA_TABLING_METHODS} : ${FLORA_DEFAULT_TABLING}
 flrversion${OBJEXT}: flrversion${PROLOGEXT} version.flh
 	@echo 'mc(flrversion,$(OPTION)).' >> cmd...
 
-flrporting${OBJEXT}: flrporting${PROLOGEXT} version.flh
+flrporting${OBJEXT}: flrporting${PROLOGEXT} version.flh $(FLORA_TERMS) $(FLORA_EXCEPTIONS)
 	@echo 'mc(flrporting,$(OPTION)).' >> cmd...
 
 flrlexer${OBJEXT} : flrlexer${PROLOGEXT} flrlexer.H $(FLORA_CHAR_DEFS) $(FLORA_TERMS) $(FLORA_ERRORS) $(FLORA_PORTING)
@@ -164,7 +165,7 @@ flrcoder${OBJEXT} : flrcoder${PROLOGEXT} flrcoder.H $(FLORA_CHAR_DEFS) $(FLORA_T
 	@echo 'mc(flrcoder,$(OPTION)).' >> cmd...
 
 
-flrutils${OBJEXT} : flrutils${PROLOGEXT} flrutils.H $(FLORA_CHAR_DEFS) $(FLORA_TERMS) ${FLORA_TABLING_METHODS}  $(FLORA_PORTING)
+flrutils${OBJEXT} : flrutils${PROLOGEXT} flrutils.H $(FLORA_CHAR_DEFS) $(FLORA_TERMS) ${FLORA_TABLING_METHODS}  $(FLORA_PORTING) $(FLORA_EXCEPTIONS)
 	@echo 'mc(flrutils,$(OPTION)).' >> cmd...
 
 

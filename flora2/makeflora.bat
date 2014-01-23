@@ -18,6 +18,9 @@ REM        path-for-\XSB\bin\... has a file extension, e.g., \xsb\bin\wxsb.bat
 
 if exist binary-distribution.txt goto binary
 
+REM  The Windows version doesn't support --testing, so we just delete the switch
+if exist flrtesthook.flh del flrtesthook.flh
+
 set tabling_method=/* default tabling */
 if [%1] == [-S] set tabling_method=#define FLORA_SUBSUMPTIVE_TABLING
 if [%1] == [-S] shift
@@ -63,6 +66,18 @@ if [%1] == [-c64]  nmake /nologo /f NMakefile64.mak PROLOG=%PROLOG% PROLOGDIR=%P
 
 cd ..
 
+if exist hooks\ergo.switch del hooks\ergo.switch
+REM If making ergo, create ergo.switch
+if [%0] == [makeergo]  @echo ergo > hooks\ergo.switch
+if [%0] == [makeergo.bat]  @echo ergo > hooks\ergo.switch
+
+REM The following commands touch files
+cd flrincludes
+copy /b flora_terms.flh +,,
+copy /b flora_exceptions.flh +,,
+cd ..
+copy /b flrversion.P +,,
+copy /b flora2.P +,,
 nmake /nologo /f NMakefile.mak PROLOG=%PROLOG%
 
 

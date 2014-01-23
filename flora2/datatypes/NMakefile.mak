@@ -45,5 +45,6 @@ CLEAN :
 	-@if exist .#* erase .#*
 
 
+$(ALLOBJS): ..\flrincludes\flora_terms.flh
 $(PROLOGEXT)$(OBJEXT):
 	"$(PROLOG)" -e "asserta(library_directory('..')). ['..\\flora2']. import '_#flmakesetup'/0 from flora2. '_#flmakesetup',mc(%|fF,$(OPTIONS)). halt."

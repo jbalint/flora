@@ -41,6 +41,7 @@ OPTIONS = [optimize]
 ALL: $(ALLOBJS)
 
 
+$(ALLOBJS): ..\flrincludes\flora_terms.flh
 .flr$(PROLOGEXT):
 	"$(PROLOG)" -e "asserta(library_directory('..')). ['..\\flora2']. import '_#flmakesetup'/0 from flora2. '_#flmakesetup'. import ('_compile')/1 from flora2. '_compile'(%|fF). halt."
 

@@ -41,6 +41,7 @@
 	flora_abort/2,
 	flora_set_counter/2,
 	flora_get_counter/2,
+	flora_increment_counter/4,
 	flora_concat_items/2,
 	flora_concat_atoms/2
    from flrporting.
@@ -105,6 +106,9 @@
 :- export
 	flora_reset_parser/0,
 	FLORA_INCLUDE_DEPENDENCY_CLOSURE/2,
+	flwrite/1,
+	flwriteline/1,
+	flwritelinelist/1,
 	flora_get_flatomvar_name/2,
 	flora_get_flatom_name/2,
 	flora_get_module_from_spec/3,
@@ -115,5 +119,6 @@
 	flatom_struct/3,
 	flterm_struct/4,
 	flconjunct_struct/3,
+	fldisjunct_struct/3,
 	flthismodule_struct/1,
 	flnumber_struct/3.

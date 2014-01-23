@@ -182,14 +182,6 @@ detach_flworkspace(ParserTerm,ParserTermSansWS,WS) :-
 detach_flworkspace(ParserTerm,ParserTermSansWS,WS) :-
 	is_flruleworkspace(ParserTerm,ParserTermSansWS,WS),
 	!.
-/*
-%% Not needed
-detach_flworkspace(ParserTerm,ParserTermSansWS,WS) :-
-	is_flneg(ParserTerm,Goal,Idx),
-	!,
-	detach_flworkspace(Goal,GoalSansWS,WS),
-	is_flneg(ParserTermSansWS,GoalSansWS,Idx).
-*/
 detach_flworkspace(ParserTerm,ParserTerm,FL_THISMODULE).
 
 %% P@_M
@@ -411,7 +403,7 @@ approx_flindex(FLTOKEN(_Token,I),I)            :- !.
 approx_flindex(FLTOKEN(_Token,_Suffix,I),I)    :- !.
 approx_flindex(FLVAR(_Name,I),I)               :- !.
 approx_flindex(FLTRANSACTIONALVAR(_Var,I),I)   :- !.
-approx_prindex(FLLIST(List,_T,I),J)  :- !, (I>0 -> I=J; approx_flindex(List,J)).
+approx_flindex(FLLIST(List,_T,I),J)  :- !, (I>0 -> I=J; approx_flindex(List,J)).
 approx_flindex(FLTERM(F,_,_),I)                :- !, approx_flindex(F,I).
 approx_flindex(FLTRANSACTIONALTERM(F,_,_),I)   :- !, approx_flindex(F,I).
 
@@ -597,6 +589,8 @@ approx_prindex(PRPLGNAF(G),I)                 :- !, approx_prindex(G,I).
 approx_prindex(PRNEG(G),I)                    :- !, approx_prindex(G,I).
 approx_prindex(PRQUANTIFIER(Form,_,_),I)      :- !, approx_prindex(Form,I).
 
+approx_prindex(_G,NO_INDEX)  :- !.
+
 
 /****************************************************************************
   encoding utilities
@@ -711,6 +705,7 @@ naf_struct_flora(Goal,FreeVars,Code) :-
 	delay_naf_struct(PureNAFcode,DelayCode),
 	conjunct_struct(LibModObjCode,DelayCode,Code).
 
+/*
 extract_goal_from_prrulelognaf(NafStruct,Goal) :-
 	extract_goal_from_prrulelognaf(NafStruct,Goal,_,_,_,_).
 
@@ -720,6 +715,7 @@ extract_goal_from_prrulelognaf(NafStruct,Goal,FreeVars,DelayChecker,Line,File) :
 	modularized_pratom_struct(FL_TABLED_UNNUMBER_CALL,NO_INDEX,FunCode),
 	is_prologterm(WrappedNafStruct,FunCode,1,[UnwrappedNafStruct]),
 	is_prconjunct(UnwrappedNafStruct,Goal,DelayChecker).
+*/
 
 %% delay struct
 delay_struct(Index,DelayOp,Args,Code) :-
@@ -740,10 +736,13 @@ delay_defeat_struct(Index,DefeatCond,Headvars,HeadvarNames,DynHead,Code) :-
 
 delay_naf_struct(PureNAFcode,Code) :-
 	prologterm_struct(FLLIBNAFDELAY,1,[PureNAFcode],Code).
+/*
 is_delay_naf_struct(DelayStruct,NAFCode) :-
 	is_prologterm(DelayStruct,FLLIBNAFDELAY,1,[NAFCode]).
 is_prrulelognaf(PRRULELOGNAF(WrappedGoal,FreeVars,Line,CurrFileName),
 		WrappedGoal,FreeVars,Line,CurrFileName).
+is_prlist(PRLIST(List,Term,Index),List,Term,Index).
+*/
 
 %% propagate_rulelog_naf(+Goal,+FreeVars,-Code)
 %% propagates NAF through connectives
@@ -755,6 +754,7 @@ propagate_rulelog_naf(PROR(Goal1,Goal2),FreeVars,PRAND(Code1,Code2)) :-
 	!,
 	propagate_rulelog_naf(Goal1,FreeVars,Code1),
 	propagate_rulelog_naf(Goal2,FreeVars,Code2).
+/*
 propagate_rulelog_naf(Goal,_FreeVars,Code) :-
 	is_delay_naf_struct(Goal,PRRuleLogNaf),
 	!,
@@ -780,6 +780,7 @@ propagate_rulelog_naf(Goal,FreeVars,Code) :-
 	    naf_struct_flora(Goal,FreeVarListObj,Code)
 	; propagate_rulelog_naf(Formula,FreeVars,Code)
 	).
+*/
 
 %% catch-all: nothing left to propagate, including the case of PRBAND conjuncts
 %% NAF does not propagate through strong conjunction PRBAND
@@ -815,6 +816,7 @@ neg_struct(PROR(Goal1,Goal2),Idx,PRAND(Struct1,Struct2),Status) :-
 	;  Status = S
 	).
 
+/*
 %% neg exists(Vars)^Goal -->  naf exists(Vars)^(naf neg Goal)
 neg_struct(Goal,Idx,Code,Status) :-
 	is_prquantifier(Goal,FL_EXISTS,FormCode,QuantVarObjs,FreeVars),
@@ -824,27 +826,35 @@ neg_struct(Goal,Idx,Code,Status) :-
 	append(QuantVarL,FreeVarL,AllVars),
 	list_struct(AllVars,[],ListIdx,AllVarsListObj),
 	neg_struct(FormCode,Idx,NegFormCode,Status),
-	propagate_rulelog_naf(NegFormCode,AllVarsListObj,Code1),
-	naf_struct_flora(Code1,FreeVars,Code).
+	(no_errors_found(Status) ->
+	    propagate_rulelog_naf(NegFormCode,AllVarsListObj,Code1),
+	    naf_struct_flora(Code1,FreeVars,Code)
+	; true
+	).
 
 %% neg naf foo --> naf neg foo
 neg_struct(Goal,Idx,OutGoal,Status) :-
 	is_delay_naf_struct(Goal,PRRuleLogNaf),
-	!,
-	extract_goal_from_prrulelognaf(PRRuleLogNaf,PosGoal,FreeVars,DelayChecker,Line,File),
+	extract_goal_from_prrulelognaf(PRRuleLogNaf,PosGoal,_FreeVars,_DelayChecker,Line,File),
 	(is_delay_naf_struct(PosGoal,PosGoalStripped),
 	    extract_goal_from_prrulelognaf(PosGoalStripped,PosPosGoal,_,_,_,_)
 	->  %% it is forall(...)^... translated as naf exists(...)^(naf ...)
 	    %% so neg is pushed as just exists(...)^(neg ...)
 	    %% (and exists is dropped)
 	    neg_struct(PosPosGoal,Idx,OutGoal,Status)
-	;   %% this is just a naf goal, not a forall: push neg past naf
+	;   
+	    %% this is just a naf goal, not a forall: push neg past naf
+	    fail, %% don't allow to push neg past naf
+	    %% The following code is unreachable; pushes NEG past NAF.
+	    %% We DON'T want this as we want NEG FOO to always imply NAF FOO
 	    neg_struct(PosGoal,Idx,NegPosGoal,Status),
 	    %% applied in reverse: OutGoal1 is output
-	    extract_goal_from_prrulelognaf(OutGoal1,NegPosGoal,FreeVars,DelayChecker,Line,File),
+	    extract_goal_from_prrulelognaf(OutGoal1,NegPosGoal,_FreeVars,_DelayChecker,Line,File),
 	    %% applied in reverse: OutGoal is output
 	    is_delay_naf_struct(OutGoal,OutGoal1)
-	).
+	),
+	!.
+*/
 
 %% double negation
 neg_struct(PRNEG(Goal),_Idx,Goal,[]) :- !.
@@ -859,7 +869,11 @@ neg_struct(Goal,Idx,_,[Err]) :-
 neg_struct(Goal,Idx,_,[Err]) :-
 	\+is_body_neg_negatable_literal(Goal),
 	!,
-	compiling_error(Idx,ILLEGAL_NEGBODY,Err).
+	approx_prindex(Goal,Idx2),
+	(Idx2\==NO_INDEX -> RealIdx=Idx2
+	; RealIdx=Idx
+	),
+	compiling_error(RealIdx,ILLEGAL_NEGBODY,Err).
 
 %% :- prolog predicate: workspaced and not
 neg_struct(Goal,_Idx,Code,[]) :-
@@ -1185,7 +1199,6 @@ special_variable_struct(Type,PRSPECIALVAR(Type)).
 
 list_struct(List,Term,Index,PRLIST(List,Term,Index)).
 list_struct(List,Term,PRLIST(List,Term,NO_INDEX)).
-is_prlist(PRLIST(List,Term,Index),List,Term,Index).
 
 workspace_struct(P,WS,PRWORKSPACE(P,WS)).
 is_prworkspace(PRWORKSPACE(P,WS),P,WS).
@@ -1429,7 +1442,7 @@ has_prtransactionallit([_|Rest],Idx) :-
 
 has_prologlit([],_) :- !, fail.
 has_prologlit([H|Rest],Idx) :-
-	(prologterm_atom_arity(H,Atm,_) -> approx_prindex(Atm,Idx)
+	(is_prologterm(H,Atm,_) -> \+ is_modularized_pratom(Atm,_,_)
 	; has_prologlit(Rest,Idx)
 	),
 	!.
@@ -1451,7 +1464,7 @@ attach_workspace(InCode,WS,WSCode,Status) :-
 		workspacelit_struct(InCode,WS,WSCode),
 		Status = NO_ERRORS
 	    )
-	;   is_prologterm(InCode) ->
+	;   is_prologterm(InCode,_,_) ->
 	    %% If prolog term occurs under the scope of a FLORA-2 module, 
 	    %% ignore the module
 	    WSCode = InCode,
@@ -1554,8 +1567,8 @@ prologterm_struct(F,N,Args,Module,PROLOGTERM(F,N,Args,ModuleCode)) :-
 prologliblit_struct(PrologTerm,PROLOGLIBLIT(PrologTerm)).
 %%is_prologliblit(PROLOGLIBLIT(PrologTerm),PrologTerm).
 
-is_prologterm(Term)    :- is_prologterm(Term,_,_,_), !.
-is_prologterm(Term)    :- is_prologterm(Term,_,_,_,_).
+is_prologterm(Term,Atom,Arity)    :- is_prologterm(Term,Atom,Arity,_), !.
+is_prologterm(Term,Atom,Arity)    :- is_prologterm(Term,Atom,Arity,_,_).
 
 is_modularizedprologterm(Term) :-
 	is_prologterm(Term,Fun,_N,_Args),
@@ -1564,8 +1577,7 @@ is_modularizedprologterm(Term) :-
 prologterm_atom_arity(Term,Atom,Arity) :-
 	is_prologterm(Term,Struct,Arity,_),
 	is_modularized_pratom(Struct,Atom,_).
-prologterm_atom_arity(Term,Atom,Arity) :- is_prologterm(Term,Atom,Arity,_), !.
-prologterm_atom_arity(Term,Atom,Arity) :- is_prologterm(Term,Atom,Arity,_,_).
+prologterm_atom_arity(Term,Atom,Arity) :- is_prologterm(Term,Atom,Arity).
 
 flprologlib_atom_arity(ParserTerm,Atm,Arity) :-
 	is_flplib(ParserTerm,FLterm),
@@ -1691,7 +1703,7 @@ clause_struct(Id,DescrVarTerm,MetaFacts,Mode,HeadList,Body,Code) :-
 insert_rulesig_struct(HeadList,Body,H2BSig,PreBody,PostBody,DescrIdCode,DescrVarsTerm,DefeatCond,Code) :-
 	thismodule_struct(WS),
 	get_current_compile_file(File),
-	(approx_prindex(DescrIdCode,Idx), Idx > 0 -> true
+	(approx_prindex(DescrIdCode,Idx), Idx \== NO_INDEX -> true
 	; approx_prindex(HeadList,Idx)
 	),
 	flora_token_rulenum(Idx,StmtNum), %% rulenum within file
@@ -2115,6 +2127,7 @@ new_flvariable(Index,FlVar,NewPrvar) :-
 ****************************************************************************/
 reset_newoid :- flora_set_counter(NEWOID_COUNT,1).
 
+%% unnumbered Skolems
 new_oidobj(Index,OidObject) :-
 	flora_increment_counter(NEWOID_COUNT,1,OldVal,_NewVal),
 	flora_concat_items([NEWOID,OldVal],Name),
@@ -2123,6 +2136,7 @@ new_oidobj(Index,OidObject) :-
 /*************************************************************************
   new_oidobj(+OidNumStr,+Index,-OidObject)
 *************************************************************************/
+%% numbered Skolems
 new_oidobj(OidNumStr,Index,OidObject) :-
 	( ruleoid(OidNumStr,_,Count)
 	-> Count_new is Count+1,
@@ -2644,8 +2658,9 @@ check_head_vars_for_safety(HeadTermList,BodyTerm,Status) :-
 	singleton_flvars(SortedVars,SingletonVars),
 	singleton_warning(SingletonVars,Status,WarnTail),
 	subtract_vars(HeadVars,BodyVars,UnboundVars),
-	(BodyTerm == [] -> unbound_warning(UnboundVars,WarnTail,[],UNBOUND_VAR_IN_FACT)
-	; unbound_warning(UnboundVars,WarnTail,[])
+	sort(UnboundVars,UnboundSortedVars),
+	(BodyTerm == [] -> unbound_warning(UnboundSortedVars,WarnTail,[],UNBOUND_VAR_IN_FACT)
+	; unbound_warning(UnboundSortedVars,WarnTail,[])
 	),
 	%% Don't issue the unboundedness var warning for facts
 	%%(BodyTerm \== [] -> unbound_warning(UnboundVars,WarnTail,[])
@@ -2850,7 +2865,7 @@ flora_reset_compiler(Purpose) :-
   UDFPredsDiffList is the same for the list of tabled predicates
 ****************************************************************************/
 flora_compile_add([NULL],R-R,F-F,Q-Q,LQ-LQ,U-U,_,NO_ERRORS) :- !.
-	
+
 flora_compile_add(ParserTermList,RuleDiffList,FactDiffList,QueryDiffList,LatentQueryDiffList,UDFPredsDiffList,StmtNum+FileName,Status) :-
 #ifdef SHOW_COMPILE_ADD_INPUT
 	DBGOUTLN('------------result of parsing-----------------'),
@@ -3247,7 +3262,12 @@ compile_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffL
   finds singleton numbered anon oid and puts warning message in Status
 ***************************************************************************/
 referenced_once(Status_rf,Status) :-
-	findall(Index,ruleoid(_,Index,1),IndexList),
+	%% we are looking for numbered oids mentioned once, but not those that
+	%% start with '_'.
+	%% The later were generated from unumbered oids (_#) by the parser.
+	findall(Index,
+		(ruleoid(Oid,Index,1),\+flratom_char_code(Oid,0,CH_ANON_VAR)),
+		IndexList),
 	singleton_oid_warning(IndexList,WarnList,[]),
 	append(Status_rf,WarnList,Status).
 
@@ -3782,7 +3802,7 @@ compile_defsensor_direct(SensCall,DelayCond,Code,Status) :-
 ****************************************************************************/
 compile_fact(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,MetaFactDiffList,Status) :-
 	set_context(compiling_facts),
-	compile_head(Head,HeadCode,H2BCodeFront,H2BCodeBack,HeadStat),
+	compile_head_top(Head,fact,HeadCode,H2BCodeFront,H2BCodeBack,HeadStat),
 	!,
 	( no_errors_found(HeadStat) ->
 	    compile_factlist(HeadCode,DescriptorIdCode,DescrVarsTerm,H2BCodeFront,H2BCodeBack,RuleDiffList,FactDiffList),
@@ -3801,7 +3821,7 @@ compile_fact(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDi
 
 compile_fact_add(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,MetaFactDiffList,Status) :-
 	set_context(compiling_facts), 
-	compile_head(Head,HeadCode,H2BCodeFront,H2BCodeBack,HeadStat),
+	compile_head_top(Head,fact,HeadCode,H2BCodeFront,H2BCodeBack,HeadStat),
 	!,
 	( no_errors_found(HeadStat) ->
 	    compile_factlist_add(HeadCode,DescriptorIdCode,DescrVarsTerm,H2BCodeFront,H2BCodeBack,RuleDiffList,FactDiffList,MetaFactDiffList),
@@ -3851,7 +3871,7 @@ compile_factlist_add([F|FList],DescrIdCode,DescrVarsTerm,[H2BF|H2BCodeFront],[H2
 %% this is for fact-predicates that the compiler defines as prolog
 %% using flora_define_prolog
 compile_plain_fact(F,[FCode|ListTail]-ListTail,FL-FL) :-
-	is_prologterm(F),
+	is_prologterm(F,_,_),
 	!,
 	(has_context(compiling_for_addition)
 	->
@@ -4020,7 +4040,7 @@ compile_latent_query(DescrIdCode,MetaFactDiffList,Body,Mode,LatentQueryList-Late
 	    construct_rule_enabling_test(DescrIdCode,Mode,LatentQueryEnablerTest,_),
 	    conjunct_struct(CallerBindingCode,LatentQueryEnablerTest,PreLatentQueryCode),
 	    get_current_compile_file(File),
-	    (approx_prindex(DescrIdCode,Idx), Idx > 0 -> true
+	    (approx_prindex(DescrIdCode,Idx), Idx \== NO_INDEX -> true
 	    ; approx_flindex(Body,Idx)
 	    ),
 	    get_current_stmt_number_for_descriptor(Idx,StmtNum),
@@ -4083,8 +4103,8 @@ compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,SigDiffLi
 compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut,MetaFacts-MetaFactsTail,Status) :-
 	flatten(DescriptorList,FlatDescrList),
 	%% First, extract the code for the rule id
-	findall(IdParserTerm-Idx,
-		member(FLDESCRIPTOR(IdParserTerm,FLRULEID,Idx),FlatDescrList),
+	findall(IdTerm-Idx,
+		member(FLDESCRIPTOR(IdTerm,FLRULEID,Idx),FlatDescrList),
 		IdParserTermList),
 	!,
 	set_context(no_symbol_check),
@@ -4101,6 +4121,8 @@ compile_descriptor_list(DescriptorList-RuleIdx,Mode,DescrIdCode,DescrVarsTermOut
 	    IdStatus = NO_ERRORS
 	; IdParserTermList = [[IdParserTerm|_] - Idx],
 	    %% compile Id descriptor here
+	    %% The compiler assumes that descriptor frames are passed as
+	    %% an unbroken OBJSPEC. Parser ensures that.
 	    compile_ruleid_descriptor(IdParserTerm,DescrIdCode,RuleidFrameCode,ExplicitModule,IdStatus)
 	),
 	(memberchk(Mode,[FL_DESCRMODE_RULE,FL_DESCRMODE_ADDRULE,FL_DESCRMODE_DYNRULE,FL_DESCRMODE_LATENT_QUERY,FL_DESCRMODE_LATENT_ADDQUERY,FL_DESCRMODE_LATENT_DYNQUERY,FL_DESCRMODE_UDFRULE])
@@ -4543,8 +4565,8 @@ compile_complex_descriptor(DescrContentsWS,FramesOK,Object,FrameCode,ExplicitMod
 	%% the context is set to allow__numeric_ruleids
 	(has_context(allow_numeric_ruleids) -> Status = S1
 	; is_prnumber(Object,RuleId,RidIdx), integer(RuleId), RuleId > 0 ->
-	    compiling_error(RidIdx,NO_INTEGERS_AS_RULEID,Err),
-	    Status = [Err|S1]
+	    compiling_error(RidIdx,NO_INTEGERS_AS_RULEID,Err2),
+	    Status = [Err2|S1]
 	; Status = S1
 	),
 	clear_context(allow_numeric_ruleids),
@@ -5015,7 +5037,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	    set_context(no_symbol_check)
 	; true
 	),
-	compile_head_top(Head,HeadCode,H2BCodeFront,H2BCodeBack,HeadStatus),
+	compile_head_top(Head,rule,HeadCode,H2BCodeFront,H2BCodeBack,HeadStatus),
 	(has_context(compiling_udf_definition) ->
 	    %% done compiling UDF definition head
 	    clear_context(block_udf_expansion),
@@ -5142,7 +5164,7 @@ construct_defeasible_condition_for_signature_or_dynrule(HeadCode,DescrIdCode,Des
 			      DefeatCondCode),
 	    %% wrap up for delaying the defeasible condition
 	    list_struct([],[],EmptyListObj), %% empty list
-	    ( approx_prindex(HeadCode,HeadIdx) -> true
+	    ( approx_prindex(HeadCode,HeadIdx), HeadIdx \== NO_INDEX -> true
 	    ; HeadIdx=NO_INDEX
 	    ),
 	    delay_defeat_struct(HeadIdx,DefeatCondCode,
@@ -5179,7 +5201,7 @@ construct_static_defeasible_condition(HeadCode,DescrIdCode,DescrVarsTerm,Delayed
 	    vars_to_var_names(HeadCodeVars,HeadCodeVarNames),
 	    list_struct(HeadCodeVars,[],HeadCodeVarsStruct),
 	    list_struct(HeadCodeVarNames,[],HeadCodeVarNamesStruct),
-	    ( approx_prindex(HeadCode,HeadIdx) -> true
+	    ( approx_prindex(HeadCode,HeadIdx), HeadIdx\==NO_INDEX -> true
 	    ; HeadIdx=NO_INDEX
 	    ),
 	    delay_defeat_struct(HeadIdx,DefeatCondCode,
@@ -5193,48 +5215,51 @@ construct_static_defeasible_condition(HeadCode,DescrIdCode,DescrVarsTerm,Delayed
 
 
 /****************************************************************************
-  compile_conjunct2list(+ConjunctCode,-CodeList)
-  compile_conjunct2list(+ConjunctCode,-CodeList,-ListTail)
+  prconjunct2list(+ConjunctCode,-CodeList)
+  prconjunct2list(+ConjunctCode,-CodeList,-ListTail)
 
   ConjunctCode may contain NULL.
 ****************************************************************************/
-compile_conjunct2list(ConjunctCode,CodeList) :-
-	compile_conjunct2list(ConjunctCode,CodeList,[]).
+prconjunct2list(ConjunctCode,CodeList) :-
+	prconjunct2list(ConjunctCode,CodeList,[]).
 
-compile_conjunct2list(NULL,CodeList,CodeList) :- !.
+prconjunct2list(NULL,CodeList,CodeList) :- !.
 
-compile_conjunct2list(ConjunctCode,CodeList,ListTail) :-
+prconjunct2list(ConjunctCode,CodeList,ListTail) :-
 	is_prconjunct(ConjunctCode,C1,C2),
 	!,
-	compile_conjunct2list(C1,CodeList,T1),
-	compile_conjunct2list(C2,T1,ListTail).
+	prconjunct2list(C1,CodeList,T1),
+	prconjunct2list(C2,T1,ListTail).
 
-compile_conjunct2list(Code,[Code|ListTail],ListTail) :- !.
+prconjunct2list(Code,[Code|ListTail],ListTail) :- !.
 
 
 /****************************************************************************
-  compile_head_top(+ParserTermList,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
+  compile_head_top(+ParserTermList,+Context,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
   compile_head(+ParserTermList,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
+
+  Context: rule or fact
   H2BCodeFront - code passed from head to body, which is supposed to be
                  prepended to the code of the body
   H2BCodeBack - code passed from head to body, which is supposed to be
                 appended to the code of the body
 ****************************************************************************/
-#if exists("hooks/flrhead_flterm_print.P")
-#include "hooks/flrhead_flterm_print.P"
-#endif
 
-#if exists("hooks/flrheadtop_compile.P")
+#if exists("hooks/flrheadtop_compile.P") && exists("hooks/ergo.switch")
 #include "hooks/flrheadtop_compile.P"
 #else
-compile_head_top(ParserTerm,Code,H2BCodeFront,H2BCodeBack,Status) :-
-	collect_flvars(ParserTerm,FlVars),
-	%% TODO: pass FlVars to compile_head as a parameter
-	%%       Then pass it also to compile_body_top, compile_body,
-	%%       compile_stop_delay
-	set_context(compiling_head(FlVars)),
+compile_head_top(ParserTerm,Context,Code,H2BCodeFront,H2BCodeBack,Status) :-
+	(Context==fact -> true
+	; collect_flvars(ParserTerm,FlVars),
+	    %% TODO: pass FlVars to compile_head as a parameter
+	    %%       Then pass it also to compile_body_top, compile_body,
+	    %%       compile_stop_delay
+	    set_context(compiling_head(FlVars))
+	),
 	compile_head(ParserTerm,Code,H2BCodeFront,H2BCodeBack,Status),
-	clear_context(compiling_head(FlVars)),
+	(Context==fact -> true
+	; clear_context(compiling_head(FlVars))
+	),
 	!.
 #endif
 
@@ -5287,7 +5312,8 @@ compile_body(ParserTerm,Code,Status) :-
 	    ( no_errors_found(S2) ->
 		conjunct_struct(LCode,RCode,Code),
 		append(S,S2,Status)
-	    ; Status=S2)
+	    ; Status=S2
+	    )
 	;
 	  Status=S
         ).
@@ -5356,27 +5382,32 @@ compile_body(ParserTerm,Code,Status) :-
 	),
 
 	compile_body(Formula,FormCode,S2),
+	(S1==NO_ERRORS -> S3=S2
+	; S3 = [Err1|S2]
+	),
 	%% We use prvars so that newly introduced vars will be accounted for
 	collect_prvars(FormCode,FormVarList),
 	vars_to_var_names(FormVarList,FormVarNames),
-	(QuantVarNames == FL_STAR -> S3 = NO_ERRORS %% all vars are existential
-	%% quantified vars must occur in Formula
-	; subset(QuantVarNames,FormVarNames) -> S3 = NO_ERRORS
-	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
-	    S3 = [Err3]
-	),
-	(QuantVarNames == FL_STAR -> FreeVarObjs_aux = []
-	; subtract_varnames_from_vars(FormVarList,QuantVarNames,FreeVarObjs_aux)
-	),
-	remove_prdontcare_and_FL_CONTEXT_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
-	%% this is used if naf-exists is nested deep inside the code
-	remove_quantified_vars(FreeVarObjs_aux2,FreeVarObjs),
+	(no_errors_found(S3) ->
+	    (QuantVarNames == FL_STAR -> Status = NO_ERRORS %% all vars exist'l
+	    %% quantified vars must occur in Formula
+	    ; subset(QuantVarNames,FormVarNames) -> Status = NO_ERRORS
+	    ; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err4),
+		Status = [Err4]
+	    ),
+	    (QuantVarNames == FL_STAR -> FreeVarObjs_aux = []
+	    ; subtract_varnames_from_vars(FormVarList,QuantVarNames,FreeVarObjs_aux)
+	    ),
+	    remove_prdontcare_and_FL_CONTEXT_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
+	    %% this is used if naf-exists is nested deep inside the code
+	    remove_quantified_vars(FreeVarObjs_aux2,FreeVarObjs),
 
-	(QuantVarNames == FL_STAR -> RenamedFormCode = FormCode
-	; rename_prvariables(QuantVarNames,NEWQUANTIFIEDVAR ,FormCode,
-			     RenamedFormCode,RenamedQuantVars)
+	    (QuantVarNames == FL_STAR -> RenamedFormCode = FormCode
+	    ; rename_prvariables(QuantVarNames,NEWQUANTIFIEDVAR ,FormCode,
+				 RenamedFormCode,RenamedQuantVars)
+	    )
+	; Status = S3
 	),
-	flatten([S1,S2,S3],Status),
 	!,
 	( no_errors_found(Status) ->
 	    %% Create code for compiled quantification.
@@ -6334,11 +6365,11 @@ check_aggregate(Var,GVars,BodyTerm,Status) :-
 	%% Check if any grouping variable is anonymous.
 	check_gvar(GVars,S1,S2),
 	%% Check if the aggregate variable is also used for grouping.
-	( VarName \= FL_ANON_VAR, is_flvariable(U,VarName,_Iu), memberchk(U,GVars) ->
+	( VarName \= FL_ANON_VAR, is_flvariable(U,VarName,_Iu),
+	    memberchk(U,GVars) ->
 	    compiling_error(VarIndex,AVAR_ASGVAR,M2),
 	    S2=[M2|S3]
-	;
-	  S3=S2
+	; S3=S2
         ),
 	%% Check if there are any repeated grouping variables.
 	sort(GVars,SVars),
@@ -6931,8 +6962,7 @@ compile_body_pathexplist([T|L],WS,[TObj|LObj],OidCode,Code,BodyFrontList,Status)
 	    (var(LCode) -> LCode = NULL ; true),
 	    ( var(BodyFrontList) ->
 		append(BodyFrontList1,BodyFrontList2,BodyFrontList)
-	    ;
-		true
+	    ; true
 	    ),
 	    ( no_errors_found(S2) -> 
 		conjunct_struct(TCode,LCode,Code),
@@ -6940,8 +6970,7 @@ compile_body_pathexplist([T|L],WS,[TObj|LObj],OidCode,Code,BodyFrontList,Status)
 		append(S,S2,Status)
 	    ; Status=S2
 	    )
-	;
-	  Status=S
+	; Status=S
         ),
 	!.
 
@@ -7655,26 +7684,30 @@ compile_body_specbody(Object,SpecTerm,WS,OidCode,Code,BodyFrontList,Status) :-
 	),
 
 	compile_body_specbody(Object,Formula,WS,OidCode,FormCode,BodyFrontList,S2),
+	(S1==NO_ERRORS -> S3=S2
+	; S3 = [Err1|S2]
+	),
 	%% We use prvars so that newly introduced vars will be accounted for
 	collect_prvars([Object,OidCode,FormCode],AllVarList),
 	vars_to_var_names(AllVarList,AllVarList_names),
-	%% quantified vars must occur in Formula
-	(subset(QuantVarNames,AllVarList_names) -> S3 = NO_ERRORS
-	; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err3),
-	    S3 = [Err3]
+	(no_errors_found(S3) ->
+	    %% quantified vars must occur in Formula
+	    (subset(QuantVarNames,AllVarList_names) -> Status = NO_ERRORS
+	    ; compiling_error(Idx,QUANT_VARS_NOT_SUBSET,Err4),
+		Status = [Err4]
+	    ),
+
+	    subtract_varnames_from_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
+	    %% remove don't care vars, since no need to delay because of them
+	    remove_prdontcare_and_FL_CONTEXT_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
+	    %% this is used if naf-exists is nested deep inside the code
+	    remove_quantified_vars(FreeVarObjs_aux2,FreeVarObjs),
+	    
+	    rename_prvariables(QuantVarNames,NEWQUANTIFIEDVAR ,FormCode,
+			       RenamedFormCode,RenamedQuantVars)
+	; Status = S3
 	),
-
-	subtract_varnames_from_vars(AllVarList,QuantVarNames,FreeVarObjs_aux),
-	%% remove don't care vars, since no need to delay because of them
-	remove_prdontcare_and_FL_CONTEXT_vars(FreeVarObjs_aux,FreeVarObjs_aux2),
-	%% this is used if naf-exists is nested deep inside the code
-	remove_quantified_vars(FreeVarObjs_aux2,FreeVarObjs),
-	
-	rename_prvariables(QuantVarNames,NEWQUANTIFIEDVAR ,FormCode,
-			   RenamedFormCode,RenamedQuantVars),
-
 	!,
-	flatten([S1,S2,S3],Status),
 	( no_errors_found(Status) -> 
 	    %% Create the code for compiled quantification.
 	    conjunct_struct(OidCode,RenamedFormCode,CombinedCode),
@@ -9236,7 +9269,7 @@ compile_insert(Op,List,Code,Status) :-
 compile_insert_literals(List,DBCodeList,Status) :-
 	set_context(compiling_update_literals),
 	compile_insert_litlist(List,Code,Status),
-	compile_conjunct2list(Code,CodeList),
+	prconjunct2list(Code,CodeList),
 	( no_errors_found(Status) -> 
 	    compile_dbupdate_list(CodeList,DBCodeList)
 	;
@@ -9292,7 +9325,7 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 	    ->
 		%% If literal is a prolog term, generate code that will simply
 		%% insert this term using adaptive assert
-		(is_prologterm(HeadCode) ->
+		(is_prologterm(HeadCode,_,_) ->
 		    generate_prolog_liblit(FL_DYNPROLOG_FACT,1,[HeadCode],HeadCode1)
 		; HeadCode1 = HeadCode
 		),
@@ -9315,7 +9348,7 @@ compile_insert_litlist([HWS|T],Code,Status) :-
 		set_context(compile_with_var_module),
 		set_context(compiling_dynrule(DescrIdCode)),
 		%% CHECK!!!!
-		compile_conjunct2list(HeadCode,HCode),
+		prconjunct2list(HeadCode,HCode),
 		list_struct(HCode,[],HeadCodeList),
 		%% only the vars in the fact-term are to be checked
 		delay_literals_checking_code([],H,DescrVarsTerm,DelayCheckCode),
@@ -9426,7 +9459,7 @@ compile_delete_litlist([H|T],CodeList,Status) :-
 	approx_flindex(O1,Idx),
 	report_option(FLOBJEQLDEF,Idx),
 	( no_errors_found(S) -> 
-	    compile_conjunct2list(HCode,HCodeList),
+	    prconjunct2list(HCode,HCodeList),
 	    compile_delete_litlist(T,TCodeList,Status),
 	    ( no_errors_found(Status) -> 
 		append(HCodeList,TCodeList,CodeList)
@@ -9463,16 +9496,16 @@ compile_delete_litlist([HWS|T],CodeList,Status) :-
         clear_context(compile_delete),
 	( no_errors_found(S) -> 
 	    (HOidCode == NULL ->
-		(is_prologterm(HSpecCode) ->
+		(is_prologterm(HSpecCode,_,_) ->
 		    %% This tells flrdbop.P and flrbtdbop.P that this fact is
 		    %% to be asserted as Prolog, not into a trie.
 		    %% Currently the asserts aren't backtrackable: to fix later.
 		    generate_prolog_liblit(FL_DYNPROLOG_FACT,1,[HSpecCode],HWSCode1)
 		; HWSCode1 = HSpecCode
 		),
-		compile_conjunct2list(HWSCode1,HWSCode)
+		prconjunct2list(HWSCode1,HWSCode)
 	    ;
-		compile_conjunct2list(HSpecCode,HList),
+		prconjunct2list(HSpecCode,HList),
 		RuleIdx = NO_INDEX,
 		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_DYNRULE,DescrIdCode,DescrVarsTerm,DefaultMetaFactDiffList,_),
 		set_context(compile_with_var_module),
@@ -9652,7 +9685,7 @@ compile_dyn_latent_query(Op,DescrIdCode,MetaFactDiffList,Body,LatentQuerySigCode
 	    construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_LATENT_DYNQUERY,LatentQueryEnablerTest,_),
 	    conjunct_struct(CallerBindingCode,LatentQueryEnablerTest,PreLatentQueryCode),
 	    get_current_compile_file_for_descriptor(File,FL_DESCRMODE_LATENT_DYNQUERY),
-	    (approx_prindex(DescrIdCode,Idx), Idx > 0 -> true
+	    (approx_prindex(DescrIdCode,Idx), Idx \== NO_INDEX -> true
 	    ; approx_flindex(Body,Idx)
 	    ),
 	    get_current_stmt_number_for_descriptor(Idx,StmtNum),
@@ -9674,7 +9707,7 @@ compile_dyn_latent_query(Op,DescrIdCode,MetaFactDiffList,Body,LatentQuerySigCode
 compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,RuleCode,Status) :-
         set_context(compile_with_var_module),
 	set_context(compiling_dynrule(DescrIdCode)),
-	compile_head_top(Head,HeadCode,H2BCodeFront,H2BCodeBack,HeadStatusPre),
+	compile_head_top(Head,rule,HeadCode,H2BCodeFront,H2BCodeBack,HeadStatusPre),
 	%% no :- prolog predicates in dynamic rule heads
 	(has_prologlit(HeadCode,IdxH)
 	-> compiling_error(IdxH,NO_PROLOG_IN_DYNRULE_HEAD,PlgStatus1),
@@ -10366,7 +10399,7 @@ code_line_and_file_by_prterm(_CompiledTerm,Line,File) :-
 	new_prvariable(NO_INDEX,Line),
 	new_prvariable(NO_INDEX,File).
 code_line_and_file_by_prterm(CompiledTerm,Line,File) :-
-	(approx_prindex(CompiledTerm,Index), Index \= NO_INDEX
+	(approx_prindex(CompiledTerm,Index), Index \== NO_INDEX
 	-> flora_token_index_to_line(Index,Line)
 	; Line = NULL
 	),

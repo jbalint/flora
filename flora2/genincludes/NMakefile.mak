@@ -45,12 +45,15 @@ CLEAN :
 	-@if exist *.bak erase *.bak
 	-@if exist .#* erase .#*
 
-flrpreddef.flh:
+flrpreddef.flh: ..\flrincludes\flora_terms.flh
 	"$(PROLOG)" -e "asserta(library_directory('..')). ['..\\flora2']. import '_#flmakesetup'/0 from flora2. '_#flmakesetup'. [flrwraparound]. flWrapAround(flrpreddef). halt."
 
-flrindex_P.flh:
+flrindex_P.flh: ..\flrincludes\flora_terms.flh
 	"$(PROLOG)" -e "asserta(library_directory('..')). ['..\\flora2']. import '_#flmakesetup'/0 from flora2. '_#flmakesetup'. [flrwraparound]. flWrapAround(flrindex_P). halt."
 
 
+## %|fF as a file spec means: %|...F - file parts selection syntax. f- take
+##                                     just the base name
+$(ALLOBJS): ..\flrincludes\flora_terms.flh
 .fli.flh:
 	"$(PROLOG)" -e "asserta(library_directory('..')). ['..\\flora2']. import '_#flmakesetup'/0 from flora2. '_#flmakesetup'. [flrwraparound]. import flWrapAround/1 from flrwraparound. flWrapAround(%|fF). halt." 

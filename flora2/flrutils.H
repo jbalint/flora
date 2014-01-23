@@ -352,6 +352,7 @@
 	flora_read_then_parse/2,
 	flora_read_then_parse/3,
 	flora_read_then_parse_string/3,
+	flora_read_then_parse_file/3,
 
 	flora_read_parse_compile_build_term/3,
 	flora_read_parse_compile_build_term/4,

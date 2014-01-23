@@ -2629,8 +2629,7 @@ util_rpc_file_add(MaxErr,ErrNum,CompiledRuleList,CompiledFactList,
 				  RuleStatus2,FileStatus),
 		merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
 
-	    ; flora_not_end_of_input(RuleStatus1), discard_tokens
-	    ->
+	    ; flora_not_end_of_input(RuleStatus1), discard_tokens ->
 	        util_rpc_file_add(MaxErr,NewErrNum,
 				  _CompiledRuleList,_CompiledFactList,
 				  _CompiledQueryList,_CompiledLatentQueryList,
@@ -2835,8 +2834,7 @@ util_rpc_file(MaxErr,ErrNum,CompiledRuleList,CompiledSigList,CompiledFactList,Co
 			      RuleStatus2,FileStatus),
 		merge_status_lists(RuleStatus1,RuleStatus2,RuleStatus)
 
-	    ; flora_not_end_of_input(RuleStatus1), discard_tokens
-	    ->
+	    ; flora_not_end_of_input(RuleStatus1), discard_tokens ->
 		%% continue collecting errors, ignore compiled code
 		%% here we are reading next rule while ignoring compiled code
 	        util_rpc_file(MaxErr,NewErrNum,
@@ -2891,14 +2889,13 @@ discard_tokens :-
 	flora_stdwarn_nl,
 	flora_warning_line('discarding tokens (rule delimeter `.'' or EOF expected)'),
 	flora_stdwarn_nl,
+	discard_tokens_silent.
+discard_tokens_silent :-
 	repeat,
 	flora_tokens(Tokens,Status),
 	flora_rule_delimeter_struct(_Txt,_LN1,_CN1,_LN2,_CN2,RuleDelimeterToken),
-	( flora_end_of_input(Status) ->
-	    !,
-	    fail
-	
-	; memberchk(RuleDelimeterToken,Tokens) -> !
+	( flora_end_of_input(Status) -> fail
+	; memberchk(RuleDelimeterToken,Tokens) -> true
 	;
 	  fail
         ).
@@ -3104,6 +3101,48 @@ flora_read_then_parse(InputTokens,ParserTerm,Status) :-
 	    Status=[FLORA_NOT_EOF|EWS]
 	).
 
+%% used only for testing
+util_read_then_parse_file([ParserTerm|RestParsedTermList],[Status|RestStatusList]) :-
+	flora_read_then_parse(Tokens,ParserTerm1,Status),
+	!,
+	( flora_blank_line(Tokens), flora_not_end_of_input(Status),
+	    var(ParserTerm1) ->
+	    ParserTerm = '',
+	    util_read_then_parse_file(RestParsedTermList,RestStatusList)
+	; flora_end_of_input(Status), var(ParserTerm1) ->
+	    ParserTerm = '',
+	    RestParsedTermList = [], RestStatusList = []
+	; ParserTerm1 == [NULL] ->
+	    ParserTerm = '',
+	    util_read_then_parse_file(RestParsedTermList,RestStatusList)
+	; flora_rule_delimeter_struct(_,_,_,_,_,RuleDelimeterToken),
+	    flora_not_end_of_input(Status),
+	    memberchk(RuleDelimeterToken,Tokens)
+	-> util_read_then_parse_file(RestParsedTermList,RestStatusList),
+	    ParserTerm = ParserTerm1
+	; flora_not_end_of_input(Status), discard_tokens_silent
+	-> util_read_then_parse_file(RestParsedTermList,RestStatusList),
+	    ParserTerm = ParserTerm1
+	; RestParsedTermList = [], RestStatusList = [], ParserTerm = ParserTerm1
+	).
+
+%% used only for testing
+flora_read_then_parse_file(InputFile,ParserList,StatusList) :-
+	seeing(PreInFile),
+	reset_modules_for_load(InputFile,FLORA_DEFAULT_WORKSPACE),
+	xpp_process_file(InputFile,XPP_process,IOportFromProc),
+	%%file_io:copyIOport(IOportFromProc,2), %% to see gpp output
+	see(IOportFromProc),
+	util_read_then_parse_file(ParserList,StatusList),
+	flora_clear_compilation_permaoptions,
+	%% Wait so as to not leave zombies.
+	check_xpp_process_status(InputFile,XPP_process),
+	%% Release the file descriptor used to read from cpp.
+	%%close(IOportFromProc),
+	seen,
+	flora_clear_xpp_options,
+	see(PreInFile).
+
 
 /*************************************************************************
   flora_read_then_parse_string(+String,-ParserTerm,-Status)
@@ -3174,10 +3213,8 @@ flora_shell_command_line(Code,Options,Status) :-
 	      memberchk(RuleDelimeterToken,Tokens) ->
 		InputStatus = FLORA_NOT_EOF
 
-	    ; discard_tokens ->
-	        InputStatus = FLORA_NOT_EOF
-	    ;
-	      InputStatus = FLORA_EOF
+	    ; discard_tokens -> InputStatus = FLORA_NOT_EOF
+	    ; InputStatus = FLORA_EOF
 	    ),
 	    Status=[InputStatus,FLORA_FAILURE]
 	; %% ErrNum > 0  end

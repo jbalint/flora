@@ -1,7 +1,8 @@
 @echo OFF
 
-set flrshell=ergo_shell
+set flrshell=flora_shell
 if [%0] == [runergo]  set flrshell=ergo_shell
+if [%0] == [runergo.bat]  set flrshell=ergo_shell
 
 set STARTUPOPTIONS=
 if [%1] == [--devel] (shift

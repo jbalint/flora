@@ -23,7 +23,7 @@
 */
 
 
-:- import get0/1 from standard.
+:- import get_code/1 from standard.
 
 :- import append/3,
 	member/2

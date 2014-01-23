@@ -84,6 +84,7 @@ DYN_INCLUDES_DIR = ../includes
 
 FLORA_TERMS = $(FLORA_INCLUDES_DIR)/flora_terms.flh
 FLORA_ERRORS = $(FLORA_INCLUDES_DIR)/flora_errors.flh
+FLORA_EXCEPTIONS = $(FLORA_INCLUDES_DIR)/flora_exceptions.flh
 FLRHEADER = $(DYN_INCLUDES_DIR)/flrheader.flh
 
 
@@ -105,7 +106,7 @@ all: init $(ALLOBJS) finish
 	@cat $(SVFILE)
 
 
-%$(OBJEXT): %$(PROLOGEXT) $(FLORA_TERMS)
+%$(OBJEXT): %$(PROLOGEXT) $(FLORA_TERMS) $(FLORA_EXCEPTIONS)
 	@echo 'mc($*,$(OPTION)).' >> cmd...
 
 %$(PROLOGEXT) : %$(PROLOGHEADEREXT)
@@ -117,7 +118,7 @@ flrcontrol$(OBJEXT) : flrcontrol$(PROLOGEXT) $(FLORA_TERMS) $(XSB_STANDARD)
 flrdisplay$(OBJEXT) : flrdisplay$(PROLOGEXT) $(FLORA_TERMS) $(XSB_STANDARD)
 	@echo 'mc(flrdisplay,$(OPTION)).' >> cmd...
 
-flrimport$(OBJEXT): flrimport$(PROLOGEXT) $(FLORA_TERMS) $(FLRHEADER)
+flrimport$(OBJEXT): flrimport$(PROLOGEXT) $(FLORA_TERMS) $(FLRHEADER) $(FLORA_EXCEPTIONS)
 	@echo 'mc(flrimport,$(OPTION)).' >> cmd...
 
 

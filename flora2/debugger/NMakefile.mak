@@ -31,6 +31,9 @@ ALLOBJS=  flrdebugger$(OBJEXT) \
 	flrterminyzer$(OBJEXT) \
 	dynamic_data.dat \
 	static_data.dat
+PLGOBJS=  flrdebugger$(OBJEXT) \
+	flrtabledump$(OBJEXT) \
+	flrterminyzer$(OBJEXT)
 
 OPTIONS=[optimize]
 
@@ -45,6 +48,9 @@ CLEAN :
 	-@if exist .#* erase .#*
 	-@if exist *.dat erase *.dat
 
+## %|fF as a file spec means: %|...F - file parts selection syntax. f- take
+##                                     just the base name
+$(PLGOBJS): ..\flrincludes\flora_terms.flh
 $(PROLOGEXT)$(OBJEXT):
 	"$(PROLOG)" -e "asserta(library_directory('..')). ['..\\flora2']. import '_#flmakesetup'/0 from flora2. '_#flmakesetup',mc(%|fF,$(OPTIONS)). halt."
 
