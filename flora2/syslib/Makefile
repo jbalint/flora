@@ -74,6 +74,7 @@ ALLOBJS = flranswer$(OBJEXT) \
 	  flrcheckcard$(OBJEXT) \
 	  flrudf$(OBJEXT) \
 	  flrwhen$(OBJEXT) \
+	  flrauxil$(OBJEXT) \
 	  flrunify_handlers$(OBJEXT) \
 	  flrtesting$(OBJEXT) \
 	  flrgateway$(OBJEXT) \

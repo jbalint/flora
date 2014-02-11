@@ -322,27 +322,36 @@ is_flcut(FLCUT(I),I).
 %% constructs like O[X=Y], O[X>Y], O[!], O[true], O[false], are compiled as
 %% X=Y, !, true, etc.
 is_flpassthru(FLPASSTRU(O),O).
-
-%% basic building blocks
-is_flatom(FLATOM(Atom,_I),Atom) :- 
-	\+ is_fltransactionalatom(Atom,_),
-	!.
-is_flatom(FLATOM(Atom,Index),Atom,Index) :- 
-	\+ is_fltransactionalatom(Atom,_),
-	!.
 get_flatom_name(Atom,Name) :- is_flatom(Atom,Name), !.
 get_flatom_name(Atom,Name) :- is_flbuiltin_identifier(Atom,Name), !.
 get_flatom_name(Atom,Atom) :- atom(Atom).
 
 is_fltransactionalatom(FLTRANSACTIONALATOM(Atom,_I),Atom).
-is_flnumber(FLNUMBER(Number,_I),Number).
 %% transactional numbers are used only in :- index %arity-argument
-is_fltransactionalnumber(FLTRANSACTIONALNUMBER(Number,_I),Number).
-is_flstring(FLSTRING(String,_I),String).
+%%is_fltransactionalnumber(FLTRANSACTIONALNUMBER(Number,_I),Number).
 is_fltransactionalstring(FLTRANSACTIONALSTRING(String,_I),String).
+%% is_fltrans_atomnumberstring/1
+is_fltrans_atomnumberstring(FLTRANSACTIONALATOM(_,_)).
+is_fltrans_atomnumberstring(FLTRANSACTIONALNUMBER(_,_)).
+is_fltrans_atomnumberstring(FLTRANSACTIONALSTRING(_,_)).
+
+%% basic building blocks
+is_flatom(FLATOM(Atom,_I),Atom) :- \+ is_fltransactionalatom(Atom,_).
+is_flatom(FLATOM(Atom,Index),Atom,Index) :- \+ is_fltransactionalatom(Atom,_).
+is_flnumber(FLNUMBER(Number,_I),Number).
+is_flstring(FLSTRING(String,_I),String).
+
+is_flatomnumberstringbuiltin(FLATOM(Atm,_)) :- \+is_fltransactionalatom(Atm,_).
+is_flatomnumberstringbuiltin(FLNUMBER(_,_)).
+is_flatomnumberstringbuiltin(FLSTRING(_,_)).
+is_flatomnumberstringbuiltin(FLBUILTIN_IDENTIFIER(_,_)).
+
 is_fltoken(FLTOKEN(Token,I),Token,I).
 %% this can be _#Number or _?Letter or _@!
 is_fltoken(FLTOKEN(Token,Suffix,I),Token,Suffix,I).
+%% is_fltoken/1
+is_fltoken(FLTOKEN(_,_)).
+is_fltoken(FLTOKEN(_,_,_)).
 
 is_fldatatype(FLDATATYPE(Sort,Literal,Index),Sort,Literal,Index).
 is_fltransactionaldatatype(FLTRANSACTIONALPREDSPEC(FLDATATYPE(Sort,Literal,Index)),Sort,Literal,Index).
@@ -357,6 +366,13 @@ is_flbuiltin_identifier(FLBUILTIN_IDENTIFIER(Builtin,I),Builtin,I).
 is_flvariable(FLVAR(Name,Index),Name,Index).
 is_anonymous_flvariable(FLVAR(FL_ANON_VAR,I),I).
 is_fltransactionalvariable(FLTRANSACTIONALVAR(Name,Index),Name,Index).
+
+%% for speed
+is_any_flvar(FLVAR(Name,Index),Name,Index).
+is_any_flvar(FLTRANSACTIONALVAR(Name,Index),Name,Index).
+is_any_prvar(PRVARIABLE(Name,Index),Name,Index).
+is_any_prvar(PRTRANSACTIONALVARIABLE(Name,Index),Name,Index).
+
 is_fllist(FLLIST(L,T,I),L,T,I).
 
 is_fldelayedliteral(FLDELAYEDLITERAL(Op,Args),Op,Args).
@@ -377,11 +393,13 @@ is_imvdsigspecop(FL_INMVDSIGARR).
 
 
 is_fltermdescriptor(FLTERMDESCRIPTOR(Funct,Arity),Funct,N) :-
-	is_flnumber(Arity,N),!.
+	is_flnumber(Arity,N),
+	!.
 is_fltermdescriptor(FLTERMDESCRIPTOR(Funct,Arity),Funct,FL_STAR) :-
 	is_anonymous_flvariable(Arity,_Idx),!.
 is_fltransactionaltermdescriptor(FLTRANSACTIONALTERMDESCRIPTOR(Funct,Arity),Funct,N) :-
-	is_flnumber(Arity,N),!.
+	is_flnumber(Arity,N),
+	!.
 is_fltransactionaltermdescriptor(FLTRANSACTIONALTERMDESCRIPTOR(Funct,Arity),Funct,FL_STAR) :-
 	is_anonymous_flvariable(Arity,_Idx),!.
 /****************************************************************************
@@ -620,6 +638,11 @@ defeasible_struct(Module,PRDEFEASIBLE(Module)).
 verbatim_struct(Instruction,PRVERBATIM(Instruction)).
 table_directive_struct(SpecList,PRTABLE(SpecList)).
 
+%% for speed
+is_pratomnumberstringbuiltin(PRATOM(Term,_),Term).
+is_pratomnumberstringbuiltin(PRNUMBER(Term,_),Term).
+is_pratomnumberstringbuiltin(PRSTRING(Term,_),Term).
+is_pratomnumberstringbuiltin(PRBUILTIN_IDENTIFIER(Term,_),Term).
 
 is_prconjunct(PRAND(L,R),L,R).
 is_prdisjunct(PROR(L,R),L,R).
@@ -653,6 +676,8 @@ disjunct_struct(Goal1,Goal2,Goal1) :-
 	!.
 disjunct_struct(Goal1,Goal2,PROR(Goal1,Goal2)).
 
+%% strong_conjunct_struct/3 is like conjunct_struct/3, but the diff is
+%% that NAF does not propagate through strong conjunction
 strong_conjunct_struct(Goal1,Goal2,Goal2) :-
 	%% NULL and FL_TRUE are both dummy code that is ignored
 	ignore_var_null_true(Goal1),
@@ -1209,11 +1234,13 @@ workspaceterm_struct(WS,PRWORKSPACETERM(WSTerm)) :-
 	compile_workspace_term(WS,WSTerm).
 
 %% Compiles both user and system workspace terms
+compile_workspace_term(FL_THISMODULE, CompiledWS) :-
+	!,
+	thismodule_struct(CompiledWS).
 compile_workspace_term(WS, CompiledWS) :-
 	(is_flatom(WS,_Atom,_I) -> atomobj_struct(WS,CompiledWS)
 	; is_flvariable(WS,_Var,_I) -> varobj_struct(WS,CompiledWS)
 	; is_fltoken(WS,FL_THISMODULE,_) -> thismodule_struct(CompiledWS)
-	; WS == FL_THISMODULE -> thismodule_struct(CompiledWS)
 	; is_flfloralib(WS,Mod) -> 
 	    compile_workspace_term(Mod,WS1),
 	    floralib_struct(WS1, CompiledWS) 
@@ -1335,14 +1362,17 @@ storage_struct(WS,PRFDBSTORAGE(WS)).
 %% FWContext: Flora-2 wrapper context info: FL_CONTEXT(CallerMod,Id1,Id2),
 %% where Id1, Id2 are tracing info rule Ids
 %% body_context_info_structure/1 or head_context_info_structure/1 directly.
-determine_context_info(LitContext,FWContext) :-
-	(LitContext==BODYLITERAL -> body_context_info_structure(FWContext)
-	; LitContext==HEADLITERAL -> head_context_info_structure(FWContext)
+determine_context_info(BODYLITERAL,FWContext) :-
+	!,
+	body_context_info_structure(FWContext).
+determine_context_info(HEADLITERAL,FWContext) :-
+	!,
+	head_context_info_structure(FWContext).
+determine_context_info(LitContext,_FWContext) :-
 	%% debug
-	; flora_error_line('[Compiler] BUG: No FL_CONTEXT can be constructed for this context, ~w', [LitContext]),
-	    throw(FLORA_TOP_LEVEL)
-	),
-	!.
+	flora_error_line('[Compiler] BUG: No FL_CONTEXT can be constructed for this context, ~w', [LitContext]),
+	throw(FLORA_TOP_LEVEL).
+
 splice_in_FL_CONTEXT_argument(LitContext,Args,NewArgs) :-
 	determine_context_info(LitContext,FWContext),
 	%% TODO: see if we can get rid of flattening
@@ -1492,8 +1522,7 @@ workspacelit_struct(P,WS,Code) :-
 
 	%% X@module or X@_module
         %% or %X@module or %X@_module
-	; (is_prvariable(P,_,Index); is_prtransactionalvariable(P,_,Index))
-	->
+	; is_any_prvar(P,_,Index) ->
 	    compile_workspace_term(WS,WSCode),
 	    body_context_info_structure(ThisModuleName,FWContext),
 	    %% a call to a module
@@ -2128,6 +2157,8 @@ new_flvariable(Index,FlVar,NewPrvar) :-
 reset_newoid :- flora_set_counter(NEWOID_COUNT,1).
 
 %% unnumbered Skolems
+%% NOTE: Parser no longer generates unnumbered Skolems -- see the comment
+%%       "Unnumbered" there. So, new_oidobj/2 below is never called
 new_oidobj(Index,OidObject) :-
 	flora_increment_counter(NEWOID_COUNT,1,OldVal,_NewVal),
 	flora_concat_items([NEWOID,OldVal],Name),
@@ -2202,11 +2233,8 @@ collect_prvars(Term,[Head|Vars],Vars) :-
         is_prvariable(Head,Name,Index).
 
 collect_prvars(Term,Vars,Vars) :-
-	( is_pratom(Term,_);
-	  is_prnumber(Term);
-	  is_prstring(Term);
-	  is_prbuiltin_identifier(Term,_);
-	  is_prtransactionalnumber(Term,_,_)
+	( is_pratomnumberstringbuiltin(Term,_)
+	; is_prtransactionalnumber(Term,_,_)
         ),
 	!.
 collect_prvars(Term,NewVars,Vars) :-
@@ -2271,15 +2299,9 @@ collect_flvars(ParserTerm,[NewParserTerm|Vars],Vars) :-
         is_flvariable(NewParserTerm,Name,Index).
 
 collect_flvars(ParserTerm,Vars,Vars) :-
-	( is_flatom(ParserTerm,_Atom);
-	  is_flnumber(ParserTerm,_Number);
-	  is_flstring(ParserTerm,_String);
-	  is_flbuiltin_identifier(ParserTerm,_Ident);
-          is_fltransactionalatom(ParserTerm,_Atom);
-	  is_fltransactionalnumber(ParserTerm,_Number);
-	  is_fltransactionalstring(ParserTerm,_String);
-	  is_fltoken(ParserTerm,_Token,_I);
-	  is_fltoken(ParserTerm,_Token,_Suffix,_I) 
+	( is_flatomnumberstringbuiltin(ParserTerm)
+	; is_fltrans_atomnumberstring(ParserTerm)
+	; is_fltoken(ParserTerm)
         ),
 	!.
 
@@ -2397,10 +2419,8 @@ subtract_varnames_from_vars([],_,[]) :- !.
 subtract_varnames_from_vars(L,[],L) :- !.
 
 subtract_varnames_from_vars([H|T],L,Res) :-
-	( is_flvariable(H,N,_I)
-	; is_fltransactionalvariable(H,N,_I)
-	; is_prvariable(H,N,_I)
-	; is_prtransactionalvariable(H,N,_I)
+	( is_any_flvar(H,N,_I)
+	; is_any_prvar(H,N,_I)
 	),
 	!,
 	(var(T) -> V = T
@@ -2438,9 +2458,7 @@ vars_contains([H1|T1],[H2|T2]) :-
 /*
 remove_fldontcare_vars([],[]) :- !.
 remove_fldontcare_vars([H|T1],T2) :-
-	( is_flvariable(H,FL_ANON_VAR,_I)
-	; is_fltransactionalvariable(H,FL_ANON_VAR,_I)
-	),
+	is_any_flvar(H,FL_ANON_VAR,_I),
 	!,
 	remove_fldontcare_vars(T1,T2).
 remove_fldontcare_vars([H|T1],[H|T2]) :-
@@ -2450,11 +2468,9 @@ remove_fldontcare_vars([H|T1],[H|T2]) :-
 remove_prvars(_,[],[]) :- !.
 remove_prvars(Prefix,[H|T1],T2) :-
 	%% new vars are all prvar structures
-	( is_prvariable(H,Var,_I)
-	; is_prtransactionalvariable(H,Var,_I)
-	),
+	is_any_prvar(H,Var,_I),
 	%% must be before the cut!!!
-	str_sub(Prefix,Var,0), %% starts with Prefix
+	flora_match_substring(Prefix,Var,0), %% starts with Prefix
 	!,
 	remove_prvars(Prefix,T1,T2).
 remove_prvars(Prefix,[H|T1],[H|T2]) :-
@@ -2498,17 +2514,14 @@ collect_name_var_pairs(ParserTerm,QueryVars) :-
 %% creates a list of vars of the form [Idx-Name,Idx-Name,...]
 indexvars([],[]) :- !.
 indexvars([T|L],Vars) :-
-	(is_flvariable(T,Name,I) ; is_fltransactionalvariable(T,Name,I)),
+	is_any_flvar(T,Name,I),
 	!,
-	( %%flora_match_substring(FL_ANON_VAR,Name,0)
-	    flratom_char_code(Name,0,CH_ANON_VAR)
-	-> indexvars(L,Vars)
+	( flratom_char_code(Name,0,CH_ANON_VAR) -> indexvars(L,Vars)
 	;
           Vars=[I-Name|Vs],
 	  remove_named_flvar(L,Name,VL),
 	  indexvars(VL,Vs)
-        ),
-	!.
+        ).
 
 
 % an Index-VarName list and creates a list of items ?Name = Varobj.
@@ -2527,8 +2540,9 @@ namevars([Index-Name|L],[NV|NVs]) :-
 /****************************************************************************
   singleton_flvars(+SortedVarsList,-SingletonVars)
   collects all the singleton variables in SortedVarsList into SingletonVars.
-  Singleton variables collected here exclude those
-  beginning with a underscore and the anonymous.
+  Singleton variables collected here exclude the anonymous var '_'.
+  Silent vars, those beginning with an underscore are kept but
+  singleton_warning/3 does not generate a warning for them.
 
   remove_named_flvar(+SortedVarsList,+VarName,-Vars)
   Remove variable named Name from SortedVarsList
@@ -2545,9 +2559,7 @@ namevars([Index-Name|L],[NV|NVs]) :-
 singleton_flvars([],[]) :- !.
 
 singleton_flvars([V|L],[V|Vs]) :-
-	( is_flvariable(V,FL_ANON_VAR,_I)
-	; is_fltransactionalvariable(V,FL_ANON_VAR,_I)
-	),
+	is_any_flvar(V,FL_ANON_VAR,_I),
 	!,
 	singleton_flvars(L,Vs).
 
@@ -2570,7 +2582,7 @@ singleton_flvars([V1,V2|L],Vars) :-
 %% Removes variables named Name from a sorted list of vars.
 %% The var to be removed can be at the top or not at all
 remove_named_flvar([V|L],Name,Vars) :-
-	(is_flvariable(V,Name,_I) ; is_fltransactionalvariable(V,Name,_I)),
+	is_any_flvar(V,Name,_I),
 	!,
 	remove_named_flvar(L,Name,Vars).
 remove_named_flvar(L,_Name,L).
@@ -2581,7 +2593,7 @@ remove_dupflvars(Vars,VarsOut) :-
 	remove_dupflvars_aux(VarsS,VarsOut).
 remove_dupflvars_aux([],[]) :- !.
 remove_dupflvars_aux([H|T],[H|TT]) :-
-	(is_flvariable(H,Name,_I) ; is_fltransactionalvariable(H,Name,_I)),
+	is_any_flvar(H,Name,_I),
 	!,
 	remove_named_flvar(T,Name,Vars),
 	remove_dupflvars_aux(Vars,TT).
@@ -2608,7 +2620,7 @@ get_quantification_info(QuantGoal,Quantifier,Formula,QuantVarListObj,FreeVarList
 singleton_warning([],Warn,Warn).
 
 singleton_warning([V|L],WarnList,WarnTail) :-
-	(is_flvariable(V,Name,I) ; is_fltransactionalvariable(V,Name,I)),
+	is_any_flvar(V,Name,I),
 	!,
 	( %%flora_match_substring(FL_ANON_VAR,Name,0)
 	  flratom_char_code(Name,0,CH_ANON_VAR)
@@ -2633,7 +2645,7 @@ unbound_warning(VarList,WarnList,WarnTail) :-
 unbound_warning([],WarnList,WarnList,_).
 
 unbound_warning([V|L],WarnList,WarnTail,WarningMessage) :-
-	(is_flvariable(V,Name,I) ; is_fltransactionalvariable(V,Name,I)),
+	is_any_flvar(V,Name,I),
 	!,
 	( %%flora_match_substring(FL_ANON_VAR,Name,0)
 	  flratom_char_code(Name,0,CH_ANON_VAR)
@@ -2702,10 +2714,8 @@ check_udf_vars_for_safety(Function,Predicate,ReturnValue,Status) :-
 ****************************************************************************/
 vars_to_var_names([],[]) :- !.
 vars_to_var_names([V|VarList],[Name|NameList]) :-
-	(is_flvariable(V,Name,_)
-	; is_fltransactionalvariable(V,Name,_)
-	; is_prvariable(V,Name,_)
-	; is_prtransactionalvariable(V,Name,_)
+	(is_any_flvar(V,Name,_)
+	; is_any_prvar(V,Name,_)
 	),
 	!,
 	vars_to_var_names(VarList,NameList).
@@ -2847,6 +2857,7 @@ flora_reset_compiler(Purpose) :-
 	(Purpose == file -> reset_default_ruleid
 	; true
 	),
+	!,
 	clear_compilation_liboptions,
 	flora_clear_compiletime_uriprefixes,
 	flora_clear_compilation_symbols,
@@ -3259,7 +3270,7 @@ compile_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffL
 
 /***************************************************************************
   referenced_once(+Status_rf,-Status)
-  finds singleton numbered anon oid and puts warning message in Status
+  finds singleton numbered Skolem oid and puts warning message in Status
 ***************************************************************************/
 referenced_once(Status_rf,Status) :-
 	%% we are looking for numbered oids mentioned once, but not those that
@@ -3698,7 +3709,7 @@ compile_symbol_term(Funct,0,_Args,FL_THISMODULE,_SymContext,NONTRANSACTIONAL_SYM
 compile_symbol_term(Funct,N,Args,WS,SymContext,Transactional,Status) :-
 	flora_get_flatomvar_name(Funct,Name),
 	(symbol_star_argument(Args) ->
-		(N==1 ->
+		(N=:=1 ->
 		    add_nowarn_symbol(Name,FL_STAR,WS,SymContext,Transactional),
 		    Status = NO_ERRORS
 		;
@@ -3802,7 +3813,7 @@ compile_defsensor_direct(SensCall,DelayCond,Code,Status) :-
 ****************************************************************************/
 compile_fact(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,MetaFactDiffList,Status) :-
 	set_context(compiling_facts),
-	compile_head_top(Head,fact,HeadCode,H2BCodeFront,H2BCodeBack,HeadStat),
+	compile_head_top(Head,_HeadNF,fact,HeadCode,H2BCodeFront,H2BCodeBack,HeadStat),
 	!,
 	( no_errors_found(HeadStat) ->
 	    compile_factlist(HeadCode,DescriptorIdCode,DescrVarsTerm,H2BCodeFront,H2BCodeBack,RuleDiffList,FactDiffList),
@@ -3821,7 +3832,7 @@ compile_fact(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDi
 
 compile_fact_add(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,MetaFactDiffList,Status) :-
 	set_context(compiling_facts), 
-	compile_head_top(Head,fact,HeadCode,H2BCodeFront,H2BCodeBack,HeadStat),
+	compile_head_top(Head,_HeadNF,fact,HeadCode,H2BCodeFront,H2BCodeBack,HeadStat),
 	!,
 	( no_errors_found(HeadStat) ->
 	    compile_factlist_add(HeadCode,DescriptorIdCode,DescrVarsTerm,H2BCodeFront,H2BCodeBack,RuleDiffList,FactDiffList,MetaFactDiffList),
@@ -4963,10 +4974,7 @@ encode_one_prvariable(VarName,NewVarObj,Body,NewBody) :-
         ; is_list(Body)
         -> encode_one_prvariable_in_list(VarName,NewVarObj,Body,NewBody)
         ; is_prvariable(Body,VarName,_Idx) -> NewBody = NewVarObj
-        ; is_pratom(Body,_) ->  NewBody = Body
-        ; is_prnumber(Body) ->  NewBody = Body
-        ; is_prstring(Body) ->  NewBody = Body
-        ; is_prbuiltin_identifier(Body,_) ->  NewBody = Body
+        ; is_pratomnumberstringbuiltin(Body,_) ->  NewBody = Body
         ; is_prdatatype(Body,_,_,_) ->  NewBody = Body
         ; is_prdatatypelist(Body,_) ->  NewBody = Body
         ),
@@ -4995,14 +5003,10 @@ encode_term_build(Term,BuildTerm):-
 	!.	
 
 encode_term_build(Term,BuildTerm):-
-        (
-          atomic(Term) ->  BuildTerm = Term
+        ( atomic(Term) ->  BuildTerm = Term
         ; is_list(Term) -> encode_term_build_list(Term,BuildTerm)
         ; is_prvariable(Term,VarName,_Idx) -> flora_concat_atoms(['?',VarName],BuildTerm)
-        ; is_pratom(Term,AtomName) ->  BuildTerm = AtomName
-        ; is_prnumber(Body,Number,_Idx) ->  BuildTerm = Number
-        ; is_prstring(Body,String,_Idx) ->  BuildTerm = String
-        ; is_prbuiltin_identifier(Body,Iden) ->  BuildTerm = Iden
+        ; is_pratomnumberstringbuiltin(Term,Val) ->  BuildTerm = Val
         ),
         !.
 
@@ -5037,7 +5041,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	    set_context(no_symbol_check)
 	; true
 	),
-	compile_head_top(Head,rule,HeadCode,H2BCodeFront,H2BCodeBack,HeadStatus),
+	compile_head_top(Head,HeadNF,rule,HeadCode,H2BCodeFront,H2BCodeBack,HeadStatus),
 	(has_context(compiling_udf_definition) ->
 	    %% done compiling UDF definition head
 	    clear_context(block_udf_expansion),
@@ -5048,7 +5052,7 @@ compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleList-RuleTail,SigDiffL
 	    compile_body_top(Body,BCode,BodyStatus),
 	    ( no_errors_found(BodyStatus) ->
 		make_datatype_vars_code(BCode,BodyDTvarscode),
-		delay_literals_checking_code_list(Head,Body,DescrVarsTerm,DelayCheckCodeList),
+		delay_literals_checking_code_list(HeadNF,Body,DescrVarsTerm,DelayCheckCodeList),
 		construct_rule_enabling_test(DescriptorIdCode,FL_DESCRMODE_RULE,RuleEnablerTest,_),
 		PreBody = RuleEnablerTest,
 		PostBodyList = DelayCheckCodeList,
@@ -5235,10 +5239,11 @@ prconjunct2list(Code,[Code|ListTail],ListTail) :- !.
 
 
 /****************************************************************************
-  compile_head_top(+ParserTermList,+Context,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
-  compile_head(+ParserTermList,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
+  compile_head_top(+ParsTermL,+ParsTermLNF,+Context,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
+      compile_head(+ParsTermL,         -Code,-H2BCodeFront,-H2BCodeBack,-Status)
 
   Context: rule or fact
+  ParsTermLNF  - a transformed version of ParsTermL. Used in some hooks
   H2BCodeFront - code passed from head to body, which is supposed to be
                  prepended to the code of the body
   H2BCodeBack - code passed from head to body, which is supposed to be
@@ -5248,7 +5253,7 @@ prconjunct2list(Code,[Code|ListTail],ListTail) :- !.
 #if exists("hooks/flrheadtop_compile.P") && exists("hooks/ergo.switch")
 #include "hooks/flrheadtop_compile.P"
 #else
-compile_head_top(ParserTerm,Context,Code,H2BCodeFront,H2BCodeBack,Status) :-
+compile_head_top(ParserTerm,ParserTerm,Context,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	(Context==fact -> true
 	; collect_flvars(ParserTerm,FlVars),
 	    %% TODO: pass FlVars to compile_head as a parameter
@@ -6057,26 +6062,23 @@ compile_load(LoadList,Mode,Code,Status) :-
 /****************************************************************************
   compile_var(+Name,+Index,-VarObject)
 ****************************************************************************/
+compile_var(FL_ANON_VAR,Index,VarObject) :-
+	!,
+	new_dontcare_prvariable(Index,VarObject).
 compile_var(Name,Index,VarObject) :-
-	( Name == FL_ANON_VAR -> new_dontcare_prvariable(Index,VarObject)
-	;
-	  varobj_struct(Name,Index,VarObject)
-        ),
-	!.
+	varobj_struct(Name,Index,VarObject).
 
+compile_transactionalvar_without_trans(FL_ANON_VAR,Index,VarObject) :-
+	!,
+	new_dontcare_prvariable(Index,VarObject).
 compile_transactionalvar_without_trans(Name,Index,VarObject) :-
-	( Name == FL_ANON_VAR -> new_dontcare_prvariable(Index,VarObject)
-	;
-	  varobj_struct(Name,Index,VarObject)
-        ),
-	!.
+	varobj_struct(Name,Index,VarObject).
 
+compile_transactionalvar(FL_ANON_VAR,Index,VarObject) :-
+	!,
+	new_dontcare_prtransactionalvar(Index,VarObject).
 compile_transactionalvar(Name,Index,VarObject) :-
-	( Name == FL_ANON_VAR -> new_dontcare_prtransactionalvar(Index,VarObject)
-	;
-	  transactionalvar_struct(Name,Index,VarObject)
-        ),
-	!.
+	transactionalvar_struct(Name,Index,VarObject).
 
 %% takes list of flvars
 compile_var_list([],[]) :- !.
@@ -6436,27 +6438,32 @@ allgvar_notin([H|T],[Msg|S],TS) :-
 
   Handles _#, _#123, _@, atoms
 ****************************************************************************/
-compile_head_fltoken(Token,Index,Object) :-
-	( Token == FL_NEWOID -> new_oidobj(Index,Object)
-        ; Token == FL_THISMODULE -> thismodule_struct(Object)
-        ;
-	  atomobj_struct(Token,Index,Object)
-	),
-	!.
+compile_head_fltoken(FL_THISMODULE,_Index,Object) :-
+	!,
+	thismodule_struct(Object).
+compile_head_fltoken(FL_NEWOID,Index,Object) :-
+	!,
+	%% DEAD CODE: The parser no longer generates unnumbered skolems, so
+	%% new_oidobj/2 is actually never used
+	new_oidobj(Index,Object).
+compile_head_fltoken(Token,Index,Object) :- atomobj_struct(Token,Index,Object).
 
 /****************************************************************************
   compile_head_fltoken(+Token,+Num,+Index,-Object,-Status)
 ****************************************************************************/
+compile_head_fltoken(FL_NEWOID,Suffix,Index,Object,NO_ERRORS) :-
+	!,
+	new_oidobj(Suffix,Index,Object).
+compile_head_fltoken(FLSPECIALSKOLEM,Suffix,Index,Object,NO_ERRORS) :-
+	!,
+	new_oidobj(Suffix,Index,Object).
 compile_head_fltoken(Token,Suffix,Index,Object,Status) :-
-        ( Token == FL_NEWOID ->
-	    new_oidobj(Suffix,Index,Object),
-	    Status = NO_ERRORS
-	; %% _@F, _@L
+        (%% _@F
 	    Token == FL_SPECIAL_CONST_TOKEN, Suffix == FL_SPECIAL_FILE_TOKEN ->
 	    get_current_compile_file(FileName),
 	    atomobj_struct(FileName,Index,Object),
 	    Status = NO_ERRORS
-	; %% _@F, _@L
+	; %% _@L
 	    Token == FL_SPECIAL_CONST_TOKEN, Suffix == FL_SPECIAL_LINE_TOKEN ->
 	    flora_token_index_to_line(Index,Line),
 	    numobj_struct(Line,Index,Object),
@@ -6483,8 +6490,7 @@ compile_head_fltoken(Token,Suffix,Index,Object,Status) :-
         ;
 	    atomobj_struct(Token,Index,Object),
 	    Status = NO_ERRORS
-        ),
-	!.
+        ).
 
 
 /*****************************************************************************
@@ -6797,7 +6803,7 @@ compile_body_literal(ParserTerm,WS,OidCode,BodyLitCode,BodyFrontList,Status) :-
 	    %% This is a hack: add two extra arguments to primitives listed in
 	    %% rule_manipulation_primitive/1.
 	    %% Need to find a more general solution for the future.
-	    (rule_manipulation_primitive(PrimName), N1==1
+	    (rule_manipulation_primitive(PrimName), N1=:=1
 	    -> get_rule_manipulation_primitive_extra_args(ExtraArgs),
 		append(ArgsCode1,ExtraArgs,ArgsCode),
 		N is N1+2
@@ -7118,6 +7124,7 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status
 
 	%% Anonymous OIDs can appear in the "body": they can appear
 	%% in reified formulas, which are compiled as body literals
+	%% DEAD CODE: Suffix-less newoids are no longer generated by the parser
 	; is_fltoken(ParserTerm,FL_NEWOID,Index) ->
 	    /*
 	    %% no point checking skolems!!!
@@ -7144,6 +7151,11 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,Code,BodyFrontList,Status
 	    Status = NO_ERRORS,
 	    BodyFrontList=[]
 
+	; is_fltoken(ParserTerm,FLSPECIALSKOLEM,Num,Index) ->
+	    OidCode = NULL,
+	    new_oidobj(Num,Index,Object),
+	    Status = NO_ERRORS,
+	    BodyFrontList=[]
 	%% A numbered OID that appears in a reified formula in rule body
 	; is_fltoken(ParserTerm,FL_NEWOID,Num,Index) ->
 	    /*
@@ -9704,7 +9716,7 @@ compile_dyn_latent_query(Op,DescrIdCode,MetaFactDiffList,Body,LatentQuerySigCode
 compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,RuleCode,Status) :-
         set_context(compiling_with_var_module),
 	set_context(compiling_dynrule(DescrIdCode)),
-	compile_head_top(Head,rule,HeadCode,H2BCodeFront,H2BCodeBack,HeadStatusPre),
+	compile_head_top(Head,HeadNF,rule,HeadCode,H2BCodeFront,H2BCodeBack,HeadStatusPre),
 	%% no :- prolog predicates in dynamic rule heads
 	(has_prologlit(HeadCode,IdxH)
 	-> compiling_error(IdxH,NO_PROLOG_IN_DYNRULE_HEAD,PlgStatus1),
@@ -9743,7 +9755,7 @@ compile_dynrule_main(Op,Head,Body,DescrIdCode,DescrVarsTerm,MetaFactDiffList,Rul
 		-> RuleEnablerTest = true, FileName = NULL
 		; construct_rule_enabling_test(DescrIdCode,FL_DESCRMODE_DYNRULE,RuleEnablerTest,FileName)
 		),
-		delay_literals_checking_code_list(Head,Body,DescrVarsTerm,DelayCheckCodeList),
+		delay_literals_checking_code_list(HeadNF,Body,DescrVarsTerm,DelayCheckCodeList),
 		PreBody = RuleEnablerTest,
 		PostBody = DelayCheckCodeList,
 		list_struct(PostBody,[],PostBodyList),
@@ -10348,8 +10360,9 @@ merge_status([S|Rest],T) :-
        Returns a new formula and the variable objects used
        in the substitutions.
        VarType: NEWVAR, NEWDONTCAREVAR, NEWFLCONTEXTVAR, NEWQUANTIFIEDVAR 
+
     rename_one_prvariable(+VarName,+NewVarObj,+Body,-NewBody),
-       Replaces each occurrence of a a var object having VarName
+       Replaces each occurrence of a var object having VarName
        as the variable name with NewVarObj. Returns the newly created formula.
 ***************************************************************************/
 rename_prvariables([],_VarType,Body,Body,[]) :- !.
@@ -10365,10 +10378,7 @@ rename_one_prvariable(VarName,NewVarObj,Body,NewBody) :-
 	; is_list(Body)
 	-> rename_one_prvariable_in_list(VarName,NewVarObj,Body,NewBody)
 	; is_prvariable(Body,VarName,_Idx) -> NewBody = NewVarObj
-	; is_pratom(Body,_) ->  NewBody = Body
-	; is_prnumber(Body) ->  NewBody = Body
-	; is_prstring(Body) ->  NewBody = Body
-	; is_prbuiltin_identifier(Body,_) ->  NewBody = Body
+	; is_pratomnumberstringbuiltin(Body,_) ->  NewBody = Body
 	; is_prdatatype(Body,_,_,_) ->  NewBody = Body
 	; is_prdatatypelist(Body,_) ->  NewBody = Body
 	),

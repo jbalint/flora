@@ -28,7 +28,6 @@ FLORADIR = ..
 
 ALLOBJS = flrcommon.flh \
 	flrcommon_inh.flh \
-	flrsigaxioms.flh \
 	flrnoeqltrailer.flh \
 	flrnoeqltrailer_inh.flh \
 	flreqltrailer.flh \

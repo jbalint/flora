@@ -37,7 +37,7 @@
 	flora_get_counter/2,
 	flora_abort/2,
 	%%flora_term_to_atom/2,
-        %%flora_match_substring/3,
+        flora_match_substring/3,
 	flora_concat_atoms/2,
 	flora_concat_items/2
     from flrporting.
@@ -123,15 +123,12 @@
         is_prtransactionalvariable/3,
         is_pratom/2,
         is_pratom/3,
-        is_prnumber/1,
         is_prnumber/3,
 	is_prbuiltin_identifier/2,
 	is_prbuiltin_identifier/3,
         is_prdatatype/4,
 	is_prdatatypelist/2,
         is_prtransactionalnumber/3,
-        is_prstring/1,
-        is_prstring/3,
         is_prfact/2,
 	is_prfloralib/3,
 	is_prterm/4
@@ -188,6 +185,8 @@
 	compiling_flrshell_command/0,
 	symbol/7,
 	nowarn_symbol/5,
+	collect_flvars/2,
+	remove_dupflvars/2,
 	set_turnoff_symbol_warnings_flag/1,
 	clear_turnoff_symbol_warnings_flag/0,
 	make_symbol_context_status/12,

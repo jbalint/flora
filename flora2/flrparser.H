@@ -103,12 +103,22 @@
 	flora_abolish_table_predicate/1
    from flrtables.
 
+:- import
+	flora_write_varnames/1
+   from flrdecode.
+
 :- export
 	flora_reset_parser/0,
 	FLORA_INCLUDE_DEPENDENCY_CLOSURE/2,
+
 	flwrite/1,
 	flwriteline/1,
 	flwritelinelist/1,
+	flwrite_stderr/1,
+	flwriteline_stderr/1,
+	flwritelinelist_stderr/1,
+	to_Cranial_list/3,
+	
 	flora_get_flatomvar_name/2,
 	flora_get_flatom_name/2,
 	flora_get_module_from_spec/3,

@@ -33,6 +33,7 @@
 
 :- import
 	%%reverse/2,
+	member/2,
 	length/2
    from basics.
 
@@ -43,7 +44,7 @@
 
 :- import
 	flora_concat_atoms/2,
-        flora_abort/1,
+        flora_abort/2,
 	flora_concat_items/2
    from flrporting.
 

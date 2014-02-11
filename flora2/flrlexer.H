@@ -23,10 +23,9 @@
 */
 
 
-:- import get_code/1 from standard.
-
-:- import append/3,
-	member/2
+:- import
+	append/3,
+	memberchk/2
    from basics.
 
 :- import parse_filename/4 from machine.

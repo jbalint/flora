@@ -67,8 +67,7 @@ exclude_list="abp.flr btupdates.flr compile_control.flr tabledupdates.flr \
     	      justification_test_just.flr \
               justifier_ex.flr \
               tnf_data.flr \
-              tnf_flora_old \
-              tnf_ergo_old \
+              cranial_data.flr \
               atco_specific2.flr \
               atco_specific2_aux.flr"
 

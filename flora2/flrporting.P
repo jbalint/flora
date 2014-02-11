@@ -46,13 +46,11 @@
         term_psc/2,
         psc_type/2,
         slash/1,
-        str_len/2,
 	del_attr/2,
         file_writequoted/2,
         file_puttoken/3
    from machine.
 :- import
-        substring/4,
 	term_to_codes/3,
         term_to_atom/3
    from string.
@@ -134,6 +132,7 @@
         flora_convert_backslash_to_forward/2,
         flora_convert_win_path_to_cygwin/2.
 
+flora_subatom(Sub,Atm) :- sub_atom(Atm,_,_,_,Sub).
 
 flora_term_to_atom(Term,Atom) :-
         term_to_atom(Term,Atom,[ignore_ops(canonical),quoted(false)]).
@@ -238,7 +237,7 @@ string_to_atom(S,A) :-
         
 
 
-flora_atom_length(Atom,Length) :- str_len(Atom, Length).
+flora_atom_length(Atom,Length) :- atom_length(Atom, Length).
 
 
 flora_get_counter(Counter,Value) :- conget(Counter,Value).
@@ -258,7 +257,13 @@ flora_match_substring(Sub,Str,Direction,Beg,End) :-
 
 %% extract substring Subst from String at positions From - To
 flora_get_substring(String,From,To,SubstOut) :-
-	substring(String,From,To,Subst),
+	(integer(To), To>=0 -> Size is To-From
+	; integer(To) -> flora_atom_length(String,Len), Size is Len-From+To+1
+	; var(To) -> flora_atom_length(String,Len), Size is Len-From
+	; flora_abort(['flora_get_substring/4: invalid 3d argument, ',To])
+	),
+	sub_atom(String,From,Size,_,Subst),
+	%%substring(String,From,To,Subst),
 	Subst=SubstOut.
 
 flora_slash(Slash) :- slash(Slash).
@@ -410,24 +415,24 @@ flora_read_line_as_list(Str) :- file_read_line_list(Str).
 
 flora_running_under(cygwin) :-
 	xsb_configuration(architecture,A),
-	str_sub(cygwin,A),
+	flora_subatom(cygwin,A),
 	!.
 flora_running_under(windows) :-
 	xsb_configuration(architecture,A),
-	str_sub(windows,A),
+	flora_subatom(windows,A),
 	!.
 flora_running_under(windows64) :-
 	xsb_configuration(architecture,A),
-	str_sub(windows,A),
-	str_sub(x64,A),
+	flora_subatom(windows,A),
+	flora_subatom(x64,A),
 	!.
 flora_running_under(macos) :-
 	xsb_configuration(architecture,A),
-	str_sub(darwin,A),
+	flora_subatom(darwin,A),
 	!.
 flora_running_under(darwin) :-
 	xsb_configuration(architecture,A),
-	str_sub(darwin,A),
+	flora_subatom(darwin,A),
 	!.
 flora_running_under(unix) :-
 	\+ flora_running_under(cygwin),
@@ -562,7 +567,7 @@ flora_build_id(Build) :-
     str_match('$',FLORA_BUILD,reverse,BEnd,_),
     BStart2 is BEnd-7,
     (BStart2>BStart1 -> BStart=BStart2 ; BStart=BStart1),
-    substring(FLORA_BUILD,BStart,BEnd,BuildSub),
+    flora_get_substring(FLORA_BUILD,BStart,BEnd,BuildSub),
     atom_codes(BuildSub,Codes),
     skip_blanks(Codes,Codes1),
     extract_nonblanks(Codes1,Codes2),
@@ -573,7 +578,7 @@ flora_build_id(unknown).
 flora_build_date(Date) :-
     str_match(': ',FLORA_DATE,forward,_,DStart),
     str_match('$',FLORA_DATE,reverse,DEnd,_),
-    substring(FLORA_DATE,DStart,DEnd,DateSub),
+    flora_get_substring(FLORA_DATE,DStart,DEnd,DateSub),
     atom_codes(DateSub,Codes),
     skip_blanks(Codes,Codes1),
     reverse(Codes1,Codes2),
@@ -609,7 +614,7 @@ flora_predicate_is_defined_lowlevel(Term) :-
 TLS 7/99 This version is linear rather than quadratic and seems
 much faster than the old one (which I must confess to writing).  Also,
 this is well-behaved for memory management since it no longer uses
-str_cat or str_len.
+str_cat or atom_length.
 
 TLS: 12/03 I thought this might be more useful if I added a flatten,
 	so that substrings could be passed in as lists. 

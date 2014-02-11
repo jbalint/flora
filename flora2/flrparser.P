@@ -62,6 +62,7 @@
 #define DISALLOW_TRANS           disallow_trans
 
 #define ANON_OID_COUNT           parser_anon_oid_count
+#define NEWFLVAR                 newflvar
 
 
 #include "flora_errors.flh"
@@ -74,6 +75,7 @@
 
 prepare_for_parsing_rule :-
 	flora_set_counter(ANON_OID_COUNT,1),
+	flora_set_counter(NEWFLVAR,1),
 	clear_context(_).
 
 
@@ -915,8 +917,10 @@ flobject_struct(OBJECT(SYMBOL_TOKEN(Atom),I),FLATOM(Atom,I)) :- !.
 flobject_struct(OBJECT(VARIABLE(Name),I),FLVAR(Name,I)) :- !.
 flobject_struct(OBJECT(NUMBER(Num),I),FLNUMBER(Num,I)) :- !.
 flobject_struct(OBJECT(ASCII_STRING(Str),I),FLSTRING(Str,I)) :- !.
-%% this is done in order to preserve co-reference when splitting anon oids
-%% like in this case: a[b->_#[c->d]] ~~~> a[b->_#-1],_#-1[c->c].
+%% NOTE: Unnumbered skolems are converted into special numbered ones
+%% (distinct from user-defined numbered skolems).
+%% This is done in order to preserve co-reference when splitting anon oids
+%% like in this case: a[b->_#[c->d]] ~~~> a[b->_#_1],_#_1[c->c].
 %% The number is prefixed with '_' in order to not confuse it with
 %% user-given suffixes
 flobject_struct(OBJECT(SPECIAL_TOKEN(FL_NEWOID),I),FLTOKEN(FL_NEWOID,Suff,I)) :-
@@ -1102,8 +1106,12 @@ flprlgnaf_struct(Goal,FLPLGNAF(Goal)).
 flrulelognaf_struct(Goal,FLRULELOGNAF(Goal)).
 flneg_struct(Goal,Index,FLNEG(Goal,Index)).
 
+%% duplicates in var names are eliminated
 flquantifier_struct(Quant,VarNames,FormulaCode,Idx,
-		    FLQUANTIFIER(Quant,VarNames,FormulaCode,Idx)).
+		    FLQUANTIFIER(Quant,SortedVars,FormulaCode,Idx)) :-
+	(VarNames == FL_STAR -> SortedVars=VarNames
+	; sort(VarNames,SortedVars)
+	).
 
 fldelayquant_struct(Quant,Cond,Goal,Index,FLDELAYQUANTIFIER(Quant,Cond,Goal,Index)).
 
@@ -1346,8 +1354,8 @@ convert_unnumbered_oid(X,X).
 */
 	
 
-%% Management of global parser context
 /*
+%% Management of global parser context
 clear_context(X) :- flora_retractall_substitute(PARSER_CONTEXT(X)).
 set_context(X) :-
 	(\+has_context(X)
@@ -9072,6 +9080,7 @@ is_fldelete(FLDELETE(Op,List),Op,List).
 is_flupdaterule(FLUPDATERULE(Op,RuleList),Op,RuleList).
 is_flruleworkspace(FLRULEWORKSPACE(R,WS),R,WS).
 is_fldynrule(FLDYNRULE(Head,Body,DescriptorList),Head,Body,DescriptorList).
+is_fltoken(FLTOKEN(Token,Suffix,I),Token,Suffix,I).
 
 flwriteline(ParserTerm) :-
 	flwrite(ParserTerm),
@@ -9102,7 +9111,9 @@ flwrite(ParserTerm) :-
 	is_fllogicquantifier(ParserTerm,Quant,Vars,Formula,_Idx),
 	!,
 	write(Quant),
-	write(Vars),
+	write('('),
+	flora_write_varnames(Vars),
+	write(')'),
 	write('^('),
 	flwrite(Formula),
 	write(')').
@@ -9232,8 +9243,18 @@ flwrite(ParserTerm) :-
 	write(Str).
 flwrite(ParserTerm) :-
 	is_flvar_struct(ParserTerm,Name,_),
+	!,
 	write('?'),
 	write(Name).
+flwrite(ParserTerm) :-
+	(is_fltoken(ParserTerm,FL_NEWOID,Suffix,_)
+	; is_fltoken(ParserTerm,FLSPECIALSKOLEM,Suffix,_)
+	),
+	!,
+	write(FL_NEWOID),
+	(number(Suffix)->write(Suffix)
+	; true
+	).
 flwrite(ParserTerm) :-
 	is_fllist_struct(ParserTerm,Front,Tail,_),
 	!,
@@ -9323,4 +9344,24 @@ flwritelinelist([H|T]) :-
 	flwriteline(H),
 	flwritelinelist(T).
 
+flwriteline_stderr(X) :-
+	tell(2),
+	flwrite(X),
+	nl,
+	told.
+flwrite_stderr(X) :-
+	tell(2),
+	flwrite(X),
+	told.
 
+flwritelinelist_stderr(X) :-
+	tell(2),
+	flwritelinelist(X),
+	told.
+
+
+#if exists("hooks/flrparser_cranial.P")
+#include "hooks/flrparser_cranial.P"
+#else
+to_Cranial_list(ParserTerm,ParserTerm,[NULL]).
+#endif
