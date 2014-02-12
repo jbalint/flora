@@ -36,6 +36,8 @@
 #define CANOBRACE	canobrace
 #define CANOEMPTYTERM	canoemptyterm
 
+#define SETARGATTRIBUTE parsesetarg
+
 %% Types of DB literal parsing:
 %%    - insert
 #define FLINS		flins
@@ -1104,7 +1106,14 @@ fldisjunct_struct(Cond1,Cond2,FLDISJUNCT(Cond1,Cond2)).
 
 flprlgnaf_struct(Goal,FLPLGNAF(Goal)).
 flrulelognaf_struct(Goal,FLRULELOGNAF(Goal)).
-flneg_struct(Goal,Index,FLNEG(Goal,Index)).
+
+flneg_struct(Goal,Index,FLNEG(GoalMult,Index)) :-
+	%% we have to expand setarg here so that neg p({a,b}) will be translated
+	%% neg(p(a),p(b)) rather than neg p(a), neg p(b).
+	%% This is needed in the head (in the body this is also done in
+	%% the compiler), but to simplify we do it here in all cases.
+	multiply_setarg_code(Goal,GoalList),
+	list2commalist(GoalList,GoalMult).
 
 %% duplicates in var names are eliminated
 flquantifier_struct(Quant,VarNames,FormulaCode,Idx,
@@ -3196,10 +3205,11 @@ parse_head(CanoniTerm,CodeList,Status) :-
 #endif
 
 parse_head_literal_top(CanoTerm,DWS,CodeList,Status) :-
-	parse_head_literal(CanoTerm,DWS,HCode,S),
+	parse_head_literal(CanoTerm,DWS,HCodePre,S),
+	multiply_setarg_code(HCodePre,HCodeList),
 	(S == NO_ERRORS ->
 	    get_index(CanoTerm,Idx),
-	    to_TNF_list([HCode],Idx,CodeList,PARSER_TNF_FLAG,Status)
+	    to_TNF_list(HCodeList,Idx,CodeList,PARSER_TNF_FLAG,Status)
 	; Status = S
 	).
 
@@ -6659,11 +6669,13 @@ parse_head_pathexp(CANOTERM(Funct,_N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code,St
 	;  parsing_error(Ip,EXP_ARGS,Status)
 	).
 
-parse_head_pathexp(CANOBRACE(L,N,I),_TransFlag,DWS,Code,Status) :-
+parse_head_pathexp(CANOBRACE(L,N,_I),_TransFlag,DWS,Code,Status) :-
 	N>0,
 	!,
 	parse_head_pathexplist(L,DWS,Code1,Status),
-	flsetarg_struct(Code1,I,Code).
+	Code = _, %% NOTE: a prolog var, since we'll be macro-expanding
+	put_attr(Code,SETARGATTRIBUTE,member(Code,Code1)).
+	%%flsetarg_struct(Code1,I,Code).
 
 parse_head_pathexp(CANOTERM(_Funct,_N,FL_BRACE,_Args,_If,Ip),_TransFlag,_DWS,_Code,Status) :-
 	!,
@@ -6998,9 +7010,10 @@ parse_dbliteral_list(_Mode,[],_DWS,[],Flags,NO_ERRORS) :-
 
 parse_dbliteral_list(Mode,[H|T],DWS,CodeList,FlagList,Status) :-
 	!,
-	parse_dbliteral(Mode,H,DWS,HCL,S),
+	parse_dbliteral(Mode,H,DWS,HCLpre,S),
 	( S == NO_ERRORS ->
 	    get_index(H,Idx),
+	    multiply_setarg_code_list(HCLpre,HCL),
 	    (FlagList==NULL ->
 		to_TNF_list(HCL,Idx,HTNF,NULL,S2),
 		TFlags = NULL
@@ -7047,7 +7060,7 @@ parse_dbliteral(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),_DWS,CodeLis
 	    ; flora_get_module_from_spec(RCode,FLORASYSMOD,_)
 	    )
 	-> comma_separated_canoterm_to_list(L,LList),
-	    %% important to not do TNF here or else descriptor frames will
+	    %% important to NOT do TNF here or else descriptor frames will
 	    %% be dragged through TNF but the compiler relies on the fact that
 	    %% descriptor frames are not broken and stay as one whole OBJSPEC
 	    parse_dbliteral_list_no_TNF(Mode,LList,RCode,CodeList,Status)
@@ -7555,11 +7568,13 @@ parse_db_pathexp(_Mode,ObjectTerm,_TransFlag,_DWS,Code,NO_ERRORS) :-
 	flobject_struct(ObjectTerm,Code),
 	!.
 
-parse_db_pathexp(Mode,CANOBRACE(L,N,I),_TransFlag,DWS,Code,Status) :-
+parse_db_pathexp(Mode,CANOBRACE(L,N,_I),_TransFlag,DWS,Code,Status) :-
 	N>0,
 	!,
 	parse_db_pathexplist(Mode,L,DWS,Code1,Status),
-	flsetarg_struct(Code1,I,Code).
+	Code = _, %% NOTE: a prolog var, since we'll be macro-expanding
+	put_attr(Code,SETARGATTRIBUTE,member(Code,Code1)).
+	%%flsetarg_struct(Code1,I,Code).
 
 parse_db_pathexp(_Mode,CANOBRACE(_L,_N,I),_TransFlag,_DWS,_Code,Status) :-
 	!,
@@ -7925,9 +7940,10 @@ parse_dynrule_no_module(CanoniTerm,DWS,Descriptors,Code,Status) :-
   normal variable or a head_literal
 ****************************************************************************/
 parse_dynhead_top(CanoTerm,DWS,ConjunctlessList,Status) :-
-	parse_dynhead(CanoTerm,DWS,HCL,S),
+	parse_dynhead(CanoTerm,DWS,HCLpre,S),
 	(S == NO_ERRORS ->
 	    get_index(CanoTerm,Idx),
+	    multiply_setarg_code_list(HCLpre,HCL),
 	    to_TNF_list(HCL,Idx,CodeList,PARSER_TNF_FLAG,Status),
 	    flconjunct_list2list(CodeList,ConjunctlessList)
 	; Status = S
@@ -9358,6 +9374,51 @@ flwritelinelist_stderr(X) :-
 	tell(2),
 	flwritelinelist(X),
 	told.
+
+
+/*******************************************************************************
+    Handling attributed variables for set arguments multipliers.
+*******************************************************************************/
+:- install_verify_attribute_handler(SETARGATTRIBUTE,
+				    AttrVal,VarBinding,
+				    setarg_unify_handler(AttrVal,VarBinding)).
+:- install_attribute_portray_hook(SETARGATTRIBUTE,Attr,write(Attr)).
+%% we might not need to check if the attribute value is a list:
+%% this is just a precaution against weird bindings
+setarg_unify_handler(AttrVal,_VarBinding) :- is_list(AttrVal).
+get_all_attrvars(CodeTerm,AttrVars) :-
+	flrterm_vars_split(CodeTerm,_,AttrVars,0).
+
+%% gets conjunction (member(Code1,SetargList1),member(Code2,SetargList2),...)
+get_setarg_multiplier(CodeTerm,Multiplier) :-
+	get_all_attrvars(CodeTerm,AttrVars),
+	get_setarg_multiplier_from_list(AttrVars,Multiplier).
+
+get_setarg_multiplier_from_list([],FL_TRUE) :- !.
+get_setarg_multiplier_from_list([Var|Rest], (Membership,RestMems)) :-
+	get_attr(Var,SETARGATTRIBUTE,Membership),
+	!,
+	del_attr(Var,SETARGATTRIBUTE),
+	get_setarg_multiplier_from_list(Rest,RestMems).
+get_setarg_multiplier_from_list([_|Rest], RestMems) :-
+	get_setarg_multiplier_from_list(Rest,RestMems).
+
+%% multiply the literal, if it has set arguments inside
+multiply_setarg_code(Code,MultCode) :-
+	get_setarg_multiplier(Code,Multiplier),
+	(Multiplier == FL_TRUE -> MultCode = [Code]
+	; findall(Code,Multiplier,MultCode)
+	).
+
+%% apply multiply_setarg_code/2 to each elt of list and append the results
+multiply_setarg_code_list([],[]) :- !.
+multiply_setarg_code_list([Code|RestCode],MultCodeList) :-
+	multiply_setarg_code(Code,MultCode),
+	multiply_setarg_code_list(RestCode,RestMultCode),
+	append(MultCode,RestMultCode,MultCodeList).
+
+/******************************************************************************/
+
 
 
 #if exists("hooks/flrparser_cranial.P")

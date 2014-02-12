@@ -32,6 +32,7 @@
 
 :- import
 	memberchk/2,
+	member/2,
 	subset/2,
 	length/2,
 	append/3
@@ -106,6 +107,18 @@
 :- import
 	flora_write_varnames/1
    from flrdecode.
+
+:- import
+	flrterm_vars_split/4
+   from flora_ground.
+
+:- import
+	put_attr/3,
+	get_attr/3,
+	del_attr/2,
+	install_verify_attribute_handler/4,
+	install_attribute_portray_hook/3
+   from machine.
 
 :- export
 	flora_reset_parser/0,
