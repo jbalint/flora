@@ -14,9 +14,9 @@ echo "Testing $BASEDIR/$FILE"
 
 $FLORA << EOF
 [$FILE].
-_nochatter.
+\nochatter.
 %test.
-_end.
+\end.
 EOF
 
 # print out differences.

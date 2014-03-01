@@ -149,35 +149,38 @@ public class FloraObject extends FloraConstants
     public boolean getboolean(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String paramList = makeParameterListString(parameters);
-	String methodmodifier = "";
+	String open_bracket = "", close_bracket = "";
+	String arrow = "";
+
 	if (isDataAtom)
-	    methodmodifier =
-		(inherit ?
-		 INHERITABLE_METHOD_SYMBOL : NONINHERITABLE_METHOD_SYMBOL);
+	    arrow = "";
 	else
-	    methodmodifier =
-		(inherit ?
-		 INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = DATA_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 	   
 	String floraQuery =
-	    floraOID + "["
-	    + methodmodifier
+	    floraOID + open_bracket
+	    + arrow
 	    + methodName.toString()
 	    + paramList
-	    + "]" + AT_MODULE_SYMBOL + moduleName + ".";
+	    + close_bracket + AT_MODULE_SYMBOL + moduleName + ".";
 		
 	try {
 	    return session.ExecuteCommand(floraQuery);
 	}
 	catch(Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Command failed, " + floraQuery + "\n");
+	    throw new FlrException("\n*** Java-Flora-2 interface: Command failed, " + floraQuery + "\n");
 	}
     }
 
 
     /* Get all values for a Boolean method where the arguments might be unbound.
-    ** For instance, obj[m(aaa,?Y)] or obj[*m(aaa,?Y)]
+    ** For instance, obj[m(aaa,?Y)] or obj[|m(aaa,?Y)|]
     **
     ** methodName  : name of method whose value is to be got
     ** inherit     : whether the method is inheritable or not 
@@ -187,6 +190,8 @@ public class FloraObject extends FloraConstants
     {
 	String floraQuery = "";
 	String paramList = makeParameterListString(parameters);
+	String open_bracket = "", close_bracket = "";
+	String arrow = "";
 	
 	// add variable arguments of method to get their bindings out
 	Vector<String> argList = new Vector<String>();
@@ -196,26 +201,27 @@ public class FloraObject extends FloraConstants
 	    if (param.startsWith("?")) argList.add(param);
 	}
 		
-	String methodmodifier = "";
 	if (isDataAtom)
-	    methodmodifier =
-		(inherit ?
-		 INHERITABLE_METHOD_SYMBOL : NONINHERITABLE_METHOD_SYMBOL);
+	    arrow = "";
 	else
-	    methodmodifier =
-		(inherit ?
-		 INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = DATA_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 	   
 	floraQuery =
-	    floraOID + "[" + methodmodifier + methodName.toString() + paramList 
-	    + "]" + AT_MODULE_SYMBOL + moduleName + ".";
+	    floraOID + open_bracket + arrow 
+	    + methodName.toString() + paramList 
+	    + close_bracket + AT_MODULE_SYMBOL + moduleName + ".";
 		
 	try {
 	    return session.FindAllMatches(floraQuery,argList);
 	}
 	catch(Exception e) {
 	    e.printStackTrace();	
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in getbooleanAll(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in getbooleanAll(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -231,29 +237,32 @@ public class FloraObject extends FloraConstants
     public boolean setboolean(String moduleName,Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String paramList = makeParameterListString(parameters);
-	String methodmodifier = "";
+	String open_bracket = "", close_bracket = "";
+	String arrow = "";
+
 	if (isDataAtom)
-	    methodmodifier =
-		(inherit ?
-		 INHERITABLE_METHOD_SYMBOL : NONINHERITABLE_METHOD_SYMBOL);
+	    arrow = "";
 	else
-	    methodmodifier =
-		(inherit ?
-		 INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = DATA_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 
 	String floraQuery=
-	    "insert{" + floraOID + "["
-	    + methodmodifier
+	    "insert{" + floraOID + open_bracket
+	    + arrow
 	    + methodName.toString()
 	    + paramList
-	    + "]" + AT_MODULE_SYMBOL + moduleName + "}.";
+	    + close_bracket + AT_MODULE_SYMBOL + moduleName + "}.";
 
 	try {
 	    return session.ExecuteCommand(floraQuery);
 	}
 	catch(Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Command failed, " + floraQuery + "\n");
+	    throw new FlrException("\n*** Java-Flora-2 interface: Command failed, " + floraQuery + "\n");
 	}
     }
 
@@ -267,30 +276,32 @@ public class FloraObject extends FloraConstants
     public boolean deleteboolean(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String paramList = makeParameterListString(parameters);
+	String open_bracket = "", close_bracket = "";
+	String arrow = "";
 
-	String methodmodifier = "";
 	if (isDataAtom)
-	    methodmodifier =
-		(inherit ?
-		 INHERITABLE_METHOD_SYMBOL : NONINHERITABLE_METHOD_SYMBOL);
+	    arrow = "";
 	else
-	    methodmodifier =
-		(inherit ?
-		 INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = DATA_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 
 	String floraQuery =
-	    "deleteall{" + floraOID + "["
-	    + methodmodifier
+	    "deleteall{" + floraOID + open_bracket
+	    + arrow
 	    + methodName.toString()
 	    + paramList
-	    + "]" + AT_MODULE_SYMBOL + moduleName + "}.";
+	    + close_bracket + AT_MODULE_SYMBOL + moduleName + "}.";
 
 	try {
 	    return session.ExecuteCommand(floraQuery);
 	}
 	catch(Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Command "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Command "
 				   + floraQuery + " failed\n");
 	}
     }
@@ -305,35 +316,39 @@ public class FloraObject extends FloraConstants
     public boolean getprocedural(String moduleName,Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String paramList = makeParameterListString(parameters);
+	String open_bracket = "", close_bracket = "";
+	String arrow = "";
 
-	String methodmodifier = "";
 	if (isDataAtom)
-	    methodmodifier = "";
+	    arrow = "";
 	else
-	    methodmodifier =
-		(inherit ?
-		 INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = DATA_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 
 	String floraQuery =
-	    floraOID + "["
-	    + methodmodifier + " "
+	    floraOID + open_bracket
+	    + arrow + " "
 	    + PROCEDURAL_METHOD_SYMBOL + methodName.toString()
 	    + paramList
-	    + "]" + AT_MODULE_SYMBOL + moduleName + ".";
+	    + close_bracket + AT_MODULE_SYMBOL + moduleName + ".";
 		
 	try {
 	    return session.ExecuteCommand(floraQuery);
 	}
 	catch(Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Command "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Command "
 				   + floraQuery + " failed");
 	}
     }
 
 
     /* Get all values for a procedural method. The arguments might be unbound.
-    ** For instance, obj[m(aaa,?Y)] or obj[*m(aaa,?Y)]
+    ** For instance, obj[m(aaa,?Y)] or obj[|m(aaa,?Y)|]
     **
     ** methodName  : name of method whose value is to be got
     ** inherit     : whether the method is inheritable or not 
@@ -343,6 +358,8 @@ public class FloraObject extends FloraConstants
     {
 	String floraQuery = "";
 	String paramList = makeParameterListString(parameters);
+	String open_bracket = "", close_bracket = "";
+	String arrow = "";
 	
 	// add variable arguments of method to get their bindings out
 	Vector<String> argList = new Vector<String>();
@@ -352,27 +369,28 @@ public class FloraObject extends FloraConstants
 	    if (param.startsWith("?")) argList.add(param);
 	}
 		
-	// inherit is ignored here
-	String methodmodifier = "";
 	if (isDataAtom)
-	    methodmodifier = "";
+	    arrow = "";
 	else
-	    methodmodifier =
-		(inherit ?
-		 INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = DATA_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 	   
 	floraQuery =
-	    floraOID + "[" + methodmodifier + " "
+	    floraOID + open_bracket + arrow + " "
 	    + PROCEDURAL_METHOD_SYMBOL
 	    + methodName.toString() + paramList 
-	    + "]" + AT_MODULE_SYMBOL + moduleName + ".";
+	    + close_bracket + AT_MODULE_SYMBOL + moduleName + ".";
 		
 	try {
 	    return session.FindAllMatches(floraQuery,argList);
 	}
 	catch(Exception e) {
 	    e.printStackTrace();	
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in getproceduralAll(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in getproceduralAll(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -387,27 +405,31 @@ public class FloraObject extends FloraConstants
     public boolean setprocedural(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String paramList = makeParameterListString(parameters);
+	String open_bracket = "", close_bracket = "";
+	String arrow = "";
 
-	String methodmodifier = "";
 	if (isDataAtom)
-	    methodmodifier = "";
+	    arrow = "";
 	else
-	    methodmodifier =
-		(inherit ?
-		 INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = DATA_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 
 	String floraQuery=
-	    "insert{" + floraOID + "[" + methodmodifier + " "
+	    "insert{" + floraOID + open_bracket + arrow + " "
 	    + PROCEDURAL_METHOD_SYMBOL
 	    + methodName.toString()
 	    + paramList
-	    + "]" + AT_MODULE_SYMBOL + moduleName + "}.";
+	    + close_bracket + AT_MODULE_SYMBOL + moduleName + "}.";
 	try {
 	    return session.ExecuteCommand(floraQuery);
 	}
 	catch(Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Command "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Command "
 				   + floraQuery + " failed\n");
 	}
     }
@@ -422,27 +444,31 @@ public class FloraObject extends FloraConstants
     public boolean deleteprocedural(String moduleName, Object methodName,boolean inherit,boolean isDataAtom,Vector<Object> parameters)
     {
 	String paramList = makeParameterListString(parameters);
+	String open_bracket = "", close_bracket = "";
+	String arrow = "";
 
-	String methodmodifier = "";
 	if (isDataAtom)
-	    methodmodifier = "";
+	    arrow = "";
 	else
-	    methodmodifier =
-		(inherit ?
-		 INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = DATA_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 
 	String floraQuery=
-	    "deleteall{" + floraOID + "[" + methodmodifier + " "
+	    "deleteall{" + floraOID + open_bracket + arrow + " "
 	    + PROCEDURAL_METHOD_SYMBOL
 	    + methodName.toString()
 	    + paramList
-	    + "]" + AT_MODULE_SYMBOL + moduleName + "}.";
+	    + close_bracket + AT_MODULE_SYMBOL + moduleName + "}.";
 	try {
 	    return session.ExecuteCommand(floraQuery);
 	}
 	catch(Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in deleteprocedural(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in deleteprocedural(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -458,18 +484,23 @@ public class FloraObject extends FloraConstants
     {
 	String floraQuery= "";
 	String paramList = makeParameterListString(parameters);
+	String open_bracket = "", close_bracket = "";
 
-	String operatorstring = "";
+	String arrow = "";
 	if (isDataAtom)
-	    operatorstring =
-		(inherit ? INHERIT_DATA_ARROW : NONINHERIT_DATA_ARROW);
+	    arrow = DATA_ARROW;
 	else
-	    operatorstring =
-		(inherit ? INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = SIGNATURE_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 		
 	floraQuery =
-	    "deleteall{"+floraOID + "[" + methodName.toString() + paramList
-	    + operatorstring + value + "]"
+	    "deleteall{"+floraOID + open_bracket
+	    + methodName.toString() + paramList
+	    + arrow + value + close_bracket
 	    + AT_MODULE_SYMBOL + moduleName + "}.";
 		
 	try {
@@ -477,14 +508,14 @@ public class FloraObject extends FloraConstants
 	}
 	catch(Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in deletevalue(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in deletevalue(). Query was "
 				   + floraQuery + "\n");
 	}
     }
 
 	
     /* Get all values for a method where the arguments might be unbound.
-    ** For instance, obj[m(aaa,?Y) -> ?Z] or obj[m(aaa,?Y) *-> ?Z]
+    ** For instance, obj[m(aaa,?Y) -> ?Z] or obj[|m(aaa,?Y) -> ?Z|]
     **
     ** methodName  : name of method whose value is to be got
     ** inherit     : whether the method is inheritable or not 
@@ -494,6 +525,8 @@ public class FloraObject extends FloraConstants
     {
 	String floraQuery = "";
 	String paramList = makeParameterListString(parameters);
+	String open_bracket = "", close_bracket = "";
+	String arrow = "";
 	
 	// add variable arguments of method to get their bindings out
 	Vector<String> argList = new Vector<String>();
@@ -503,18 +536,22 @@ public class FloraObject extends FloraConstants
 	    if (param.startsWith("?")) argList.add(param);
 	}
 		
-	String operatorstring = "";
 	if (isDataAtom)
-	    operatorstring =
-		(inherit ? INHERIT_DATA_ARROW : NONINHERIT_DATA_ARROW);
+	    arrow = DATA_ARROW;
 	else
-	    operatorstring =
-		(inherit ? INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = SIGNATURE_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 	   
 	// Use weird name Value___395792 to avoid clashes with argList vars
 	floraQuery =
-	    floraOID + "[" + methodName.toString() + paramList + operatorstring
-	    + "?Value___395792]" + AT_MODULE_SYMBOL + moduleName + ".";
+	    floraOID + open_bracket + methodName.toString()
+	    + paramList + arrow
+	    + "?Value___395792" + close_bracket
+	    + AT_MODULE_SYMBOL + moduleName + ".";
 	argList.add("?Value___395792");
 		
 	try {
@@ -522,7 +559,7 @@ public class FloraObject extends FloraConstants
 	}
 	catch(Exception e) {
 	    e.printStackTrace();	
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in getvalueAll(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in getvalueAll(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -538,18 +575,23 @@ public class FloraObject extends FloraConstants
     {
 	String floraQuery = "";
 	String paramList = makeParameterListString(parameters);
+	String open_bracket = "", close_bracket = "";
 	
-	String operatorstring = "";
+	String arrow = "";
 	if (isDataAtom)
-	    operatorstring =
-		(inherit ? INHERIT_DATA_ARROW : NONINHERIT_DATA_ARROW);
+	    arrow = DATA_ARROW;
 	else
-	    operatorstring =
-		(inherit ? INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = SIGNATURE_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 	      
 	floraQuery =
-	    floraOID + "[" + methodName.toString() + paramList + operatorstring
-	    + "?Value]" + AT_MODULE_SYMBOL + moduleName + ".";
+	    floraOID + open_bracket + methodName.toString()
+	    + paramList + arrow
+	    + "?Value" + close_bracket + AT_MODULE_SYMBOL + moduleName + ".";
 
 	if (debug)
 	    System.out.println("In get/3, floraQuery: " + floraQuery);
@@ -559,7 +601,7 @@ public class FloraObject extends FloraConstants
 	}
 	catch (Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Method "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Method "
 				   + methodName
 				   + " failed on object " + floraOID
 				   + " in module " + moduleName + "\n");
@@ -578,25 +620,29 @@ public class FloraObject extends FloraConstants
 	String floraQuery= "";
 	String paramList = makeParameterListString(parameters);
 	String valuelist = makeValueListString(value);
-		
-	String operatorstring = "";
+	String open_bracket = "", close_bracket = "";
+	String arrow = "";
+
 	if (isDataAtom)
-	    operatorstring =
-		(inherit ? INHERIT_DATA_ARROW : NONINHERIT_DATA_ARROW);
+	    arrow = DATA_ARROW;
 	else
-	    operatorstring =
-		(inherit ? INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = SIGNATURE_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 		
 	floraQuery =
-	    "deleteall{" + floraOID + "[" + methodName.toString()
-	    + paramList + operatorstring+valuelist + "]"
+	    "deleteall{" + floraOID + open_bracket + methodName.toString()
+	    + paramList + arrow+valuelist + close_bracket
 	    + AT_MODULE_SYMBOL + moduleName + "}.";
 	try {
 	    return session.ExecuteCommand(floraQuery);
 	}
 	catch(Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in deletevalue(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in deletevalue(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -612,18 +658,22 @@ public class FloraObject extends FloraConstants
     {
 	String floraQuery= "";
 	String paramList = makeParameterListString(parameters);
+	String open_bracket = "", close_bracket = "";
+	String arrow = "";
 	
-	String operatorstring = "";
 	if (isDataAtom)
-	    operatorstring =
-		(inherit ? INHERIT_DATA_ARROW : NONINHERIT_DATA_ARROW);
+	    arrow = DATA_ARROW;
 	else
-	    operatorstring =
-		(inherit ? INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = SIGNATURE_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 		
 	floraQuery =
-	    "deleteall{" + floraOID + "[" + methodName.toString()
-	    + paramList + operatorstring + "?Value___395792" + "]"
+	    "deleteall{" + floraOID + open_bracket + methodName.toString()
+	    + paramList + arrow + "?Value___395792" + close_bracket
 	    + AT_MODULE_SYMBOL + moduleName + "}.";
 		
 	try {
@@ -631,7 +681,7 @@ public class FloraObject extends FloraConstants
 	}
 	catch (Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in deletevalue(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in deletevalue(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -648,25 +698,29 @@ public class FloraObject extends FloraConstants
     {
 	String floraQuery= "";
 	String paramList = makeParameterListString(parameters);
+	String open_bracket = "", close_bracket = "";
+	String arrow = "";
 	
-	String operatorstring = "";
 	if (isDataAtom)
-	    operatorstring =
-		(inherit ? INHERIT_DATA_ARROW : NONINHERIT_DATA_ARROW);
+	    arrow = DATA_ARROW;
 	else
-	    operatorstring =
-		(inherit ? INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = SIGNATURE_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 		
 	floraQuery =
-	    "insert{"+floraOID + "[" + methodName + paramList
-	    + operatorstring + value.toString() + "]"
+	    "insert{"+floraOID + open_bracket + methodName + paramList
+	    + arrow + value.toString() + close_bracket
 	    + AT_MODULE_SYMBOL + moduleName + "}.";
 		
 	try {
 	    return session.ExecuteCommand(floraQuery);
 	} catch (Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in setvalue(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in setvalue(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -684,25 +738,30 @@ public class FloraObject extends FloraConstants
 	String floraQuery= "";
 	String paramList = makeParameterListString(parameters);
 	String valuelist = makeValueListString(value);
-		
-	String operatorstring = "";
+	String open_bracket = "", close_bracket = "";
+	String arrow = "";
+
 	if (isDataAtom)
-	    operatorstring =
-		(inherit ? INHERIT_DATA_ARROW : NONINHERIT_DATA_ARROW);
+	    arrow = DATA_ARROW;
 	else
-	    operatorstring =
-		(inherit ? INHERIT_SIGNATURE_ARROW : NONINHERIT_SIGNATURE_ARROW);
+	    arrow = SIGNATURE_ARROW;
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
 		
 	floraQuery =
-	    "insert{"+floraOID + "[" + methodName.toString() + paramList
-	    + operatorstring + valuelist + "]"
+	    "insert{"+floraOID + open_bracket
+	    + methodName.toString() + paramList
+	    + arrow + valuelist + close_bracket
 	    + AT_MODULE_SYMBOL + moduleName +"}.";
 	try {
 	    return session.ExecuteCommand(floraQuery);
 	}
 	catch(Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in setvalue(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in setvalue(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -720,7 +779,7 @@ public class FloraObject extends FloraConstants
 	}
 	catch(Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in getInstances(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in getInstances(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -744,7 +803,7 @@ public class FloraObject extends FloraConstants
 	}
 	catch(Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in getDirectInstances(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in getDirectInstances(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -762,7 +821,7 @@ public class FloraObject extends FloraConstants
 	}
 	catch (Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in getSubClasses(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in getSubClasses(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -783,7 +842,7 @@ public class FloraObject extends FloraConstants
 	}
 	catch (Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in geDirecttSubClasses(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in geDirecttSubClasses(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -801,7 +860,7 @@ public class FloraObject extends FloraConstants
 	}
 	catch (Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in getSuperClasses(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in getSuperClasses(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -822,7 +881,7 @@ public class FloraObject extends FloraConstants
 	}
 	catch (Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in getDirectSuperClasses(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in getDirectSuperClasses(). Query was "
 				   + floraQuery + "\n");
 	}
     }
@@ -869,26 +928,27 @@ public class FloraObject extends FloraConstants
     private Iterator<FloraMethod> getMethods(String moduleName, boolean inherit, int methType)
     {
 	String callModifier = ""; // *, %, or nothing
-	String valuePart = "";    // => ?Val or *=> ?Val for data symbols
+	String valuePart = "";    // => ?Val for data symbols
+	String open_bracket = "", close_bracket = "";
 
 	checkMethodType(methType);
 
+	if (inherit) {
+	    open_bracket = "[|"; close_bracket = "|]";
+	} else {
+	    open_bracket = "["; close_bracket = "]";
+	}
+
 	if (methType == VALUE) {
-	    if (inherit)
-		valuePart = INHERIT_SIGNATURE_ARROW + "?Value";
-	    else
-		valuePart = NONINHERIT_SIGNATURE_ARROW + "?Value";
+	    valuePart = SIGNATURE_ARROW + "?Value";
 	} else if (methType == BOOLEAN) {
-	    if (inherit)
-		callModifier = INHERIT_SIGNATURE_ARROW;
-	    else
-		callModifier = NONINHERIT_SIGNATURE_ARROW;
+	    callModifier = SIGNATURE_ARROW;
 	} else if (methType == PROCEDURAL) {
 	    if (inherit)
-		throw new FlrException("\n*** Java-FLORA-2 interface: Invalid method type -- procedural+inheritable methods are not supported\n");
+		throw new FlrException("\n*** Java-Flora-2 interface: Invalid method type -- procedural+inheritable methods are not supported\n");
 	    else
 		callModifier =
-		    NONINHERIT_SIGNATURE_ARROW + PROCEDURAL_METHOD_SYMBOL;
+		    SIGNATURE_ARROW + PROCEDURAL_METHOD_SYMBOL;
 	}
 			
 	Vector<String> vars = new Vector<String>();
@@ -898,7 +958,7 @@ public class FloraObject extends FloraConstants
 		
 	String floraQueryString =
 	    "(" + this.toString()
-	    + "[" + callModifier + "?__Call" + valuePart + "]"
+	    + open_bracket + callModifier + "?__Call" + valuePart + close_bracket
 	    + ", (?__Call =.. [hilog(?Method) | ?Arguments] "
                + "or (?__Call =.. [?Method | ?Arguments], atom(?Method)))"
 	    + ")" + AT_MODULE_SYMBOL + moduleName + ".";
@@ -929,7 +989,7 @@ public class FloraObject extends FloraConstants
 	}
 	catch (Exception e) {
 	    e.printStackTrace();
-	    throw new FlrException("\n*** Java-FLORA-2 interface: Error in getMethods(). Query was "
+	    throw new FlrException("\n*** Java-Flora-2 interface: Error in getMethods(). Query was "
 				   + floraQueryString + "\n");
 	}
 	return returnMethodVec.iterator();

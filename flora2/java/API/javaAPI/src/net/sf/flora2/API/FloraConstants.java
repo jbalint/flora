@@ -35,15 +35,9 @@ public class FloraConstants
     public final static String ISA_SYMBOL       = ":";
     public final static String SUBCLASS_SYMBOL  = "::";
 	
-    public final static String INHERIT_DATA_ARROW    = "*->";
-    public final static String NONINHERIT_DATA_ARROW = "->";
-	
-    public final static String INHERIT_SIGNATURE_ARROW    = "*=>";
-    public final static String NONINHERIT_SIGNATURE_ARROW = "=>";
-
+    public final static String DATA_ARROW = "->";
+    public final static String SIGNATURE_ARROW    = "=>";
     public final static String PROCEDURAL_METHOD_SYMBOL = "%";
-    public final static String INHERITABLE_METHOD_SYMBOL = "*";
-    public final static String NONINHERITABLE_METHOD_SYMBOL = "";
 
     public final static String AT_MODULE_SYMBOL = "@";
 

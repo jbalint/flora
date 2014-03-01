@@ -43,7 +43,7 @@ ALL: $(ALLOBJS)
 
 $(ALLOBJS): ..\flrincludes\flora_terms.flh
 .flr$(PROLOGEXT):
-	"$(PROLOG)" -e "asserta(library_directory('..')). ['..\\flora2']. import '_#flmakesetup'/0 from flora2. '_#flmakesetup'. import ('_compile')/1 from flora2. '_compile'(%|fF). halt."
+	"$(PROLOG)" -e "asserta(library_directory('..')). ['..\\flora2']. import '_#flmakesetup'/0 from flora2. '_#flmakesetup'. import ('\\compile')/1 from flora2. '\\compile'(%|fF). halt."
 
 
 CLEAN:
@@ -57,6 +57,7 @@ CLEAN:
 	-@if exist *.fls2 erase *.fls2
 	-@if exist *.flm erase *.flm
 	-@if exist .flora_aux_files\*.xwam del /q .flora_aux_files
+	-@if exist .ergo_aux_files\*.xwam del /q .ergo_aux_files
 	-@if exist *~ erase *~
 	-@if exist *.bak erase *.bak
 	-@if exist .#* erase .#*

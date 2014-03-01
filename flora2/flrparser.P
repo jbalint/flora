@@ -48,13 +48,19 @@
 %%    - clause
 #define FLCLS           flcls
 
-%% @_module - system module
+#define PURE_PATHEXPS_ONLY     1
+#define ANY_PATHEXP            0
+
+
+%% @\module - system module
 #define FLORASYSMOD	        florasysmod
-%% @_prolog(), @_prolog(...)
-#define PROLOGMODULE	        prologmodule
-%% @_prologall(), @_prologall(...)
-#define PROLOGALLMODULE         prologallmodule
 #define FLORAUSERMOD	        florausermod
+#define FLORAMODULE	        floramodule
+%% @\prolog(), @\prolog(...)
+#define PROLOGMODULE	        prologmodule
+%% @\prologall(), @\prologall(...)
+#define PROLOGALLMODULE         prologallmodule
+
 #define FLORARULEWORKSPACE	floraruleworkspace
 
 #define ALLOW_VARIABLES         allow_variables
@@ -153,14 +159,14 @@ SpecBody := SpecBody ';' SpecBody
 MethodSpecification :=  ('%' | '*')? Term
 MethodSpecification :=  PathExpression (ValueReferenceConnective | SigReferenceConnective) PathExpression
 
-ValueReferenceConnective :=  '->' | '*->' | '+>' | '*+>' | '->->' | '*->->'
+ValueReferenceConnective :=  '->' | '+>' | '*+>' | '->->' 
 
-SigReferenceConnective := ('{' (integer|variable) ':' (integer|variable) '}')? ('=>' | '*=>')
+SigReferenceConnective := ('{' (integer|variable) ':' (integer|variable) '}')? ('=>' )
 
 ExplicitlyNegatableMethodSpecification := ('*')? Term
 ExplicitlyNegatableMethodSpecification := PathExpression ExplicitlyNegatableReferenceConnective PathExpression
 
-ExplicitlyNegatableReferenceConnective := '->' | '*->' | SigReferenceConnective
+ExplicitlyNegatableReferenceConnective := '->' | SigReferenceConnective
 
                                         
 PathExpression := atom | number | string | Uri | variable | specialOidToken
@@ -174,7 +180,7 @@ Uri := SQname | FullUri
 
 SQname := identifier '#' string
 
-FullUri := '_'string
+FullUri := '\'string
 
 PathExpressionConnective :=  '.' | '!'
 
@@ -183,13 +189,13 @@ specialOidToken :=  anonymousOid | numberedOid | thisModuleName
 ReifiedFormula := '${' (Body | '(' Rule ')') '}'
 
 %% No quotes are allowed in the following special tokens!
-%% No space alowed between _# and integer
+%% No space alowed between \# and integer
 %% anonymousOid & numberedOid can occur only in rule head
 %% or in reified formulas
-anonymousOid   := '_#'
-%% No space between _# and integer
-numberedOid    := '_#'integer
-thisModuleName := '_@'
+anonymousOid   := '\#'
+%% No space between \# and integer
+numberedOid    := '\#'integer
+thisModuleName := '\@'
 
 List := '[' PathExpression (',' PathExpression)* ('|' PathExpression)? ']'
 
@@ -320,9 +326,12 @@ canonical_form(FUNCTION(Funct,Arg),CanoniTerm,Index) :-
 	canonical_form(Funct,F,Index),
 	( Arg = ARGUMENT(B,A,I1,_I2) ->
 	    (B==FL_BRACE -> replace_synonyms(F,SynF)
-	    ; SynF = F ),
+	    ; SynF = F
+	    ),
 	    CanoniTerm=CANOTERM(SynF,N,B,AList,Index,I1),
-	    ( B == FL_BRACKET ->
+	    %% For brackets, convert comma-separated list of arguments into
+	    %% a canonical expression so we could parse its elements
+	    ( memberchk(B,[FL_BRACKET,FL_BRACKBAR]) ->
 		N=1,
 		AList=[T],
 		canonical_form(A,T,_I)
@@ -331,7 +340,8 @@ canonical_form(FUNCTION(Funct,Arg),CanoniTerm,Index) :-
 	    )
 	; Arg=ARGUMENT(B,I1,_I2),
 	    (B==FL_BRACE -> replace_synonyms(F,SynF)
-	    ; SynF = F )
+	    ; SynF = F
+	    )
 	->
 	    CanoniTerm=CANOTERM(SynF,0,B,[],Index,I1)
 	).
@@ -341,6 +351,7 @@ canonical_form(ARGUMENT(FL_PARENTHESIS,Arg,_I1,_I2),A,Index) :-
 	!,
 	canonical_form(Arg,A,Index).
 
+%% Term that is a nonempty list [a,b] or [a|b]
 canonical_form(ARGUMENT(FL_BRACKET,Arg,I1,_I2),CANOLIST(AList,T,N,I1,Ib),I1) :-
 	!,
 	%% a list
@@ -352,7 +363,6 @@ canonical_form(ARGUMENT(FL_BRACKET,Arg,I1,_I2),CANOLIST(AList,T,N,I1,Ib),I1) :-
 	  Ib=NO_INDEX,
 	  comma_separated_list(Arg,AList,N)
         ).
-
 %% empty list
 canonical_form(ARGUMENT(FL_BRACKET,I1,_I2),CANOLIST([],[],0,I1,NO_INDEX),I1) :- !.
 
@@ -478,6 +488,24 @@ arrange_arguments([A|L],S,Index,Left,Right,_Iright,CanoniTerm) :-
 	T=CANOTERM(FunctTerm,N,FL_BRACKET,ArgList,Index,I1),
 	arrange_arguments(L,T,Index,CanoniTerm).
 
+arrange_arguments([A|L],S,Index,Left,Right,_Iright,CanoniTerm) :-
+	%% [f->g] is a special case. Note that a.b[f->g] should be read
+	%% as (a.b)[f->g].
+	( A = ARGUMENT(FL_BRACKBAR,Arg,I1,_I2) ->
+	    canonical_form(Arg,ArgTerm,_Ia),
+	    N=1,
+	    ArgList=[ArgTerm]
+	;
+	  A = ARGUMENT(FL_BRACKBAR,I1,_I2),
+	  N = 0,
+	  ArgList = []
+        ),
+	!,
+	Funct=OBJECT(QUOTED_ATOM(S),Index),
+	FunctTerm=CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],Index,NO_INDEX),
+	T=CANOTERM(FunctTerm,N,FL_BRACKBAR,ArgList,Index,I1),
+	arrange_arguments(L,T,Index,CanoniTerm).
+
 /**
 %% We do NOT want a.b(f,g) to be read as (a.b)(f,g)!
 %% This is a path expression in its own right and should not be parsed 
@@ -552,6 +580,10 @@ arrange_arguments([A|L],Funct,Index,CanoniTerm) :-
 		canonical_form(Arg,ArgTerm,_Ia),
 		N=1,
 		ArgList=[ArgTerm]
+	    ; B == FL_BRACKBAR ->
+		canonical_form(Arg,ArgTerm,_Ia),
+		N=1,
+		ArgList=[ArgTerm]
 	    ;
  	      comma_separated_list(Arg,ArgList,N)
 	    )
@@ -608,7 +640,7 @@ is_variable(OBJECT(VARIABLE(Name),I),Name,I).
 get_flname_struct(OBJECT(IDENTIFIER(Name),I),FLATOM(Name,I))  :- !.
 get_flname_struct(OBJECT(QUOTED_ATOM(Name),I),FLATOM(Name,I)) :- !.
 %% Don't add  BUILTIN_IDENTIFIER to get_flname_struct. 
-%% Gets confused and can't load system modules like @_sys, etc.
+%% Gets confused and can't load system modules like @\sys, etc.
 
 get_flbuiltin_identifier_struct(OBJECT(BUILTIN_IDENTIFIER(Name),I),FLATOM(Name,I))  :- !.
 
@@ -643,7 +675,9 @@ get_transactionalinteger(OBJECT(TRANSACTIONAL_NUMBER(N),_I),N) :- integer(N).
 
 get_index(CANOTERM(_F,_N,B,_L,Ifunct,Ibrace),Index) :-
 	!,
-	((B == FL_BRACKET; B == FL_BRACE) -> Index=Ibrace; Index=Ifunct).
+	(memberchk(B,[FL_BRACKET,FL_BRACE,FL_BRACKBAR]) -> Index=Ibrace
+	; Index=Ifunct
+	).
 
 %% Operates on canonical terms
 get_index(CANOLIST(_L,_T,_N,Index,_Ib),Index) :- !.
@@ -663,7 +697,7 @@ get_index(FLDATATYPE(_Sort,_Lit,Index),Index) :- !.
 %% get_spectoken/2
 %% unnumbered oids
 get_spectoken(OBJECT(SPECIAL_TOKEN(Atom),_I),Atom) :- !.
-%% numbered anon oids and things like _?F, _?L
+%% numbered anon oids and things like \?F, \?L
 get_spectoken(OBJECT(SPECIAL_TOKEN(Atom,_Suffix),_I),Atom) :- !.
 
 
@@ -777,30 +811,19 @@ is_datatypeop(FL_DATATYPE_CONNECTOR) :- !.
 is_objrefop(FL_MVD)	     :- !.
 is_objrefop(FL_INHERIMVD) :- !.
 
-%% =>, *=>
+%% =>,
 is_sigattspecop(FL_MVDSIGARROW) :- !.
-is_sigattspecop(FL_INMVDSIGARR) :- !.
-
-%% ->, *->
+%% ->
 is_mvdattspecop(FL_MVDARROW)   :- !.
-is_mvdattspecop(FL_INMVDARROW) :- !.
 
 is_export_spec(FL_MVDARROW)    :- !.
 
 is_boolsigop(FL_BOOLSIGARR)    :- !.
-is_iboolsigop(FL_INBOOLSIGARR) :- !.
 
-%% These are no longer used
-%%is_transigop(FL_TRANSIGARR)    :- !.
-%%is_itransigop(FL_INTRANSIGARR) :- !.
-
-%% +>>, *+>>
+%% +>>
 is_incattspecop(FL_ALLINARROW)   :- !.
-is_incattspecop(FL_INALLINARROW) :- !.
-
-%% ->->, *->->
+%% ->->
 is_tolistattspecop(FL_TOLISTARROW)   :- !.
-is_tolistattspecop(FL_INTOLISTARROW) :- !.
 
 is_aggregtop(FL_MIN)        :- !.
 is_aggregtop(FL_MAX)        :- !.
@@ -922,7 +945,7 @@ flobject_struct(OBJECT(ASCII_STRING(Str),I),FLSTRING(Str,I)) :- !.
 %% NOTE: Unnumbered skolems are converted into special numbered ones
 %% (distinct from user-defined numbered skolems).
 %% This is done in order to preserve co-reference when splitting anon oids
-%% like in this case: a[b->_#[c->d]] ~~~> a[b->_#_1],_#_1[c->c].
+%% like in this case: a[b->\#[c->d]] ~~~> a[b->\#_1],\#_1[c->c].
 %% The number is prefixed with '_' in order to not confuse it with
 %% user-given suffixes
 flobject_struct(OBJECT(SPECIAL_TOKEN(FL_NEWOID),I),FLTOKEN(FL_NEWOID,Suff,I)) :-
@@ -1029,8 +1052,9 @@ is_passthru_struct(FLPASSTRU(_Struct)).
 
 flbirelate_struct(Subject,R,Object,FLBIRELATE(Subject,R,Object)).
 
-%% object specified using a path expression
-flobjref_struct(Object,M,Attribute,FLOBJREF(Object,M,Attribute)).
+%% object specified using a path expression: a..b and a!b
+flobjref_struct(FL_MVD,Object,Attribute,FLOBJREF(Object,Attribute,NONINHERITABLE)) :- !.
+flobjref_struct(FL_INHERIMVD,Object,Attribute,FLOBJREF(Object,Attribute,INHERITABLE)).
 
 %% Composes PARSED Funct with PARSED args to compose a parsed term
 %% If the term is -(Number) or +(Number) then convert to flnumber
@@ -1060,25 +1084,43 @@ is_fltransactionalterm_struct(FLTERM(FuncSpec,_Arity,_Args)) :-
 flaggregt_struct(Op,Var,GroupVars,SortSpec,Conds,FLAGGREGATE(Op,Var,GroupVars,SortSpec,Conds)).
 is_flaggregt_struct(FLAGGREGATE(_Op,_Var,_GroupVars,_SortSpec,_Conds)).
 
-flobjspec_struct(Object,Spec,FLOBJSPEC(Object,Spec)).
+flobjeql_struct(O1,O2,FLOBJEQL(O1,O2)).
+flobjspec_struct(Object,Spec,Type,FLOBJSPEC(Object,Spec,Type)).
 
-%% Spec represents the arrow type: ->, *->, ->, =>, ...
-flmvdattspec_struct(Attribute,Spec,Value,FLMVDATTSPEC(Attribute,Spec,Value)).
-flsigattspec_struct(Attribute,Spec,Value,FLSIGATTSPEC(Attribute,Spec,Value)).
+%% Arrow: represents the arrow type: ->, =>, ...
+%% Type: INHERITABLE or NONINHERITABLE
+flmvdattspec_struct(Attribute,Arrow,Value,Type,FLMVDATTSPEC(Attribute,Arrow,Value,Type)).
+flsigattspec_struct(Attribute,Arrow,Value,Type,FLSIGATTSPEC(Attribute,Arrow,Value,Type)).
 %% signature constraint a[b=>{low:high}]
-flsigattconspec_struct(Attribute,Constr,Spec,Value,FLSIGATTCONSPEC(Attribute,Constr,Spec,Value)).
-flincattspec_struct(Attribute,Spec,Value,FLINCATTSPEC(Attribute,Spec,Value)).
-fltolistattspec_struct(Attribute,Spec,Value,FLTOLISTATTSPEC(Attribute,Spec,Value)).
-flboolsig_struct(Attribute,Spec,FLBOOLSIG(Attribute,Spec)).
-fliboolsig_struct(Attribute,Spec,FLIBOOLSIG(Attribute,Spec)).
-fltransig_struct(Attribute,Spec,FLTRANSIG(Attribute,Spec)).
-flitransig_struct(Attribute,Spec,FLITRANSIG(Attribute,Spec)).
+flsigattconspec_struct(Attribute,Constr,Arrow,Value,Type,FLSIGATTCONSPEC(Attribute,Constr,Arrow,Value,Type)).
+%% a[b+>>c]
+flincattspec_struct(Attribute,Arrow,Value,Type,FLINCATTSPEC(Attribute,Arrow,Value,Type)).
+%% a[b->->c]
+fltolistattspec_struct(Attribute,Arrow,Value,Type,FLTOLISTATTSPEC(Attribute,Arrow,Value,Type)).
+flboolsig_struct(Attribute,Arrow,Type,FLBOOLSIG(Attribute,Arrow,Type)).
+fltransig_struct(Attribute,Arrow,Type,FLTRANSIG(Attribute,Arrow,Type)).
+
+flmethspec_struct(Method,Type,FLMETHSPEC(Method,Type)).
+fltranspec_struct(Tran,Type,FLTRANSPEC(Tran,Type)).
 
 flsigconstr_struct(LowerBound,UpperBound,FLSIGCONSTR(LowerBound,UpperBound)). 
 
-is_flattspec_struct(FLMVDATTSPEC(_A,_S,_V))    :- !.
-is_flattspec_struct(FLINCATTSPEC(_A,_S,_V))    :- !.
-is_flattspec_struct(FLTOLISTATTSPEC(_A,_S,_V)) :- !.
+
+is_flattspec_struct(FLMVDATTSPEC(_Att,_Arr,_V,Type),Type)    :- !.
+is_flattspec_struct(FLINCATTSPEC(_Att,_Arr,_V,Type),Type)    :- !.
+is_flattspec_struct(FLTOLISTATTSPEC(_Att,_Arr,_V,Type),Type) :- !.
+is_flattspec_struct(FLTRANSPEC(_Tran,Type),Type) :- !.
+is_flattspec_struct(FLMETHSPEC(_Method,Type),Type).
+
+is_flsigspec_struct(FLBOOLSIG(_Att,_Arr,Type),Type) :- !.
+is_flsigspec_struct(FLTRANSIG(_Att,_Arr,Type),Type) :- !.
+is_flsigspec_struct(FLSIGATTSPEC(_Att,_Arr,_V,Type),Type) :- !.
+is_flsigspec_struct(FLSIGATTCONSPEC(_Att,_Constr,_Arr,_V,Type),Type).
+
+get_spectype(Spec,Type) :- is_flattspec_struct(Spec,Type), !.
+get_spectype(Spec,Type) :- is_flsigspec_struct(Spec,Type), !.
+%% Spec can be an empty list: foo[]
+get_spectype(_Spec,NONINHERITABLE).
 
 is_obj_identifier_struct(OBJECT(IDENTIFIER(_Str),_Index)) :- !.
 is_obj_quoted_atom_struct(OBJECT(QUOTED_ATOM(_Str),_Index)) :- !.
@@ -1088,16 +1130,6 @@ is_obj_identifier_struct(OBJECT(IDENTIFIER(Str),Index), Str, Index) :- !.
 is_obj_quoted_atom_struct(OBJECT(QUOTED_ATOM(Str),Index), Str, Index) :- !.
 is_obj_ascii_string_struct(OBJECT(ASCII_STRING(Str),Index), Str, Index) :- !.
 is_obj_builtin_identifier_struct(OBJECT(BUILTIN_IDENTIFIER(Str),Index), Str, Index) :- !.
-
-flmethspec_struct(Method,FLMETHSPEC(Method)).
-
-flimethspec_struct(IMethod,FLIMETHSPEC(IMethod)).
-is_flimethspec_struct(FLIMETHSPEC(_IMethod)).
-
-fltranspec_struct(Tran,FLTRANSPEC(Tran)).
-is_fltranspec_struct(FLTRANSPEC(_Tran)).
-
-flobjeql_struct(O1,O2,FLOBJEQL(O1,O2)).
 
 flconjunct_struct(NULL,Cond2,Cond2) :- !.
 flconjunct_struct(Cond1,NULL,Cond1) :- !.
@@ -1133,7 +1165,7 @@ flconstraint_struct(Constr,FLCONSTRAINT(Constr)).
 
 is_flworkspace_struct(FLWORKSPACE(_G,_N)).
 
-%% Encoding these module specs: @mod @_mod @_prolog(mod) @_prologall(mod)
+%% Encoding these module specs: @mod @\mod @\prolog(mod) @\prologall(mod)
 flmodule_struct(_,IgnoreWSLit,_,IgnoreWSLit) :-
 	ignore_workspace_literal(IgnoreWSLit),
 	!.
@@ -1163,11 +1195,16 @@ flmodule_struct(PROLOGALLMODULE,Goal,ModuleIn,FLPLIBALL(Goal,Module)) :-
 	; Module = ModuleIn
 	).
 
-%% code for _@ workspace
+is_prologmodule(PROLOGMODULE).
+is_prologmodule(PROLOGALLMODULE).
+is_prologmodule(PROLOGMODULE(M),M).
+is_prologmodule(PROLOGALLMODULE(M),M).
+
+%% code for \@ workspace
 flthismodule_struct(FLTOKEN(FL_THISMODULE,NO_INDEX)).
 is_thismodule(FLTOKEN(FL_THISMODULE,_)).
 
-%% Encoding module specs of the form @_prolog() and @_prologall()
+%% Encoding module specs of the form @\prolog() and @\prologall()
 %% Takes a goal and protects it against hilog conversion
 flplib_struct(Goal,FLPLIB(Goal)).
 flpliball_struct(Goal,FLPLIBALL(Goal)).
@@ -1191,6 +1228,13 @@ flora_get_module_from_spec(Spec,Type,_Mod) :-
 	nonvar(Spec),
 	var(Type),
 	flora_abort([UNKNOWN_ERROR,'\n\t\t Details: in flora_get_module_from_spec'],FLORA_ABORT_NOTRACE).
+
+has_module_type(PROLOGMODULE,PROLOGMODULE).
+has_module_type(PROLOGMODULE(_),PROLOGMODULE).
+has_module_type(PROLOGALLMODULE,PROLOGALLMODULE).
+has_module_type(PROLOGALLMODULE(_),PROLOGALLMODULE).
+has_module_type(FLORAUSERMOD(_),FLORAMODULE).
+has_module_type(FLORASYSMOD(_),FLORAMODULE).
 
 
 is_flmodulespec_struct(FLWORKSPACE(_G,_N)) :- !.
@@ -1348,7 +1392,7 @@ convert_to_quoted_atomobj(OBJECT(IDENTIFIER(Atm),I),OBJECT(QUOTED_ATOM(Atm),I)) 
 convert_to_quoted_atomobj(OBJECT(BUILTIN_IDENTIFIER(Atm),I),OBJECT(QUOTED_ATOM(Atm),I)) :- !.
 
 /*
-%% convert _# to a numbered oid with negative number (therefore unique in rule)
+%% convert \# to a numbered oid with negative number (therefore unique in rule)
 %% if not a numbered oid then no change
 %% get_spectoken/3
 get_spectoken(OBJECT(SPECIAL_TOKEN(Atom),I),Atom,I).
@@ -1645,7 +1689,7 @@ importmodule_parse_termlist([H|T],Code,Status) :-
 importmodule_parse_term(Module,Code,Status) :-
 	export_check_module(Module,Status),
 	\+get_flvar_struct(Module,_),
-	parse_body_pathexp(Module,DISALLOW_TRANS,NULL,Code1,Status),
+	parse_body_pathexp(Module,DISALLOW_TRANS,NULL,PURE_PATHEXPS_ONLY,Code1,Status),
 	flimportmodule_struct(Code1,Code),
 	!.
 
@@ -1776,7 +1820,7 @@ export_compose_term_list([H|T],InitTermCode,WS,IsUpd,Code) :-
 	  append(TermCode,InitTermCode,List)
 
 	;
-	  %% in other cases where it is a simple term and not a list.
+	  %% TermCode is a simple term and not a list.
 	  List = [TermCode|InitTermCode]
 	),
 	export_compose_term_list(T,List,WS,IsUpd,Code).
@@ -1793,9 +1837,7 @@ export_compose_term([CANOTERM(Funct,_N,FL_PARENTHESIS,Args,_If,_Ip)],WS,_IsUpdat
 	%% check whether the Funct is updatable
 	get_name(Funct,FL_UPDATABLE),
 	%% single or mutiple terms enclosed.
-	(
-	  export_compose_term(Args,WS,FL_UPDATABLE,ExportCode),
-	  !
+	(export_compose_term(Args,WS,FL_UPDATABLE,ExportCode) -> true
 	;
 	  export_compose_term_list(Args,[],WS,FL_UPDATABLE,ExportCode)
 	).
@@ -1933,18 +1975,16 @@ export_parse_term(TermCode,ExportCode,Status) :-
 	    S2=S1
 	),
 	(S2==NO_ERRORS -> 
-	    (
-		export_parse_body_term(Term,WS,TCode,StatusBody),
-		flfact_struct(TCode,FactTermCode),
-		%% the module(s)
-		(StatusBody == NO_ERRORS ->
-		    export_parse_modules(Modules,ModuleCode,Status)
-		;
-		    Status = StatusBody
-		),
-		fllist_struct(ModuleCode,[],1,ModuleCodeList),
-		export_struct(WS,FactTermCode,ModuleCodeList,IsUpdatable,ExportCode)
-	    )
+	    export_parse_body_term(Term,WS,TCode,StatusBody),
+	    flfact_struct(TCode,FactTermCode),
+	    %% the module(s)
+	    (StatusBody == NO_ERRORS ->
+		export_parse_modules(Modules,ModuleCode,Status)
+	    ;
+		Status = StatusBody
+	    ),
+	    fllist_struct(ModuleCode,[],1,ModuleCodeList),
+	    export_struct(WS,FactTermCode,ModuleCodeList,IsUpdatable,ExportCode)
 	; Status=S2
 	).
 
@@ -1973,12 +2013,12 @@ export_parse_modules([CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip)],OtherModuleLi
         get_name(Funct,FL_COMMA),
         !,
 	comma_separated_canoterm_to_list(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),ModuleList),
-	parse_body_pathexplist(ModuleList,NULL,OtherModuleList,Status).
+	parse_body_pathexplist(ModuleList,NULL,PURE_PATHEXPS_ONLY,OtherModuleList,Status).
 	
 %% general case, term>>m1,m2,m3...mn. Modules NOT enclosed within parentheses.
 export_parse_modules(OtherModules,OtherModuleList,Status) :-
         %% the other module names 
-	parse_body_pathexplist(OtherModules,NULL,OtherModuleList,Status).
+	parse_body_pathexplist(OtherModules,NULL,PURE_PATHEXPS_ONLY,OtherModuleList,Status).
 
 
 /****************************************************************************
@@ -2001,7 +2041,7 @@ export_struct(WS,TermCode,ModuleCodeList,IsUpdatable,ExportCode) :-
 export_check_single_term([CANOTERM(_Funct,_N,_FL,_Args,_If,_Ip),OBJECT(IDENTIFIER(_Atom),_)|_T]) :- !.
 %% module is system module.
 export_check_single_term([CANOTERM(_Funct,_N,_FL,_Args,_If,_Ip),
-				CANOTERM(OBJECT(IDENTIFIER(_ATOM),_),_N1,_FL1,_ARGS,_If1,_Ip1)|_T]) 
+			  CANOTERM(OBJECT(IDENTIFIER(_ATOM),_),_N1,_FL1,_ARGS,_If1,_Ip1)|_T]) 
 				:-!.
 %% module name is variable.
 export_check_single_term([CANOTERM(_Funct,_N,_FL,_Args,_If,_Ip),OBJECT(VARIABLE(_Atom),_)|_T]) :- !.
@@ -3013,7 +3053,7 @@ flora_parse_user_defined_function_fact(Function,Value,Code,Status) :-
 	parse_udf_function(Function,FunctionCode,S),
 	clear_context(parsing_udf_fact),
 	( S == NO_ERRORS -> 
-		parse_head_pathexp(Value,DISALLOW_TRANS,NULL,ValueCode,Status),
+		parse_head_pathexp(Value,DISALLOW_TRANS,NULL,PURE_PATHEXPS_ONLY,ValueCode,Status),
 		fludffact_struct(FunctionCode,ValueCode,Code)
 	;
 		Status = S
@@ -3034,8 +3074,15 @@ parse_toplevel_annotated_statement(Descriptors,Statement,VarsOK,Code,Status) :-
 	    ->
 		( (is_rule(Statement,_,_) ; is_latent_query(Statement,_))
 		-> CodeConstr = Code1
-		; %% if annotated fact, convert it to a rule:  fact :- true.
-		    flfact_struct(Head,Code1), % unwrap flfact
+		/* if Code1 is an annotated fact, convert it to a rule:
+		         fact :- true.
+		   Code1 can be (FLFACT(...),FLFACT(...),...,FLFACT(...))
+		   or FLFACT(single-fact) or FLFACT(list-of-facts)
+		   strip_flfact_list/2 removes FLFACT and converts the stuff
+		   into a kosher list used for rule heads.
+		*/
+		; strip_flfact_list(Code1,Head) ->
+		    %% unwrap flfact(s)
 		    flatom_struct(FL_TRUE,NO_INDEX,BodyCode),
 		    flrule_struct(Head,BodyCode,CodeConstr)
 		),
@@ -3052,6 +3099,16 @@ parse_toplevel_annotated_statement(Descriptors,Statement,VarsOK,Code,Status) :-
 	    parse_canonical(Statement,Code,Status)
 	).
 
+strip_flfact_list(FlFactConj,FlattenedList) :-
+	commalist2list(FlFactConj,List),
+	unwrap_flfacts(List,StrippedList),
+	basics:flatten(StrippedList,FlattenedList).
+unwrap_flfacts([],[]) :- !.
+unwrap_flfacts([H|T],[UH|UT]) :-
+	(is_flfact(H,UH) -> true
+	; H=UH
+	),
+	unwrap_flfacts(T,UT).
 
 /****************************************************************************
   parse_gpp_markup(+CanoniTerm,+Status)
@@ -3114,13 +3171,13 @@ parse_udf_function(CANOTERM(Funct,2,FL_PARENTHESIS,[_L,_R],_If,_Ip),_Code,Status
 	parsing_error(Funct,ERROR_UDF,Status).
 
 parse_udf_function(CanoniTerm,Code,Status) :-
-	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,NULL,Code,Status).
+	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,NULL,PURE_PATHEXPS_ONLY,Code,Status).
 
 parse_udf_body(CanoniTerm,Code,Status) :-
 	parse_rule_body(CanoniTerm,Code,Status). %% do not restrict udf body
 
 parse_udf_return_value(ObjectTerm,Code,Status) :-
-	parse_body_pathexp(ObjectTerm,DISALLOW_TRANS,NULL,Code,Status),
+	parse_body_pathexp(ObjectTerm,DISALLOW_TRANS,NULL,PURE_PATHEXPS_ONLY,Code,Status),
 	!.
 
 parse_udf_return_value(ObjectTerm,_,Status):-
@@ -3236,11 +3293,15 @@ parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Code,Statu
 	;
 	    Status = S
 	).
-parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
+parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],_If,_Ip),DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_birelop(F),
 	!,
-	parse_head_pathexplist(Args,DWS,[LCode,RCode],Status),
+	parse_head_pathexp(Left,DISALLOW_TRANS,DWS,ANY_PATHEXP,LCode,S),
+	(S==NO_ERRORS ->
+	    parse_head_pathexp(Right,DISALLOW_TRANS,DWS,ANY_PATHEXP,RCode,Status)
+	; Status = S
+	),
 	(Status == NO_ERRORS -> 
             flbirelate_struct(LCode,F,RCode,TCode),
             flora_get_module_from_spec(DWS,ModuleType,Module),
@@ -3267,7 +3328,7 @@ parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status
 	get_atom(Funct,FL_OBJEQL),
 	!,
 	%% equality definition fact/rule
-	parse_head_pathexplist(Args,DWS,[LCode,RCode],Status),
+	parse_head_pathexplist(Args,DWS,PURE_PATHEXPS_ONLY,[LCode,RCode],Status),
 	(Status == NO_ERRORS -> 
             flobjeql_struct(LCode,RCode,TCode),
             flora_get_module_from_spec(DWS,ModuleType,Module),
@@ -3328,12 +3389,22 @@ parse_head_literal(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status
         ; true
 	).
 
+%% Head a[...]
 parse_head_literal(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),DWS,Code,Status) :-
 	!,
-	parse_head_objspec_top(Funct,N,Args,DWS,TCode,Status),
+	parse_head_objspec_top(Funct,N,Args,DWS,NONINHERITABLE,ObjspecCode,Status),
         ( Status == NO_ERRORS ->
             flora_get_module_from_spec(DWS,ModuleType,Module),
-	    flmodule_struct(ModuleType,TCode,Module,Code)
+	    flmodule_struct(ModuleType,ObjspecCode,Module,Code)
+        ; true
+	).
+%% Head a[|...|]
+parse_head_literal(CANOTERM(Funct,N,FL_BRACKBAR,Args,_If,_Ip),DWS,Code,Status) :-
+	!,
+	parse_head_objspec_top(Funct,N,Args,DWS,INHERITABLE,ObjspecCode,Status),
+        ( Status == NO_ERRORS ->
+            flora_get_module_from_spec(DWS,ModuleType,Module),
+	    flmodule_struct(ModuleType,ObjspecCode,Module,Code)
         ; true
 	).
 
@@ -3538,14 +3609,11 @@ parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),_WS,DWS,Code,Stat
         %% incorrect syntax may be overridden by nested module specification.
 	parse_workspace(R,RCode,S),
 	( S == NO_ERRORS ->
-            ( (RCode==PROLOGMODULE
-	      ; RCode==PROLOGALLMODULE
-	      ; flora_get_module_from_spec(RCode,PROLOGMODULE,_)
-	      ; flora_get_module_from_spec(RCode,PROLOGALLMODULE,_))
-	    ->
-                parse_rule_body(L,RCode,DWS,Code,Status)
-            ;
-                parse_rule_body(L,RCode,RCode,Code,Status)
+            ( (is_prologmodule(RCode)
+	      ; is_prologmodule(RCode,_)
+	      )
+	    -> parse_rule_body(L,RCode,DWS,Code,Status)
+            ;  parse_rule_body(L,RCode,RCode,Code,Status)
             )
         ; 
             Status = S
@@ -3577,23 +3645,21 @@ parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,[Head,Body],If,Ip),WS,WS,Code,St
         ( var(PrevContext) -> true; set_context(parsing_reify)).
 
 %% Delayed builtins: !=, >, >=, =:=, etc. Also sensors defined in .flr files
-%% If the user wrote @_prolog or @_prologall then we pass it down to prolog
+%% If the user wrote @\prolog or @\prologall then we pass it down to prolog
 %% and do not delay. This is a change from the original treatment
 parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
 	get_name(Funct,FAtom),
 	flora_delayed_builtin_literal(FAtom,N),
-	%% if @_plg or @_plgall, pass down to Prolog, don't delay
-	\+ WS == PROLOGMODULE,
-	\+ WS == PROLOGALLMODULE,
-	\+ flora_get_module_from_spec(WS,PROLOGMODULE,Mod),
-	\+ flora_get_module_from_spec(WS,PROLOGALLMODULE,Mod),
+	%% if @\plg or @\plgall, pass down to Prolog, don't delay
+	\+ is_prologmodule(WS),
+	\+ is_prologmodule(WS,_),
 	%% If inside a CLP constraint, don't delay
 	\+ has_context(parsing_CLP_constraint),
 	!,
 	flatom_struct(FAtom,If,OpCode),
 	(flora_argdef(FAtom,N,ArgTypes,DWS)
-	-> parse_body_argpathexplist(Args,ArgTypes,DWS,ACode,Status)
-	;  parse_body_pathexplist(Args,DWS,ACode,Status)
+	-> parse_body_argpathexplist(Args,ArgTypes,DWS,PURE_PATHEXPS_ONLY,ACode,Status)
+	;  parse_body_pathexplist(Args,DWS,PURE_PATHEXPS_ONLY,ACode,Status)
 	),
 	fllist_struct(ACode,[],Ip,ArgsCode),
 	fldelayedliteral_struct(OpCode,ArgsCode,Code).
@@ -3714,14 +3780,14 @@ parse_rule_body(CANOTERM(TopWrapper,2,_Paren,_Args,If,_Ip),_WS,_DWS,_Code,Status
 	parsing_error(If,UNEXPECTED_CONTROL,Status).
 
 
-%% @_prolog()
+%% @\prolog()
 parse_rule_body(CanoniTerm,PROLOGMODULE,DWS,Code,Status) :-
 	!,
 	%% Prolog builtin
 	parse_prlgterm(CanoniTerm,DWS,TCode,Status),
 	(Status == NO_ERRORS -> flplib_struct(TCode,Code); true).
 
-%% @_prolog(...)
+%% @\prolog(...)
 parse_rule_body(CanoniTerm,PrologModuleSpec,DWS,Code,Status) :-
 	flora_get_module_from_spec(PrologModuleSpec,PROLOGMODULE,Mod),
 	!,
@@ -3731,7 +3797,7 @@ parse_rule_body(CanoniTerm,PrologModuleSpec,DWS,Code,Status) :-
 	; true
 	).
 
-%% @_prologall()
+%% @\prologall()
 parse_rule_body(CanoniTerm,PROLOGALLMODULE,DWS,Code,Status) :-
 	!,
 	%% Prolog builtin
@@ -3743,7 +3809,7 @@ parse_rule_body(CanoniTerm,PROLOGALLMODULE,DWS,Code,Status) :-
 	; Status = Status1
 	).
 
-%% @_prologall(...)
+%% @\prologall(...)
 parse_rule_body(CanoniTerm,PrologModuleSpec,DWS,Code,Status) :-
 	flora_get_module_from_spec(PrologModuleSpec,PROLOGALLMODULE,Mod),
 	!,
@@ -3804,6 +3870,7 @@ parse_rule_body(CanoniTerm,NULL,NULL,Code,Status) :-
 
 /****************************************************************************
   parse_prolog_condition(+Condition,-CondCode,-Status)
+  Prolog condition (nonvar,ground, etc.) in delay quantifiers
 ****************************************************************************/
 parse_prolog_condition(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),CondCode,Status) :-
 	!,
@@ -3831,11 +3898,11 @@ parse_prolog_condition(Condition,_CondCode,Status):-
 
   This predicate is called to parse the module name of a workspace specification.
   Three types of module names are allowed:
-  (1) Prolog module, e.g., @_prolog(basics), @_prolog(), @_prolog
-                           @_prologall(basics), @_prologall(), @_prologall
+  (1) Prolog module, e.g., @\prolog(basics), @\prolog(), @\prolog
+                           @\prologall(basics), @\prologall(), @\prologall
       WSCode=PROLOGMODULE(name), or PROLOGMODULE
       WSCode=PROLOGALLMODULE(name), or PROLOGALLMODULE
-  (2) Flora system module, e.g., @_io, @_pp.
+  (2) Flora system module, e.g., @\io, @\pp.
       WSCode=FLORASYSMOD(name)
   (3) Flora user module, which could be either an atom or a variable.
       WSCode=FLORAUSERMOD(name), or FLORAUSERMOD(var)
@@ -3847,36 +3914,36 @@ parse_workspace(CanoniTerm,FLORAUSERMOD(NVCode),NO_ERRORS) :-
 	name_or_var(CanoniTerm,NVCode),
 	!.
 
-%% @_prolog, @_plg, etc.
+%% @\prolog, @\plg, etc.
 parse_workspace(CanoniTerm,PROLOGMODULE,NO_ERRORS) :-
 	get_flbuiltin_identifier_struct(CanoniTerm,NVCode),
 	is_flatom_struct(NVCode,FL_PLIB),
 	!.
-%% @_prologall, @_plgall, etc.
+%% @\prologall, @\plgall, etc.
 parse_workspace(CanoniTerm,PROLOGALLMODULE,NO_ERRORS) :-
 	get_flbuiltin_identifier_struct(CanoniTerm,NVCode),
 	is_flatom_struct(NVCode,FL_PLIBALL),
 	!.
 
-%% Handle THIS MODULE specification, e.g., a[b->c]@ _@.
+%% Handle THIS MODULE specification, e.g., a[b->c]@ \@.
 parse_workspace(CanoniTerm,FLORAUSERMOD(ThisModToken),NO_ERRORS) :-
-	%% When _@ is specified as a module, we treat it
-	%% as a user module even if _@ occurs in a system module.
-	%% This is because _@ doesn't require us to notify flrlibman.P that a
+	%% When \@ is specified as a module, we treat it
+	%% as a user module even if \@ occurs in a system module.
+	%% This is because \@ doesn't require us to notify flrlibman.P that a
 	%% system module needs to be loaded.
-	%% However, in case of a system module _@ gets substituted with
+	%% However, in case of a system module \@ gets substituted with
 	%% FLORA_THIS_MODULE_NAME, so at compile time we get the right module.
 	get_spectoken(CanoniTerm,FL_THISMODULE),
 	!,
 	flobject_struct(CanoniTerm,ThisModToken).
 
-%% Handle a Prolog module specified as @_prolog()
+%% Handle a Prolog module specified as @\prolog
 parse_workspace(CANOTERM(Mod,0,FL_PARENTHESIS,[],_Ifu,_Ipa),PROLOGMODULE,NO_ERRORS) :-
 	get_flbuiltin_identifier_struct(Mod,NVCode),
 	is_flatom_struct(NVCode,FL_PLIB),
 	!.
 
-%% A Prolog module given as @_prolog(xsbmod)
+%% A Prolog module given as @\prolog(xsbmod)
 parse_workspace(CANOTERM(Mod,1,FL_PARENTHESIS,[M],_Ifu,_Ipa),PROLOGMODULE(MCode),Status) :-
 	get_flbuiltin_identifier_struct(Mod,NVCode),
 	is_flatom_struct(NVCode,FL_PLIB),
@@ -3885,13 +3952,13 @@ parse_workspace(CANOTERM(Mod,1,FL_PARENTHESIS,[M],_Ifu,_Ipa),PROLOGMODULE(MCode)
 	; parsing_error(M,ERROR_WSNAME,Status)
 	).
 
-%% @_prologall() module
+%% @\prologall() module
 parse_workspace(CANOTERM(Mod,0,FL_PARENTHESIS,[],_Ifu,_Ipa),PROLOGALLMODULE,NO_ERRORS) :-
 	get_flbuiltin_identifier_struct(Mod,NVCode),
 	is_flatom_struct(NVCode,FL_PLIBALL),
 	!.
 
-%% @_prologall(module) module
+%% @\prologall(module) module
 parse_workspace(CANOTERM(Mod,1,FL_PARENTHESIS,[M],_Ifu,_Ipa),PROLOGALLMODULE(MCode),Status) :-
 	get_flbuiltin_identifier_struct(Mod,NVCode),
 	is_flatom_struct(NVCode,FL_PLIBALL),
@@ -3900,7 +3967,7 @@ parse_workspace(CANOTERM(Mod,1,FL_PARENTHESIS,[M],_Ifu,_Ipa),PROLOGALLMODULE(MCo
 	; parsing_error(M,ERROR_WSNAME,Status)
 	).
 
-%% system module specification @_module
+%% system module specification @\module
 parse_workspace(CanoniTerm,FLORASYSMOD(MCode),Status) :-
 	get_flbuiltin_identifier_struct(CanoniTerm,MCode),
 	is_flatom_struct(MCode,ModuleName),
@@ -3909,7 +3976,7 @@ parse_workspace(CanoniTerm,FLORASYSMOD(MCode),Status) :-
 	; parsing_error(CanoniTerm,UNREG_SYSMOD,Status)
 	).
 
-%% system module specification @_module()
+%% system module specification @\module()
 parse_workspace(CANOTERM(Mod,0,FL_PARENTHESIS,[],_Ifu,_Ipa),FLORASYSMOD(MCode),Status) :-
 	get_flbuiltin_identifier_struct(Mod,MCode),
 	is_flatom_struct(MCode,ModuleName),
@@ -4086,38 +4153,38 @@ parse_body_notuniveqform(CANOTERM(_Funct,2,FL_PARENTHESIS,Args,_If,_Ip),WS,DWS,C
 	).
 
 
-/****************************************************************************
+/*******************************************************************************
   parse_body_metauniv(+CanoniTerm,+WS,+DWS,-Code,-Status)
 
   Parse the meta op =..
-  (_ =.. _)@_prolog(mod) and (_ =.. _)@_prologall(mod)
+  (_ =.. _)@\prolog(mod) and (_ =.. _)@\prologall(mod)
   are illegal, but
-  (_ =.. _)@_prolog() and (_ =.. _)@_prologall() are legal.
-****************************************************************************/
+  (_ =.. _)@\prolog() and (_ =.. _)@\prologall() are legal.
+*******************************************************************************/
 parse_body_metauniv(CANOTERM(_Funct,2,FL_PARENTHESIS,_Args,If,_Ip),WS,_DWS,_Code,Status) :-
-	%% Only @_prolog() and @_prologall() are allowed;
+	%% Only @\prolog() and @\prologall() are allowed;
 	%% they don't match flora_get_module_from_spec/3
-	%% The test below checks for @_prolog(mod), @_prologall(mod)
-	(flora_get_module_from_spec(WS,PROLOGMODULE,_);flora_get_module_from_spec(WS,PROLOGALLMODULE,_)),
+	%% The test below checks for @\prolog(mod), @\prologall(mod)
+	is_prologmodule(WS,_),
 	!,
 	parsing_error(If,NO_WORKSPACE,Status).
 
-%% If (_ =.. _)@_prolog() or (_ =.. _)@_prologall(), then use Prolog =..
-parse_body_metauniv(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),WS,DWS,Code,Status) :-
-	(WS == PROLOGMODULE; WS == PROLOGALLMODULE),
+%% If (_ =.. _)@\prolog() or (_ =.. _)@\prologall(), then use Prolog =..
+parse_body_metauniv(CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],_If,_Ip),WS,DWS,Code,Status) :-
+	is_prologmodule(WS),
 	!,
-	Args = [LCode,RCode],
 	(WS == PROLOGMODULE
-	-> ( (get_flvar_struct(LCode,LCodeParsed), S1 = NO_ERRORS, !
-	     ; parse_prlgterm(LCode,DWS,LCodeParsed,S1)),
-	       (S1 == NO_ERRORS -> parse_body_pathexp(RCode,DISALLOW_TRANS,DWS,RCodeParsed,Status)
+	-> ( (get_flvar_struct(Left,LeftParsed), S1 = NO_ERRORS, !
+	     ; parse_prlgterm(Left,DWS,LeftParsed,S1)),
+	       (S1 == NO_ERRORS ->
+		   parse_body_pathexplist([Right],DWS,PURE_PATHEXPS_ONLY,[RightParsed],Status)
 	       %% failed to parse the first term
 	       ; Status = S1
 	       )
 	   )
 	;  %% PROLOGALLMODULE
-	    ( parse_pure_term(LCode,DWS,LCodeParsed,S1),
-		(S1 == NO_ERRORS -> parse_pure_term(RCode,DWS,RCodeParsed,Status)
+	    ( parse_pure_term(Left,DWS,LeftParsed,S1),
+		(S1 == NO_ERRORS -> parse_pure_term(Right,DWS,RightParsed,Status)
 		%% failed to parse the first term
 		; Status = S1
 		)
@@ -4127,10 +4194,9 @@ parse_body_metauniv(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),WS,DWS,Code,St
 	(Status == NO_ERRORS ->
 	    %% FCode is parsed functor code
 	    flobject_struct(Funct,FCode),
-	    flterm_struct(FCode,2,[LCodeParsed,RCodeParsed],Code1),
+	    flterm_struct(FCode,2,[LeftParsed,RightParsed],Code1),
 	    %% protect predicate code against hilog conversion
-	    ( WS == PROLOGMODULE
-	     -> flplib_struct(Code1,Code)
+	    ( WS == PROLOGMODULE -> flplib_struct(Code1,Code)
 	      %% WS == PROLOGALLMODULE
 	     ;  flpliball_struct(Code1,Code)
 	    ) 
@@ -4138,12 +4204,12 @@ parse_body_metauniv(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),WS,DWS,Code,St
 	; true
 	).
 
-parse_body_metauniv(CANOTERM(_Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,DWS,Code,Status) :-
-	Args = [Left,Right],
-	parse_body_pathexp(Left,DISALLOW_TRANS,DWS,LeftParsed,S1),
-	(S1 == NO_ERRORS -> parse_body_pathexp(Right,DISALLOW_TRANS,DWS,RightParsed,Status)
-	%% failed to parse the first term
-	; Status = S1
+parse_body_metauniv(CANOTERM(_Funct,2,FL_PARENTHESIS,[Left,Right],_If,_Ip),DWS,DWS,Code,Status) :-
+	parse_body_pathexp(Left,DISALLOW_TRANS,DWS,ANY_PATHEXP,LeftParsed,S1),
+	(S1 == NO_ERRORS ->
+	    parse_body_pathexplist([Right],DWS,PURE_PATHEXPS_ONLY,[RightParsed],Status)
+	; %% failed to parse the first term
+	    Status = S1
 	),
 	(Status == NO_ERRORS -> flmetauniv_struct(LeftParsed,RightParsed,Code)
 	%% failed to parse the second term
@@ -4235,11 +4301,15 @@ parse_body_literal(CanoniTerm,DWS,Code,Status) :-
 	flmodule_struct(ModuleType,TCode,Module,Code).
 
 %% :(_,_), ::(_,_)
-parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],_If,_Ip),DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_birelop(F),
 	!,
-	parse_body_pathexplist(Args,DWS,[LCode,RCode],Status),
+	parse_body_pathexp(Left,DISALLOW_TRANS,DWS,ANY_PATHEXP,LCode,S),
+	(S==NO_ERRORS ->
+	    parse_body_pathexp(Right,DISALLOW_TRANS,DWS,ANY_PATHEXP,RCode,Status)
+	; Status = S
+	),
 	(Status == NO_ERRORS ->
             flbirelate_struct(LCode,F,RCode,TCode),
             flora_get_module_from_spec(DWS,ModuleType,Module),
@@ -4290,12 +4360,13 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[_Arg],_If,Ip),_DWS,_Code,Status) :
 */
 
 %% true{...}, false{...}, unknown{...}
-parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),DWS,Code,Status) :-
+parse_body_literal(CANOTERM(Funct,_N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_truthvalue_op(Atom),
 	!,
 	flatom_struct(Atom,Ip,AtomCode),
-	parse_rule_body(Arg,DWS,DWS,ArgCode,Status),
+	list_to_canoterm_conjunct(Args,Conjunct,If,Ip),
+	parse_rule_body(Conjunct,DWS,DWS,ArgCode,Status),
 	(Status == NO_ERRORS
 	->
 	    fltruthvalue_struct(ArgCode,AtomCode,Code)
@@ -4457,30 +4528,35 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),_DWS,Code,Status) :-
 	    parsing_error(Ip,ERROR_WSNAME,Status)
 	).
 
-%% _load(...)
-parse_body_literal(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,_If,Ip),_DWS,Code,Status) :-
+%% \load(...)
+parse_body_literal(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),_DWS,Code,Status) :-
 	get_name(Funct,FL_LOAD),
 	!,
-	( Args == []
-	-> parsing_error(Ip,ERROR_LOADLIST,Status)
+	( Args == [] ->
+	    flatom_struct(FL_INLINEMODULE,NO_INDEX,C1),
+	    fllist_struct([C1],[],If,C),
+	    Status = NO_ERRORS
 	;
-	  parse_loadlist(Args,[],Ip,C,Status),
-	  (Status == NO_ERRORS -> flload_struct(C,Code)
-	  ; true
-	  )
+	  parse_loadlist(Args,[],Ip,C,Status)
+	),
+	(Status == NO_ERRORS -> flload_struct(C,Code)
+	; true
 	).
 
-%% _add(...)
-parse_body_literal(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,_If,Ip),_DWS,Code,Status) :-
+%% \add(...)
+parse_body_literal(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),_DWS,Code,Status) :-
 	get_name(Funct,FL_ADD),
 	!,
 	( Args == []
-	-> parsing_error(Ip,ERROR_LOADLIST,Status)
+	->
+	    flatom_struct(FL_INLINEMODULE,NO_INDEX,C1),
+	    fllist_struct([C1],[],If,C),
+	    Status = NO_ERRORS
 	;
-	  parse_loadlist(Args,[],Ip,C,Status),
-	  (Status == NO_ERRORS -> fladd_struct(C,Code)
-	  ; true
-	  )
+	  parse_loadlist(Args,[],Ip,C,Status)
+	),
+	(Status == NO_ERRORS -> fladd_struct(C,Code)
+	; true
 	).
 
 %% simple generic primitive like primName{Args}
@@ -4488,10 +4564,10 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,_Ip),DWS,Code,Status) :-
 	get_name(Funct,PrimitiveName),
 	flora_simple_primitive(PrimitiveName,N1,_,_),
 	%% this test for N is a hack to allow rule-manipulation primitives,
-	%% like FL_RULEENABLE, to loose the two last arguments _@F and _@
+	%% like FL_RULEENABLE, to loose the two last arguments \@F and \@
 	(N == N1 ; N is N1-2),
 	!,
-	parse_body_pathexplist(Args,DWS,ArgCode,Status),
+	parse_body_pathexplist(Args,DWS,PURE_PATHEXPS_ONLY,ArgCode,Status),
 	flsimpleprimitive_struct(PrimitiveName,ArgCode,Code).
 
 %% insertrule_a{...}, insertrule_z{...}, deleterule_a{...},
@@ -4607,7 +4683,7 @@ valid_clause_mode(DYNZ_CLAUSE) :- !.
 parse_body_literal(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
 	get_atom(Funct,FL_OBJEQL),
 	!,
-	parse_body_pathexplist(Args,DWS,[LCode,RCode],Status),
+	parse_body_pathexplist(Args,DWS,PURE_PATHEXPS_ONLY,[LCode,RCode],Status),
 	(Status == NO_ERRORS ->
             flobjeql_struct(LCode,RCode,TCode),
             flora_get_module_from_spec(DWS,ModuleType,Module),
@@ -4625,25 +4701,38 @@ parse_body_literal(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status
             )
         ; true).
 
-%% ...[...]
+%% obj[...]
 parse_body_literal(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),DWS,Code,Status) :-
 	!,
-	parse_body_objspec(Funct,N,Args,DWS,TCode,Status),
+	parse_body_objspec(Funct,N,Args,DWS,NONINHERITABLE,TCode,Status),
+	(Status == NO_ERRORS ->
+            flora_get_module_from_spec(DWS,ModuleType,Module),
+	    flmodule_struct(ModuleType,TCode,Module,Code)
+        ; true
+	).
+%% obj[|...|]
+parse_body_literal(CANOTERM(Funct,N,FL_BRACKBAR,Args,_If,_Ip),DWS,Code,Status) :-
+	!,
+	parse_body_objspec(Funct,N,Args,DWS,INHERITABLE,TCode,Status),
 	(Status == NO_ERRORS ->
             flora_get_module_from_spec(DWS,ModuleType,Module),
 	    flmodule_struct(ModuleType,TCode,Module,Code)
         ; true
 	).
 
+%% case of ?- []. or ?- [files] Inline file
 parse_body_literal(CANOLIST(L,T,_N,I,_Ib),_DWS,Code,Status) :-
 	!,
-	( L == []
-	-> parsing_error(I,ERROR_LOADLIST,Status)
+	%% Inline file. Encoded as '|', since this symbol can't occur in a file.
+	( L == [] ->
+	    flatom_struct(FL_INLINEMODULE,I,C1),
+	    fllist_struct([C1],[],I,C),
+	    Status = NO_ERRORS
 	;
-	  parse_loadlist(L,T,I,C,Status),
-	  (Status == NO_ERRORS -> flload_struct(C,Code)
-	  ; true
-	  )
+	  parse_loadlist(L,T,I,C,Status)
+	),
+	(Status == NO_ERRORS -> flload_struct(C,Code)
+	; true
 	).
 
 %% {...} at the top level -- constraint
@@ -4780,13 +4869,13 @@ workspace_template(CanoniTerm,FLORAUSERMOD(MCode),NO_ERRORS) :-
         is_anonymous_flvar_struct(MCode),
         !.
 
-%% _@ as module
+%% \@ as module
 workspace_template(CanoniTerm,FLORAUSERMOD(MCode),NO_ERRORS) :-
 	get_spectoken(CanoniTerm,FL_THISMODULE),
         !,
         flobject_struct(CanoniTerm,MCode).
 
-%% system module specification @_module
+%% system module specification @\module
 workspace_template(CanoniTerm,FLORASYSMOD(MCode),Status) :-
 	get_flbuiltin_identifier_struct(CanoniTerm,MCode),
 	is_flatom_struct(MCode,ModuleName),
@@ -4795,7 +4884,7 @@ workspace_template(CanoniTerm,FLORASYSMOD(MCode),Status) :-
 	; parsing_error(CanoniTerm,UNREG_SYSMOD,Status)
 	).
 
-%% system module specification @_module()
+%% system module specification @\module()
 workspace_template(CANOTERM(Mod,0,FL_PARENTHESIS,[],_Ifu,_Ipa),FLORASYSMOD(MCode),Status) :-
 	get_flbuiltin_identifier_struct(Mod,MCode),
 	is_flatom_struct(MCode,ModuleName),
@@ -4877,7 +4966,7 @@ parse_body_literal_template(CANOTERM(Funct,N,FL_BRACE,Args,_If,_Ip),Code,Status)
             )
         ).
 
-%% ...[...]
+%% obj[...]
 parse_body_literal_template(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),Code,Status) :-
 	!,
         ( get_flvar_struct(Funct,OCode), is_anonymous_flvar_struct(OCode) ->
@@ -4886,9 +4975,26 @@ parse_body_literal_template(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),Code,Statu
                 Status = NO_ERRORS
             ;
 		Args=[Spec],
-		parse_body_attmeth_template(Spec,SpecCode,Status)
+		parse_body_attmeth_template(Spec,NONINHERITABLE,SpecCode,Status)
 	    ),
-	    (Status == NO_ERRORS -> flobjspec_struct(OCode,SpecCode,Code); true)
+	    (Status == NO_ERRORS -> flobjspec_struct(OCode,SpecCode,NONINHERITABLE,Code)
+	    ; true
+	    )
+        ;
+            parsing_error(Funct,EXP_ANONYVAR,Status)
+        ).
+%% obj[|...|]
+parse_body_literal_template(CANOTERM(Funct,N,FL_BRACKBAR,Args,_If,_Ip),Code,Status) :-
+	!,
+        ( get_flvar_struct(Funct,OCode), is_anonymous_flvar_struct(OCode) ->
+            ( N == 0 ->
+                SpecCode = [],
+                Status = NO_ERRORS
+            ;
+		Args=[Spec],
+		parse_body_attmeth_template(Spec,INHERITABLE,SpecCode,Status)
+	    ),
+	    (Status == NO_ERRORS -> flobjspec_struct(OCode,SpecCode,INHERITABLE,Code); true)
         ;
             parsing_error(Funct,EXP_ANONYVAR,Status)
         ).
@@ -4940,17 +5046,18 @@ parse_body_literal_template(CanoniTerm,_Code,Status) :-
 
 
 /****************************************************************************
-  parse_body_attmeth_template(+CanoniTerm,-Code,-Status)
+  parse_body_attmeth_template(+CanoniTerm,+Type,-Code,-Status)
   methods and attributes can be term templates, and all other arguments must
   be anonymous variables
+  Type -  INHERITABLE/NONINHERITABLE
 ****************************************************************************/
-parse_body_attmeth_template(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Code,Status) :-
+parse_body_attmeth_template(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Type,Code,Status) :-
 	get_atom(Funct,F),
 	( is_mvdattspecop(F) ->
             ( get_flvar_struct(R,RCode), is_anonymous_flvar_struct(RCode) ->
                 term_template(L,DISALLOW_TRANS,LCode,Status),
 		%% TODO: check if needs [RCode] instead of RCode
-	        (Status == NO_ERRORS -> flmvdattspec_struct(LCode,F,[RCode],Code); true)
+	        (Status == NO_ERRORS -> flmvdattspec_struct(LCode,F,[RCode],Type,Code); true)
             ;
                 parsing_error(R,EXP_ANONYVAR,Status)
             )
@@ -4958,7 +5065,7 @@ parse_body_attmeth_template(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Code,
 	; is_sigattspecop(F) ->
             ( get_flvar_struct(R,RCode), is_anonymous_flvar_struct(RCode) ->
                 term_template(L,DISALLOW_TRANS,LCode,Status),
-	        (Status == NO_ERRORS -> flsigattspec_struct(LCode,F,RCode,Code); true)
+	        (Status == NO_ERRORS -> flsigattspec_struct(LCode,F,RCode,Type,Code); true)
             ;
                 parsing_error(R,EXP_ANONYVAR,Status)
             )
@@ -4966,7 +5073,7 @@ parse_body_attmeth_template(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Code,
 	; is_incattspecop(F) ->
             ( get_flvar_struct(R,RCode), is_anonymous_flvar_struct(RCode) ->
                 term_template(L,DISALLOW_TRANS,LCode,Status),
-	        (Status == NO_ERRORS -> flincattspec_struct(LCode,F,RCode,Code); true)
+	        (Status == NO_ERRORS -> flincattspec_struct(LCode,F,RCode,Type,Code); true)
             ;
                 parsing_error(R,EXP_ANONYVAR,Status)
             )
@@ -4974,14 +5081,14 @@ parse_body_attmeth_template(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Code,
 	; is_tolistattspecop(F) ->
             ( get_flvar_struct(R,RCode), is_anonymous_flvar_struct(RCode) ->
                 term_template(L,DISALLOW_TRANS,LCode,Status),
-	        (Status == NO_ERRORS -> fltolistattspec_struct(LCode,F,RCode,Code); true)
+	        (Status == NO_ERRORS -> fltolistattspec_struct(LCode,F,RCode,Type,Code); true)
             ;
                 parsing_error(R,EXP_ANONYVAR,Status)
             )
         ),
 	!.
 
-parse_body_attmeth_template(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),Code,Status) :-
+parse_body_attmeth_template(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),Type,Code,Status) :-
 	get_atom(Funct,FL_AT),
 	!,
         ( (get_flname_struct(R,RCode)
@@ -4990,22 +5097,20 @@ parse_body_attmeth_template(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),Code,S
 	      is_anonymous_flvar_struct(RCode)
 	  )
 	->
-	    parse_body_attmeth_template(L,LCode,S),
+	    parse_body_attmeth_template(L,Type,LCode,S),
 	    ( S == NO_ERRORS ->
-		( ( is_flattspec_struct(LCode)
-		  ; is_flimethspec_struct(LCode)
-		  ; is_fltranspec_struct(LCode)
+		( ( is_flattspec_struct(LCode,_)
 		  ; is_passthru_struct(LCode)
 		  )
 		->
 		      parsing_error(L,NO_WORKSPACE,Status)
 		;
-		    flmethspec_struct(C,LCode),
+		    flmethspec_struct(C,Type,LCode),
 		    ( is_flworkspace_struct(C) ->
 			parsing_error(If,NO_WSNESTING,Status)
 		    ;
 			flmodule_struct(FLORAUSERMOD,C,RCode,W),
-			flmethspec_struct(W,Code),
+			flmethspec_struct(W,Type,Code),
 			Status = NO_ERRORS
 		    )
 	        )
@@ -5016,23 +5121,19 @@ parse_body_attmeth_template(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),Code,S
 	    parsing_error(R,ERROR_WSNAME,Status)
         ).
 
-parse_body_attmeth_template(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),Code,Status) :-
+parse_body_attmeth_template(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),Type,Code,Status) :-
 	get_atom(Funct,F),
-	(is_boolsigop(F) ; is_iboolsigop(F)),
+	is_boolsigop(F),
 	!,
 	term_template(A,DISALLOW_TRANS,ACode,S1),
 	(S1 == NO_ERRORS ->
-	    ( is_boolsigop(F) -> flboolsig_struct(ACode,F,Code)
-	    ; is_iboolsigop(F) -> fliboolsig_struct(ACode,F,Code)
-	    ),
+	    flboolsig_struct(ACode,F,Type,Code),
 	    Status = NO_ERRORS
 	;
-	    parse_body_attmeth_template(A,ACode2,S2),
+	    parse_body_attmeth_template(A,Type,ACode2,S2),
 	    (S2 == NO_ERRORS ->
-		(fltranspec_struct(ATemp,ACode2) -> 
-		    ( is_boolsigop(F) -> fltransig_struct(ATemp,F,Code)
-		    ; is_iboolsigop(F) -> flitransig_struct(ATemp,F,Code)
-		    ),
+		(fltranspec_struct(ATemp,Type,ACode2) -> 
+		    fltransig_struct(ATemp,F,Type,Code),
 		    Status = NO_ERRORS
 		;
 		    parsing_error(A,ERROR_BOOLSIG,Status)
@@ -5043,24 +5144,7 @@ parse_body_attmeth_template(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),Code,St
 	),
 	!.
 
-/*
-parse_body_attmeth_template(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),Code,Status) :-
-	get_atom(Funct,F),
-	( is_transigop(F) ; is_itransigop(F)),
-	!,
-	term_template(A,DISALLOW_TRANS,ACode,Status),
-	( is_transigop(F) -> fltransig_struct(ACode,F,Code)
-	; is_itransigop(F) -> flitransig_struct(ACode,F,Code)
-	).
-*/
-
-parse_body_attmeth_template(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),Code,Status) :-
-	get_atom(Funct,FL_INMETH),
-	!,
-	term_template(A,DISALLOW_TRANS,C,Status),
-	(Status == NO_ERRORS -> flimethspec_struct(C,Code); true).
-
-parse_body_attmeth_template(CanoniTerm,Code,Status) :-
+parse_body_attmeth_template(CanoniTerm,Type,Code,Status) :-
         fltransactionalobject_struct(CanoniTerm,C),
         !,
 	(is_fltransactionalvar_struct(C),
@@ -5068,11 +5152,11 @@ parse_body_attmeth_template(CanoniTerm,Code,Status) :-
 	->
 	    parsing_error(CanoniTerm,ERROR_NAMEDVAR,Status)
 	;
-            fltranspec_struct(C,Code),
+            fltranspec_struct(C,Type,Code),
 	    Status = NO_ERRORS
 	).
  
-parse_body_attmeth_template(CanoniTerm,Code,Status) :-
+parse_body_attmeth_template(CanoniTerm,Type,Code,Status) :-
 	term_template(CanoniTerm,ALLOW_TRANS,C,Status),
 	(Status == NO_ERRORS -> 
             ((is_fltransactionalterm_struct(C)
@@ -5080,9 +5164,9 @@ parse_body_attmeth_template(CanoniTerm,Code,Status) :-
 	     ; is_fltransactionalatom_struct(C)
 	     )
 	    ->
-                fltranspec_struct(C,Code)
+                fltranspec_struct(C,Type,Code)
             ;
-                flmethspec_struct(C,Code)
+                flmethspec_struct(C,Type,Code)
             )
         ;
             true
@@ -5321,52 +5405,55 @@ loaditemlist([T|L],[TCode|LCode],Status) :-
 	loaditem(T,TCode,S),
 	(S == NO_ERRORS -> loaditemlist(L,LCode,Status); Status = S).
 
+%% ?- [>>module] - inline load into module
+loaditem(CANOTERM(Funct,1,FL_PARENTHESIS,[R],If,_Ip),Code,Status) :-
+	get_atom(Funct,FL_RIGHTTO),
+	flobject_struct(Funct,FCode),
+	!,
+	flatom_struct(FL_INLINEMODULE,If,LCode),
+	(name_or_normvar(R,RCode) ->
+	   flterm_struct(FCode,2,[LCode,RCode],Code),
+	   Status=NO_ERRORS
+	;
+	    parsing_error(R,ERROR_WSNAME,Status)
+	). 
 
+%% ?- [file>>module] - load to module
+%% ?- [+file>>module] - addition to module
+%% ?- [+ >>module] - inline addition to module
 loaditem(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Code,Status) :-
 	get_atom(Funct,FL_RIGHTTO),
 	flobject_struct(Funct,FCode),
 	!,
-	( ( name_or_normvar(L,LCode), LStatus = NO_ERRORS
-	  ; get_flbuiltin_identifier_struct(L,LCode), LStatus = NO_ERRORS
-	  ; parse_urlfile(L,LCode,LStatus)
-	  )
-	->
-	    ( name_or_normvar(R,RCode)
-	    ->
-		flterm_struct(FCode,2,[LCode,RCode],Code),
-		Status=LStatus
-	    ;
-	      parsing_error(R,ERROR_WSNAME,Status)
-	    )
-	; parse_addfile(L,LCode,LStatus)
-	-> %% support for adding files to modules
-	    ( name_or_normvar(R,RCode)
-	    ->
-		flterm_struct(FCode,2,[LCode,RCode],Code),
-		Status=LStatus
-	    ;
-		parsing_error(R,ERROR_WSNAME,Status)
-	    )
+	( name_or_normvar(R,RCode) ->
+	    flterm_struct(FCode,2,[LCode,RCode],Code),
+	    RStatus=NO_ERRORS
 	;
-	    parsing_error(L,ERROR_LOADFILE,Status)
+	    parsing_error(R,ERROR_WSNAME,RStatus)
+	),
+	%% Now construct the LCode
+	(RStatus == NO_ERRORS ->
+	    (name_or_normvar(L,LCode) -> Status = NO_ERRORS
+	    ; get_flbuiltin_identifier_struct(L,LCode) -> Status = NO_ERRORS
+	    ; parse_urlfile(L,LCode,Status) -> true
+	    %% support for adding files to modules
+	    ; parse_addfile(L,LCode,Status) -> true
+	    ;
+		parsing_error(L,ERROR_LOADFILE,Status)
+	    )
+	; Status = RStatus
         ).
 
 loaditem(CanoniTerm,Code,Status) :-
-	(
-	  (name_or_normvar(CanoniTerm,Code), Status = NO_ERRORS
-	  ; get_flbuiltin_identifier_struct(CanoniTerm,Code), Status = NO_ERRORS
-	  ; get_atom(CanoniTerm,FL_INLINEMODULE,Idx),
-	      flatom_struct(FL_INLINEMODULE,Idx,Code), Status = NO_ERRORS
-	  ; parse_urlfile(CanoniTerm,Code,Status)
-	  ),
-	  !
+	(get_flbuiltin_identifier_struct(CanoniTerm,Code) -> Status = NO_ERRORS
+	; name_or_normvar(CanoniTerm,Code) -> Status = NO_ERRORS
+	; parse_urlfile(CanoniTerm,Code,Status) -> true
 	;
 	    parse_addfile(CanoniTerm,Code,Status)
 	),
 	!.
 
 loaditem(CanoniTerm,_Code,Status) :-
-	!,
 	parsing_error(CanoniTerm,ERROR_LOADITEM,Status).
 
 
@@ -5393,21 +5480,45 @@ parse_term_or_var(CanoniTerm,Code,Status) :-
         ),
 	!.
 
-%% support for adding files to modules
+
+%% support for adding files
+%% the case of a normal file: [+file ...]
 parse_addfile(CANOTERM(Funct,1,FL_PARENTHESIS,[L],_If,_Ip),Code,Status) :-
 	get_atom(Funct,FL_PLUS),
-	flobject_struct(Funct,FCode),
 	!,
-	( ( name_or_normvar(L,LCode), LStatus = NO_ERRORS
-	  ; get_flbuiltin_identifier_struct(L,LCode), LStatus = NO_ERRORS
-	  ; parse_urlfile(L,LCode,LStatus)
-	  )
-	->
+	flatom_struct(FL_PLUS,NO_INDEX,FCode),
+	( name_or_normvar(L,LCode) -> LStatus = NO_ERRORS
+	; get_flbuiltin_identifier_struct(L,LCode) -> LStatus = NO_ERRORS
+	; parse_urlfile(L,LCode,LStatus)
+	),
+	(LStatus == NO_ERRORS ->
 	    flterm_struct(FCode,1,[LCode],Code),
 	    Status=LStatus
 	;
 	    parsing_error(L,ERROR_ADDFILE,Status)
         ).
+
+%% the case of ?- [+>> module] - inline file
+parse_addfile(CANOTERM(Funct,1,FL_PARENTHESIS,[R],_If,_Ip),Code,Status) :-
+	get_atom(Funct,FL_ALLINARROW),
+	!,
+	flatom_struct(FL_PLUS,NO_INDEX,PlusCode),
+	flatom_struct(FL_INLINEMODULE,NO_INDEX,LCode),
+	flterm_struct(PlusCode,1,[LCode],FileCode),
+	(name_or_normvar(R,RCode) ->
+	    flatom_struct(FL_RIGHTTO,NO_INDEX,ToModCode),
+	    flterm_struct(ToModCode,2,[FileCode,RCode],Code),
+	    Status = NO_ERRORS
+	; parsing_error(R,ERROR_WSNAME,Status)
+	).
+
+%% the case of ?- [+ >> module] - inline file
+parse_addfile(Canoterm,Code,NO_ERRORS) :-
+	get_atom(Canoterm,FL_PLUS),
+	!,
+	flatom_struct(FL_PLUS,NO_INDEX,FCode),
+	flatom_struct(FL_INLINEMODULE,NO_INDEX,LCode),
+	flterm_struct(FCode,1,[LCode],Code).
 
 %% file name specified as url('http://...')
 parse_urlfile(CANOTERM(Funct,1,FL_PARENTHESIS,[L],_If,_Ip),Code,Status) :-
@@ -5490,7 +5601,7 @@ parse_body_term(Funct,N,Args,_TransFlag,DWS,Code,Status) :-
 	flora_argdef(FAtom,N,ArgTypes,DWS),
 	!, 
         flobject_struct(Funct,F),
-	parse_body_argpathexplist(Args,ArgTypes,DWS,AList,Status),
+	parse_body_argpathexplist(Args,ArgTypes,DWS,PURE_PATHEXPS_ONLY,AList,Status),
 	( Status == NO_ERRORS
 	-> flterm_struct(F,N,AList,Code)
 	;
@@ -5503,9 +5614,9 @@ parse_body_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
         ( TransFlag == ALLOW_TRANS ->
 	    (get_transactionalatom(Funct,FAtom),
 		flora_argdef(FAtom,N,ArgTypes,DWS)
-	    -> parse_body_argpathexplist(Args,ArgTypes,DWS,AList,Status)
+	    -> parse_body_argpathexplist(Args,ArgTypes,DWS,PURE_PATHEXPS_ONLY,AList,Status)
 	    ;
-		parse_body_pathexplist(Args,DWS,AList,Status)
+		parse_body_pathexplist(Args,DWS,PURE_PATHEXPS_ONLY,AList,Status)
 	    ),
             (Status == NO_ERRORS -> fltransactionalterm_struct(F,N,AList,Code) ; true)
         ;
@@ -5526,9 +5637,9 @@ parse_body_term(Funct,2,Args,TransFlag,DWS,Code,Status) :-
 	parse_curi(Args,TransFlag,DWS,Code,Status).
 
 parse_body_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
-	parse_body_pathexp(Funct,TransFlag,DWS,F,S),
+	parse_body_pathexp(Funct,TransFlag,DWS,PURE_PATHEXPS_ONLY,F,S),
 	( S == NO_ERRORS ->
-	    parse_body_pathexplist(Args,DWS,AList,Status),
+	    parse_body_pathexplist(Args,DWS,PURE_PATHEXPS_ONLY,AList,Status),
 	    (Status == NO_ERRORS -> 
                 ((is_fltransactionalterm_struct(F)
 		 ; is_fltransactionalatom_struct(F)
@@ -5740,13 +5851,13 @@ parse_list([],[],Index,_DWS,T,NO_ERRORS) :-
 	fllist_struct([],[],Index,T).
 
 parse_list(L,T,Index,DWS,Code,Status) :-
-	parse_body_pathexplist(L,DWS,LCode,S),
+	parse_body_pathexplist(L,DWS,PURE_PATHEXPS_ONLY,LCode,S),
 	( S == NO_ERRORS ->
 	    ( T == [] ->
 		TCode = [],
 		Status = NO_ERRORS
 	    ;
-	      parse_body_pathexp(T,DISALLOW_TRANS,DWS,TCode,Status)
+	      parse_body_pathexplist([T],DWS,PURE_PATHEXPS_ONLY,[TCode],Status)
 	    ),
 	    (Status == NO_ERRORS -> fllist_struct(LCode,TCode,Index,Code); true)
 	;
@@ -5755,63 +5866,88 @@ parse_list(L,T,Index,DWS,Code,Status) :-
 
 
 /****************************************************************************
-  parse_body_pathexplist(+ListOfCanoniTerms,+DWS,-ListOfPathExpressions,-Status)
+  parse_body_pathexplist(+ListOfCanoniTerms,+DWS,+TermArgMode,-ListOfPathExpressions,-Status)
 
   parses a list of path expressions that are supposed to represent oids.
+  TermArgMode: PURE_PATHEXPS_ONLY/ANY_PATHEXP
+               whether we are parsing term arguments or not
 
 ****************************************************************************/
-parse_body_pathexplist([],_DWS,[],NO_ERRORS) :- !.
+parse_body_pathexplist([],_DWS,_TermArgMode,[],NO_ERRORS) :- !.
 
-parse_body_pathexplist([T|L],DWS,[TCode|LCode],Status) :-
-	parse_body_pathexp(T,DISALLOW_TRANS,DWS,TCode,S),
-	( S == NO_ERRORS ->
-	    parse_body_pathexplist(L,DWS,LCode,Status)
+parse_body_pathexplist([T|L],DWS,TermArgMode,[TCode|LCode],Status) :-
+	parse_body_pathexp(T,DISALLOW_TRANS,DWS,TermArgMode,TCode,S),
+	(S==NO_ERRORS,
+	    %% No longer allow truth-valued path expressions pathexp[...]
+	    %% as arguments to preds and terms
+	    is_truthval_pathexp(TCode,TermArgMode)
+	-> parsing_error(T,ERROR_PURE_PATHEXP_ONLY,PureTermTestStat)
+	; PureTermTestStat = S
+	),
+	( PureTermTestStat == NO_ERRORS ->
+	    parse_body_pathexplist(L,DWS,TermArgMode,LCode,Status)
 	;
-	  Status = S
+	  Status = PureTermTestStat
         ).
+
+is_truthval_pathexp(Obj,PURE_PATHEXPS_ONLY) :- is_flobjspec(Obj,_,_,_).
 
 
 /****************************************************************************
-  parse_body_argpathexplist(+Terms,+ArgumentTypes,+DWS,-PathExpressions,-Status)
+  parse_body_argpathexplist(+Terms,+ArgumentTypes,+DWS,+TermArgMode,-PathExpressions,-Status)
 
   parses a list of path expressions according to a list of argument
   specification directives.
   FL_OID means the oid represented by a path expression while
   FL_BODYFORMULA means the formula represented by a path expression.
 ****************************************************************************/
-parse_body_argpathexplist([],[],_DWS,[],NO_ERRORS) :- !.
+parse_body_argpathexplist([],[],_DWS,_TermArgMode,[],NO_ERRORS) :- !.
 
-parse_body_argpathexplist([T|L],[FL_OID|Arguments],DWS,[TCode|LCode],Status) :-
-	parse_body_pathexp(T,DISALLOW_TRANS,DWS,TCode,S),
-	( S == NO_ERRORS ->
-	    parse_body_argpathexplist(L,Arguments,DWS,LCode,Status)
+parse_body_argpathexplist([T|L],[FL_OID|Arguments],DWS,TermArgMode,[TCode|LCode],Status) :-
+	parse_body_pathexp(T,DISALLOW_TRANS,DWS,TermArgMode,TCode,S),
+	(S==NO_ERRORS,
+	    %% No longer allow truth-valued path expressions pathexp[...]
+	    %% as arguments to preds and terms
+	    is_truthval_pathexp(TCode,TermArgMode)
+	-> parsing_error(T,ERROR_PURE_PATHEXP_ONLY,PureTermTestStat)
+	; PureTermTestStat = S
+	),
+	( PureTermTestStat == NO_ERRORS ->
+	    parse_body_argpathexplist(L,Arguments,DWS,TermArgMode,LCode,Status)
 	;
-	  Status = S
+	  Status = PureTermTestStat
         ).
 
-parse_body_argpathexplist([T|L],[FL_BODYFORMULA|Arguments],DWS,[RTCode|LCode],Status) :-
+parse_body_argpathexplist([T|L],[FL_BODYFORMULA|Arguments],DWS,TermArgMode,[RTCode|LCode],Status) :-
 	set_context(implicit_reification),
 	protect_reification(parse_rule_body(T,DWS,DWS,TCode,S)),
 	clear_context(implicit_reification),
 	( S == NO_ERRORS ->
             flreify_struct(TCode,RTCode),
-	    parse_body_argpathexplist(L,Arguments,DWS,LCode,Status)
+	    parse_body_argpathexplist(L,Arguments,DWS,TermArgMode,LCode,Status)
 	;
 	  Status = S
         ).
 
-parse_body_argpathexplist([T|L],[FL_ARITH|Arguments],DWS,[TACode|LCode],Status) :-
-	parse_body_pathexp(T,DISALLOW_TRANS,DWS,TCode,S),
+parse_body_argpathexplist([T|L],[FL_ARITH|Arguments],DWS,TermArgMode,[TACode|LCode],Status) :-
+	parse_body_pathexp(T,DISALLOW_TRANS,DWS,TermArgMode,TCode,S),
+	(S==NO_ERRORS,
+	    %% No longer allow truth-valued path expressions pathexp[...]
+	    %% as arguments to preds and terms
+	    is_truthval_pathexp(TCode,TermArgMode)
+	-> parsing_error(T,ERROR_PURE_PATHEXP_ONLY,PureTermTestStat)
+	; PureTermTestStat = S
+	),
 	flarith_struct(TCode,TACode),
-	( S == NO_ERRORS ->
-	    parse_body_argpathexplist(L,Arguments,DWS,LCode,Status)
+	( PureTermTestStat == NO_ERRORS ->
+	    parse_body_argpathexplist(L,Arguments,DWS,TermArgMode,LCode,Status)
 	;
-	  Status = S
+	  Status = PureTermTestStat
         ).
 
 
 /****************************************************************************
-  parse_body_pathexp(+CanoniTerm,+TransFlag,+DWS,-PathExpression,-Status)
+  parse_body_pathexp(+CanoniTerm,+TransFlag,+DWS,+TermArgMode,-PathExpression,-Status)
 
   Parse path expression represented by CanoniTerm. A path expression is
   oid[molecule].oid[molecule]. ... .oid[molecule]
@@ -5819,54 +5955,59 @@ parse_body_argpathexplist([T|L],[FL_ARITH|Arguments],DWS,[TACode|LCode],Status) 
   Also term:term, term::term, and lists
 
 ****************************************************************************/
-parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_TransFlag,DWS,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],_If,_Ip),_TransFlag,DWS,TermArgMode,Code,Status) :-
 	get_atom(Funct,F),
-	(is_birelop(F); is_objrefop(F)),
-	!,
-	parse_body_pathexplist(Args,DWS,[LCode,RCode],Status),
-	( Status == NO_ERRORS ->
-	    ( is_birelop(F) -> flbirelate_struct(LCode,F,RCode,Code)
-	    ; 
-	      flobjref_struct(LCode,F,RCode,Code)
+	(is_birelop(F) ->
+	    parse_body_pathexplist([Left,Right],DWS,TermArgMode,[LCode,RCode],Status),
+	    ( Status == NO_ERRORS -> flbirelate_struct(LCode,F,RCode,Code)
+	    ; true
 	    )
-	;
-	  true
-        ).
+	; is_objrefop(F) ->
+	    parse_body_pathexp(Left,DISALLOW_TRANS,DWS,ANY_PATHEXP,LCode,S),
+	    (S==NO_ERRORS ->
+		parse_body_pathexplist([Right],DWS,TermArgMode,[RCode],Status)
+	    ; Status = S
+	    ),
+	    ( Status == NO_ERRORS -> flobjref_struct(F,LCode,RCode,Code)
+	    ; true
+	    )
+        ),
+	!.
 
 %% To handle CURI structure like prefix#suffix
-parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,_TermArgMode,Code,Status) :-
 	get_atom(Funct,F),
 	is_curi_op(F),
 	!,
 	parse_curi(Args,TransFlag,DWS,Code,Status).
 
 % To handle literal^^sort 
-parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),_TransFlag,DWS,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
 	get_atom(Funct,F),
 	is_datatypeop(F),
 	!,
 	parse_composer_datatype(Args,If,DWS,Code,Status).
 
-%% This clause handles module specification @_prolog() and @_prologall()
+%% This clause handles module specification @\prolog() and @\prologall()
 %% in the argument position.
-%% Note that @module (for FLORA-2 modules) is illegal in the argument position.
+%% Note that @module (for Flora-2 modules) is illegal in the argument position.
 %% But aggregate{ ... atom@module} and update{atom@module} are allowed.
-parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,DWS,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,DWS,TermArgMode,Code,Status) :-
 	get_atom(Funct,FL_AT),
 	!,
 	parse_workspace(R,WSCode,S1),
 	( S1 == NO_ERRORS ->
-	    ( (WSCode = PROLOGMODULE; WSCode = PROLOGMODULE(Mod)) ->
+	    ( has_module_type(WSCode,PROLOGMODULE) ->
 		parse_prlgterm(L,DWS,LCode,S2)
 	    
-	    ; (WSCode = PROLOGALLMODULE; WSCode = PROLOGALLMODULE(Mod)) ->
+	    ; has_module_type(WSCode,PROLOGALLMODULE) ->
 		parse_pure_term(L,DWS,LCode,S2)
 
-	    ;   %% aggregate{ ... atom@module} or update{atom@module}
-		%% Others (e.g., p(foo@bar)) will be caught in the compiler
-		(WSCode = FLORAUSERMOD(Mod) ; WSCode = FLORASYSMOD(Mod)) ->
+	    ; %% aggregate{ ... atom@module} or update{atom@module}
+	      %% Others (e.g., p(foo@bar)) will be caught in the compiler
+	      has_module_type(WSCode,FLORAMODULE) ->
 		%% TransFlag = ALLOW_TRANS causes failure in the composer
-	        parse_body_pathexp(L,TransFlag,WSCode,LCode,S2)
+	        parse_body_pathexp(L,TransFlag,WSCode,TermArgMode,LCode,S2)
 	    ),
 	    %% Check if the module specification is valid.
 	    ( S2 == NO_ERRORS ->
@@ -5877,14 +6018,14 @@ parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,DWS,C
 		;
 		  Status = NO_ERRORS,
 		  ( WSCode = PROLOGMODULE ->
-		      %% Covers: @_prolog()
+		      %% Covers: @\prolog()
 		      flplib_struct(LCode,Code)
 		  
 		  ; WSCode = PROLOGALLMODULE ->
-		      %% Covers: @_prologall()
+		      %% Covers: @\prologall()
 		      flpliball_struct(LCode,Code)
 
-		  %% Covers: @mod, @_mod, @_prolog(mod), @_prologall(mod)
+		  %% Covers: @mod, @\mod, @\prolog(mod), @\prologall(mod)
 		  ; flora_get_module_from_spec(WSCode,ModuleType,Mod),
 		      flmodule_struct(ModuleType,LCode,Mod,Code)
 		  )
@@ -5896,39 +6037,44 @@ parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,DWS,C
 	  Status = S1
         ).
 
-parse_body_pathexp(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,_TermArgMode,Code,Status) :-
 	!,
 	parse_body_term(Funct,N,Args,TransFlag,DWS,Code,Status).
 
-parse_body_pathexp(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),_TransFlag,DWS,Code,Status) :-
+%% obj[...]
+parse_body_pathexp(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
 	!,
-	parse_body_objspec(Funct,N,Args,DWS,Code,Status).
+	parse_body_objspec(Funct,N,Args,DWS,NONINHERITABLE,Code,Status).
+%% obj[|...|]
+parse_body_pathexp(CANOTERM(Funct,N,FL_BRACKBAR,Args,_If,_Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
+	!,
+	parse_body_objspec(Funct,N,Args,DWS,INHERITABLE,Code,Status).
 
-parse_body_pathexp(CANOLIST(L,T,_N,I,_Ib),_TransFlag,DWS,Code,Status) :-
+parse_body_pathexp(CANOLIST(L,T,_N,I,_Ib),_TransFlag,DWS,_TermArgMode,Code,Status) :-
 	!,
 	parse_list(L,T,I,DWS,Code,Status).
 
 
 %% ${...} - reification
-parse_body_pathexp(CANOTERM(Funct,0,FL_BRACE,[],_If,Ip),_TransFlag,_DWS,_Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,0,FL_BRACE,[],_If,Ip),_TransFlag,_DWS,_TermArgMode,_Code,Status) :-
 	get_atom(Funct,Atom),
 	is_reifyop(Atom),
 	!,
 	parsing_error(Ip,EXP_ARGS,Status).
 
-parse_body_pathexp(CANOTERM(Funct,_N,FL_BRACE,[Arg|Rest],If,Ip),_TransFlag,DWS,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,_N,FL_BRACE,[Arg|Rest],If,Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
 	get_atom(Funct,Atom),
 	is_reifyop(Atom),
 	!,
 	list_to_canoterm_conjunct([Arg|Rest], Conjunct, If, Ip),
 	parse_reify(Conjunct,DWS,Code,Status).
 	
-parse_body_pathexp(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
 	!,
 	parse_aggregt(Funct,N,Args,If,Ip,DWS,Code,Status).
 
 /*
-%% We now allow _# in the body: it is a test if the arg matches a Skolem
+%% We now allow \# in the body: it is a test if the arg matches a Skolem
 parse_body_pathexp(ObjectTerm,_TransFlag,_DWS,_Code,Status) :-
 	%% New oid symbol is only allowed in rule heads or reified formulas.
 	get_spectoken(ObjectTerm,FL_NEWOID),
@@ -5937,21 +6083,21 @@ parse_body_pathexp(ObjectTerm,_TransFlag,_DWS,_Code,Status) :-
 	parsing_error(ObjectTerm,ERROR_NEWOID,Status).
 */
 
-parse_body_pathexp(ObjectTerm,_TransFlag,_DWS,Code,NO_ERRORS) :-
+parse_body_pathexp(ObjectTerm,_TransFlag,_DWS,_TermArgMode,Code,NO_ERRORS) :-
 	flobject_struct(ObjectTerm,Code),
 	!.
 
-parse_body_pathexp(CANOBRACE(L,N,I),_TransFlag,DWS,Code,Status) :-
+parse_body_pathexp(CANOBRACE(L,N,I),_TransFlag,DWS,TermArgMode,Code,Status) :-
 	N>0,
 	!,
-	parse_body_pathexplist(L,DWS,Code1,Status),
+	parse_body_pathexplist(L,DWS,TermArgMode,Code1,Status),
 	flsetarg_struct(Code1,I,Code).
 
-parse_body_pathexp(CANOBRACE(_L,_N,I),_TransFlag,_DWS,_Code,Status) :-
+parse_body_pathexp(CANOBRACE(_L,_N,I),_TransFlag,_DWS,_TermArgMode,_Code,Status) :-
 	!,
 	parsing_error(I,ERROR_SETNOTE,Status).
 
-parse_body_pathexp(CanoniTerm,_TransFlag,_DWS,_Code,Status) :-
+parse_body_pathexp(CanoniTerm,_TransFlag,_DWS,_TermArgMode,_Code,Status) :-
 	!,
 	parsing_error(CanoniTerm,ERROR_PATHEXP,Status).
 
@@ -5977,35 +6123,38 @@ nowspathexp(S) :-
 
 
 /****************************************************************************
-  parse_body_objspec(+Obj,+Arity,+Args,+DWS,-Code,-Status)
+  parse_body_objspec(+Obj,+Arity,+Args,+DWS,+InherType,-Code,-Status)
   parse_body_objspec(+CanoniTerm,+DWS,-Code,-Status)
 
   parses ObjectSpecification as described in the BNF grammar at the
   beginning of this file.
   Args here is what's inside the brackets ...[Args]
+  InherType: INHERITABLE/NONINHERITABLE
 ****************************************************************************/
-parse_body_objspec(Obj,N,Args,DWS,Code,Status) :-
-	parse_body_pathexp(Obj,DISALLOW_TRANS,DWS,O,S),
+parse_body_objspec(Obj,N,Args,DWS,Type,Code,Status) :-
+	parse_body_pathexp(Obj,DISALLOW_TRANS,DWS,ANY_PATHEXP,O,S),
 	( S == NO_ERRORS ->
 	    ( N == 0 ->
 		Spec = [],
 		Status = NO_ERRORS
 	    ;
 		Args=[Body],
-		parse_body_objspec(Body,DWS,Spec,Status)
+		parse_body_objspec(Body,DWS,Type,Spec,Status)
 	    ),
-	    (Status == NO_ERRORS -> flobjspec_struct(O,Spec,Code); true)
+	    (Status == NO_ERRORS -> flobjspec_struct(O,Spec,Type,Code)
+	    ; true
+	    )
 	;
 	  Status = S
         ).
 
-parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Code,Status) :-
+parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,F),
 	(F == FL_AND_CONNECTIVE; F == FL_OR_CONNECTIVE),
 	!, %% conjunction or disjunction
-	parse_body_objspec(L,DWS,LCode,S),
+	parse_body_objspec(L,DWS,Type,LCode,S),
 	( S == NO_ERRORS ->
-	    parse_body_objspec(R,DWS,RCode,Status),
+	    parse_body_objspec(R,DWS,Type,RCode,Status),
 	    ( Status == NO_ERRORS ->
 		( F == FL_AND_CONNECTIVE ->
 		    flconjunct_struct(LCode,RCode,Code)
@@ -6021,7 +6170,7 @@ parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Code,Statu
 
 %% This parses obj[naf foo->bar], obj[naf foo], obj[\+foo->bar], or obj[\+foo] 
 %% in object specifications
-parse_body_objspec(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),DWS,Code,Status) :-
+parse_body_objspec(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,F),
 	(is_plgnafop(F); is_rulelognafop(F); is_negop(F)),
 	!, %% negation
@@ -6031,7 +6180,7 @@ parse_body_objspec(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),DWS,Code,Status)
 	; true
 	),
 	list_to_canoterm_conjunct(Args,Conjunct,If,Ip),
-	parse_body_objspec(Conjunct,DWS,C,Status),
+	parse_body_objspec(Conjunct,DWS,Type,C,Status),
 	( Status == NO_ERRORS ->
 	    (is_plgnafop(F) -> flprlgnaf_struct(C,Code)
 	    ; is_rulelognafop(F) -> flrulelognaf_struct(C,Code)
@@ -6043,7 +6192,7 @@ parse_body_objspec(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),DWS,Code,Status)
 
 %% existantial quantifier under default negation in
 %% obj[not exists(?X,?Y)^goo->bar]
-parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTHESIS,Vars,_,_),Goal],_If,_Ip),DWS,Code,Status) :-
+parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTHESIS,Vars,_,_),Goal],_If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,FL_QUANTVARCONNECTOR),
 	get_atom(Quant,QuantAtom,QuantIdx),
 	is_logicalquantifier(QuantAtom,QuantAtomCanon),
@@ -6058,7 +6207,7 @@ parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTH
 	-> VarNames=FL_STAR, S2 = NO_ERRORS
 	; parse_varlist(Vars,_VarCode,VarNames,S2)
 	),
-	parse_body_objspec(Goal,DWS,GoalCode,S3),
+	parse_body_objspec(Goal,DWS,Type,GoalCode,S3),
 	merge_status([S1,S2,S3],Status),
 	( Status == NO_ERRORS ->
 	    flquantifier_struct(QuantAtomCanon,VarNames,GoalCode,QuantIdx,Code)
@@ -6066,7 +6215,7 @@ parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTH
 	  true
         ).
 
-parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTHESIS,_Vars,_,_),_Goal],_If,_Ip),_DWS,_Code,Status) :-
+parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTHESIS,_Vars,_,_),_Goal],_If,_Ip),_DWS,_Type,_Code,Status) :-
 	get_atom(Funct,FL_QUANTVARCONNECTOR),
 	get_atom(Quant,QuantAtom,QuantIdx),
 	is_logicalquantifier(QuantAtom,_QuantAtomCanon),
@@ -6074,30 +6223,31 @@ parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTH
 	parsing_error(QuantIdx,NO_LOG_QUANTIFIERS,Status).
 
 
-parse_body_objspec(CanoniTerm,DWS,Code,Status) :-
-	parse_body_attmethspec(CanoniTerm,DWS,Code,Status).
+parse_body_objspec(CanoniTerm,DWS,Type,Code,Status) :-
+	parse_body_attmethspec(CanoniTerm,DWS,Type,Code,Status).
 	
 
 
 /****************************************************************************
-  parse_body_attmethspec(+CanoniTerm,+DWS,-Goal,-Status)
+  parse_body_attmethspec(+CanoniTerm,+DWS,+Type,-Goal,-Status)
   parse_body_setexp(+CanoniTerm,+DWS,-CodeList,-Status)
+  Type: INHERITABLE/NONINHERITABLE
 ****************************************************************************/
-parse_body_attmethspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Code,Status) :-
+parse_body_attmethspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,F),
 	( is_mvdattspecop(F) ->
-	    parse_body_pathexp(L,DISALLOW_TRANS,DWS,LCode,S),
+	    parse_body_pathexp(L,DISALLOW_TRANS,DWS,ANY_PATHEXP,LCode,S),
 	    (S == NO_ERRORS -> parse_body_setexp(R,DWS,RCode,Status)
 	    ; Status = S
 	    ),
-	    (Status == NO_ERRORS -> flmvdattspec_struct(LCode,F,RCode,Code)
+	    (Status == NO_ERRORS -> flmvdattspec_struct(LCode,F,RCode,Type,Code)
 	    ; true
 	    )
 	; is_sigattspecop(F) ->
 	    (L=CANOTERM(M,1,FL_BRACE,[Constr],_If1,_Ip1)->
 		parse_sigconstr(Constr,DWS,CCode,S_C), 
 		(S_C == NO_ERRORS ->
-		    parse_body_pathexp(M,DISALLOW_TRANS,DWS,MCode,S1),
+		    parse_body_pathexp(M,DISALLOW_TRANS,DWS,ANY_PATHEXP,MCode,S1),
 		    (S1 == NO_ERRORS
 		    %% The right hand side 
 		    -> (is_emptyterm(R)
@@ -6105,7 +6255,7 @@ parse_body_attmethspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Code,S
 		       -> get_index(R,Ind),
 			   emptyterm_struct(Ind,RCode),
 			   Status = NO_ERRORS
-		       ;  parse_body_pathexp(R,DISALLOW_TRANS,DWS,RCode,Status)
+		       ;  parse_body_pathexp(R,DISALLOW_TRANS,DWS,ANY_PATHEXP,RCode,Status)
 		       )
 		    ; Status = S1
 		    )
@@ -6113,51 +6263,56 @@ parse_body_attmethspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Code,S
 		    Status = S_C
 		),
 		(Status == NO_ERRORS ->
-		    flsigattconspec_struct(MCode,CCode,F,RCode,Code)
+		    flsigattconspec_struct(MCode,CCode,F,RCode,Type,Code)
 		; true
 		)
 	    ;
-		parse_body_pathexp(L,DISALLOW_TRANS,DWS,LCode,S1),
+		parse_body_pathexp(L,DISALLOW_TRANS,DWS,ANY_PATHEXP,LCode,S1),
 		(S1 == NO_ERRORS
 		%% The right hand side 
 		-> (is_emptyterm(R)
 		   -> get_index(R,Ind),
 		       emptyterm_struct(Ind,RCode),
 		       Status = NO_ERRORS
-		   ;  parse_body_pathexp(R,DISALLOW_TRANS,DWS,RCode,Status)
+		   ;  parse_body_pathexp(R,DISALLOW_TRANS,DWS,ANY_PATHEXP,RCode,Status)
 		   )
 		; Status = S1
 		),
-		(Status == NO_ERRORS -> flsigattspec_struct(LCode,F,RCode,Code); true)
+		(Status == NO_ERRORS ->
+		    flsigattspec_struct(LCode,F,RCode,Type,Code)
+		; true
+		)
 	    )
 
 	; is_incattspecop(F) ->
-	    parse_body_pathexplist([L,R],DWS,[LCode,RCode],Status),
-	    (Status == NO_ERRORS -> flincattspec_struct(LCode,F,RCode,Code); true)
+	    parse_body_pathexplist([L,R],DWS,ANY_PATHEXP,[LCode,RCode],Status),
+	    (Status == NO_ERRORS ->
+		flincattspec_struct(LCode,F,RCode,Type,Code)
+	    ; true
+	    )
 
 	; is_tolistattspecop(F) ->
-	    parse_body_pathexplist([L,R],DWS,[LCode,RCode],Status),
-	    (Status == NO_ERRORS -> fltolistattspec_struct(LCode,F,RCode,Code); true)
+	    parse_body_pathexplist([L,R],DWS,ANY_PATHEXP,[LCode,RCode],Status),
+	    (Status == NO_ERRORS ->
+		fltolistattspec_struct(LCode,F,RCode,Type,Code)
+	    ; true
+	    )
         ),
 	!.
 
-parse_body_attmethspec(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Code,Status) :-
+parse_body_attmethspec(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,F),
-	(is_boolsigop(F) ; is_iboolsigop(F)),
+	is_boolsigop(F),
 	!,
-	parse_body_pathexp(A,DISALLOW_TRANS,DWS,ACode,S1),
+	parse_body_pathexp(A,DISALLOW_TRANS,DWS,ANY_PATHEXP,ACode,S1),
 	(S1 == NO_ERRORS ->
-	    ( is_boolsigop(F) -> flboolsig_struct(ACode,F,Code)
-	    ; is_iboolsigop(F) -> fliboolsig_struct(ACode,F,Code)
-	    ),
+	    flboolsig_struct(ACode,F,Type,Code),
 	    Status = NO_ERRORS
 	;
-	    parse_body_attmethspec(A,DWS,ACode2,S2),
+	    parse_body_attmethspec(A,DWS,Type,ACode2,S2),
 	    (S2 == NO_ERRORS ->
-		(fltranspec_struct(ATemp,ACode2) -> 
-		    ( is_boolsigop(F) -> fltransig_struct(ATemp,F,Code)
-		    ; is_iboolsigop(F) -> flitransig_struct(ATemp,F,Code)
-		    ),
+		(fltranspec_struct(ATemp,Type,ACode2) -> 
+		    fltransig_struct(ATemp,F,Type,Code),
 		    Status = NO_ERRORS
 		;
 		    parsing_error(A,ERROR_BOOLSIG,Status)
@@ -6168,118 +6323,97 @@ parse_body_attmethspec(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Code,Sta
 	),
 	!.
 
-/*
-parse_body_attmethspec(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Code,Status) :-
-	get_atom(Funct,F),
-	( is_transigop(F) ; is_itransigop(F)),
-	!,
-	parse_body_pathexp(A,DISALLOW_TRANS,DWS,ACode,Status),
-	( is_transigop(F) -> fltransig_struct(ACode,F,Code)
-	; is_itransigop(F) -> flitransig_struct(ACode,F,Code)
-	).
-*/
 
-
-parse_body_attmethspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),_DWS,Code,Status) :-
+parse_body_attmethspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),_DWS,Type,Code,Status) :-
 	get_atom(Funct,FL_AT),
 	!,
 	( name_or_var(R,RCode) ->
             parse_workspace(R,WSCode,SWS),
-	    parse_body_attmethspec(L,WSCode,LCode,S),
+	    parse_body_attmethspec(L,WSCode,Type,LCode,S),
 	    ( S == NO_ERRORS, SWS == NO_ERRORS ->
-		( ( is_flattspec_struct(LCode)
-		  ; is_flimethspec_struct(LCode)
-		  ; is_fltranspec_struct(LCode)
+		( ( is_flattspec_struct(LCode,_)
 		  ; is_passthru_struct(LCode)
 		  )
 		->
 		      parsing_error(L,NO_WORKSPACE,Status)
 		;
-		    flmethspec_struct(C,LCode),
+		    flmethspec_struct(C,Type,LCode),
 		    ( is_flworkspace_struct(C) ->
 			parsing_error(If,NO_WSNESTING,Status)
 		    ;
 			flmodule_struct(FLORAUSERMOD,C,RCode,W),
-			flmethspec_struct(W,Code),
+			flmethspec_struct(W,Type,Code),
 			Status = NO_ERRORS
 		    )
 	        )
-	    ; SWS == NO_ERRORS
-	    -> Status = S
+	    ; SWS == NO_ERRORS -> Status = S
 	    ; Status = SWS
 	    )
 	;
 	    parsing_error(R,ERROR_WSNAME,Status)
         ).
 
-parse_body_attmethspec(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Code,Status) :-
-	get_atom(Funct,FL_INMETH),
-	!,
-	parse_body_pathexp(A,DISALLOW_TRANS,DWS,C,Status),
-	( Status == NO_ERRORS -> flimethspec_struct(C,Code);true).
-
-parse_body_attmethspec(CanoniTerm,_DWS,Code,NO_ERRORS) :-
+parse_body_attmethspec(CanoniTerm,_DWS,Type,Code,NO_ERRORS) :-
         fltransactionalobject_struct(CanoniTerm,C),
         !,
-        fltranspec_struct(C,Code).
+        fltranspec_struct(C,Type,Code).
         
 %% Transactional method spec. Possibly with a prefix macro.
-parse_body_attmethspec(CanoniTerm,DWS,Code,Status) :-
-	parse_body_pathexp(CanoniTerm,ALLOW_TRANS,DWS,C,Status),
+parse_body_attmethspec(CanoniTerm,DWS,Type,Code,Status) :-
+	parse_body_pathexp(CanoniTerm,ALLOW_TRANS,DWS,ANY_PATHEXP,C,Status),
 	(is_fltransactionalterm_struct(C)
 	; is_fltransactionalpredspec_struct(C)
 	; is_fltransactionalatom_struct(C)
 	),
 	!,
-	(Status == NO_ERRORS -> fltranspec_struct(C,Code)
+	(Status == NO_ERRORS -> fltranspec_struct(C,Type,Code)
         ;
 	    %% error
             true
         ).
 
 %% Obj[true], Obj[fail], Obj[!] - interpreted as true, false, !
-parse_body_attmethspec(CanoniTerm,DWS,Code,Status) :-
-	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,C,Status),
+parse_body_attmethspec(CanoniTerm,DWS,_Type,Code,Status) :-
+	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,ANY_PATHEXP,C,Status),
 	is_flatom_struct(C,Atom),
 	is_passthru_atom(Atom),
         !,
 	(Status == NO_ERRORS -> flpassthru_struct(C,Code); true).
 
 %% Obj[X>Y], Obj[X=Y], etc.
-parse_body_attmethspec(CanoniTerm,DWS,Code,Status) :-
-	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,C,Status),
+parse_body_attmethspec(CanoniTerm,DWS,_Type,Code,Status) :-
+	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,PURE_PATHEXPS_ONLY,C,Status),
 	flterm_struct(Funct,Arity,_Args,C), % decompose C
 	is_flatom_struct(Funct,Atom),
 	is_passthru_pred(Atom,Arity),
         !,
 	(Status == NO_ERRORS -> flpassthru_struct(C,Code); true).
 
-parse_body_attmethspec(CanoniTerm,DWS,Code,Status) :-
-	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,C,Status),
-	(Status == NO_ERRORS -> flmethspec_struct(C,Code); true).
+parse_body_attmethspec(CanoniTerm,DWS,Type,Code,Status) :-
+	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,ANY_PATHEXP,C,Status),
+	(Status == NO_ERRORS -> flmethspec_struct(C,Type,Code)
+	; true
+	).
 
 
 parse_body_setexp(CANOBRACE(L,_N,_I),DWS,Code,Status) :-
 	!,
-	parse_body_pathexplist(L,DWS,Code,Status).
+	parse_body_pathexplist(L,DWS,ANY_PATHEXP,Code,Status).
 
 parse_body_setexp(CanoniTerm,DWS,[Code],Status) :-
-	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,Code,Status).
+	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,ANY_PATHEXP,Code,Status).
 
 	
-
 parse_sigconstr(CANOTERM(Funct,2,FL_PARENTHESIS,[Lower,Upper],_If,_Ip),DWS,Code,Status) :-
-	get_atom(Funct,FL_CONSTR),
+	get_atom(Funct,FL_RANGE),
 	!,
-	parse_body_pathexplist([Lower,Upper],DWS,[LowerCode,UpperCode],S),
+	parse_body_pathexplist([Lower,Upper],DWS,PURE_PATHEXPS_ONLY,[LowerCode,UpperCode],S),
 	( S == NO_ERRORS ->
-	    ( not(valid_lower_sigconstr(LowerCode)) ->
-		Lower = OBJECT(_,If),
+	    ( not(valid_lower_sigconstr(LowerCode)) -> Lower = OBJECT(_,If),
 		parsing_error(If,ERROR_SIGCONSTR_LOW,Status)
 	    ;
-		( not(valid_upper_sigconstr(UpperCode)) ->
-		        Upper = OBJECT(_,If),
-		        parsing_error(If,ERROR_SIGCONSTR_HIGH,Status)
+		( not(valid_upper_sigconstr(UpperCode)) -> Upper = OBJECT(_,If),
+		    parsing_error(If,ERROR_SIGCONSTR_HIGH,Status)
 		;
 		    Status = NO_ERRORS
 		)
@@ -6490,7 +6624,7 @@ parse_head_term(Funct,N,Args,_TransFlag,DWS,Code,Status) :-
 	flora_argdef(FAtom,N,ArgTypes,DWS),
 	!,
 	flobject_struct(Funct,F),
-	parse_head_argpathexplist(Args,ArgTypes,DWS,AList,Status),
+	parse_head_argpathexplist(Args,ArgTypes,DWS,PURE_PATHEXPS_ONLY,AList,Status),
 	(Status == NO_ERRORS
 	->
 	    flterm_struct(F,N,AList,Code)
@@ -6515,15 +6649,21 @@ parse_head_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
 	fltransactionalobject_struct(Funct,F),
         !,
         (TransFlag == ALLOW_TRANS ->
-	    parse_head_pathexplist(Args,DWS,AList,Status),
+	    (get_transactionalatom(Funct,FAtom),
+		flora_argdef(FAtom,N,ArgTypes,DWS)
+	    -> parse_head_pathexplist(Args,DWS,PURE_PATHEXPS_ONLY,AList,Status)
+	    ;
+		parse_head_argpathexplist(Args,ArgTypes,DWS,PURE_PATHEXPS_ONLY,AList,Status)
+	    ),
             (Status == NO_ERRORS -> fltransactionalterm_struct(F,N,AList,Code) ; true)
         ;
             parsing_error(Funct,ERROR_TRANSACTIONAL_SYMBOL,Status)
         ).
 
 parse_head_term(Funct,N,Args,TransFlag,DWS,Code,Status) :-
-	parse_head_pathexp(Funct,TransFlag,DWS,F,S),
-	( S == NO_ERRORS -> parse_head_pathexplist(Args,DWS,AList,Status),
+	parse_head_pathexp(Funct,TransFlag,DWS,PURE_PATHEXPS_ONLY,F,S),
+	( S == NO_ERRORS ->
+	    parse_head_pathexplist(Args,DWS,PURE_PATHEXPS_ONLY,AList,Status),
 	    (Status == NO_ERRORS -> 
                 ( is_fltransactionalterm_struct(F) ->
                     fltransactionalterm_struct(F,N,AList,Code)
@@ -6546,13 +6686,13 @@ parse_head_list([],[],Index,_DWS,T,NO_ERRORS) :-
 	fllist_struct([],[],Index,T).
 
 parse_head_list(L,T,Index,DWS,Code,Status) :-
-	parse_head_pathexplist(L,DWS,LCode,S),
+	parse_head_pathexplist(L,DWS,PURE_PATHEXPS_ONLY,LCode,S),
 	( S == NO_ERRORS ->
 	    ( T == [] ->
 		TCode = [],
 		Status = NO_ERRORS
 	    ;
-	      parse_head_pathexp(T,DISALLOW_TRANS,DWS,TCode,Status)
+	      parse_head_pathexp(T,DISALLOW_TRANS,DWS,PURE_PATHEXPS_ONLY,TCode,Status)
 	    ),
 	    (Status == NO_ERRORS -> fllist_struct(LCode,TCode,Index,Code); true)
 	;
@@ -6561,106 +6701,133 @@ parse_head_list(L,T,Index,DWS,Code,Status) :-
 
 
 /****************************************************************************
-  parse_head_argpathexplist(+Terms,+ArgumentTypes,+DWS,-PathExpressions,-Status)
+  parse_head_argpathexplist(+Terms,+ArgumentTypes,+DWS,+TermArgMode,-PathExpressions,-Status)
 ****************************************************************************/
-parse_head_argpathexplist([],[],_DWS,[],NO_ERRORS) :- !.
+parse_head_argpathexplist([],[],_DWS,_TermArgMode,[],NO_ERRORS) :- !.
 
-parse_head_argpathexplist([T|L],[FL_OID|Arguments],DWS,[TCode|LCode],Status) :-
-	parse_head_pathexp(T,DISALLOW_TRANS,DWS,TCode,S),
-	( S == NO_ERRORS ->
-	    parse_head_argpathexplist(L,Arguments,DWS,LCode,Status)
+parse_head_argpathexplist([T|L],[FL_OID|Arguments],DWS,TermArgMode,[TCode|LCode],Status) :-
+	parse_head_pathexp(T,DISALLOW_TRANS,DWS,TermArgMode,TCode,S),
+	(S==NO_ERRORS,
+	    %% No longer allow truth-valued path expressions pathexp[...]
+	    %% as arguments to preds and terms
+	    is_truthval_pathexp(TCode,TermArgMode)
+	-> parsing_error(T,ERROR_PURE_PATHEXP_ONLY,PureTermTestStat)
+	; PureTermTestStat = S
+	),
+	( PureTermTestStat == NO_ERRORS ->
+	    parse_head_argpathexplist(L,Arguments,DWS,TermArgMode,LCode,Status)
 	;
-	  Status = S
+	  Status = PureTermTestStat
         ).
 
-parse_head_argpathexplist([T|L],[FL_BODYFORMULA|Arguments],DWS,[RTCode|LCode],Status) :-
+parse_head_argpathexplist([T|L],[FL_BODYFORMULA|Arguments],DWS,TermArgMode,[RTCode|LCode],Status) :-
 	set_context(implicit_reification),
 	parse_rule_body(T,DWS,DWS,TCode,S),
 	clear_context(implicit_reification),
 	( S == NO_ERRORS ->
             flreify_struct(TCode,RTCode),
-	    parse_head_argpathexplist(L,Arguments,DWS,LCode,Status)
+	    parse_head_argpathexplist(L,Arguments,DWS,TermArgMode,LCode,Status)
 	;
 	  Status = S
         ).
 
 %% treat arithmetics in rule head as a normal term
-parse_head_argpathexplist([T|L],[FL_ARITH|Arguments],DWS,[TCode|LCode],Status) :-
-	parse_head_pathexp(T,DISALLOW_TRANS,DWS,TCode,S),
-	( S == NO_ERRORS ->
-	    parse_head_argpathexplist(L,Arguments,DWS,LCode,Status)
+parse_head_argpathexplist([T|L],[FL_ARITH|Arguments],DWS,TermArgMode,[TACode|LCode],Status) :-
+	parse_head_pathexp(T,DISALLOW_TRANS,DWS,TermArgMode,TCode,S),
+	(S==NO_ERRORS,
+	    %% No longer allow truth-valued path expressions pathexp[...]
+	    %% as arguments to preds and terms
+	    is_truthval_pathexp(TCode,TermArgMode)
+	-> parsing_error(T,ERROR_PURE_PATHEXP_ONLY,PureTermTestStat)
+	; PureTermTestStat = S
+	),
+	flarith_struct(TCode,TACode),
+	( PureTermTestStat == NO_ERRORS ->
+	    parse_head_argpathexplist(L,Arguments,DWS,TermArgMode,LCode,Status)
 	;
-	  Status = S
+	  Status = PureTermTestStat
         ).
 
 
 /****************************************************************************
-  parse_head_pathexplist(+ListOfCanoniTerms,+DWS,-ListOfPathExpressions,-Status)
+  parse_head_pathexplist(+ListOfCanoniTerms,+DWS,+TermArgMode,-ListOfPathExpressions,-Status)
 ****************************************************************************/
-parse_head_pathexplist([],_DWS,[],NO_ERRORS) :- !.
+parse_head_pathexplist([],_DWS,_TermArgMode,[],NO_ERRORS) :- !.
 
-parse_head_pathexplist([T|L],DWS,[TCode|LCode],Status) :-
-	parse_head_pathexp(T,DISALLOW_TRANS,DWS,TCode,S),
-	( S == NO_ERRORS ->
-	    parse_head_pathexplist(L,DWS,LCode,Status)
+parse_head_pathexplist([T|L],DWS,TermArgMode,[TCode|LCode],Status) :-
+	parse_head_pathexp(T,DISALLOW_TRANS,DWS,TermArgMode,TCode,S),
+	(S==NO_ERRORS,
+	    %% No longer allow truth-valued path expressions pathexp[...]
+	    %% as arguments to preds and terms
+	    is_truthval_pathexp(TCode,TermArgMode)
+	-> parsing_error(T,ERROR_PURE_PATHEXP_ONLY,PureTermTestStat)
+	; PureTermTestStat = S
+	),
+	( PureTermTestStat == NO_ERRORS ->
+	    parse_head_pathexplist(L,DWS,TermArgMode,LCode,Status)
 	;
-	  Status = S
+	  Status = PureTermTestStat
         ).
 
 
 /****************************************************************************
-  parse_head_pathexp(+CanoniTerm,+TransFlag,+DWS,-HeadPathExpression,-Status)
+  parse_head_pathexp(+CanoniTerm,+TransFlag,+DWS,+TermArgMode,-HeadPathExpression,-Status)
 ****************************************************************************/
-parse_head_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),TransFlag,DWS,Code,Status) :-
+parse_head_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],If,_Ip),TransFlag,DWS,TermArgMode,Code,Status) :-
 	get_atom(Funct,F),
 	!,
 	( is_birelop(F) ->
-	    parse_head_pathexplist(Args,DWS,[LCode,RCode],Status),
+	    parse_head_pathexplist([Left,Right],DWS,TermArgMode,[LCode,RCode],Status),
 	    ( Status == NO_ERRORS -> flbirelate_struct(LCode,F,RCode,Code)
-	    ;
-	      true
+	    ; true
 	    )
 
 	; is_objrefop(F) -> 
-	    parse_head_pathexplist(Args,DWS,[LCode,RCode],Status),
-	    ( Status == NO_ERRORS -> flobjref_struct(LCode,F,RCode,Code)
-	    ;
-	      true
+	    parse_head_pathexp(Left,DISALLOW_TRANS,DWS,ANY_PATHEXP,LCode,S),
+	    (S==NO_ERRORS ->
+		parse_head_pathexplist([Right],DWS,TermArgMode,[RCode],Status)
+	    ; Status = S
+	    ),
+	    ( Status == NO_ERRORS -> flobjref_struct(F,LCode,RCode,Code)
+	    ; true
 	    )
 
 	%% foo@mod as argument without explicit reification braces ${...}
-	%% not allowed in head
-	; F == FL_AT ->
-	    %%parse_reify(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,Ip),DWS,Code,Status)
-	    parsing_error(If,NO_WSINRULEHEAD,Status)
+	%% not allowed in the head
+	; F == FL_AT -> parsing_error(If,NO_WSINRULEHEAD,Status)
 
-	; is_curi_op(F) -> parse_curi(Args,TransFlag,DWS,Code,Status)
+	; is_curi_op(F) -> parse_curi([Left,Right],TransFlag,DWS,Code,Status)
 
-	; is_datatypeop(F) -> parse_composer_datatype(Args,If,DWS,Code,Status)
+	; is_datatypeop(F) -> parse_composer_datatype([Left,Right],If,DWS,Code,Status)
 	    
 	;
-	    parse_head_term(Funct,2,Args,TransFlag,DWS,Code,Status)
+	    parse_head_term(Funct,2,[Left,Right],TransFlag,DWS,Code,Status)
         ).
 
-parse_head_pathexp(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,Code,Status) :-
+parse_head_pathexp(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,_TermArgMode,Code,Status) :-
 	!,
 	parse_head_term(Funct,N,Args,TransFlag,DWS,Code,Status).
 
-parse_head_pathexp(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),_TransFlag,DWS,Code,Status) :-
+%% Head pathexp a[...]
+parse_head_pathexp(CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
 	!,
-	parse_head_objspec_top(Funct,N,Args,DWS,Code,Status).
+	parse_head_objspec_top(Funct,N,Args,DWS,NONINHERITABLE,Code,Status).
+%% Head pathexp a[|...|]
+parse_head_pathexp(CANOTERM(Funct,N,FL_BRACKBAR,Args,_If,_Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
+	!,
+	parse_head_objspec_top(Funct,N,Args,DWS,INHERITABLE,Code,Status).
 
-parse_head_pathexp(CANOLIST(L,T,_N,I,_Ib),_TransFlag,DWS,Code,Status) :-
+parse_head_pathexp(CANOLIST(L,T,_N,I,_Ib),_TransFlag,DWS,_TermArgMode,Code,Status) :-
 	!,
 	parse_head_list(L,T,I,DWS,Code,Status).
 
 %% If ObjectTerm is non-transactional
-parse_head_pathexp(ObjectTerm,_TransFlag,_DWS,Code,NO_ERRORS) :-
+parse_head_pathexp(ObjectTerm,_TransFlag,_DWS,_TermArgMode,Code,NO_ERRORS) :-
 	flobject_struct(ObjectTerm,Code),
 	!.
 
 %% ${...} - reification
-parse_head_pathexp(CANOTERM(Funct,_N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code,Status) :-
+parse_head_pathexp(CANOTERM(Funct,_N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
 	get_atom(Funct,Atom),
 	is_reifyop(Atom),
 	!,
@@ -6669,23 +6836,22 @@ parse_head_pathexp(CANOTERM(Funct,_N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code,St
 	;  parsing_error(Ip,EXP_ARGS,Status)
 	).
 
-parse_head_pathexp(CANOBRACE(L,N,_I),_TransFlag,DWS,Code,Status) :-
+parse_head_pathexp(CANOBRACE(L,N,_I),_TransFlag,DWS,TermArgMode,Code,Status) :-
 	N>0,
 	!,
-	parse_head_pathexplist(L,DWS,Code1,Status),
+	parse_head_pathexplist(L,DWS,TermArgMode,Code1,Status),
 	Code = _, %% NOTE: a prolog var, since we'll be macro-expanding
 	put_attr(Code,SETARGATTRIBUTE,member(Code,Code1)).
-	%%flsetarg_struct(Code1,I,Code).
 
-parse_head_pathexp(CANOTERM(_Funct,_N,FL_BRACE,_Args,_If,Ip),_TransFlag,_DWS,_Code,Status) :-
+parse_head_pathexp(CANOTERM(_Funct,_N,FL_BRACE,_Args,_If,Ip),_TransFlag,_DWS,_TermArgMode,_Code,Status) :-
 	!,
 	parsing_error(Ip,NO_AGGINHEAD,Status).
 
-parse_head_pathexp(CANOBRACE(_L,_N,I),_TransFlag,_DWS,_Code,Status) :-
+parse_head_pathexp(CANOBRACE(_L,_N,I),_TransFlag,_DWS,_TermArgMode,_Code,Status) :-
 	!,
 	parsing_error(I,ERROR_SETNOTE,Status).
 
-parse_head_pathexp(CanoniTerm,_TransFlag,_DWS,_Code,Status) :-
+parse_head_pathexp(CanoniTerm,_TransFlag,_DWS,_TermArgMode,_Code,Status) :-
 	(fltransactionalobject_struct(CanoniTerm,_) ->
 	    parsing_error(CanoniTerm,ERROR_TRANSACTIONAL_SYMBOL,Status)
 	; parsing_error(CanoniTerm,ERROR_EXPINHEAD,Status)
@@ -6693,115 +6859,123 @@ parse_head_pathexp(CanoniTerm,_TransFlag,_DWS,_Code,Status) :-
 
 
 /****************************************************************************
-  parse_head_objspec(+Obj,+Arity,+Args,+DWS,-Code,-Status)
-  parse_head_objspec(+CanoniTerm,+DWS,-Code,-Status)
+  parse_head_objspec(+Obj,+Arity,+Args,+DWS,+Type,-Code,-Status)
+  parse_head_objspec(+CanoniTerm,+DWS,-Code,+Type,-Status)
+  Type: INHERITABLE/NONINHERITABLE for a[...] and a[|...|], respectively
 ****************************************************************************/
-parse_head_objspec_top(Funct,N,Args,DWS,Code,Status) :-
-	parse_head_objspec(Funct,N,Args,DWS,TCode,S),
+parse_head_objspec_top(Funct,N,Args,DWS,Type,Code,Status) :-
+	parse_head_objspec(Funct,N,Args,DWS,Type,TCode,S),
 	(S == NO_ERRORS ->
-	    get_index(Funct,Idx),
-	    to_TNF_list([TCode],Idx,[Code],PARSER_TNF_FLAG,Status)
+	    %% NO NEED TO CALL to_TNF here or else TNF will be done twice
+	    %% for frames!
+	    %%get_index(Funct,Idx),
+	    %%to_TNF_list([TCode],Idx,[Code],PARSER_TNF_FLAG,Status)
+	    TCode = Code, Status = S
 	; Status = S
 	).
 
-parse_head_objspec(Obj,N,Args,DWS,Code,Status) :-
-	parse_head_pathexp(Obj,DISALLOW_TRANS,DWS,O,S),
+parse_head_objspec(Obj,N,Args,DWS,Type,Code,Status) :-
+	parse_head_pathexp(Obj,DISALLOW_TRANS,DWS,ANY_PATHEXP,O,S),
 	( S == NO_ERRORS ->
 	    ( N == 0 ->
 		Spec = [],
 		Status = NO_ERRORS
 	    ;
 	      Args=[Body],
-	      parse_head_objspec(Body,DWS,Spec,Status)
+	      parse_head_objspec(Body,DWS,Type,Spec,Status)
 	    ),
-	    (Status == NO_ERRORS -> flobjspec_struct(O,Spec,Code); true)
-	;
-	  Status = S
+	    (Status == NO_ERRORS -> flobjspec_struct(O,Spec,Type,Code)
+	    ; true
+	    )
+	; Status = S
         ).
 
 
-parse_head_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Code,Status) :-
+parse_head_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,FL_AND_CONNECTIVE),
 	!,
-	parse_head_objspec(L,DWS,LCode,S),
+	parse_head_objspec(L,DWS,Type,LCode,S),
 	( S == NO_ERRORS ->
-	    parse_head_objspec(R,DWS,RCode,Status),
+	    parse_head_objspec(R,DWS,Type,RCode,Status),
 	    (Status == NO_ERRORS -> flconjunct_struct(LCode,RCode,Code)
 	    ; true
 	    )
-	;
-	    Status = S
+	; Status = S
 	).
 
-parse_head_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Code,Status) :-
+parse_head_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,FL_OR_CONNECTIVE),
 	!,
-	parse_head_objspec(L,DWS,LCode,S),
+	parse_head_objspec(L,DWS,Type,LCode,S),
 	( S == NO_ERRORS ->
-	    parse_head_objspec(R,DWS,RCode,Status),
+	    parse_head_objspec(R,DWS,Type,RCode,Status),
 	    (Status == NO_ERRORS -> fldisjunct_struct(LCode,RCode,Code)
 	    ; true
 	    )
-	;
-	    Status = S
+	; Status = S
 	).
 
-parse_head_objspec(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),DWS,Code,Status) :-
+parse_head_objspec(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,F),
 	%% explicit negation inside frame
 	is_negop(F),
 	!,
 	list_to_canoterm_conjunct(Args,Conjunct,If,Ip),
-	parse_head_objspec(Conjunct,DWS,ArgCode,Status),
+	parse_head_objspec(Conjunct,DWS,Type,ArgCode,Status),
 	(Status == NO_ERRORS -> flneg_struct(ArgCode,If,Code)
         ; true
 	).
 
-parse_head_objspec(CANOTERM(Funct,1,FL_PARENTHESIS,[_G],If,_Ip),_DWS,_Code,Status) :-
+parse_head_objspec(CANOTERM(Funct,1,FL_PARENTHESIS,[_G],If,_Ip),_DWS,_Type,_Code,Status) :-
 	get_atom(Funct,F),
 	(is_plgnafop(F); is_rulelognafop(F)),
 	!,
 	parsing_error(If,NO_NEGATION,Status).
 
-parse_head_objspec(CanoniTerm,DWS,Code,Status) :-
-	parse_head_attmethspec(CanoniTerm,DWS,Code,Status).
+parse_head_objspec(CanoniTerm,DWS,Type,Code,Status) :-
+	parse_head_attmethspec(CanoniTerm,DWS,Type,Code,Status).
 
 
 /****************************************************************************
-  parse_head_attmethspec(+CanoniTerm,+DWS,-Goal,-Status)
+  parse_head_attmethspec(+CanoniTerm,+DWS,+Type,-Goal,-Status)
   parse_head_setexp(+CanoniTerm,+DWS,-CodeList,-Status)
+  Type: INHERITABLE/NONINHERITABLE
 ****************************************************************************/
-parse_head_attmethspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),DWS,Code,Status) :-
+parse_head_attmethspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,F),
 	( is_mvdattspecop(F) ->
-	    parse_head_pathexp(L,DISALLOW_TRANS,DWS,LCode,S),
-	    (S == NO_ERRORS -> parse_head_setexp(R,DWS,RCode,Status); Status = S),
-	    (Status == NO_ERRORS -> flmvdattspec_struct(LCode,F,RCode,Code); true)
+	    parse_head_pathexp(L,DISALLOW_TRANS,DWS,ANY_PATHEXP,LCode,S),
+	    (S == NO_ERRORS -> parse_head_setexp(R,DWS,RCode,Status)
+	    ; Status = S
+	    ),
+	    (Status == NO_ERRORS -> flmvdattspec_struct(LCode,F,RCode,Type,Code)
+	    ; true
+	    )
 
 	; is_sigattspecop(F) ->
 	    (L=CANOTERM(M,1,FL_BRACE,[Constr],_If1,_Ip1)->
 		parse_head_sigconstr(Constr,DWS,CCode,S_C),
 		(S_C == NO_ERRORS ->
-		    parse_head_pathexp(M,DISALLOW_TRANS,DWS,MCode,S1),
+		    parse_head_pathexp(M,DISALLOW_TRANS,DWS,ANY_PATHEXP,MCode,S1),
 		    (S1 == NO_ERRORS ->
 			%% The right hand side
 			(is_emptyterm(R) ->
 			    get_index(R,Ind),
 			    emptyterm_struct(Ind,RCode),
 			    Status = NO_ERRORS
-			;  parse_head_pathexp(R,DISALLOW_TRANS,DWS,RCode,Status)
+			;  parse_head_pathexp(R,DISALLOW_TRANS,DWS,ANY_PATHEXP,RCode,Status)
 			)
 		    ; Status = S1
 		    )
 		; Status = S_C
 		),
 		(Status == NO_ERRORS ->
-		    flsigattconspec_struct(MCode,CCode,F,RCode,Code)
+		    flsigattconspec_struct(MCode,CCode,F,RCode,Type,Code)
 		; true
 		)
 	    ;
 		flsigconstr_struct(FLNUMBER(0,NO_INDEX),FLATOM(FL_STAR,NO_INDEX),CCode),
-		parse_head_pathexp(L,DISALLOW_TRANS,DWS,LCode,S1),
+		parse_head_pathexp(L,DISALLOW_TRANS,DWS,ANY_PATHEXP,LCode,S1),
 		( S1 == NO_ERRORS ->
 		    %% The right hand side 
 		    (is_emptyterm(R) ->
@@ -6809,12 +6983,12 @@ parse_head_attmethspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),DWS,Code,St
 			emptyterm_struct(Ind,RCode),
 			Status = NO_ERRORS
 		    ; 
-			parse_head_pathexp(R,DISALLOW_TRANS,DWS,RCode,Status)
+			parse_head_pathexp(R,DISALLOW_TRANS,DWS,ANY_PATHEXP,RCode,Status)
 		    )
 		 ; Status = S1
 		 ),
 		(Status == NO_ERRORS ->
-		    flsigattconspec_struct(LCode,CCode,F,RCode,Code)
+		    flsigattconspec_struct(LCode,CCode,F,RCode,Type,Code)
 		; true
 		)
 	    )
@@ -6827,23 +7001,19 @@ parse_head_attmethspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),DWS,Code,St
         ),
 	!.
 
-parse_head_attmethspec(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Code,Status) :-
+parse_head_attmethspec(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,F),
-	(is_boolsigop(F) ; is_iboolsigop(F)),
+	is_boolsigop(F),
 	!,
-	parse_head_pathexp(A,DISALLOW_TRANS,DWS,ACode,S1),
+	parse_head_pathexp(A,DISALLOW_TRANS,DWS,ANY_PATHEXP,ACode,S1),
 	(S1 == NO_ERRORS ->
-	    ( is_boolsigop(F) -> flboolsig_struct(ACode,F,Code)
-	    ; is_iboolsigop(F) -> fliboolsig_struct(ACode,F,Code)
-	    ),
+	    flboolsig_struct(ACode,F,Type,Code),
 	    Status = NO_ERRORS
 	;
-	    parse_head_attmethspec(A,DWS,ACode2,S2),
+	    parse_head_attmethspec(A,DWS,Type,ACode2,S2),
 	    (S2 == NO_ERRORS ->
-		(fltranspec_struct(ATemp,ACode2) -> 
-		    ( is_boolsigop(F) -> fltransig_struct(ATemp,F,Code)
-		    ; is_iboolsigop(F) -> flitransig_struct(ATemp,F,Code)
-		    ),
+		(fltranspec_struct(ATemp,Type,ACode2) -> 
+		    fltransig_struct(ATemp,F,Type,Code),
 		    Status = NO_ERRORS
 		;
 		    parsing_error(A,ERROR_BOOLSIG,Status)
@@ -6854,35 +7024,17 @@ parse_head_attmethspec(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Code,Sta
 	),
 	!.
 
-/*
-parse_head_attmethspec(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Code,Status) :-
-	get_atom(Funct,F),
-	( is_transigop(F) ; is_itransigop(F)),
-	!,
-	parse_head_pathexp(A,DISALLOW_TRANS,DWS,ACode,Status),
-	( is_transigop(F) -> fltransig_struct(ACode,F,Code)
-	; is_itransigop(F) -> flitransig_struct(ACode,F,Code)
-	).
-*/
-
-parse_head_attmethspec(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Code,Status) :-
-	get_atom(Funct,FL_INMETH),
-	!,
-	parse_head_pathexp(A,DISALLOW_TRANS,DWS,C,Status),
-	(Status == NO_ERRORS -> flimethspec_struct(C,Code);true).
-
-parse_head_attmethspec(CanoniTerm,_DWS,Code,NO_ERRORS) :-
+parse_head_attmethspec(CanoniTerm,_DWS,Type,Code,NO_ERRORS) :-
         fltransactionalobject_struct(CanoniTerm,C),
         !,
-        fltranspec_struct(C,Code).
+        fltranspec_struct(C,Type,Code).
         
-parse_head_attmethspec(CanoniTerm,DWS,Code,Status) :-
-	parse_head_pathexp(CanoniTerm,ALLOW_TRANS,DWS,C,Status),
+parse_head_attmethspec(CanoniTerm,DWS,Type,Code,Status) :-
+	parse_head_pathexp(CanoniTerm,ALLOW_TRANS,DWS,ANY_PATHEXP,C,Status),
 	(Status == NO_ERRORS -> 
-            (is_fltransactionalterm_struct(C) ->
-                fltranspec_struct(C,Code)
+            (is_fltransactionalterm_struct(C) -> fltranspec_struct(C,Type,Code)
             ;
-                flmethspec_struct(C,Code)
+                flmethspec_struct(C,Type,Code)
             )
         ;
             true
@@ -6890,16 +7042,16 @@ parse_head_attmethspec(CanoniTerm,DWS,Code,Status) :-
 
 parse_head_setexp(CANOBRACE(L,_N,_I),DWS,CodeList,Status) :-
 	!,
-	parse_head_pathexplist(L,DWS,CodeList,Status).
+	parse_head_pathexplist(L,DWS,ANY_PATHEXP,CodeList,Status).
 
 parse_head_setexp(CanoniTerm,DWS,[Code],Status) :-
-	parse_head_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,Code,Status).
+	parse_head_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,ANY_PATHEXP,Code,Status).
 
 
 parse_head_sigconstr(CANOTERM(Funct,2,FL_PARENTHESIS,[Lower,Upper],_If,_Ip),DWS,Code,Status) :-
-	get_atom(Funct,FL_CONSTR),
+	get_atom(Funct,FL_RANGE),
 	!,
-	parse_head_pathexplist([Lower,Upper],DWS,[LowerCode,UpperCode],S),
+	parse_head_pathexplist([Lower,Upper],DWS,PURE_PATHEXPS_ONLY,[LowerCode,UpperCode],S),
 	( S == NO_ERRORS ->
 	    ( not(valid_lower_sigconstr(LowerCode)) ->
 		Lower = OBJECT(_,If),
@@ -6928,7 +7080,9 @@ parse_head_sigconstr(CANOTERM(_Funct,_N,_,_Args,If,_Ip),_DWS,_Code,Status) :-
 parse_tablerefresh(Args,DWS,Code,Status) :-
 	%% NULL here means that error will be issued, if HeadList
 	%% has disjunction, quantifier, etc.
+	set_context(parsing_refresh),
 	parse_dbliteral_list_conjunctless(FLREF,Args,DWS,CodeList,NULL,Status),
+	clear_context(parsing_refresh),
 	(Status == NO_ERRORS
 	-> flrefresh_struct(CodeList,Code)
 	; true
@@ -7250,7 +7404,7 @@ parse_stripped_dbliteral(Mode,CanoniTerm,DWS,Code,Status) :-
 	    flatom_struct(FL_INSERTRULE_Z,If,OpCode)
 	; Mode == FLDEL ->
 	    flatom_struct(FL_DELETERULE,If,OpCode)
-	; flora_error_line('[Parser] bug: Invalid update mode, ~w', [Mode]),
+	; flora_error_line('<Parser> bug: Invalid update mode, ~w', [Mode]),
 	    throw(FLORA_TOP_LEVEL)
 	),
 	parse_dynrule(CanoniTerm,DWS,CodeList,Status),
@@ -7262,7 +7416,7 @@ parse_stripped_dbliteral(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,
 	get_atom(Funct,F),
 	is_birelop(F),
 	!,
-	parse_db_pathexplist(Mode,Args,DWS,[LCode,RCode],Status),
+	parse_db_pathexplist(Mode,Args,DWS,ANY_PATHEXP,[LCode,RCode],Status),
 	(Status == NO_ERRORS -> flbirelate_struct(LCode,F,RCode,Code)
 	; true
 	).
@@ -7271,25 +7425,19 @@ parse_stripped_dbliteral(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_DWS
 	get_atom(Funct,F),
 	is_objrefop(F),
 	!,
-	( Mode == FLINS ->
-	    parsing_error(If,ERROR_INSERT,Status)
-	; Mode == FLDEL ->
-	    parsing_error(If,ERROR_DELETE,Status)
-        ; Mode == FLREF ->
-	    parsing_error(If,ERROR_REFRESH,Status)
-        ; Mode == FLCLS ->
-	    parsing_error(If,ERROR_CLAUSELIT,Status)
+	( Mode == FLINS -> parsing_error(If,ERROR_INSERT,Status)
+	; Mode == FLDEL -> parsing_error(If,ERROR_DELETE,Status)
+        ; Mode == FLREF -> parsing_error(If,ERROR_REFRESH,Status)
+        ; Mode == FLCLS -> parsing_error(If,ERROR_CLAUSELIT,Status)
 	).
 
 %% :=: as fact
 parse_stripped_dbliteral(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
 	get_atom(Funct,FL_OBJEQL),
 	!,
-	parse_db_pathexplist(Mode,Args,DWS,[LCode,RCode],Status),
-	(Status == NO_ERRORS ->
-	    flobjeql_struct(LCode,RCode,Code)
-	;
-	    true
+	parse_db_pathexplist(Mode,Args,DWS,PURE_PATHEXPS_ONLY,[LCode,RCode],Status),
+	(Status == NO_ERRORS -> flobjeql_struct(LCode,RCode,Code)
+	; true
 	).
 
 
@@ -7306,9 +7454,14 @@ parse_stripped_dbliteral(Mode,CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,_Ip),DWS,C
 	  parse_db_term(Mode,Funct,N,Args,ALLOW_TRANS,DWS,Code,Status)
 	).
 
+%% obj[...]
 parse_stripped_dbliteral(Mode,CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),DWS,Code,Status) :-
 	!,
-	parse_db_objspec(Mode,Funct,N,Args,DWS,Code,Status).
+	parse_db_objspec(Mode,Funct,N,Args,DWS,NONINHERITABLE,Code,Status).
+%% obj[|...|]
+parse_stripped_dbliteral(Mode,CANOTERM(Funct,N,FL_BRACKBAR,Args,_If,_Ip),DWS,Code,Status) :-
+	!,
+	parse_db_objspec(Mode,Funct,N,Args,DWS,INHERITABLE,Code,Status).
 
 parse_stripped_dbliteral(Mode,CanoniTerm,_DWS,Code,Status) :-
 	get_atom(CanoniTerm,A),
@@ -7386,7 +7539,7 @@ parse_db_term(Mode,Funct,N,Args,_TransFlag,DWS,Code,Status) :-
 	flora_argdef(FAtom,N,ArgTypes,DWS),
 	!, 
         flobject_struct(Funct,F),
-	parse_db_argpathexplist(Mode,Args,ArgTypes,DWS,AList,Status),
+	parse_db_argpathexplist(Mode,Args,ArgTypes,DWS,PURE_PATHEXPS_ONLY,AList,Status),
 	( Status == NO_ERRORS
 	-> flterm_struct(F,N,AList,Code)
 	;
@@ -7399,9 +7552,9 @@ parse_db_term(Mode,Funct,N,Args,TransFlag,DWS,Code,Status) :-
         ( TransFlag == ALLOW_TRANS ->
 	    (get_transactionalatom(Funct,FAtom),
 		flora_argdef(FAtom,N,ArgTypes,DWS)
-	    -> parse_db_argpathexplist(Mode,Args,ArgTypes,DWS,AList,Status)
+	    -> parse_db_argpathexplist(Mode,Args,ArgTypes,DWS,PURE_PATHEXPS_ONLY,AList,Status)
 	    ;
-		parse_db_pathexplist(Mode,Args,DWS,AList,Status)
+		parse_db_pathexplist(Mode,Args,DWS,PURE_PATHEXPS_ONLY,AList,Status)
 	    ),
             (Status == NO_ERRORS -> fltransactionalterm_struct(F,N,AList,Code) ; true)
         ;
@@ -7409,9 +7562,9 @@ parse_db_term(Mode,Funct,N,Args,TransFlag,DWS,Code,Status) :-
         ).
 
 parse_db_term(Mode,Funct,N,Args,TransFlag,DWS,Code,Status) :-
-	parse_db_pathexp(Mode,Funct,TransFlag,DWS,F,S),
+	parse_db_pathexp(Mode,Funct,TransFlag,DWS,PURE_PATHEXPS_ONLY,F,S),
 	( S == NO_ERRORS ->
-	    parse_db_pathexplist(Mode,Args,DWS,AList,Status),
+	    parse_db_pathexplist(Mode,Args,DWS,PURE_PATHEXPS_ONLY,AList,Status),
 	    (Status == NO_ERRORS -> 
                 ( is_fltransactionalterm_struct(F) ->
                     fltransactionalterm_struct(F,N,AList,Code)
@@ -7434,13 +7587,13 @@ parse_db_list(_Mode,[],[],Index,_DWS,T,NO_ERRORS) :-
 	fllist_struct([],[],Index,T).
 
 parse_db_list(Mode,L,T,Index,DWS,Code,Status) :-
-	parse_db_pathexplist(Mode,L,DWS,LCode,S),
+	parse_db_pathexplist(Mode,L,DWS,PURE_PATHEXPS_ONLY,LCode,S),
 	( S == NO_ERRORS ->
 	    ( T == [] ->
 		TCode = [],
 		Status = NO_ERRORS
 	    ;
-	      parse_db_pathexp(Mode,T,DISALLOW_TRANS,DWS,TCode,Status)
+	      parse_db_pathexp(Mode,T,DISALLOW_TRANS,DWS,PURE_PATHEXPS_ONLY,TCode,Status)
 	    ),
 	    (Status == NO_ERRORS -> fllist_struct(LCode,TCode,Index,Code); true)
 	;
@@ -7449,80 +7602,103 @@ parse_db_list(Mode,L,T,Index,DWS,Code,Status) :-
 
 
 /****************************************************************************
-  parse_db_pathexplist(+Mode,+ListOfCanoniTerms,+DWS,-ListOfPathExpressions,-Status)
+  parse_db_pathexplist(+Mode,+ListOfCanoniTerms,+DWS,+TermArgMode,-ListOfPathExpressions,-Status)
 ****************************************************************************/
-parse_db_pathexplist(_Mode,[],_DWS,[],NO_ERRORS) :- !.
+parse_db_pathexplist(_Mode,[],_DWS,_TermArgMode,[],NO_ERRORS) :- !.
 
-parse_db_pathexplist(Mode,[T|L],DWS,[TCode|LCode],Status) :-
-	parse_db_pathexp(Mode,T,DISALLOW_TRANS,DWS,TCode,S),
-	( S == NO_ERRORS ->
-	    parse_db_pathexplist(Mode,L,DWS,LCode,Status)
+parse_db_pathexplist(Mode,[T|L],DWS,TermArgMode,[TCode|LCode],Status) :-
+	parse_db_pathexp(Mode,T,DISALLOW_TRANS,DWS,TermArgMode,TCode,S),
+	(S==NO_ERRORS,
+	    %% No longer allow truth-valued path expressions pathexp[...]
+	    %% as arguments to preds and terms
+	    is_truthval_pathexp(TCode,TermArgMode)
+	-> parsing_error(T,ERROR_PURE_PATHEXP_ONLY,PureTermTestStat)
+	; PureTermTestStat = S
+	),
+	( PureTermTestStat == NO_ERRORS ->
+	    parse_db_pathexplist(Mode,L,DWS,TermArgMode,LCode,Status)
 	;
-	  Status = S
+	  Status = PureTermTestStat
         ).
 
 
 /****************************************************************************
-  parse_db_argpathexplist(+Mode,+ListOfCanoniTerms,+ArgTypes,+DWS,-ListOfPathExpressions,-Status)
+  parse_db_argpathexplist(+Mode,+ListOfCanoniTerms,+ArgTypes,+DWS,+TermArgMode,-ListOfPathExpressions,-Status)
 ****************************************************************************/
-parse_db_argpathexplist(_Mode,[],[],_DWS,[],NO_ERRORS) :- !.
+parse_db_argpathexplist(_Mode,[],[],_DWS,_TermArgMode,[],NO_ERRORS) :- !.
 
-parse_db_argpathexplist(Mode,[T|L],[FL_OID|ArgTypes],DWS,[TCode|LCode],Status) :-
-	parse_db_pathexp(Mode,T,DISALLOW_TRANS,DWS,TCode,S),
-	( S == NO_ERRORS ->
-	    parse_db_argpathexplist(Mode,L,ArgTypes,DWS,LCode,Status)
+parse_db_argpathexplist(Mode,[T|L],[FL_OID|ArgTypes],DWS,TermArgMode,[TCode|LCode],Status) :-
+	parse_db_pathexp(Mode,T,DISALLOW_TRANS,DWS,TermArgMode,TCode,S),
+	(S==NO_ERRORS,
+	    %% No longer allow truth-valued path expressions pathexp[...]
+	    %% as arguments to preds and terms
+	    is_truthval_pathexp(TCode,TermArgMode)
+	-> parsing_error(T,ERROR_PURE_PATHEXP_ONLY,PureTermTestStat)
+	; PureTermTestStat = S
+	),
+	( PureTermTestStat == NO_ERRORS ->
+	    parse_db_argpathexplist(Mode,L,ArgTypes,DWS,TermArgMode,LCode,Status)
 	;
-	  Status = S
+	  Status = PureTermTestStat
         ).
 
-parse_db_argpathexplist(Mode,[T|L],[FL_BODYFORMULA|ArgTypes],DWS,[RTCode|LCode],Status) :-
+parse_db_argpathexplist(Mode,[T|L],[FL_BODYFORMULA|ArgTypes],DWS,TermArgMode,[RTCode|LCode],Status) :-
 	set_context(implicit_reification),
 	parse_rule_body(T,DWS,DWS,TCode,S),
 	clear_context(implicit_reification),
 	( S == NO_ERRORS ->
             flreify_struct(TCode,RTCode),
-	    parse_db_argpathexplist(Mode,L,ArgTypes,DWS,LCode,Status)
+	    parse_db_argpathexplist(Mode,L,ArgTypes,DWS,TermArgMode,LCode,Status)
 	;
 	  Status = S
         ).
 
 
 /****************************************************************************
-  parse_db_pathexp(+Mode,+CanoniTerm,+TransFlag,+DWS,-InsertPathExpression,-Status)
+  parse_db_pathexp(+Mode,+CanoniTerm,+TransFlag,+DWS,+TermArgMode,-InsertPathExpression,-Status)
 ****************************************************************************/
-parse_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_TransFlag,DWS,Code,Status) :-
+parse_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],_If,_Ip),_TransFlag,DWS,TermArgMode,Code,Status) :-
 	get_atom(Funct,F),
 	is_birelop(F),
 	!,
-	parse_db_pathexplist(Mode,Args,DWS,[LCode,RCode],Status),
+	parse_db_pathexplist(Mode,[Left,Right],DWS,TermArgMode,[LCode,RCode],Status),
 	(Status == NO_ERRORS -> flbirelate_struct(LCode,F,RCode,Code); true).
 
-parse_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),_TransFlag,DWS,Code,Status) :- 	 
+parse_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],_If,_Ip),_TransFlag,DWS,TermArgMode,Code,Status) :- 	 
          get_atom(Funct,F), 	 
          is_objrefop(F), 	 
-         !, 	 
-         parse_db_pathexplist(Mode,Args,DWS,[LCode,RCode],Status), 	 
-         (Status == NO_ERRORS -> flobjref_struct(LCode,F,RCode,Code); true).
+         !,
+	 (has_context(parsing_refresh) ->
+	     parse_db_pathexp(Mode,Left,DISALLOW_TRANS,DWS,ANY_PATHEXP,LCode,S),
+	     (S==NO_ERRORS ->
+		 parse_db_pathexplist(Mode,[Right],DWS,TermArgMode,[RCode],Status)
+	     ; Status = S
+	     )
+	 ; parsing_error(Funct,ERROR_REFOP_IN_DB,Status)
+	 ),
+         (Status == NO_ERRORS -> flobjref_struct(F,LCode,RCode,Code)
+	 ; true
+	 ).
 
 %% To handle CURI structure like prefix#suffix
-parse_db_pathexp(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,Code,Status) :-
+parse_db_pathexp(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,_TermArgMode,Code,Status) :-
 	get_atom(Funct,F),
 	is_curi_op(F),
 	!,
 	parse_curi(Args,TransFlag,DWS,Code,Status).
 
-parse_db_pathexp(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),_TransFlag,DWS,Code,Status) :-
+parse_db_pathexp(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
 	get_atom(Funct,F),
 	is_datatypeop(F),
 	!,
 	parse_composer_datatype([L,R],If,DWS,Code,Status).
 
-parse_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,_DWS,Code,Status) :-
+parse_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,_DWS,TermArgMode,Code,Status) :-
 	get_atom(Funct,FL_AT),
 	!,
 	( (name_or_var(R,RCode) ; thismodule_token(R,RCode))
 	->
-	    parse_db_pathexp(Mode,L,TransFlag,RCode,LCode,S),
+	    parse_db_pathexp(Mode,L,TransFlag,RCode,TermArgMode,LCode,S),
 	    ( S == NO_ERRORS ->
 		( is_flworkspace_struct(LCode) ->
 		    parsing_error(If,NO_WSNESTING,Status)
@@ -7539,17 +7715,22 @@ parse_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,_D
 	  parsing_error(R,ERROR_WSNAME,Status)
         ).
 
-parse_db_pathexp(Mode,CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,Code,Status) :-
+parse_db_pathexp(Mode,CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,_TermArgMode,Code,Status) :-
 	!,
 	parse_db_term(Mode,Funct,N,Args,TransFlag,DWS,Code,Status).
 
-parse_db_pathexp(Mode,CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),_TransFlag,DWS,Code,Status) :-
+%% obj[...]
+parse_db_pathexp(Mode,CANOTERM(Funct,N,FL_BRACKET,Args,_If,_Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
 	!,
-	parse_db_objspec(Mode,Funct,N,Args,DWS,Code,Status).
+	parse_db_objspec(Mode,Funct,N,Args,DWS,NONINHERITABLE,Code,Status).
+%% obj[|...|]
+parse_db_pathexp(Mode,CANOTERM(Funct,N,FL_BRACKBAR,Args,_If,_Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
+	!,
+	parse_db_objspec(Mode,Funct,N,Args,DWS,INHERITABLE,Code,Status).
 
 %% Reification in insert/delete seems to be blocked elsewhere.
 %% This clause is here in case we decide to unblock later.
-parse_db_pathexp(_Mode,CANOTERM(Funct,_N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Code,Status) :-
+parse_db_pathexp(_Mode,CANOTERM(Funct,_N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
 	get_atom(Funct,Atom),
 	is_reifyop(Atom),
 	!,
@@ -7558,29 +7739,28 @@ parse_db_pathexp(_Mode,CANOTERM(Funct,_N,FL_BRACE,Args,If,Ip),_TransFlag,DWS,Cod
 	;  parsing_error(Ip,EXP_ARGS,Status)
 	).
 
-parse_db_pathexp(Mode,CANOLIST(L,T,_N,I,_Ib),_TransFlag,DWS,Code,Status) :-
+parse_db_pathexp(Mode,CANOLIST(L,T,_N,I,_Ib),_TransFlag,DWS,_TermArgMode,Code,Status) :-
 	!,
 	parse_db_list(Mode,L,T,I,DWS,Code,Status).
 
 
 %% Anonymous oid IS allowed in insert/delete
-parse_db_pathexp(_Mode,ObjectTerm,_TransFlag,_DWS,Code,NO_ERRORS) :-
+parse_db_pathexp(_Mode,ObjectTerm,_TransFlag,_DWS,_TermArgMode,Code,NO_ERRORS) :-
 	flobject_struct(ObjectTerm,Code),
 	!.
 
-parse_db_pathexp(Mode,CANOBRACE(L,N,_I),_TransFlag,DWS,Code,Status) :-
+parse_db_pathexp(Mode,CANOBRACE(L,N,_I),_TransFlag,DWS,TermArgMode,Code,Status) :-
 	N>0,
 	!,
-	parse_db_pathexplist(Mode,L,DWS,Code1,Status),
+	parse_db_pathexplist(Mode,L,DWS,TermArgMode,Code1,Status),
 	Code = _, %% NOTE: a prolog var, since we'll be macro-expanding
 	put_attr(Code,SETARGATTRIBUTE,member(Code,Code1)).
-	%%flsetarg_struct(Code1,I,Code).
 
-parse_db_pathexp(_Mode,CANOBRACE(_L,_N,I),_TransFlag,_DWS,_Code,Status) :-
+parse_db_pathexp(_Mode,CANOBRACE(_L,_N,I),_TransFlag,_DWS,_TermArgMode,_Code,Status) :-
 	!,
 	parsing_error(I,ERROR_SETNOTE,Status).
 
-parse_db_pathexp(Mode,CanoniTerm,_TransFlag,_DWS,_Code,Status) :-
+parse_db_pathexp(Mode,CanoniTerm,_TransFlag,_DWS,_TermArgMode,_Code,Status) :-
 	( Mode == FLINS ->
 	    parsing_error(CanoniTerm,ERROR_EXPINSERT,Status)
 	; Mode == FLDEL ->
@@ -7593,31 +7773,34 @@ parse_db_pathexp(Mode,CanoniTerm,_TransFlag,_DWS,_Code,Status) :-
 
 
 /****************************************************************************
-  parse_db_objspec(+Mode,+Obj,+Arity,+Args,+DWS,-Code,-Status)
-  parse_db_objspec(+Mode,+CanoniTerm,+DWS,-Code,-Status)
+  parse_db_objspec(+Mode,+Obj,+Arity,+Args,+DWS,+Type,-Code,-Status)
+  parse_db_objspec(+Mode,+CanoniTerm,+DWS,+Type,-Code,-Status)
+  Type: INHERITABLE/NONINHERITABLE
 ****************************************************************************/
-parse_db_objspec(Mode,Obj,N,Args,DWS,Code,Status) :-
-	parse_db_pathexp(Mode,Obj,DISALLOW_TRANS,DWS,O,S),
+parse_db_objspec(Mode,Obj,N,Args,DWS,Type,Code,Status) :-
+	parse_db_pathexp(Mode,Obj,DISALLOW_TRANS,DWS,ANY_PATHEXP,OCode,S),
 	( S == NO_ERRORS ->
 	    ( N == 0 ->
 		Spec = [],
 		Status = NO_ERRORS
 	    ;
 	      Args=[Body],
-	      parse_db_objspec(Mode,Body,DWS,Spec,Status)
+	      parse_db_objspec(Mode,Body,DWS,Type,Spec,Status)
 	    ),
-	    (Status == NO_ERRORS -> flobjspec_struct(O,Spec,Code); true)
+	    (Status == NO_ERRORS -> flobjspec_struct(OCode,Spec,Type,Code)
+	    ; true
+	    )
 	;
 	  Status = S
         ).
 
 
-parse_db_objspec(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Code,Status) :-
+parse_db_objspec(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,FL_AND_CONNECTIVE),
 	!,
-	parse_db_objspec(Mode,L,DWS,LCode,S),
+	parse_db_objspec(Mode,L,DWS,Type,LCode,S),
 	( S == NO_ERRORS ->
-	    parse_db_objspec(Mode,R,DWS,RCode,Status),
+	    parse_db_objspec(Mode,R,DWS,Type,RCode,Status),
 	    (Status == NO_ERRORS -> flconjunct_struct(LCode,RCode,Code)
 	    ; true
 	    )
@@ -7625,12 +7808,12 @@ parse_db_objspec(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Code,St
 	    Status = S
 	).
 
-parse_db_objspec(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Code,Status) :-
+parse_db_objspec(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,FL_OR_CONNECTIVE),
 	!,
-	parse_db_objspec(Mode,L,DWS,LCode,S),
+	parse_db_objspec(Mode,L,DWS,Type,LCode,S),
 	( S == NO_ERRORS ->
-	    parse_db_objspec(Mode,R,DWS,RCode,Status),
+	    parse_db_objspec(Mode,R,DWS,Type,RCode,Status),
 	    (Status == NO_ERRORS -> fldisjunct_struct(LCode,RCode,Code)
 	    ; true
 	    )
@@ -7639,19 +7822,19 @@ parse_db_objspec(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Code,St
 
 
 %% something like a[neg p->q] or a[ neg p] in a db update
-parse_db_objspec(Mode,CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),DWS,Code,Status) :-
+parse_db_objspec(Mode,CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,F),
 	is_negop(F),
 	!,
 	list_to_canoterm_conjunct(Args,Conjunct,If,Ip),
-	parse_db_objspec(Mode,Conjunct,DWS,GCode,Status),
+	parse_db_objspec(Mode,Conjunct,DWS,Type,GCode,Status),
 	( Status == NO_ERRORS -> flneg_struct(GCode,If,Code)
 	; true
 	).
 
 
 
-parse_db_objspec(Mode,CANOTERM(Funct,1,FL_PARENTHESIS,[_G],If,_Ip),_DWS,_Code,Status) :-
+parse_db_objspec(Mode,CANOTERM(Funct,1,FL_PARENTHESIS,[_G],If,_Ip),_DWS,_Type,_Code,Status) :-
 	get_atom(Funct,F),
 	(is_plgnafop(F); is_rulelognafop(F)),
 	!,
@@ -7665,26 +7848,27 @@ parse_db_objspec(Mode,CANOTERM(Funct,1,FL_PARENTHESIS,[_G],If,_Ip),_DWS,_Code,St
 	    parsing_error(If,ERROR_CLAUSELIT,Status)
 	).
 
-parse_db_objspec(Mode,CanoniTerm,DWS,Code,Status) :-
-	parse_db_attmethspec(Mode,CanoniTerm,DWS,Code,Status).
+parse_db_objspec(Mode,CanoniTerm,DWS,Type,Code,Status) :-
+	parse_db_attmethspec(Mode,CanoniTerm,DWS,Type,Code,Status).
 
 
 /****************************************************************************
-  parse_db_attmethspec(+Mode,+CanoniTerm,+DWS,-Goal,-Status)
+  parse_db_attmethspec(+Mode,+CanoniTerm,+DWS,+Type,-Goal,-Status)
   parse_db_setexp(+Mode,+CanoniTerm,+DWS,-CodeList,-Status)
+  Type: INHERITABLE/NONINHERITABLE
 ****************************************************************************/
-parse_db_attmethspec(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),DWS,Code,Status) :-
+parse_db_attmethspec(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,F),
 	( is_mvdattspecop(F) ->
-	    parse_db_pathexp(Mode,L,DISALLOW_TRANS,DWS,LCode,S),
+	    parse_db_pathexp(Mode,L,DISALLOW_TRANS,DWS,ANY_PATHEXP,LCode,S),
 	    (S == NO_ERRORS -> parse_db_setexp(Mode,R,DWS,RCode,Status); Status = S),
-	    (Status == NO_ERRORS -> flmvdattspec_struct(LCode,F,RCode,Code); true)
+	    (Status == NO_ERRORS -> flmvdattspec_struct(LCode,F,RCode,Type,Code); true)
 
 	; is_sigattspecop(F) ->
 	    (L=CANOTERM(M,1,FL_BRACE,[Constr],_If1,_Ip1)->
 	       parse_db_sigconstr(Mode,Constr,DWS,CCode,S_C), 
 		(S_C == NO_ERRORS ->
-		    parse_db_pathexp(Mode,M,DISALLOW_TRANS,DWS,MCode,S1),
+		    parse_db_pathexp(Mode,M,DISALLOW_TRANS,DWS,ANY_PATHEXP,MCode,S1),
 		    (S1 == NO_ERRORS ->
 			%% The right hand side
 			(is_emptyterm(R) ->
@@ -7692,18 +7876,18 @@ parse_db_attmethspec(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),DWS,Code
 			    get_index(R,Ind),
 			    emptyterm_struct(Ind,RCode),
 			    Status = NO_ERRORS
-			;  parse_db_pathexp(Mode,R,DISALLOW_TRANS,DWS,RCode,Status)
+			;  parse_db_pathexp(Mode,R,DISALLOW_TRANS,DWS,ANY_PATHEXP,RCode,Status)
 			)
 		    ; Status = S1
 		    )
 		; Status = S_C
 		),
 		(Status == NO_ERRORS ->
-		    flsigattconspec_struct(MCode,CCode,F,RCode,Code)
+		    flsigattconspec_struct(MCode,CCode,F,RCode,Type,Code)
 		; true
 		)
 	    ;
-		parse_db_pathexp(Mode,L,DISALLOW_TRANS,DWS,LCode,S1),
+		parse_db_pathexp(Mode,L,DISALLOW_TRANS,DWS,ANY_PATHEXP,LCode,S1),
 		(S1 == NO_ERRORS
 		%% The right hand side 
 		-> (is_emptyterm(R)
@@ -7711,11 +7895,14 @@ parse_db_attmethspec(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),DWS,Code
 		   -> get_index(R,Ind),
 		       emptyterm_struct(Ind,RCode),
 		       Status = NO_ERRORS
-		   ;  parse_db_pathexp(Mode,R,DISALLOW_TRANS,DWS,RCode,Status)
+		   ;  parse_db_pathexp(Mode,R,DISALLOW_TRANS,DWS,ANY_PATHEXP,RCode,Status)
 		   )
 		; Status = S1
 		),
-		(Status == NO_ERRORS -> flsigattspec_struct(LCode,F,RCode,Code); true)
+		(Status == NO_ERRORS ->
+		    flsigattspec_struct(LCode,F,RCode,Type,Code)
+		; true
+		)
 	    )
 
 	; (is_incattspecop(F); is_tolistattspecop(F)) ->
@@ -7734,23 +7921,19 @@ parse_db_attmethspec(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),DWS,Code
         ),
 	!.
 
-parse_db_attmethspec(Mode,CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Code,Status) :-
+parse_db_attmethspec(Mode,CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,F),
-	(is_boolsigop(F) ; is_iboolsigop(F)),
+	is_boolsigop(F),
 	!,
-	parse_db_pathexp(Mode,A,DISALLOW_TRANS,DWS,ACode,S1),
+	parse_db_pathexp(Mode,A,DISALLOW_TRANS,DWS,ANY_PATHEXP,ACode,S1),
 	(S1 == NO_ERRORS ->
-	    (is_boolsigop(F) -> flboolsig_struct(ACode,F,Code)
-	    ; is_iboolsigop(F) -> fliboolsig_struct(ACode,F,Code)
-	    ),
+	    flboolsig_struct(ACode,F,Type,Code),
 	    Status = NO_ERRORS
 	;
-	    parse_db_attmethspec(Mode,A,DWS,ACode2,S2),
+	    parse_db_attmethspec(Mode,A,DWS,Type,ACode2,S2),
 	    (S2 == NO_ERRORS ->
-		(fltranspec_struct(ATemp,ACode2) -> 
-		    ( is_boolsigop(F) -> fltransig_struct(ATemp,F,Code)
-		    ; is_iboolsigop(F) -> flitransig_struct(ATemp,F,Code)
-		    ),
+		(fltranspec_struct(ATemp,Type,ACode2) -> 
+		    fltransig_struct(ATemp,F,Type,Code),
 		    Status = NO_ERRORS
 		;
 		    parsing_error(A,ERROR_BOOLSIG,Status)
@@ -7761,35 +7944,17 @@ parse_db_attmethspec(Mode,CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Code,
 	),
 	!.
 
-/*
-parse_db_attmethspec(Mode,CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Code,Status) :-
-	get_atom(Funct,F),
-	( is_transigop(F) ; is_itransigop(F)),
-	!,
-	parse_db_pathexp(Mode,A,DISALLOW_TRANS,DWS,ACode,Status),
-	( is_transigop(F) -> fltransig_struct(ACode,F,Code)
-	; is_itransigop(F) -> flitransig_struct(ACode,F,Code)
-	).
-*/
-
-parse_db_attmethspec(Mode,CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Code,Status) :-
-	get_atom(Funct,FL_INMETH),
-	!,
-	parse_db_pathexp(Mode,A,DISALLOW_TRANS,DWS,C,Status),
-        (Status == NO_ERRORS -> flimethspec_struct(C,Code);true).
-
-parse_db_attmethspec(_Mode,CanoniTerm,_DWS,Code,NO_ERRORS) :-
+parse_db_attmethspec(_Mode,CanoniTerm,_DWS,Type,Code,NO_ERRORS) :-
         fltransactionalobject_struct(CanoniTerm,C),
         !,
-        fltranspec_struct(C,Code).
+        fltranspec_struct(C,Type,Code).
 
-parse_db_attmethspec(Mode,CanoniTerm,DWS,Code,Status) :-
-	parse_db_pathexp(Mode,CanoniTerm,ALLOW_TRANS,DWS,C,Status),
+parse_db_attmethspec(Mode,CanoniTerm,DWS,Type,Code,Status) :-
+	parse_db_pathexp(Mode,CanoniTerm,ALLOW_TRANS,DWS,ANY_PATHEXP,C,Status),
 	(Status == NO_ERRORS -> 
-            (is_fltransactionalterm_struct(C) ->
-                fltranspec_struct(C,Code)
+            (is_fltransactionalterm_struct(C) -> fltranspec_struct(C,Type,Code)
             ;
-                flmethspec_struct(C,Code)
+                flmethspec_struct(C,Type,Code)
             )
         ;
             true
@@ -7797,15 +7962,38 @@ parse_db_attmethspec(Mode,CanoniTerm,DWS,Code,Status) :-
 
 parse_db_setexp(Mode,CANOBRACE(L,_N,_I),DWS,CodeList,Status) :-
 	!,
-	parse_db_pathexplist(Mode,L,DWS,CodeList,Status).
+	parse_db_pathexplist(Mode,L,DWS,ANY_PATHEXP,CodeList,Status).
 
 parse_db_setexp(Mode,CanoniTerm,DWS,[Code],Status) :-
-	parse_db_pathexp(Mode,CanoniTerm,DISALLOW_TRANS,DWS,Code,Status).
+	parse_db_pathexp(Mode,CanoniTerm,DISALLOW_TRANS,DWS,ANY_PATHEXP,Code,Status).
 
+/*
 parse_db_sigconstr(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[Lower,Upper],_If,_Ip),DWS,Code,Status) :-
 	get_atom(Funct,FL_CONSTR),
 	!,
-	parse_db_pathexplist(Mode,[Lower,Upper],DWS,[LowerCode,UpperCode],S),
+	parse_db_pathexplist(Mode,[Lower,Upper],DWS,PURE_PATHEXPS_ONLY,[LowerCode,UpperCode],S),
+	( S == NO_ERRORS ->
+	    ( not(valid_lower_sigconstr(LowerCode)) ->
+		Lower = OBJECT(_,If),
+		parsing_error(If,ERROR_SIGCONSTR_LOW,Status)
+	    ;
+		( not(valid_upper_sigconstr(UpperCode)) ->
+		        Upper = OBJECT(_,If),
+		        parsing_error(If,ERROR_SIGCONSTR_HIGH,Status)
+		;
+		    Status = NO_ERRORS
+		)
+	    )
+	;
+	    Status = S
+	),
+	flsigconstr_struct(LowerCode,UpperCode,Code). 
+*/
+
+parse_db_sigconstr(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[Lower,Upper],_If,_Ip),DWS,Code,Status) :-
+	get_atom(Funct,FL_RANGE),
+	!,
+	parse_db_pathexplist(Mode,[Lower,Upper],DWS,PURE_PATHEXPS_ONLY,[LowerCode,UpperCode],S),
 	( S == NO_ERRORS ->
 	    ( not(valid_lower_sigconstr(LowerCode)) ->
 		Lower = OBJECT(_,If),
@@ -8110,10 +8298,10 @@ protect_reification(Call) :-
 
 
 %% Used for reading FLORA-2 terms (incl. reified formulas) from within
-%% FLORA-2 programs
+%% Flora-2 programs
 flora_parse_term_external(ComposerTerm,ParsedTerm,Status) :-
 	canonical_form(ComposerTerm,CanoniTerm),
-	parse_body_pathexp(CanoniTerm,ALLOW_TRANS,NULL,ParsedTerm,Status),
+	parse_body_pathexp(CanoniTerm,ALLOW_TRANS,NULL,PURE_PATHEXPS_ONLY,ParsedTerm,Status),
 	!.
 
 get_statement_descriptors(CanoTerm,[Descriptor1|RestDescriptors],Statement) :-
@@ -8240,9 +8428,14 @@ parse_composer_datatype(Args,If,DWS,Code,Status) :-
 	    parse_list(List,[],IdxL,DWS,LitCode,Status1)
 	; parsing_error(If,ERROR_DATATYPE_LITERAL,Status1)
 	),
-	flobject_struct(TypeIn,TypeCode),
+	(flobject_struct(TypeIn,TypeCode) -> Status2 = NO_ERRORS
+	; parse_body_pathexp(TypeIn,DISALLOW_TRANS,DWS,PURE_PATHEXPS_ONLY,TypeCode,Status2)
+	),
+	(Status1 == NO_ERRORS -> Status3 = Status2
+	; Status3 = Status1
+	),
 	flora_get_flatomvar_name(TypeCode,TypeName),
-	(Status1 == NO_ERRORS ->
+	(Status3 == NO_ERRORS ->
 	    (is_flstring_struct(LitCode,Literal,Idx) ->
 		(flora_synonymous_type_names(TypeName,FL_IRI)
 		-> atom_codes(LitAtm,Literal),
@@ -8276,7 +8469,7 @@ parse_composer_datatype(Args,If,DWS,Code,Status) :-
 	    ;
 		parsing_error(If,ERROR_DATATYPE_LITERAL,Status)
 	    )
-	; Status = Status1
+	; Status = Status3
 	).
 
 
@@ -8366,7 +8559,6 @@ is_fldisjunct(FLDISJUNCT(L,R),L,R).
 is_flneg(FLNEG(Goal,Idx),Goal,Idx).
 is_flrulelognaf(FLRULELOGNAF(Goal),Goal).
 is_flworkspace(FLWORKSPACE(P,WS),P,WS).
-is_flobjspec(FLOBJSPEC(Obj,Spec),Obj,Spec).
 is_flbirelate(FLBIRELATE(Obj1,RelType,Obj2),Obj1,RelType,Obj2).
 is_fllogicquantifier(FLQUANTIFIER(Quant,VarNames,FormulaCode,Idx),
 		     Quant,VarNames,FormulaCode,Idx).
@@ -8383,7 +8575,6 @@ dual_quantifier(FL_EXIST,FL_FORALL).
 #include "hooks/flrparser_TNF.P"
 #endif
 
-%%%% NOTE: TNF won't work with SETARG
 
 %% to_TNF_list(+Headlist,+Index,-TNF,-FlagList,-Status)
 to_TNF_list([],_If,[],Flags,NO_ERRORS) :-
@@ -8424,7 +8615,7 @@ to_TNF(Head,TNF,HasOmni) :-
 	!,
 	( %% a frame: pull conj and disj out, then push
 	    is_flworkspace(Goal,BareHead,WS),
-	    is_flobjspec(BareHead,Obj,Spec)
+	    is_flobjspec(BareHead,Obj,Spec,_Type)
 	->
 	    get_frame_object(Obj,WS,RealObj,ObjCode,_),
 	    push_obj_to_objspec(RealObj,Spec,WS,_,PushedSpec),
@@ -8449,7 +8640,7 @@ to_TNF(Head,TNF,1) :-
 	fldisjunct_struct(LC,RC,TNF).
 to_TNF(Head,TNF,HasOmni) :-
 	is_flworkspace(Head,BareHead,WS),
-	is_flobjspec(BareHead,Obj,Spec),
+	is_flobjspec(BareHead,Obj,Spec,_Type),
 	!,
 	get_frame_object(Obj,WS,RealObj,ObjCode,HasOmni2),
 	push_obj_to_objspec(RealObj,Spec,WS,HasOmni1,PushedSpec),
@@ -8494,7 +8685,7 @@ propagate_neg(Goal,Idx,Result,0) :-
 %%    Obj,disj(spec1,spec2),WS --> disj(Obj[spec1]@WS,Obj[Spec2]@WS)
 %%    Otherwise: Obj,spec,WS   --> Obj[spec]@WS
 push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
-	is_flobjspec(Obj,ObjObj,Spec2),
+	is_flobjspec(Obj,ObjObj,Spec2,_ObjType),
 	!,
 	get_frame_object(ObjObj,WS,RealObj,ObjCode,HasOmni3),
 	push_obj_to_objspec(RealObj,Spec,WS,HasOmni1,Goal1),
@@ -8524,44 +8715,21 @@ push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 %% METH,  a[meth]
 push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 	%% boolean frame component METH obj[m:n]
-	is_flmethspec(Spec,Meth),
-	is_flbirelate(Meth,_Obj1,_Type,_Obj2),
+	is_flmethspec(Spec,Meth,SpecType),
+	is_flbirelate(Meth,_Obj1,_RelType,_Obj2),
 	!,
 	get_frame_object(Meth,WS,MethObj,MethCode,HasOmni1),
-	flmethspec_struct(MethObj,Meth2),
+	flmethspec_struct(MethObj,SpecType,Meth2),
 	push_obj_to_objspec(Obj,Meth2,WS,HasOmni2,Goal1),
 	HasOmni is HasOmni1\/HasOmni2,
 	flconjunct_struct(Goal1,MethCode,Goal).
 push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 	%% boolean frame component METH obj[obj2[...]]
-	is_flmethspec(Spec,Meth),
-	is_flobjspec(Meth,Obj2,Spec2),
+	is_flmethspec(Spec,Meth,SpecType),
+	is_flobjspec(Meth,Obj2,Spec2,_MType),
 	!,
 	get_frame_object(Obj2,WS,RealObj2,Obj2Code,HasOmni3),
-	flmethspec_struct(RealObj2,Meth2),
-	push_obj_to_objspec(Obj,Meth2,WS,HasOmni1,Goal1),
-	push_obj_to_objspec(RealObj2,Spec2,WS,HasOmni2,Goal2),
-	HasOmni is HasOmni1\/HasOmni2\/HasOmni3,
-	flconjunct_struct(Goal1,Goal2,Goal3),
-	flconjunct_struct(Goal3,Obj2Code,Goal).
-%% iMETH, a[*meth]
-push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
-	%% boolean frame component iMETH obj[*m:n]
-	is_flimethspec(Spec,Meth),
-	is_flbirelate(Meth,_Obj1,_Type,_Obj2),
-	!,
-	get_frame_object(Meth,WS,MethObj,MethCode,HasOmni1),
-	flimethspec_struct(MethObj,Meth2),
-	push_obj_to_objspec(Obj,Meth2,WS,HasOmni2,Goal1),
-	HasOmni is HasOmni1\/HasOmni2,
-	flconjunct_struct(Goal1,MethCode,Goal).
-push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
-	%% boolean frame component iMETH obj[*obj2[...]]
-	is_flimethspec(Spec,Meth),
-	is_flobjspec(Meth,Obj2,Spec2),
-	!,
-	get_frame_object(Obj2,WS,RealObj2,Obj2Code,HasOmni3),
-	flimethspec_struct(RealObj2,Meth2),
+	flmethspec_struct(RealObj2,SpecType,Meth2),
 	push_obj_to_objspec(Obj,Meth2,WS,HasOmni1,Goal1),
 	push_obj_to_objspec(RealObj2,Spec2,WS,HasOmni2,Goal2),
 	HasOmni is HasOmni1\/HasOmni2\/HasOmni3,
@@ -8573,27 +8741,27 @@ push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 %% since %m:n is invalid and so is %obj[...]
 push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 	%% boolean frame component METH obj[%m:n]
-	is_fltranspec(Spec,Meth),
-	is_flbirelate(Meth,_Obj1,_Type,_Obj2),
+	is_fltranspec(Spec,Meth,SpecType),
+	is_flbirelate(Meth,_Obj1,_RelType,_Obj2),
 	!,
 	get_frame_object(Meth,WS,MethObj,MethCode,HasOmni1),
 	(transactional_to_regular(MethObj,RegMethObj) -> true
 	; RegMethObj = MethObj
 	),
-	fltranspec_struct(RegMethObj,Meth2),
+	fltranspec_struct(RegMethObj,SpecType,Meth2),
 	push_obj_to_objspec(Obj,Meth2,WS,HasOmni2,Goal1),
 	HasOmni is HasOmni1\/HasOmni2,
 	flconjunct_struct(Goal1,MethCode,Goal).
 push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 	%% boolean frame component METH obj[%obj2[...]]
-	is_fltranspec(Spec,Meth),
-	is_flobjspec(Meth,Obj2,Spec2),
+	is_fltranspec(Spec,Meth,SpecType),
+	is_flobjspec(Meth,Obj2,Spec2,_MType),
 	!,
 	get_frame_object(Obj2,WS,RealObj2,Obj2Code,HasOmni3),
 	(transactional_to_regular(RealObj2,RegRealObj2) -> true
 	; RegRealObj2 = RealObj2
 	),
-	fltranspec_struct(RegRealObj2,Meth2),
+	fltranspec_struct(RegRealObj2,SpecType,Meth2),
 	push_obj_to_objspec(Obj,Meth2,WS,HasOmni1,Goal1),
 	push_obj_to_objspec(RegRealObj2,Spec2,WS,HasOmni2,Goal2),
 	HasOmni is HasOmni1\/HasOmni2\/HasOmni3,
@@ -8604,44 +8772,21 @@ push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 %% BOOLSIG, a[=>meth]
 push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 	%% boolean frame component METH obj[=>m:n]
-	is_flboolsig(Spec,Meth,RefType),
-	is_flbirelate(Meth,_Obj1,_Type,_Obj2),
+	is_flboolsig(Spec,Meth,Arrow,SpecType),
+	is_flbirelate(Meth,_Obj1,_RelType,_Obj2),
 	!,
 	get_frame_object(Meth,WS,MethObj,MethCode,HasOmni1),
-	flboolsig_struct(MethObj,RefType,Meth2),
+	flboolsig_struct(MethObj,Arrow,SpecType,Meth2),
 	push_obj_to_objspec(Obj,Meth2,WS,HasOmni2,Goal1),
 	HasOmni is HasOmni1\/HasOmni2,
 	flconjunct_struct(Goal1,MethCode,Goal).
 push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 	%% boolean frame component METH obj[=>obj2[...]]
-	is_flboolsig(Spec,Meth,RefType),
-	is_flobjspec(Meth,Obj2,Spec2),
+	is_flboolsig(Spec,Meth,Arrow,SpecType),
+	is_flobjspec(Meth,Obj2,Spec2,_MType),
 	!,
 	get_frame_object(Obj2,WS,RealObj2,Obj2Code,HasOmni3),
-	flboolsig_struct(RealObj2,RefType,Meth2),
-	push_obj_to_objspec(Obj,Meth2,WS,HasOmni1,Goal1),
-	push_obj_to_objspec(RealObj2,Spec2,WS,HasOmni2,Goal2),
-	HasOmni is HasOmni1\/HasOmni2\/HasOmni3,
-	flconjunct_struct(Goal1,Goal2,Goal3),
-	flconjunct_struct(Goal3,Obj2Code,Goal).
-%% iBOOLSIG, a[*=>meth]
-push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
-	%% boolean frame component iMETH obj[*=>m:n]
-	is_fliboolsig(Spec,Meth,RefType),
-	is_flbirelate(Meth,_Obj1,_Type,_Obj2),
-	!,
-	get_frame_object(Meth,WS,MethObj,MethCode,HasOmni1),
-	fliboolsig_struct(MethObj,RefType,Meth2),
-	push_obj_to_objspec(Obj,Meth2,WS,HasOmni2,Goal1),
-	HasOmni is HasOmni1\/HasOmni2,
-	flconjunct_struct(Goal1,MethCode,Goal).
-push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
-	%% boolean frame component iMETH obj[*=>obj2[...]]
-	is_fliboolsig(Spec,Meth,RefType),
-	is_flobjspec(Meth,Obj2,Spec2),
-	!,
-	get_frame_object(Obj2,WS,RealObj2,Obj2Code,HasOmni3),
-	fliboolsig_struct(RealObj2,RefType,Meth2),
+	flboolsig_struct(RealObj2,Arrow,SpecType,Meth2),
 	push_obj_to_objspec(Obj,Meth2,WS,HasOmni1,Goal1),
 	push_obj_to_objspec(RealObj2,Spec2,WS,HasOmni2,Goal2),
 	HasOmni is HasOmni1\/HasOmni2\/HasOmni3,
@@ -8651,44 +8796,21 @@ push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 %% FLTRANSIG, a[=>%meth]
 push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 	%% boolean frame component METH obj[=>%m:n]
-	is_fltransig(Spec,Meth,RefType),
-	is_flbirelate(Meth,_Obj1,_Type,_Obj2),
+	is_fltransig(Spec,Meth,Arrow,SpecType),
+	is_flbirelate(Meth,_Obj1,_RelType,_Obj2),
 	!,
 	get_frame_object(Meth,WS,MethObj,MethCode,HasOmni1),
-	fltransig_struct(MethObj,RefType,Meth2),
+	fltransig_struct(MethObj,Arrow,SpecType,Meth2),
 	push_obj_to_objspec(Obj,Meth2,WS,HasOmni2,Goal1),
 	HasOmni is HasOmni1\/HasOmni2,
 	flconjunct_struct(Goal1,MethCode,Goal).
 push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 	%% boolean frame component METH obj[=>%obj2[...]]
-	is_fltransig(Spec,Meth,RefType),
-	is_flobjspec(Meth,Obj2,Spec2),
+	is_fltransig(Spec,Meth,Arrow,SpecType),
+	is_flobjspec(Meth,Obj2,Spec2,_MType),
 	!,
 	get_frame_object(Obj2,WS,RealObj2,Obj2Code,HasOmni3),
-	fltransig_struct(RealObj2,RefType,Meth2),
-	push_obj_to_objspec(Obj,Meth2,WS,HasOmni1,Goal1),
-	push_obj_to_objspec(RealObj2,Spec2,WS,HasOmni2,Goal2),
-	HasOmni is HasOmni1\/HasOmni2\/HasOmni3,
-	flconjunct_struct(Goal1,Goal2,Goal3),
-	flconjunct_struct(Goal3,Obj2Code,Goal).
-%% FLITRANSIG, a[*=>%meth]
-push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
-	%% boolean frame component iMETH obj[*=>%m:n]
-	is_flitransig(Spec,Meth,RefType),
-	is_flbirelate(Meth,_Obj1,_Type,_Obj2),
-	!,
-	get_frame_object(Meth,WS,MethObj,MethCode,HasOmni1),
-	flitransig_struct(MethObj,RefType,Meth2),
-	push_obj_to_objspec(Obj,Meth2,WS,HasOmni2,Goal1),
-	HasOmni is HasOmni1\/HasOmni2,
-	flconjunct_struct(Goal1,MethCode,Goal).
-push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
-	%% boolean frame component iMETH obj[*=>%obj2[...]]
-	is_flitransig(Spec,Meth,RefType),
-	is_flobjspec(Meth,Obj2,Spec2),
-	!,
-	get_frame_object(Obj2,WS,RealObj2,Obj2Code,HasOmni3),
-	flitransig_struct(RealObj2,RefType,Meth2),
+	fltransig_struct(RealObj2,Arrow,SpecType,Meth2),
 	push_obj_to_objspec(Obj,Meth2,WS,HasOmni1,Goal1),
 	push_obj_to_objspec(RealObj2,Spec2,WS,HasOmni2,Goal2),
 	HasOmni is HasOmni1\/HasOmni2\/HasOmni3,
@@ -8696,143 +8818,144 @@ push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 	flconjunct_struct(Goal3,Obj2Code,Goal).
 
 push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
-	%% att-val pair MVD/iMVD: obj[attr->obj2[...]]
-	is_flmvdattspec(Spec,Att,RefType,ValList),
+	%% att-val pair MVD: obj[attr->obj2[...]]
+	is_flmvdattspec(Spec,Att,Arrow,ValList,SpecType),
 	!,
 	get_frame_object(Att,WS,RealAtt,AttCode,HasOmni2),
-	push_mvdattspeclist(ValList,Obj,RealAtt,RefType,WS,HasOmni1,Goal1),
+	push_mvdattspeclist(ValList,Obj,RealAtt,Arrow,SpecType,WS,HasOmni1,Goal1),
 	HasOmni is HasOmni1\/HasOmni2,
 	flconjunct_struct(Goal1,AttCode,Goal).
 push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
-	%% att-val pair MVDSIG/iMVDSIG: obj[attr=>obj2[...]]
+	%% att-val pair MVDSIG: obj[attr=>obj2[...]]
 	%% head occurrences of this seem to be only in insert{...}
-	is_flsigattspec(Spec,Att,RefType,Val),
+	is_flsigattspec(Spec,Att,Arrow,Val,SpecType),
 	!,
 	get_frame_object(Att,WS,RealAtt,AttCode,HasOmni2),
-	push_sigattspec(Val,Obj,RealAtt,RefType,WS,HasOmni1,Goal1),
+	push_sigattspec(Val,Obj,RealAtt,Arrow,SpecType,WS,HasOmni1,Goal1),
 	HasOmni is HasOmni1\/HasOmni2,
 	flconjunct_struct(Goal1,AttCode,Goal).
 push_obj_to_objspec(Obj,Spec,WS,HasOmni,Goal) :-
 	%% att-val pair MVDSIG/iMVDSIG: obj[attr{...}=>obj2[...]]
-	is_flsigattconspec(Spec,Att,Constr,RefType,Val),
+	is_flsigattconspec(Spec,Att,Constr,Arrow,Val,SpecType),
 	!,
 	get_frame_object(Att,WS,RealAtt,AttCode,HasOmni2),
-	push_sigattconspec(Val,Obj,RealAtt,Constr,RefType,WS,HasOmni1,Goal1),
+	push_sigattconspec(Val,Obj,RealAtt,Constr,Arrow,SpecType,WS,HasOmni1,Goal1),
 	HasOmni is HasOmni1\/HasOmni2,
 	flconjunct_struct(Goal1,AttCode,Goal).
 push_obj_to_objspec(Obj,Spec,WS,0,Goal) :-
-	flobjspec_struct(Obj,Spec,Frame),
+	get_spectype(Spec,Type),
+	flobjspec_struct(Obj,Spec,Type,Frame),
 	flmodule_struct(FLORAUSERMOD,Frame,WS,Goal).
 
-%% push_mvdattspeclist/7
-%% push_mvdattspec/7
-push_mvdattspeclist([],Obj,Att,RefType,WS,0,Goal) :-
+%% push_mvdattspeclist/8
+%% push_mvdattspec/8
+push_mvdattspeclist([],Obj,Att,Arrow,Type,WS,0,Goal) :-
 	!,
 	%% also the case of a[b->{}]
-	flmvdattspec_struct(Att,RefType,[],AttValSpec),
-	flobjspec_struct(Obj,AttValSpec,Frame),
+	flmvdattspec_struct(Att,Arrow,[],Type,AttValSpec),
+	flobjspec_struct(Obj,AttValSpec,Type,Frame),
 	flmodule_struct(FLORAUSERMOD,Frame,WS,Goal).
-push_mvdattspeclist([Val],Obj,Att,RefType,WS,HasOmni,Goal) :-
+push_mvdattspeclist([Val],Obj,Att,Arrow,Type,WS,HasOmni,Goal) :-
 	!,
-	push_mvdattspec(Val,Obj,Att,RefType,WS,HasOmni,Goal).
-push_mvdattspeclist([Val|List],Obj,Att,RefType,WS,HasOmni,Goal) :-
-	push_mvdattspec(Val,Obj,Att,RefType,WS,HasOmni1,Goal1),
-	push_mvdattspeclist(List,Obj,Att,RefType,WS,HasOmni2,Goal2),
+	push_mvdattspec(Val,Obj,Att,Arrow,Type,WS,HasOmni,Goal).
+push_mvdattspeclist([Val|List],Obj,Att,Arrow,Type,WS,HasOmni,Goal) :-
+	push_mvdattspec(Val,Obj,Att,Arrow,Type,WS,HasOmni1,Goal1),
+	push_mvdattspeclist(List,Obj,Att,Arrow,Type,WS,HasOmni2,Goal2),
 	HasOmni is HasOmni1\/HasOmni2,
 	flconjunct_struct(Goal1,Goal2,Goal).
 
-push_mvdattspec(Val,Obj,Att,RefType,WS,HasOmni,Goal) :-
-	%% Obj[Att->Val] here Val is a single object, not a list
-	is_flobjspec(Val,Obj2,Spec2),
+push_mvdattspec(Val,Obj,Att,Arrow,Type,WS,HasOmni,Goal) :-
+	%% Obj[Att->Val] here Val is a single spec, not a list
+	is_flobjspec(Val,Obj2,Spec2,_ValType),
 	!,
 	get_frame_object(Obj2,WS,RealObj2,Obj2Code,HasOmni3),
-	flmvdattspec_struct(Att,RefType,[RealObj2],AttSpec),
+	flmvdattspec_struct(Att,Arrow,[RealObj2],Type,AttSpec),
 	push_obj_to_objspec(Obj,AttSpec,WS,HasOmni1,Goal1),
 	push_obj_to_objspec(RealObj2,Spec2,WS,HasOmni2,Goal2),
 	HasOmni is HasOmni1\/HasOmni2\/HasOmni3,
 	flconjunct_struct(Goal1,Goal2,Goal3),
 	flconjunct_struct(Goal3,Obj2Code,Goal).
-push_mvdattspec(Val,Obj,Att,RefType,WS,1,Goal) :-
+push_mvdattspec(Val,Obj,Att,Arrow,Type,WS,1,Goal) :-
 	is_fldisjunct(Val,V1,V2),
 	!,
-	push_mvdattspec(V1,Obj,Att,RefType,WS,_,Goal1),
-	push_mvdattspec(V2,Obj,Att,RefType,WS,_,Goal2),
+	push_mvdattspec(V1,Obj,Att,Arrow,Type,WS,_,Goal1),
+	push_mvdattspec(V2,Obj,Att,Arrow,Type,WS,_,Goal2),
 	fldisjunct_struct(Goal1,Goal2,Goal).
-push_mvdattspec(Val,Obj,Att,RefType,WS,HasOmni,Goal) :-
+push_mvdattspec(Val,Obj,Att,Arrow,Type,WS,HasOmni,Goal) :-
 	is_flconjunct(Val,V1,V2),
 	!,
-	push_mvdattspec(V1,Obj,Att,RefType,WS,HasOmni1,Goal1),
-	push_mvdattspec(V2,Obj,Att,RefType,WS,HasOmni2,Goal2),
+	push_mvdattspec(V1,Obj,Att,Arrow,Type,WS,HasOmni1,Goal1),
+	push_mvdattspec(V2,Obj,Att,Arrow,Type,WS,HasOmni2,Goal2),
 	HasOmni is HasOmni1\/HasOmni2,
 	flconjunct_struct(Goal1,Goal2,Goal).
-push_mvdattspec(Val,Obj,Att,RefType,WS,HasOmni,Goal) :-
+push_mvdattspec(Val,Obj,Att,Arrow,Type,WS,HasOmni,Goal) :-
 	get_frame_object(Val,WS,RealVal,ValCode,HasOmni),
-	flmvdattspec_struct(Att,RefType,[RealVal],AttValSpec),
-	flobjspec_struct(Obj,AttValSpec,Frame),
+	flmvdattspec_struct(Att,Arrow,[RealVal],Type,AttValSpec),
+	flobjspec_struct(Obj,AttValSpec,Type,Frame),
 	flmodule_struct(FLORAUSERMOD,Frame,WS,Goal1),
 	flconjunct_struct(Goal1,ValCode,Goal).
 
-%% push_sigattspec/7
-push_sigattspec(Val,Obj,Att,RefType,WS,HasOmni,Goal) :-
+%% push_sigattspec/8
+push_sigattspec(Val,Obj,Att,Arrow,Type,WS,HasOmni,Goal) :-
 	%% Obj[Att=> Val] here Val is a single object, not a list
-	is_flobjspec(Val,Obj2,Spec2),
+	is_flobjspec(Val,Obj2,Spec2,_ValType),
 	!,
 	get_frame_object(Obj2,WS,RealObj2,Obj2Code,HasOmni3),
-	flsigattspec_struct(Att,RefType,RealObj2,AttSpec),
+	flsigattspec_struct(Att,Arrow,RealObj2,Type,AttSpec),
 	push_obj_to_objspec(Obj,AttSpec,WS,HasOmni1,Goal1),
 	push_obj_to_objspec(RealObj2,Spec2,WS,HasOmni2,Goal2),
 	HasOmni is HasOmni1\/HasOmni2\/HasOmni3,
 	flconjunct_struct(Goal1,Goal2,Goal3),
 	flconjunct_struct(Goal3,Obj2Code,Goal).
-push_sigattspec(Val,Obj,Att,RefType,WS,1,Goal) :-
+push_sigattspec(Val,Obj,Att,Arrow,Type,WS,1,Goal) :-
 	is_fldisjunct(Val,V1,V2),
 	!,
-	push_sigattspec(V1,Obj,Att,RefType,WS,_,Goal1),
-	push_sigattspec(V2,Obj,Att,RefType,WS,_,Goal2),
+	push_sigattspec(V1,Obj,Att,Arrow,Type,WS,_,Goal1),
+	push_sigattspec(V2,Obj,Att,Arrow,Type,WS,_,Goal2),
 	fldisjunct_struct(Goal1,Goal2,Goal).
-push_sigattspec(Val,Obj,Att,RefType,WS,HasOmni,Goal) :-
+push_sigattspec(Val,Obj,Att,Arrow,Type,WS,HasOmni,Goal) :-
 	is_flconjunct(Val,V1,V2),
 	!,
-	push_sigattspec(V1,Obj,Att,RefType,WS,HasOmni1,Goal1),
-	push_sigattspec(V2,Obj,Att,RefType,WS,HasOmni2,Goal2),
+	push_sigattspec(V1,Obj,Att,Arrow,Type,WS,HasOmni1,Goal1),
+	push_sigattspec(V2,Obj,Att,Arrow,Type,WS,HasOmni2,Goal2),
 	HasOmni is HasOmni1\/HasOmni2,
 	flconjunct_struct(Goal1,Goal2,Goal).
-push_sigattspec(Val,Obj,Att,RefType,WS,HasOmni,Goal) :-
+push_sigattspec(Val,Obj,Att,Arrow,Type,WS,HasOmni,Goal) :-
 	get_frame_object(Val,WS,RealVal,ValCode,HasOmni),
-	flsigattspec_struct(Att,RefType,RealVal,AttValSpec),
-	flobjspec_struct(Obj,AttValSpec,Frame),
+	flsigattspec_struct(Att,Arrow,RealVal,Type,AttValSpec),
+	flobjspec_struct(Obj,AttValSpec,Type,Frame),
 	flmodule_struct(FLORAUSERMOD,Frame,WS,Goal1),
 	flconjunct_struct(Goal1,ValCode,Goal).
 
 %% push_sigattconspec/8
-push_sigattconspec(Val,Obj,Att,Constr,RefType,WS,HasOmni,Goal) :-
+push_sigattconspec(Val,Obj,Att,Constr,Arrow,Type,WS,HasOmni,Goal) :-
 	%% Obj[Att=> Val] here Val is a single object, not a list
-	is_flobjspec(Val,Obj2,Spec2),
+	is_flobjspec(Val,Obj2,Spec2,_ValType),
 	!,
 	get_frame_object(Obj2,WS,RealObj2,Obj2Code,HasOmni3),
-	flsigattconspec_struct(Att,Constr,RefType,RealObj2,AttSpec),
+	flsigattconspec_struct(Att,Constr,Arrow,RealObj2,Type,AttSpec),
 	push_obj_to_objspec(Obj,AttSpec,WS,HasOmni1,Goal1),
 	push_obj_to_objspec(RealObj2,Spec2,WS,HasOmni2,Goal2),
 	HasOmni is HasOmni1\/HasOmni2\/HasOmni3,
 	flconjunct_struct(Goal1,Goal2,Goal3),
 	flconjunct_struct(Goal3,Obj2Code,Goal).
-push_sigattconspec(Val,Obj,Att,Constr,RefType,WS,1,Goal) :-
+push_sigattconspec(Val,Obj,Att,Constr,Arrow,Type,WS,1,Goal) :-
 	is_fldisjunct(Val,V1,V2),
 	!,
-	push_sigattconspec(V1,Obj,Att,Constr,RefType,WS,_,Goal1),
-	push_sigattconspec(V2,Obj,Att,Constr,RefType,WS,_,Goal2),
+	push_sigattconspec(V1,Obj,Att,Constr,Arrow,Type,WS,_,Goal1),
+	push_sigattconspec(V2,Obj,Att,Constr,Arrow,Type,WS,_,Goal2),
 	fldisjunct_struct(Goal1,Goal2,Goal).
-push_sigattconspec(Val,Obj,Att,Constr,RefType,WS,HasOmni,Goal) :-
+push_sigattconspec(Val,Obj,Att,Constr,Arrow,Type,WS,HasOmni,Goal) :-
 	is_flconjunct(Val,V1,V2),
 	!,
-	push_sigattconspec(V1,Obj,Att,Constr,RefType,WS,HasOmni1,Goal1),
-	push_sigattconspec(V2,Obj,Att,Constr,RefType,WS,HasOmni2,Goal2),
+	push_sigattconspec(V1,Obj,Att,Constr,Arrow,Type,WS,HasOmni1,Goal1),
+	push_sigattconspec(V2,Obj,Att,Constr,Arrow,Type,WS,HasOmni2,Goal2),
 	HasOmni is HasOmni1\/HasOmni2,
 	flconjunct_struct(Goal1,Goal2,Goal).
-push_sigattconspec(Val,Obj,Att,Constr,RefType,WS,HasOmni,Goal) :-
+push_sigattconspec(Val,Obj,Att,Constr,Arrow,Type,WS,HasOmni,Goal) :-
 	get_frame_object(Val,WS,RealVal,ValCode,HasOmni),
-	flsigattconspec_struct(Att,Constr,RefType,RealVal,AttValSpec),
-	flobjspec_struct(Obj,AttValSpec,Frame),
+	flsigattconspec_struct(Att,Constr,Arrow,RealVal,Type,AttValSpec),
+	flobjspec_struct(Obj,AttValSpec,Type,Frame),
 	flmodule_struct(FLORAUSERMOD,Frame,WS,Goal1),
 	flconjunct_struct(Goal1,ValCode,Goal).
 
@@ -8840,10 +8963,10 @@ push_sigattconspec(Val,Obj,Att,Constr,RefType,WS,HasOmni,Goal) :-
 %% If frame or flbirelate, extract pure object and
 %% return either the object spec or NULL
 get_frame_object(Frame,WS,Obj,Code,HasOmni) :-
-	is_flobjspec(Frame,Obj1,Spec),
+	is_flobjspec(Frame,Obj1,Spec,Type),
 	!,
 	get_frame_object(Obj1,WS,Obj,Code2,HasOmni2),
-	flobjspec_struct(Obj,Spec,SpecCode),
+	flobjspec_struct(Obj,Spec,Type,SpecCode),
 	flmodule_struct(FLORAUSERMOD,SpecCode,WS,SpecCodeWS),
 	to_TNF(SpecCodeWS,Code1,HasOmni1),
 	HasOmni is HasOmni1\/HasOmni2,
@@ -9069,19 +9192,19 @@ convert_forall(Goal,Goal).
 is_flrule(FLRULE(Head,Body),Head,Body).
 is_flfact(FLFACT(Head),Head).
 is_flquery(FLQUERY(Body),Body).
-is_flmethspec(FLMETHSPEC(Meth),Meth).
-is_flimethspec(FLIMETHSPEC(Meth),Meth).
-is_fltranspec(FLTRANSPEC(QN),QN).
-is_flmvdattspec(FLMVDATTSPEC(Att,RefType,Val),Att,RefType,Val).
 
-is_flsigattspec(FLSIGATTSPEC(Att,RefType,Val),Att,RefType,Val).
-is_flsigattconspec(FLSIGATTCONSPEC(Att,Constr,RefType,Val),Att,Constr,RefType,Val).
+is_flmethspec(FLMETHSPEC(Meth,Type),Meth,Type).
+is_fltranspec(FLTRANSPEC(QN,Type),QN,Type).
+is_flmvdattspec(FLMVDATTSPEC(Att,Arrow,Val,Type),Att,Arrow,Val,Type).
+
+is_flsigattspec(FLSIGATTSPEC(Att,Arrow,Val,Type),Att,Arrow,Val,Type).
 is_flsigconstr(FLSIGCONSTR(Lower,Upper),Lower,Upper).
 
-is_flboolsig(FLBOOLSIG(Att,RefType),Att,RefType).
-is_fliboolsig(FLIBOOLSIG(Att,RefType),Att,RefType).
-is_fltransig(FLTRANSIG(Att,RefType),Att,RefType).
-is_flitransig(FLITRANSIG(Att,RefType),Att,RefType).
+is_flobjspec(FLOBJSPEC(Obj,Spec,Type),Obj,Spec,Type).
+is_flboolsig(FLBOOLSIG(Att,Arrow,Type),Att,Arrow,Type).
+is_fltransig(FLTRANSIG(Att,Arrow,Type),Att,Arrow,Type).
+
+is_flsigattconspec(FLSIGATTCONSPEC(Att,Constr,Arrow,Val,Type),Att,Constr,Arrow,Val,Type).
 
 is_flbirelate(FLBIRELATE(Obj1,RelType,Obj2),Obj1,RelType,Obj2).
 is_flterm(FLTERM(Funct,Arity,Args),Funct,Arity,Args).
@@ -9178,58 +9301,55 @@ flwrite(ParserTerm) :-
 	    flwrite(WS)
 	).
 flwrite(ParserTerm) :-
-	is_flobjspec(ParserTerm,Obj,Spec),
+	is_flobjspec(ParserTerm,Obj,Spec,Type),
 	!,
 	flwrite(Obj),
-	write('['),
+	(Type == NONINHERITABLE -> write('[')
+	; write('[|')
+	),
 	flwrite(Spec),
-	write(']').
+	(Type == NONINHERITABLE -> write(']')
+	; write('|]')
+	).
 flwrite(ParserTerm) :-
-	is_flmethspec(ParserTerm,Meth),
+	is_flmethspec(ParserTerm,Meth,_),
 	!,
 	flwrite(Meth).
 flwrite(ParserTerm) :-
-	is_flimethspec(ParserTerm,Meth),
-	!,
-	write('*'),
-	flwrite(Meth).
-flwrite(ParserTerm) :-
-	is_fltranspec(ParserTerm,Meth),
+	is_fltranspec(ParserTerm,Meth,_),
 	!,
 	flwrite(Meth).
 flwrite(ParserTerm) :-
-	is_flmvdattspec(ParserTerm,Att,RefType,Val),
+	is_flmvdattspec(ParserTerm,Att,Arrow,Val,_),
 	!,
 	flwrite(Att),
-	flwrite(RefType),
+	flwrite(Arrow),
 	flwrite(Val).
 flwrite(ParserTerm) :-
-	is_flsigattspec(ParserTerm,Att,RefType,Val),
+	is_flsigattspec(ParserTerm,Att,Arrow,Val,_),
 	!,
 	flwrite(Att),
-	flwrite(RefType),
+	flwrite(Arrow),
 	flwrite(Val).
 flwrite(ParserTerm) :-
-	is_flsigattconspec(ParserTerm,Att,Constr,RefType,Val),
+	is_flsigattconspec(ParserTerm,Att,Constr,Arrow,Val,_),
 	flwrite(Att),
 	write('{'),
 	flwrite(Constr),
 	write('}'),
-	flwrite(RefType),
+	flwrite(Arrow),
 	flwrite(Val).
 flwrite(ParserTerm) :-
 	is_flsigconstr(ParserTerm,Lower,Upper),
 	flwrite(Lower),
-	write('..'),
+	write(FL_RANGE),
 	flwrite(Upper).
 flwrite(ParserTerm) :-
-	(is_flboolsig(ParserTerm,Meth,RefType) ;
-	    is_fliboolsig(ParserTerm,Meth,RefType) ;
-	    is_fltransig(ParserTerm,Meth,RefType) ;
-	    is_flitransig(ParserTerm,Meth,RefType)
+	(is_flboolsig(ParserTerm,Meth,Arrow,_) ;
+	    is_fltransig(ParserTerm,Meth,Arrow,_)
 	),
 	!,
-	flwrite(RefType),
+	flwrite(Arrow),
 	flwrite(Meth).
 flwrite(ParserTerm) :-
 	is_flterm(ParserTerm,Funct,_Arity,Args),

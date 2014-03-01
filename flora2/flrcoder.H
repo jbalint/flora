@@ -39,7 +39,8 @@
 	%%flora_abort/1,
 	flora_abort/2,
 	%%flora_term_to_atom_quote/2,
-	flora_double_quotes/2,
+	flora_double_backslash_and_quotes/2,
+	flora_double_backslash/2,
 	flora_write_quoted_atom/1,
 	flora_write_atom/1,
 	flora_concat_atoms/2

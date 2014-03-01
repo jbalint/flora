@@ -26,7 +26,7 @@
 
 :- import flora_decode_predicate/6 from flrwrapper.
 
-:- import '_isloaded'/1 from flora2.
+:- import '\\isloaded'/1 from flora2.
 
 :- import flora_error_line/2 from flrprint.
 

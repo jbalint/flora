@@ -135,7 +135,7 @@
       1 'font-lock-keyword-face)
     '("\\(@!\\|-->\\|@\\|@@\\)"
       1 'flora-font-lock-bold-keyword-face)
-    '("\\(\\*?->\\|\\*?=>\\|\\*?->->\\|\\*?=>\\)"
+    '("\\(->\\|=>\\|->->\\|=>\\)"
       1 'flora-font-lock-arrow-face)
     '("\\(:\\|[^[(]|[^])]\\)" 
       1 'font-lock-type-face)
@@ -145,7 +145,7 @@
       1 'bold)
     (list (format "\\b\\(%s\\|^#[a-z]\\)\\b" flora-directives-regexp)
 	  1 '(quote flora-font-lock-system-face))
-    '("\\(\\b[A-Za-z0-9_]+\\b *\\((\\b[^)]+\\b)\\)?\\)[ \t\n]*\\((.*)[ \t\C-m]*\\)?\\*?[---=]>"
+    '("\\(\\b[A-Za-z0-9_]+\\b *\\((\\b[^)]+\\b)\\)?\\)[ \t\n]*\\((.*)[ \t\C-m]*\\)?[---=]>"
       1 'font-lock-function-name-face)
     )
   "Additional expressions to highlight in flora mode.")
@@ -566,7 +566,7 @@ The region must be created in advance."
     (save-excursion
       (process-send-string
        flora-process-name 
-       (format " _load('%s' >> %s).\n" tmpfile-name (if module module "main"))
+       (format " \\load('%s' >> %s).\n" tmpfile-name (if module module "main"))
        ))
     (show-flora-buffer)
     ))
@@ -614,7 +614,7 @@ Does not offer to save files."
     (run-flora-background)
     (process-send-string
      flora-process-name
-     (format "_load('%s' >> %s).\n" file (if module module "main")))
+     (format "\\load('%s' >> %s).\n" file (if module module "main")))
     (show-flora-buffer)))
 
 (defun flora-load-file-to-module (module)

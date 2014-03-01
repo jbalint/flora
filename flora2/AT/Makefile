@@ -76,7 +76,7 @@ flrgclp${PROLOGEXT}:
 
 # the default case
 .flr${PROLOGEXT}:
-	echo "import ('_compile')/1 from flora2. '_compile'($*)." >> cmd...
+	echo "import ('\\\\compile')/1 from flora2. '\\\\compile'($*)." >> cmd...
 
 init:
 	rm -f $(SVFILE)
@@ -101,3 +101,4 @@ finish:
 clean:
 	/bin/rm -f *${PROLOGEXT} *$(OBJEXT) *.O *.fdb *~ .*~ *.fld *.flt *.flm *.fls *.fls2 *.con *.bak .#* cmd*
 	/bin/rm -rf .flora_aux_files/* prolog/*.xwam
+	/bin/rm -rf .ergo_aux_files/* prolog/*.xwam

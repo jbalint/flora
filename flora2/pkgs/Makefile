@@ -63,10 +63,10 @@ recompile: $(ALL) finish
 	@cat $(SVFILE)
 
 flrxml_aux$(PROLOGEXT):
-	echo "import ('_compile')/1 from flora2. '_compile'($* >> flrxml)." >> cmd...
+	echo "import ('\\\\compile')/1 from flora2. '\\\\compile'($* >> flrxml)." >> cmd...
 
 .flr${PROLOGEXT}:
-	echo "import ('_compile')/1 from flora2. '_compile'($*)." >> cmd...
+	echo "import ('\\\\compile')/1 from flora2. '\\\\compile'($*)." >> cmd...
 
 init:
 	/bin/rm -f $(SVFILE)
@@ -90,3 +90,4 @@ finish:
 clean:
 	/bin/rm -f core *$(PROLOGEXT) *${OBJEXT} *.O *.fdb *.fld *.flt *.fls *.fls2 *.flm *.bak *~ .*~ .#*
 	/bin/rm -rf .flora_aux_files/*
+	/bin/rm -rf .ergo_aux_files/*

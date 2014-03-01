@@ -73,12 +73,10 @@ flora_compile_util(File) :-
 flora_compile_util(OrigFile,Module) :-
 	flora_check_filename(OrigFile,File),
 	valid_flora_module_name(Module),
-	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
+	( flora_locate_file(File,FLORA_FILE_EXT_ALT,FlrFile) ->
 	    flora_compile_then_prolog_compile(FlrFile,Module)
 	;
-	  flrfilename_error(File),
-	  !,
-	  fail
+	  flrfilename_error(File,FLORA_FILE_EXT_ALT) -> fail
 	),
 	!.
 
@@ -99,12 +97,9 @@ flora_compile_add(File) :-
 flora_compile_add(OrigFile,Module) :-
 	flora_check_filename(OrigFile,File),
 	valid_flora_module_name(Module),
-	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
+	( flora_locate_file(File,FLORA_FILE_EXT_ALT,FlrFile) ->
 	    flora_compile_then_prolog_compile_add(FlrFile,Module)
-	;
-	  flrfilename_error(File),
-	  !,
-	  fail
+	; flrfilename_error(File,FLORA_FILE_EXT_ALT) -> fail
 	),
 	!.
 
@@ -120,7 +115,7 @@ flora_add_module_dyn(OrigInFile,Module,HostFile)  :-
 flora_add_module_dyn(OrigInFile,Module,HostFile,ReportingType,FileStatus,ErrList) :-
 	flora_check_filename(OrigInFile,InFile),
 	valid_flora_module_name(Module),
-	(\+ '_isloaded'(Module)
+	(\+ '\\isloaded'(Module)
 	-> 
 	    %% We now just create a module, if adding to a new module
 	    flloadtrailer([],Module)
@@ -132,14 +127,11 @@ flora_add_module_dyn(OrigInFile,Module,HostFile,ReportingType,FileStatus,ErrList
 	; true
 	),
 	get_user_program_maybe(InFile,File),
-	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
+	( flora_locate_file(File,FLORA_FILE_EXT_ALT,FlrFile) ->
 	    (ReportingType == print -> flora_fladd(FlrFile,Module,HostFile)
 	    ; flora_fladd(FlrFile,Module,HostFile,ReportingType,FileStatus,ErrList)
 	    )
-	;
-	  flrfilename_error(InFile),
-	  !,
-	  fail
+	; flrfilename_error(InFile,FLORA_FILE_EXT_ALT) -> fail
 	),
 	(var(ErrList) -> ErrList = NO_ERRORS ; true),
 	!.
@@ -170,14 +162,11 @@ flora_load_module_util(OrigInFile,Module,HostFile,ReportingType,FileStatus,ErrLi
 	flora_check_filename(OrigInFile,InFile),
 	valid_flora_module_name(Module),
 	get_user_program_maybe(InFile,File),
-	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
+	( flora_locate_file(File,FLORA_FILE_EXT_ALT,FlrFile) ->
 	    (ReportingType == print ->flora_flload(FlrFile,Module,HostFile)
 	    ; flora_flload(FlrFile,Module,HostFile,ReportingType,FileStatus,ErrList)
 	    )
-	;
-	  flrfilename_error(InFile),
-	  !,
-	  fail
+	; flrfilename_error(InFile,FLORA_FILE_EXT_ALT) -> fail
 	),
 	(var(ErrList) -> ErrList = NO_ERRORS ; true),
 	!.
@@ -195,7 +184,7 @@ flora_load_module_util(OrigInFile,Module,HostFile,ReportingType,FileStatus,ErrLi
 flora_load_module_util(OrigInFile,HostFile) :-
 	flora_check_filename(OrigInFile,InFile),
 	get_user_program_maybe(InFile,File),
-	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
+	( flora_locate_file(File,FLORA_FILE_EXT_ALT,FlrFile) ->
 	    %% Load FLORA-2 file
 	    flora_flload(FlrFile,FLORA_DEFAULT_WORKSPACE,HostFile)
 
@@ -228,19 +217,7 @@ flora_load_module_util(OrigInFile,HostFile) :-
 	    consult(OBJFile)
 
 	%% The error cases
-	; parse_filename(File,_,_,Ext), 
-          Ext \== '', Ext \== PROLOG_OBJFILE_EXT, Ext \== PROLOG_PFILE_EXT, Ext \== FLORA_FILE_EXT,
-	  flora_file_op(exists,File)
-	->
-	    flora_stderr_nl,
-	    flora_error_line('~w: Filename extension must be ~w, ~w or ~w',
-	                     [File,FLORA_FILE_EXT,PROLOG_PFILE_EXT,PROLOG_OBJFILE_EXT]),
-	    fail
-	;
-	  flora_stderr_nl,
-	  flora_error_line('File ~w[.{~w|~w|~w}] does not exist',
-			   [File,FLORA_FILE_EXT,PROLOG_PFILE_EXT,PROLOG_OBJFILE_EXT]),
-          fail
+	; flrfilename_error('file',File,[FLORA_FILE_EXT_ALT,PROLOG_PFILE_EXT,PROLOG_OBJFILE_EXT]) -> fail
         ),
 	!.
 
@@ -565,15 +542,11 @@ flora_compile_system_module(File) :-
 	%% Get the system module ID from the base file name.
 	flora_file_op(basename,File,BaseName),
 	flora_sysmod_file(Module,BaseName,_SubDir),
-	( flora_locate_file(BaseName,FLORA_FILE_EXT,FlrFile) ->
+	( flora_locate_file(BaseName,FLORA_FILE_EXT_ALT,FlrFile) ->
 	    flora_check_module_name(Module),
 	    flora_compile_then_prolog_compile(FlrFile,Module)
 	;
-	  flora_stderr_nl,
-	  flora_error_line('File ~w[.~w] does not exist',
-			   [BaseName,FLORA_FILE_EXT]),
-	  !,
-          fail
+	    flrfilename_error(File,FLORA_FILE_EXT_ALT) -> fail
 	),
 	!.
 
@@ -591,20 +564,16 @@ flora_load_system_module_util(Module) :-
 	    %% Compute the Flora file name.
 	    flora_configuration(installdir,FloraDir),
 	    flora_slash(S),
-	    flora_concat_atoms([FloraDir,S,SubDir,S,BaseName,'.',FLORA_FILE_EXT],FlrFile),
+	    flora_concat_atoms([FloraDir,S,SubDir,S,BaseName],BaseFile),
+	    (flora_locate_file(BaseFile,FLORA_FILE_EXT_ALT,FlrFile) -> true
+	    ; flrfilename_error('system',FlrFile,FLORA_FILE_EXT_ALT) -> fail
+	    ),
 	    util_mainP_filename(FlrFile,PFile),
 	    util_WSXWAM_filename(FlrFile,Module,WSXWAMFile),
 	    !,
 	    ( skip_recompile(FlrFile,PFile) -> true
 
-	    ; flora_file_op(exists,FlrFile) ->
-		flora_compile_then_prolog_compile(FlrFile,Module)
-	    ;
-	      flora_stderr_nl,
-	      flora_error_line('System module file `~w'' does not exist',
-			       [FlrFile]),
-	      !,
-	      fail
+	    ; flora_compile_then_prolog_compile(FlrFile,Module)
 	    ),
 	    !,
 	    %% Seems system modules are always prolog-compiled.
@@ -628,7 +597,7 @@ flora_load_system_module_util(Module) :-
 	    flora_clear_xpp_options
 	;
 	  flora_stderr_nl,
-	  flora_error_line('Invalid system module ID ~w -- Loading failed',
+	  flora_error_line('invalid system module ID ~w -- Loading failed',
 			   [Module]),
           !,
 	  fail
@@ -835,13 +804,13 @@ save_user_clauses(FlrFile) :-
 
 /*************************************************************************
   get_user_program_maybe(+InFile,-File)
-  If InFile = _user assume the user wants to input the program from the shell.
+  If InFile = '' assume the user wants to input the program from the shell.
   Return the name of the tempfile that has the program.
 *************************************************************************/
 get_user_program_maybe(InFile,File) :-
 	( InFile == FL_INLINEMODULE ->
 	    util_user_tmpfile(File),
-	    flora_concat_atoms([File,'.',FLORA_FILE_EXT],FlrFile),
+	    flora_concat_atoms([File,'.',FLORA_FILE_PREFERRED_EXT],FlrFile),
 	    save_user_clauses(FlrFile)
 	;
 	  File=InFile
@@ -864,8 +833,11 @@ flora_locate_file(FL_URL(InFile),ExtType,ExtFile) :-
 	%% FixMe: In principle, we could first check the modtime of the URL
 	%% and download it only if it is newer than ExtFile
 	curl:load_page(FL_URL(ExtFileName),Document,
-		       [redirect(true)],  %% decide which options make sense
+		       [redirect(true)], %% decide which options make sense
 		       [DirEnc,FileBase,Suffix,_Size,WebTime],Warn),
+	(\+webdoc_not_found(Document) -> true
+	; fail
+	),
 	curl:www_cache_filename([redirect(true)],FileBase,Suffix,WWW_cache_Filename),
 	(Warn==[] -> true
 	;
@@ -881,7 +853,7 @@ flora_locate_file(FL_URL(InFile),ExtType,ExtFile) :-
 	    ;
 		flora_abort(['cannot create the Web cache directory: ',
 			     UserWebCache,
-			     ' HTTP interface will become inoperational'],
+			     ' the HTTP interface is inoperational'],
 			    FLORA_ABORT_NOTRACE)
 	    )
 	),
@@ -892,7 +864,7 @@ flora_locate_file(FL_URL(InFile),ExtType,ExtFile) :-
 	    ;
 		flora_abort(['cannot create a Web cache subdirectory: ',
 			     InFileCacheDirectory,
-			     ' HTTP interface will become nonoperational'],
+			     ' HTTP interface is nonoperational'],
 			    FLORA_ABORT_NOTRACE)
 	    )
 	),
@@ -902,13 +874,7 @@ flora_locate_file(FL_URL(InFile),ExtType,ExtFile) :-
 	-> flora_file_op(modtime,ExtFile,ExtFileTime)
 	;  ExtFileTime = 0
 	),
-	(Document == ''
-	->
-	    flora_error_line('Web document ~w[.{~w|~w|~w}] does not exist or is not readable',
-			   [InFile,FLORA_FILE_EXT,PROLOG_PFILE_EXT,PROLOG_OBJFILE_EXT]),
-	    fail
-	;   ExtFileTime =< WebTime 
-	->
+	( ExtFileTime =< WebTime ->
 	    %% test: [url('http://www.cs.stonybrook.edu/~kifer/test/test.flr')].
 	    open(ExtFile,write,Stream),
 	    write(Stream,Document),
@@ -921,11 +887,23 @@ flora_locate_file(InFile,ExtType,ExtFile) :-
 	check_attach_extension(InFile,ExtType,ExtFileName),
 	flora_locate_file(ExtFileName,ExtFile),
 	!.
+%% ExtType can be a list of alternative extensions
 check_attach_extension(InFile,ExtType,ExtFileName) :-
 	parse_filename(InFile,_,_,Ext),
-	( Ext == ExtType -> ExtFileName=InFile
-	;
+	( %% InFile has a matching extension
+	  atom(ExtType), Ext == ExtType -> ExtFileName=InFile
+	; is_list(ExtType), member(Ext,ExtType) -> ExtFileName=InFile
+	; atom(ExtType), Ext == '' ->
 	    flora_concat_atoms([InFile,'.',ExtType],ExtFileName)
+	; is_list(ExtType), Ext == '' ->
+	    member(AltExt,ExtType),
+	    flora_concat_atoms([InFile,'.',AltExt],ExtFileName)
+	).
+
+webdoc_not_found(Doc) :-
+	(\+atom(Doc) -> true
+	; Doc == '' -> true
+	; flora_match_substring('Not Found</title>',Doc,_)
 	).
 
 
@@ -982,7 +960,7 @@ util_hidden_aux_dir(File,Dir) :-
 util_hidden_aux_file_base(File,AuxBase) :-
 	parse_filename(File,Dir,Base,Ext),
 	flora_slash(S),
-	(Ext == FLORA_FILE_EXT ->
+	(member(Ext,FLORA_FILE_EXT_ALT) ->
 	    flora_concat_atoms([Dir,FLORA_HIDDEN_DIR,S],AuxDir)
 	; AuxDir = Dir
 	),
@@ -991,7 +969,8 @@ util_hidden_aux_file_base(File,AuxBase) :-
 	( flora_file_op(exists,AuxDir) -> true
 	; ( flora_file_op(mkdir,AuxDir) -> true
 	  ;
-	      flora_abort(['cannot create the ', FLSYSTEM, ' auxiliary folder for storing compiled files: ',
+	      flora_abort(['cannot create the ',FLSYSTEM,
+			   ' auxiliary folder for storing compiled files: ',
 			   AuxDir, '. Aborting.'],
 			  FLORA_ABORT_NOTRACE)
 	  )
@@ -1141,9 +1120,11 @@ util_FPJ_filename(File,FPJFile) :-
 	util_hidden_aux_file_base(File,AuxBase),
 	flora_concat_atoms([AuxBase,'.',FLORA_FPJ_EXT],FPJFile).
 
+%% Here we use FLORA_FILE_PREFERRED_EXT because this is used only
+%% for auxiliary purposes, never to actually locate Flora-2 program files
 util_FLR_filename(File,FlrFile) :-
 	parse_filename(File,_,Base,_),
-	flora_concat_atoms([Base,'.',FLORA_FILE_EXT],FlrFile).	
+	flora_concat_atoms([Base,'.',FLORA_FILE_PREFERRED_EXT],FlrFile).	
 	
 
 /*************************************************************************
@@ -1152,8 +1133,8 @@ util_FLR_filename(File,FlrFile) :-
 *************************************************************************/
 flora_check_filename(OrigFile,File) :-
 	P2H_CONVERSION(File,OrigFile),
-	(atom(File), !
-	; File = FL_URL(Atom), atom(Atom), !
+	(atom(File) -> true
+	; File = FL_URL(Atom), atom(Atom) -> true
 	; 
 	    flora_error_line('invalid file name: ~w', [OrigFile]),
 	    fail
@@ -1242,8 +1223,7 @@ flora_set_xpp_options(Purpose,Module) :-
 	flora_check_module_name(Module),
 	(flora_is_system_module_name(Module)
 	-> ExtraOpt='-D FLORA_COMPILE_SYSTEM_MODULE'
-	; flora_check_module_name(Module)
-	-> ExtraOpt=''
+	; flora_check_module_name(Module) -> ExtraOpt=''
 	; flora_module_name_error(Module)
 	),
 	(Purpose==read -> xpp_standard_options_for_read(StandardOpt)
@@ -1260,7 +1240,12 @@ flora_set_xpp_options(Purpose,Module) :-
 	    %% do increment it for compile/dump
 	    flora_increment_counter(FLORA_COMPILATION_COUNTER,1,_,Id)
 	),
-	flora_concat_items([StandardOpt,' -D FLORA_VAR_WORKSPACE="',Module,
+	%% If Module is a system module and has a \, we have to pull it through
+	%% the system exec command and then through the Prolog reader.
+	%% This, the \ has to be quadrupled
+	flrporting:flora_double_backslash(Module,ModuleDbl),
+	flrporting:flora_double_backslash(ModuleDbl,ModuleDbl2),
+	flora_concat_items([StandardOpt,' -D FLORA_VAR_WORKSPACE="',ModuleDbl2,
 			    '" ',ExtraOpt,' -D FLORA_COMPILATION_ID=',Id,' '],
 			   Opt),
 	flora_assert_xpp_options(Opt),
@@ -1354,13 +1339,13 @@ util_include_file([Opt|OptList],Status) :-
 	    flora_copy_input(FullName,_),
 	    util_include_file(OptList,Status)
 	;
-	  flora_error_line('The ~w system file ~w cannot be found',
+	  flora_error_line('the ~w system file ~w cannot be found',
 			   [FLSYSTEM,FullName]),
           Status = FLORA_FAILURE
 	).
 
 util_include_file(_OptList,FLORA_FAILURE) :-
-	  flora_error_line('System file corrupted').
+	  flora_error_line('system file corrupted').
 
 
 /*************************************************************************
@@ -1456,9 +1441,10 @@ util_compile_file_add(InputFile,Module,PFile,DBFile,FLDFile,FLSFile,FLS2File,FLT
 			    InputFile, ':']
 			   ),
 	flora_clear_compilation_permaoptions,
+	!,
 	%% Wait so as to not leave zombies.
-	check_xpp_process_status(InputFile,XPP_process),
-	%% Release the file descriptor used to read from cpp.
+	check_xpp_process_status(InputFile,XPP_process,close_on_error),
+	%% Release the file descriptor used to read from gpp.
 	%%close(IOportFromProc),
 	seen,
 	flora_clear_xpp_options,
@@ -1624,7 +1610,7 @@ generate_Pfile_add(PFileName,FileOptionList,TrailerOptions,RuleList,FactList,Que
 	%% may no longer be valid
 	flora_concat_atoms(['?-(catch(abolish_all_tables,_,flora_warning_line(''',
 			    WARN_TABLED_FLLOAD,
-			    ''',[''_add'']))).'],
+			    ''',[''\\add'']))).'],
 			   AbolishCommand),
 	flora_current_out_line(AbolishCommand),
 	%%
@@ -1727,9 +1713,10 @@ util_compile_file(InputFile,Module,PFile,DBFile,FLDFile,FLMFile,FLSFile,FLS2File
 			   ['<Compiler> Compile time for ', InputFile, ':']
 			   ),
 	flora_clear_compilation_permaoptions,
+	!,
 	%% Wait so as to not leave zombies.
-	check_xpp_process_status(InputFile,XPP_process),
-	%% Release the file descriptor used to read from cpp.
+	check_xpp_process_status(InputFile,XPP_process,close_on_error),
+	%% Release the file descriptor used to read from gpp.
 	%%close(IOportFromProc),
 	seen,
 	flora_clear_xpp_options,
@@ -2118,7 +2105,7 @@ flora_loaddyn_data(OrigInFile,Module,Ext) :-
 	%% FLS2 files are usually absent
 	; Ext == FLORA_FLS2_EXT -> true
 	;
-	    flora_concat_atoms(['file ', InFileAbs, ' does not exist - recompile'], ErrMsg),
+	    flora_concat_atoms(['file ',InFileAbs,' does not exist - recompile'], ErrMsg),
 	    flora_abort(ErrMsg,FLORA_ABORT_NOTRACE)
 	),
 	!.
@@ -2159,7 +2146,8 @@ flora_read_descriptor_metafacts_canonical_and_insert(File,ErrNumFinal) :-
 	    arg(2,Term,RFN),
 	    arg(3,Term,Module),
 	    parse_filename(File,_,Base,_),
-	    flora_concat_atoms([Base,FLORA_FILE_EXT],ErrFile),
+	    file_ext_printable_alternatives(FLORA_FILE_EXT_ALT,FileExtAlts),
+	    flora_concat_atoms([Base,'.',FileExtAlts],ErrFile),
 	    flora_concat_atoms(['a rule with Id (',
 				StmtId,',',RFN,',',Module,
 				') already exists'],
@@ -2430,7 +2418,7 @@ flora_save_module_util(Module,OrigFile) :-
 	flora_check_filename(OrigFile,File),
 	valid_flora_module_name(Module),
 	
-	( flora_locate_file(File,FLORA_FILE_EXT,FlrFile) ->
+	( flora_locate_file(File,FLORA_FILE_PREFERRED_EXT,FlrFile) ->
 	    flora_loader_message('replacing the old ~w', [FlrFile]),
 	    save_module_internal(Module,FlrFile)
 	; 
@@ -3137,9 +3125,10 @@ flora_read_then_parse_file(InputFile,ParserList,StatusList) :-
 	see(IOportFromProc),
 	util_read_then_parse_file(ParserList,StatusList),
 	flora_clear_compilation_permaoptions,
+	!,
 	%% Wait so as to not leave zombies.
-	check_xpp_process_status(InputFile,XPP_process),
-	%% Release the file descriptor used to read from cpp.
+	check_xpp_process_status(InputFile,XPP_process,close_on_error),
+	%% Release the file descriptor used to read from gpp.
 	%%close(IOportFromProc),
 	seen,
 	flora_clear_xpp_options,
@@ -3245,22 +3234,50 @@ flora_shell_command_line(Code,Options,Status) :-
 
 
 /*************************************************************************
-  flrfilename_error(+FileName)
+  flrfilename_error(+Message,+FileName,+Extension)
 
   This predicate is called when search for a Flora file is failed. The
   failure may be due to incorrect file name extension or non-existence.
 *************************************************************************/
-flrfilename_error(File) :-
-	( parse_filename(File,_,_,Ext), Ext \== '', Ext \== FLORA_FILE_EXT,
-	  flora_file_op(exists,File) ->
-	    flora_stderr_nl,
-	    flora_error_line('~w: Filename extension must be ~w',
-			     [File,FLORA_FILE_EXT])
+flrfilename_error(File,Extension) :-
+	flrfilename_error('file',File,Extension).
+flrfilename_error(MesgIn,FileIn,Extension) :-
+	(FileIn = FL_URL(File) -> Mesg = 'Web document'
+	; File = FileIn, Mesg = MesgIn
+	),
+	parse_filename(File,_,BaseName,Ext),
+	(atom(Extension) -> ExtList = Extension, FullExtList = ['',ExtList]
+	; flatten(Extension,ExtList), FullExtList = [''|ExtList]
+	),
+	flora_stderr_nl,
+	file_ext_printable_alternatives(ExtList,AltExts),
+	(\+member(Ext,FullExtList) ->
+	    flora_error_line('~w: ~w name extension must be ~w',
+			     [File,Mesg,AltExts])
+	; Ext \== '' -> flora_error_line('~w ~w does not exist',[Mesg,File])
 	;
-	  flora_stderr_nl,
-	  flora_error_line('File ~w[.~w] does not exist',[File,FLORA_FILE_EXT])
+	    flora_error_line('~w ~w.~w does not exist',[Mesg,BaseName,AltExts])
         ),
 	!.
+
+file_ext_printable_alternatives(Ext,Ext) :-
+	atom(Ext),
+	!.
+file_ext_printable_alternatives(Ext,AltAtm) :-
+	is_list(Ext),
+	!,
+	list_to_alternatives(Ext,Alts),
+	(length(Ext,Len), Len>1 ->
+	    flora_concat_atoms(['{',Alts,'}'],AltAtm)
+	; AltAtm = Alts
+	).
+
+list_to_alternatives([],'') :- !.
+list_to_alternatives([Elt|Rest],Alt) :-
+	list_to_alternatives(Rest,RestAlts),
+	(RestAlts == '' -> Alt = Elt
+	; flora_concat_atoms([Elt,'|',RestAlts],Alt)
+	).
 
 
 /*************************************************************************
@@ -3504,7 +3521,6 @@ util_composer_error([],0) :- !.
 util_composer_error([error(Indx,Msg)|L],ErrNum) :-
 	!,
 	flora_nth_token(Indx,Tk),
-	%%atom_codes(A,[CH_UNDERSCORE]),
 	A = '_',
 	( (Tk = variable(A,_)) ->
 	    %% in error reporting, output ? for anonymous variable
@@ -3702,9 +3718,9 @@ check_for_dependencies_error([],0) :- !.
 check_for_dependencies_error([error(Msg)|L],ErrNum) :-
 	!,
 	( flora_current_compile_filename(FileName) ->
-	    flora_error_line('[~w] [Dependency check] ~w', [FileName,Msg])
+	    flora_error_line('[~w] <Dependency check> ~w', [FileName,Msg])
 	;
-	    flora_error_line('[Dependency check] ~w', [Msg])
+	    flora_error_line('<Dependency check> ~w', [Msg])
 	),
 	check_for_dependencies_error(L,EN),
 	ErrNum is EN+1.
@@ -3723,7 +3739,6 @@ util_compiler_error([error(Indx,Msg)|L],ErrNum) :-
 	Indx \== NO_INDEX,
 	!,
 	flora_nth_token(Indx,Tk),
-	%%atom_codes(A,[CH_UNDERSCORE]),	
 	A = '_',
 	( (Tk = variable(A,_)) ->
 	    %% prepend ? to anonymous var _
@@ -3778,7 +3793,6 @@ util_compiler_warn([warning(Indx,_Msg)|_L],WarnNum,SkippedWarns) :-
 util_compiler_warn([warning(Indx,Msg)|L],WarnNum,SkippedWarns) :-
 	!,
 	flora_nth_token(Indx,Tk),
-	%%atom_codes(A,[CH_UNDERSCORE]),
 	A = '_',
 	( (Tk = variable(A,_)) ->
 	    %% prepend ? to anonymous var _
@@ -3864,7 +3878,6 @@ flora_coder_error([error(Msg)|L]) :-
 flora_coder_error([error(Indx,Msg)|L]) :-
 	!,
 	flora_nth_token(Indx,Tk),
-	%%atom_codes(A,[CH_UNDERSCORE]),
 	A = '_',
 	( (Tk = variable(A,_)) ->
 	    %% prepend ? to anonymous var _
@@ -3905,7 +3918,7 @@ flora_list2conjunct([G|L],(G,LG)) :-
 
 flora_set_maxerrors(X) :-
 	(X \== FLORA_ALL, (not integer(X); X < 1)
-	  -> flora_error_line('Invalid argument to flora_set_maxerrors'),
+	  -> flora_error_line('invalid argument to flora_set_maxerrors'),
 	    fail
 	;
 	  (retract(flora_maxerr(_)), ! ; true),
@@ -3914,7 +3927,7 @@ flora_set_maxerrors(X) :-
 
 flora_set_maxwarnings(X) :-
 	((\+integer(X); X < 1)
-	  -> flora_error_line('Invalid argument to flora_set_maxwarnings'),
+	  -> flora_error_line('invalid argument to flora_set_maxwarnings'),
 	    fail
 	;
 	  (retract(flora_maxwarn(_)), ! ; true),
@@ -3945,10 +3958,8 @@ FL_DUMP(InFile) :-
 dump_file_internal(OrigInFile,Module,SquashingOption) :-
 	flora_check_filename(OrigInFile,InFile),
 	valid_flora_module_name(Module),
-	( flora_locate_file(InFile,FLORA_FILE_EXT,FlrFile), !
-	; flrfilename_error(InFile),
-	    !,
-	    fail
+	( flora_locate_file(InFile,FLORA_FILE_EXT_ALT,FlrFile) -> true
+	; flrfilename_error(InFile,FLORA_FILE_EXT_ALT) -> fail
 	),
 	%% Find the files that need to be dumped.
 	util_mainP_filename(FlrFile,PFile),
@@ -4039,7 +4050,8 @@ gpp_dumpfile_internal(FileName,DumpFileName,Module) :-
 	%% do prettyprinting; gpp output is now piped through
 	%% this predicate to the dumpfile
 	prettyprint_stdin,
-	check_xpp_process_status(FileName,XPP_process),
+	!,
+	check_xpp_process_status(FileName,XPP_process,close_on_error),
 	flora_clear_xpp_options,
 	%%close(IOportFromGPP),
 	%%close(DumpPort),
@@ -4072,7 +4084,8 @@ flora_copy_and_preprocess(Input,Output,GPP_OptionsList) :-
 	seeing(StdIn),
 	telling(StdOut),
 	flora_copy_input(IOportFromGPP,Output),
-	check_xpp_process_status(Input,XPP_process),
+	!,
+	check_xpp_process_status(Input,XPP_process,close_on_error),
 	flora_clear_xpp_options,
 	seen,
 	%% Restore the old stdin and stdout
@@ -4571,15 +4584,21 @@ seen_source(IOPort,OldStdin) :-
 	see(OldStdin),
 	close(IOPort).
 
-check_xpp_process_status(File,Process) :-
+check_xpp_process_status(File,Process,Action) :-
 	process_control(Process,wait(ExitStatus)),
 	(ExitStatus == 0 -> true
 	;
 	    (var(File) -> Message = 'input stream'
 	    ; Message = File
 	    ),
-	    flora_abort(['error while preprocessing ', Message],
-			FLORA_ABORT_NOTRACE)
+	    flora_error_line('error while preprocessing ~w', [Message]),
+	    (Action==close_on_error ->
+		flora_clear_xpp_options,
+		seen
+	    ; true
+	    ),
+	    !,
+	    fail
 	).
 
 
@@ -4600,7 +4619,8 @@ xpp_datafile_for_module_and_cache(File,PreprocessedFile,Module) :-
 	%% Release the file descriptor used to read from xpp.
 	close(IOportFromProc),
 	%% Wait so as not to leave zombies.
-	check_xpp_process_status(File,XPP_process).
+	!,
+	check_xpp_process_status(File,XPP_process,do_nothing).
 
 flora_token_index_to_line(TokenIndex,Line) :-
 	flora_nth_token(TokenIndex,Tk),
@@ -4717,7 +4737,7 @@ write_tabled_udf_predicates([(PredName,PredArity),UDFPreds]):-
 	flora_write_atom('#if defined(FLORA_UDF_DYNAMIC_TABLING)'),
 	nl,
 	%% in case PredName has single quotes in it
-	flrporting:flora_double_quotes(PredName,PredName2),
+	flora_double_quotes(PredName,PredName2),
 	flora_write_atom(':-(dynamic(as(''/''(FLORA_THIS_WORKSPACE('),
 	write(PredName2),
 	flora_write_atom(')'),

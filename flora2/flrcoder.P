@@ -115,8 +115,7 @@ is_prbuiltin_identifier(PRBUILTIN_IDENTIFIER(Builtin,I),Builtin,I).
 
 is_prdatatype(PRDATATYPE(Sort,Lit,Idx), Sort,Lit,Idx).
 is_prdatatypelist(PRdtlist) :- is_prdatatypelist(PRdtlist,_).
-is_prdatatypelist(PRdtlist,List) :-
-	PRdtlist = PRDATATYPELIST(List).
+is_prdatatypelist(PRDATATYPELIST(List),List).
 
 is_table_directive(PRTABLE(PredSpecList), PredSpecList).
 
@@ -132,7 +131,7 @@ datatype_struct(ParsedDT,TypeName,DTObject) :-
 	DTObject = FL_DATATYPE(ParsedDT,TypeName).
 %% datatype_struct(+ParsedDT,-TypeName,-DTObject)
 datatype_struct(ParsedDT,_TypeName,DTObject) :-
-	%% data type with a special representation: _string, _iri
+	%% data type with a special representation: \string, \iri
 	flora_special_datatype_internal_representation(ParsedDT,DTObject),
 	!.
 %% datatype_struct(+ParsedDT,-TypeName,-DTObject)
@@ -224,7 +223,7 @@ is_florasyslib(FLORASYSLIB(I,F,N,Args),F,N,Args,I).
 
 is_prologterm(PROLOGTERM(F,N,Args),F,N,Args).
 is_prologliblit(PROLOGLIBLIT(PROLOGTERM(F,N,Args)),F,N,Args).
-%% These two for pred@_prolog(mod) when we encode this as mod:pred
+%% These two for pred@\prolog(mod) when we encode this as mod:pred
 %% Right now it is in addition to :- import, but will replace import when XSB
 %% allows this notation in assert/retract.
 is_prologterm(PROLOGTERM(F,N,Args,Module),F,N,Args,Module).
@@ -235,7 +234,7 @@ is_prnewpred(PRNEWPRED(Name,_N,Vars),Name,Vars).
 %% with textual information
 is_prnewoid(PRNEWOID(Oid,I),Oid,I).
 
-%% _?F, _?L
+%% \?F, \?L
 is_prspecialvar(PRSPECIALVAR(Type),Type).
 
 
@@ -575,7 +574,7 @@ coder_write_udf_info(Name,N,UDFCode,PredName,PredCode,Status) :-
 			flora_write_atom(','),
 			(PredName\=NULL ->
 				flora_write_atom('FLORA_THIS_WORKSPACE('),
-				flora_double_quotes(PredName,PredName2),
+				flora_double_backslash_and_quotes(PredName,PredName2),
 				flora_write_atom(PredName2),
 				flora_write_atom('),')
 			; true
@@ -611,7 +610,8 @@ coder_write_direct(Term,Status) :-
 	    flora_write_atom('#define FLORA_IMPORTED_MODULE '),
 	    flora_write_quoted_atom(ModAtm), nl,
 	    flora_write_atom('#define FLORA_IMPORTED_MODULE_UNQUOTED '),
-	    flora_write_atom(ModAtm), nl,
+	    flora_double_backslash_and_quotes(ModAtm,ModAtmDbl),
+	    flora_write_atom(ModAtmDbl), nl,
 	    flora_write_atom('#mode save'), nl,
 	    flora_write_atom('#mode nostring "\\!#''"'), nl,
 	    flora_write_atom('#include "flrimportaxioms.flh"'), nl,
@@ -914,10 +914,8 @@ flora_write_struct(Term,_Context,Status) :-
 	; Stat1 = [ERROR_DATATYPE_NAME]
 	),
 	flora_canonical_type_name(TypeName,CanonTypeName),
-	(Stat1==[]
-	->
-	    (is_prvariable(Literal,VarName,_)
-	    -> 
+	(Stat1==[] ->
+	    (is_prvariable(Literal,VarName,_) -> 
 		flora_write_quoted_atom(FL_DATATYPE),
 		put(CH_LPAREN),
 		coder_write_variable(VarName),
@@ -925,8 +923,7 @@ flora_write_struct(Term,_Context,Status) :-
 		flora_write_quoted_atom(CanonTypeName),
 		put(CH_RPAREN),
 		Status=[]
-	    ; is_prdatatypelist(Literal)
-	    ->
+	    ; is_prdatatypelist(Literal) ->
 		parse_datatype_list(Literal,ParsedLit,Stat2),
 		(Stat2==[]
 		-> flora_parse_datatype(DATATYPE(CanonTypeName,ParsedLit),
@@ -935,7 +932,8 @@ flora_write_struct(Term,_Context,Status) :-
 		    -> datatype_struct(ParsedDT,CanonTypeName,DTCode),
 			term_to_atom(DTCode,OutDTCode,
 				     [quoted(true),numbervars(true)]),
-			write(OutDTCode)
+			flora_double_backslash(OutDTCode,OutDTCodeDbl),
+			write(OutDTCodeDbl)
 		    ; true
 		    )
 		; Status=Stat2
@@ -998,10 +996,10 @@ flora_write_struct(Term,_Context,Status) :-
 	!,
 	coder_write_dynrulelist([Term],Status).
 
-%% This is used when calling ...@_systemmodule. It goes into the part
+%% This is used when calling ...@\systemmodule. It goes into the part
 %% of auxiliary info that tells which module is being called. For instance,
-%% a@_io is built as
-%% FLORA_WORKSPACE(_io,WRAP_TABLED_HILOG)(a,[FLORA_THIS_MODULE_NAME,_io])
+%% a@\io is built as
+%% FLORA_WORKSPACE(\io,WRAP_TABLED_HILOG)(a,[FLORA_THIS_MODULE_NAME,\io])
 %% So, this piece of code produces the last _io.
 flora_write_struct(Term,Context,Status) :-
 	is_prfloralib(Term,Atom,_Index),
@@ -1158,7 +1156,7 @@ coder_write_wsstruct(WS,Term,Context,Status) :-
 	    (is_pratom(F,FAtom,Index) ; is_prbuiltin_identifier(F,FAtom,Index)),
 	    flora_write_quoted_atom(FL_PROLOG_MODULE_TIE),
 	    put(CH_LPAREN),
-	    flora_write_atom(Module),
+	    coder_write_modulename(Module),
 	    put(CH_COMMA),
 	    coder_write_prolog(FAtom,N,Args,Context,Status),
 	    put(CH_RPAREN)
@@ -1227,11 +1225,11 @@ coder_write_workspace(WS,Funct) :-
 write_as_dynz_if_necessary(Funct) :-
 	(is_prdynmod_atom(Funct,PureFunct) ->
 	    flora_write_atom('FLDYNZPREFIX_UNQ('),
-	    flora_double_quotes(PureFunct,Funct2),
+	    flora_double_backslash_and_quotes(PureFunct,Funct2),
 	    flora_write_atom(Funct2),
 	    put(CH_RPAREN)
 	; %% Atom is not quoted but if there are quotes inside they are doubled
-	    flora_double_quotes(Funct,Funct2),
+	    flora_double_backslash_and_quotes(Funct,Funct2),
 	    flora_write_atom(Funct2)
 	).
 
@@ -1243,7 +1241,8 @@ write_as_dynz_if_necessary(Funct) :-
   not allowed in module names. 
 ****************************************************************************/
 coder_write_modulename(A) :-
-	flora_write_atom(A).
+	flora_double_backslash_and_quotes(A,AA),
+	flora_write_atom(AA).
 
 
 /****************************************************************************
@@ -1484,7 +1483,7 @@ coder_write_dynrulelist([H|L],Status) :-
 ****************************************************************************/
 flora_coder_write_prolog_bridge_rule(PredName,Arity,Type) :-
 	length(ArgLst,Arity),
-	flora_double_quotes(PredName,PredName2),
+	flora_double_backslash_and_quotes(PredName,PredName2),
 	flora_concat_atoms(['FLORA_THIS_WORKSPACE(',PredName2,')'],HeadPred),
 	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNAPREFIX_UNQ(', PredName2, '))'], BodyPredA),
 	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNZPREFIX_UNQ(', PredName2, '))'], BodyPredZ),
@@ -1538,7 +1537,7 @@ util_write_arglist([A|Rest]) :-
 ****************************************************************************/
 flora_coder_write_conditional_prolog_bridge_rule(PredName,Arity) :-
 	length(ArgLst,Arity),
-	flora_double_quotes(PredName,PredName2),
+	flora_double_backslash_and_quotes(PredName,PredName2),
 	flora_concat_atoms(['FLORA_THIS_WORKSPACE(',PredName2,')'],HeadPred),
 	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNAPREFIX_UNQ(',PredName2,'))'], BodyPredA),
 	flora_concat_atoms(['FLORA_THIS_WORKSPACE(FLDYNZPREFIX_UNQ(',PredName2,'))'], BodyPredZ),
@@ -1945,7 +1944,7 @@ flora_build_struct(Term,DWS,Context,VarList,Code,(CodeIndList,Index),Status) :-
 	; atom(Funct) -> PredName = Funct, Index = NO_INDEX
 	),
 	coder_build_structlist(Args,DWS,Context,VarList,ArgsCodeList,CodeIndList,Status),
-	%% If p(a)@_prolog(mod) is run from Flora shell, the code generated
+	%% If p(a)@\prolog(mod) is run from Flora shell, the code generated
 	%% must look like: X =.. [p,a], call(X)
 	%% due to XSB module design inconsistencies.
 	%%Code = ('=..'(P,[F|ArgsCodeList]),call(P)).
@@ -1957,7 +1956,7 @@ flora_build_struct(Term,DWS,Context,VarList,Code,(CodeIndList,Index),Status) :-
 	!,
 	is_pratom(Funct,F,Index),
 	coder_build_structlist(Args,DWS,Context,VarList,ArgsCodeList,CodeIndList,Status),
-	%% If p(a)@_prolog(mod) is run from Flora shell, the code generated
+	%% If p(a)@\prolog(mod) is run from Flora shell, the code generated
 	%% must look like: X =.. [p,a], P=Module:P1, call(X)
 	%% due to XSB module design inconsistencies.
 	is_pratom(Module,MAtm,_),
@@ -1982,10 +1981,10 @@ flora_build_struct(Term,DWS,_Context,VarList,Code,(CodeInd,NO_INDEX),Status) :-
 	%% Code is built as a list, but we need the head
 	Code1 = [Code].
 
-%% This is used when calling ...@_systemmodule. It goes into the part
+%% This is used when calling ...@\systemmodule. It goes into the part
 %% of auxiliary info that tells which module is being called. For instance,
-%% a@_io is built as
-%% FLORA_WORKSPACE(_io,WRAP_TABLED_HILOG)(a,[FLORA_THIS_MODULE_NAME,_io])
+%% a@\io is built as
+%% FLORA_WORKSPACE(\io,WRAP_TABLED_HILOG)(a,[FLORA_THIS_MODULE_NAME,\io])
 %% So, this piece of code produces the last _io.
 flora_build_struct(Term,DWS,Context,VarList,Code,(CodeInd,Index),Status) :-
 	is_prfloralib(Term,Atom,Index),

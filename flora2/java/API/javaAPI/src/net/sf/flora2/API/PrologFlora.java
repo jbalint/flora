@@ -70,7 +70,6 @@ public class PrologFlora extends FloraConstants
 		"consult(flora2)",
 		"'_#flmakesetup'",
 		"consult(flrimportedcalls)",
-		"import ('_load')/1, ('_add')/1 from flora2",
 		"import flora_call_string_command/5 from flrcallflora",
 		"import flora_decode_oid_as_atom/2 from flrdecode"
 	    });
@@ -91,14 +90,14 @@ public class PrologFlora extends FloraConstants
     }
 
 
-    /* Function to use _load to load FLORA-2 file into moduleName
+    /* Function to use \load to load FLORA-2 file into moduleName
     ** fileName   : name of the file to load
     ** moduleName : name of FLORA module in which to load; beware this is parsed by Prolog, so it may need quoting
     */
     public boolean loadFile(String fileName,String moduleName)
     {
 	boolean cmdsuccess = false; 
-	String cmd = wrapAsTimedCall("'_load'('"+fileName + "'>>" + moduleName+")");
+	String cmd = wrapAsTimedCall("flrutils:flora_load_module_util('"+fileName + "' , '" + moduleName+"', null)");
 	try {
 	    cmdsuccess = engine.deterministicGoal(cmd);
 	    // Don't use command: it is not error-sensitive
@@ -111,14 +110,14 @@ public class PrologFlora extends FloraConstants
     }
 
 
-    /* Function to use _compile to compile FLORA-2 file for moduleName
+    /* Function to use \compile to compile FLORA-2 file for moduleName
     ** fileName   : name of the file to compile
     ** moduleName : name of FLORA module for which to compile
     */
     public boolean compileFile(String fileName,String moduleName)
     {
 	boolean cmdsuccess = false; 
-	String cmd = wrapAsTimedCall("'_compile'('"+fileName + "'>>" + moduleName+")");
+	String cmd = wrapAsTimedCall("'\\compile'('"+fileName + "' >> '" + moduleName+"')");
 	try {
 	    cmdsuccess = engine.deterministicGoal(cmd);
 	    // command is not error-sensitive
@@ -131,14 +130,14 @@ public class PrologFlora extends FloraConstants
     }
 
 
-    /* Function to use _add to add FLORA-2 file to moduleName
+    /* Function to use \add to add FLORA-2 file to moduleName
     ** fileName   : name of the file to add
     ** moduleName : name of FLORA module to which to add
     */
     public boolean addFile(String fileName,String moduleName)
     {
     boolean cmdsuccess = false;
-	String cmd = wrapAsTimedCall("'_add'('"+fileName + "'>>" + moduleName+")");
+	String cmd = wrapAsTimedCall("flrutils:flora_add_module_dyn('"+fileName + "' , '" + moduleName+"' , null)");
 	try {
 	    cmdsuccess = engine.deterministicGoal(cmd);
 	    //cmdsuccess = engine.command(cmd);
@@ -150,14 +149,14 @@ public class PrologFlora extends FloraConstants
     }
 
     
-    /* Function to use _compileadd to compile FLORA-2 file for adding to moduleName
+    /* Function to use \compileadd to compile FLORA-2 file for adding to moduleName
     ** fileName   : name of the file to compile for addition
     ** moduleName : name of FLORA module for which to compile-add
     */
     public boolean compileaddFile(String fileName,String moduleName)
     {
 	boolean cmdsuccess = false; 
-	String cmd = wrapAsTimedCall("'_compileadd'('"+fileName + "'>>" + moduleName+")");
+	String cmd = wrapAsTimedCall("'\\compileadd'('"+fileName + "'>>" + moduleName+")");
 	try {
 	    cmdsuccess = engine.deterministicGoal(cmd);
 	    //cmdsuccess = engine.command(cmd);
@@ -295,7 +294,7 @@ public class PrologFlora extends FloraConstants
     }
 
     /**
-     * A simplified version of TermModel.toString() that doesn't put commas between nested children, for e.g.&nbsp; the message produced by <tt>?- silk:flora("type_error(atom, f(1), foo/1, 1)@_prolog(error_handler).");</tt>.
+     * A simplified version of TermModel.toString() that doesn't put commas between nested children, for e.g.&nbsp; the message produced by <tt>?- silk:flora("type_error(atom, f(1), foo/1, 1)@\prolog(error_handler).");</tt>.
      */
     public String toStringNoCommas(TermModel tm)
     {

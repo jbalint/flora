@@ -74,15 +74,18 @@ is_alphanum_or_underscore(Ch) :-
 	),
 	!.
 
-is_alphanum_int(Ch) :- (is_alpha(Ch) -> true ; is_digit(Ch)).
-is_alphanum_or_underscore_int(Ch) :-
-	(is_alphanum_int(Ch) -> true ; Ch = CH_UNDERSCORE).
-is_alpha_or_underscore_int(Ch) :-
-	(is_alpha_int(Ch) -> true ; Ch = CH_UNDERSCORE).
-is_alpha_int(Ch) :-
-	( (Ch >= CH_a, Ch =< CH_z) -> true
-	; (Ch >= CH_A, Ch =< CH_Z)
-	).
+is_alphanum_int(Ch) :- is_alpha_int(Ch), !.
+is_alphanum_int(Ch) :- is_digit_int(Ch).
+
+is_alphanum_or_underscore_int(CH_UNDERSCORE) :- !.
+is_alphanum_or_underscore_int(Ch) :- is_alphanum_int(Ch).
+
+is_alpha_or_underscore_int(CH_UNDERSCORE) :- !.
+is_alpha_or_underscore_int(Ch) :- is_alpha_int(Ch).
+
+is_alpha_int(Ch) :- Ch >= CH_a, Ch =< CH_z, !.
+is_alpha_int(Ch) :- Ch >= CH_A, Ch =< CH_Z.
+
 is_digit_int(Ch) :- Ch >= CH_0, Ch =< CH_9.
 
 
@@ -242,7 +245,7 @@ flora_compile_filename_by_token(_TK,FileName) :-
   flora_transactional_symbol_token_struct(+TextStr,+LN1,+CN1,+LN2,+CN2,-Token)
   
   %% support for numbered anon oids
-  flora_special_token_struct(+TextStr,+Num,+LN1,+CN1,+LN2,+CN2,-Token)
+  flora_quasi_constvar_struct(+TextStr,+Num,+LN1,+CN1,+LN2,+CN2,-Token)
   
   lexer_whitespace_struct(+TextStr,+LN1,+CN1,+LN2,+CN2,-Token)
   lexer_comment_struct(+TextStr,+LN1,+CN1,+LN2,+CN2,-Token)
@@ -296,7 +299,7 @@ lexer_tansactional_builtin_struct(IdStr,LN1,CN1,LN2,CN2,TRANSACTIONAL_BUILTIN(Id
 	atom_codes(IdAtm,IdStrCanon),
 	text_info(LN1,CN1,LN2,CN2,IdStrCanon,Text).
 
-%% Converts _type"..." into "..."^^_type
+%% Converts \type"..." into "..."^^\type
 %% This is just to support an alternative FLORA-2 syntax for types
 lexer_datatype_struct(TypeStr,LiteralChars,LiteralStr,
 		      TypeLN1,TypeCN1, %% first char pos in type name
@@ -332,15 +335,15 @@ flora_transactional_symbol_token_struct(TextStr,LN1,CN1,LN2,CN2,TRANSACTIONAL_SY
 	atom_codes(A,TextStr).
 
 /***************************************************************************
-	Special tokens: numbered and unnumbered anon oids, _@
+	Special tokens: numbered and unnumbered anon oids, \@
 ****************************************************************************/
-%% _#, _@
-flora_special_token_struct(TextStr,LN1,CN1,LN2,CN2,SPECIAL_TOKEN(A,Text)) :-
+%% \#, \@
+flora_quasi_constvar_struct(TextStr,LN1,CN1,LN2,CN2,SPECIAL_TOKEN(A,Text)) :-
 	text_info(LN1,CN1,LN2,CN2,TextStr,Text),
 	atom_codes(A,TextStr).
 
-%% _#N
-flora_special_token_struct(TextStr,Num,LN1,CN1,LN2,CN2,SPECIAL_TOKEN(A,B,Text)) :-
+%% \#N, \?Char
+flora_quasi_constvar_struct(TextStr,Num,LN1,CN1,LN2,CN2,SPECIAL_TOKEN(A,B,Text)) :-
         TextStr=[Underscore, Hash],
 	text_info(LN1,CN1,LN2,CN2,[Underscore|[Hash|Num]],Text),
         atom_codes(A,TextStr),
@@ -534,7 +537,7 @@ read_tokens(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
         ; Char =:= CH_PERCENT ->
             read_transactional_token(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status)
 
-	; is_alpha(Char) ->
+	; is_alpha_or_underscore_int(Char) ->
 	    read_identifier(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status)
 
 	; Char =:= CH_QUESTION ->
@@ -550,11 +553,11 @@ read_tokens(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
 
 		;   %% The case when '?' is an anonymous variable by itself
 		    %% Since the cursor cannot be set backward, we construct
-		    %% a token here to avoid losing it.
+		    %% a token here to avoid losing ?.
 		    lexer_variable_struct([CH_ANON_VAR],LineNo,CharNo,LineNo,CharNo,Tk),
 		    TokenList=[Tk|NTokenList],
 		    !,
-		    read_tokens(NChar,NextLN,NextCN,NNLN,NNCN,NTokenList,Status) % status should include this operation
+		    read_tokens(NChar,NextLN,NextCN,NNLN,NNCN,NTokenList,Status)
 		)
 
 	    ;   FLPEEKC(NextNextChar),
@@ -579,8 +582,10 @@ read_tokens(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
 		)
 	    )
 
-	; Char =:= CH_UNDERSCORE ->
-	    read_underscore(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status)
+	; Char =:= CH_SPECIAL_SYM, %% was _, now backslash
+	    FLPEEKC(NextChar),
+	    quasi_or_builtin_start(Char,NextChar) ->
+	    read_quasi_builtin_or_datatype(Char,NextChar,LineNo,CharNo,NextLN,NextCN,TokenList,Status)
 	    
 	; is_digit(Char) ->
 	    read_number(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status)
@@ -632,14 +637,16 @@ read_transactional_token(C1,LN1,CN1,LN,CN,TokenList,Status) :-
 	    ; %% the case '?' itself is an anonymous variable, and can
 	      %% be treated as '?_' since the cursor cannot be set
 	      %% backward, we construct a token here to avoid losing it.
-	      lexer_transactional_variable_struct([],LN1,CN1,LN,CN,Tk),
+	      lexer_transactional_variable_struct([CH_ANON_VAR],LN1,CN1,LN,CN,Tk),
 	      TokenList=[Tk|NTokenList],
 	      !,
 	      read_tokens(NChar,NextLN,NextCN,NNLN,NNCN,NTokenList,Status) 
 	    )
 
-	; Ch =:= CH_SPECIAL_SYM ->
-	    read_transactional_underscore_identifier(Ch,LN,CN,NextLN,NextCN,TokenList,Status)
+	; Ch =:= CH_SPECIAL_SYM,
+	    FLPEEKC(NextChar),
+	    quasi_or_builtin_start(Ch,NextChar) ->
+	    read_transactional_builtin_identifier(Ch,NextChar,LN,CN,NextLN,NextCN,TokenList,Status)
 
 	; is_digit(Ch) -> %% Case of %N
 	    read_transactional_number(Ch,LN1,CN1,LN,CN,NextLN,NextCN,TokenList,Status)
@@ -812,58 +819,49 @@ get_number(PrevLN,PrevCN,LN1,CN1,LN2,CN2,Num,NLN,NCN,NCh,NNLN,NNCN) :-
 	).
 
 /****************************************************************************
-read_underscore(+Char,+LineNo,+CharNo,+NextLN,+NextCN,-TokenList,-Status)
+read_quasi_builtin_or_datatype(+Char,+NextChar,+LineNo,+CharNo,+NextLN,+NextCN,-TokenList,-Status)
   This function handles
      i) Data types:
-         -  full uris, e.g._"uri"
+         -  full uris, e.g.\"uri"
 	 -  other data types (date, time, etc.)
        
     ii) Special tokens:
-       _#, _#<number> -- which generates new oids in rule head. Its use
-                         in places other than rule head generates an error.
-       _@ --  which is replaced by the preprocessor constant
+       \#, \#<number> -- quasi-constant. generates skolems in rule head.
+                         In rule body: checks that it's a var bound to a skolem.
+       \@ --  quasi-constant replaced by the preprocessor constant
               FLORA_THIS_MODULE_NAME.
+       \?Char -- quasi-variable
    iii) Other alphanumeric names preceded by underscore
        -  system modules
 ****************************************************************************/
-read_underscore(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
-	FLPEEKC(NextChar),
-	( ( NextChar =:= CH_HASH; NextChar =:= CH_AT ; NextChar =:= CH_VARSYM)
-	->
-	    read_anonyoid(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status)
+read_quasi_builtin_or_datatype(Char,NextChar,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
+	(special_token_or_builtin_2nd_char(NextChar,quasi) ->
+	    read_quasi_constvar(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status)
 
-	; (is_alphanum_or_underscore_int(NextChar) ; NextChar =:= CH_DOUBLEQUOTE)
-	->
+	; special_token_or_builtin_2nd_char(NextChar,builtin) ->
 	    %% starts with the current char (CH_SPECIAL_SYM) and reads
 	    %% alphanum+underscore.
 	    read_datatype_or_builtin_id(Char,LineNo,CharNo,NextLN,NextCN,
 					TokenList,Status)
 	
-	%% Single CH_SPECIAL_SYM
-	; special_symbol_breaker(NextChar) ->
-	    lexer_builtin_identifier_struct([Char], %% [CH_SPECIAL_SYM]
-					    LineNo,CharNo,
-					    NextLN,NextCN,Tk),
-	    get_char(NextLN,NextCN,Ch,NNextLN,NNextCN),
-	    read_tokens(Ch,NextLN,NextCN,NNextLN,NNextCN,Tokens,Status),
-	    TokenList = [Tk|Tokens]
-	;
-	    (flora_current_compile_filename(FileN), ! ; true),
+	; (flora_current_compile_filename(FileN) -> true
+	  ; true
+	  ),
 	    Status = [FLORA_NOT_EOF,error(FileN,AFTER_UNDERSCORE)],
-	    flora_special_token_struct([Char],LineNo,CharNo,LineNo,CharNo,Tk),
+	    flora_quasi_constvar_struct([Char],LineNo,CharNo,LineNo,CharNo,Tk),
 	    TokenList = [Tk]
 	).
 
-%% Like read_underscore, but is used for transactional methods and
+%% Like read_quasi_builtin_or_datatype, but is used for transactional methods and
 %% reads in only identifiers that start with CH_SPECIAL_SYM
-read_transactional_underscore_identifier(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
-	FLPEEKC(NextChar),
+read_transactional_builtin_identifier(Char,NextChar,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
 	(is_alphanum_or_underscore_int(NextChar) ->
 	    %% starts with the current char (CH_SPECIAL_SYM) and reads
 	    %% alphanum+underscore.
 	    read_transactional_builtin(Char,LineNo,CharNo,NextLN,NextCN, TokenList,Status)
-	; 
-	    (flora_current_compile_filename(FileN), ! ; true),
+	; (flora_current_compile_filename(FileN) -> true
+	  ; true
+	  ),
 	    TokenList = [],
 	    Status=[FLORA_NOT_EOF,error(FileN,ALPHA_EXPECTED)]
 	).
@@ -871,49 +869,50 @@ read_transactional_underscore_identifier(Char,LineNo,CharNo,NextLN,NextCN,TokenL
 
 
 /****************************************************************************
-read_anonyoid(+Char,+LineNo,+CharNo,+NextLN,+NextCN,-TokenList,-Status)
+read_quasi_constvar(+Char,+LineNo,+CharNo,+NextLN,+NextCN,-TokenList,-Status)
   This function handles two special tokens:
-       _#, _#<number> -- which generates new oids in rule head. Its use
+       \#, \#<number> -- which generates new oids in rule head. Its use
                          in places other than rule head generates an error.
-       _@ --  which is replaced by the preprocessor constant
+       \@ --  quasi-constant replaced by the preprocessor constant
               FLORA_THIS_MODULE_NAME.
+       \?Char - quasi-variable
 ****************************************************************************/
-read_anonyoid(C1,LN1,CN1,LN,CN,TokenList,Status) :-
+read_quasi_constvar(C1,LN1,CN1,LN,CN,TokenList,Status) :-
         get_char(LN,CN,Ch,NextLN,NextCN), 
 	( Ch =:= CH_HASH ->
           get_char(NextLN,NextCN,NextCh,LNN,CNN),
           ( is_digit(NextCh) ->
 	      %%  Numbered anonymous oid is read
 	      get_number(NextLN,NextCN,LNN,CNN,LN2,CN2,Num,NLN,NCN,NCh,NNLN,NNCN),
-	      flora_special_token_struct([C1,Ch],[NextCh|Num],LN1,CN1,LN2,CN2,Tk)
+	      flora_quasi_constvar_struct([C1,Ch],[NextCh|Num],LN1,CN1,LN2,CN2,Tk)
           ;
-             %% The special token _# is read
+             %% The special token \# is read
               NLN=NextLN,
               NCN=NextCN,
 	      NCh=NextCh,
 	      NNLN=LNN,
 	      NNCN=CNN,
-	      flora_special_token_struct([C1,Ch],LN1,CN1,LN,CN,Tk)
+	      flora_quasi_constvar_struct([C1,Ch],LN1,CN1,LN,CN,Tk)
 	  )
 	
-	;   Ch =:= CH_AT -> %% The special token _@ is read
+	;   Ch =:= CH_AT -> %% The special token \@ is read
 	    (FLPEEKC(PeekedCh),
 		memberchk(PeekedCh,[CH_RULEID_CH,CH_SPECIAL_FILE_TOKEN,CH_SPECIAL_LINE_TOKEN]) ->
 		get_char(NextLN,NextCN,NextCh,LNN,CNN),
 		get_char(LNN,CNN,NCh,NNLN,NNCN),
-		flora_special_token_struct([C1,Ch],[NextCh],LN1,CN1,NextLN,NextCN,Tk)
+		flora_quasi_constvar_struct([C1,Ch],[NextCh],LN1,CN1,NextLN,NextCN,Tk)
 	    ;
 		NLN=NextLN,
 		NCN=NextCN,
 		get_char(NLN,NCN,NCh,NNLN,NNCN),
-		flora_special_token_struct([C1,Ch],LN1,CN1,LN,CN,Tk)
+		flora_quasi_constvar_struct([C1,Ch],LN1,CN1,LN,CN,Tk)
 	    )
-	;   Ch =:= CH_QUESTION,  % _?Char, Char = digit|letter
+	;   Ch =:= CH_QUESTION,  % \?Char, Char = digit|letter
 	    FLPEEKC(TryChar),
 	    is_alphanum_int(TryChar),
 	    get_char(NextLN,NextCN,NextCh,LNN,CNN),
 	    get_char(LNN,CNN,NCh,NNLN,NNCN),
-	    flora_special_token_struct([C1,Ch],[NextCh],LN1,CN1,NextLN,NextCN,Tk)
+	    flora_quasi_constvar_struct([C1,Ch],[NextCh],LN1,CN1,NextLN,NextCN,Tk)
 	),
 	TokenList=[Tk|Tokens],
 	!,
@@ -1019,7 +1018,7 @@ read_datatype_or_builtin_id(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :
 		append(Tk,Tokens,TokenList)
 	    ;  
 		append(Chars,[AfterCh,TryChar],ErrorChars),
-		flora_special_token_struct(ErrorChars,LineNo,CharNo,
+		flora_quasi_constvar_struct(ErrorChars,LineNo,CharNo,
 					   NAfterLN,NAfterCN,Tk),
 		(flora_current_compile_filename(FileN), ! ; true),
 	        Status=[FLORA_NOT_EOF,error(FileN,VARIABLE_EXPECTED)],
@@ -1035,7 +1034,7 @@ read_datatype_or_builtin_id(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :
 	    TokenList = [Tk|Tokens]
 	).
 
-%% This is used for %_builtin. Transactional terms can't have data types
+%% This is used for %\builtin. Transactional terms can't have data types
 %% in them - doesn't make sense.
 read_transactional_builtin(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
 	read_name(Char,LineNo,CharNo,NextLN,NextCN,Chars,
@@ -1052,29 +1051,35 @@ read_transactional_builtin(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
   read_special(+Ch,+LineNo,+CharNo,+NextLN,+NextCN,-Tokens,-Status)
   handles tokens made of special symbols.
 ****************************************************************************/
-read_special(C1,LN1,CN1,LN,CN,TokenList,Status) :-
+read_special(C1,LN1,CN1,LN,CN,[Tk|Tokens],Status) :-
+	FLPEEKC(NextChar),
+	two_symbol_token(C1,NextChar),
+	!,
+	get_char(LN,CN,NextChar,NextLN,NextCN),
+	flora_symbol_token_struct([C1,NextChar],LN1,CN1,LN,CN,Tk),
+	get_char(NextLN,NextCN,Ch2,NLN,NCN),
+	read_tokens(Ch2,NextLN,NextCN,NLN,NCN,Tokens,Status).
+	
+read_special(C1,LN1,CN1,LN,CN,[Tk|Tokens],Status) :-
 	single_symbol_token(C1),
 	flora_symbol_token_struct([C1],LN1,CN1,LN1,CN1,Tk),
-	TokenList=[Tk|Tokens],
 	!,
 	get_char(LN,CN,Ch,NextLN,NextCN),
 	read_tokens(Ch,LN,CN,NextLN,NextCN,Tokens,Status).
 
-read_special(CH_DOUBLEQUOTE,LN1,CN1,LN,CN,TokenList,Status) :-
+read_special(CH_DOUBLEQUOTE,LN1,CN1,LN,CN,[Tk|Tokens],Status) :-
 	!,
 	get_char(LN,CN,Ch,NextLN,NextCN),
 	lexer_ascii_string_struct(Chars,[CH_DOUBLEQUOTE|TxChs],LN1,CN1,LN2,CN2,Tk),
-	TokenList=[Tk|Tokens],
 	read_string(Ch,LN,CN,NextLN,NextCN,LN1,CN1,CH_DOUBLEQUOTE,
 	            Chars,TxChs,LN2,CN2,Tokens,Status).
 
-read_special(CH_QUOTE,LN1,CN1,LN,CN,TokenList,Status) :-
+read_special(CH_QUOTE,LN1,CN1,LN,CN,[Tk|Tokens],Status) :-
 	!,
 	get_char(LN,CN,Ch,NextLN,NextCN),
 	read_string(Ch,LN,CN,NextLN,NextCN,LN1,CN1,CH_QUOTE,
 	            Chars,TxChs,LN2,CN2,Tokens,Status),
-	lexer_quoted_atom_struct(Chars,[CH_QUOTE|TxChs],LN1,CN1,LN2,CN2,Tk),
-	TokenList=[Tk|Tokens].
+	lexer_quoted_atom_struct(Chars,[CH_QUOTE|TxChs],LN1,CN1,LN2,CN2,Tk).
 
 read_special(CH_COLON,LN1,CN1,LN,CN,[Tk|Tokens],Status) :-
 	%% :* in signature cardinality constraint, such as {3:*}
@@ -1208,6 +1213,12 @@ single_symbol_token(CH_RBRACKET) :- !. % ]
 single_symbol_token(CH_LBRACE) :- !.   % {
 single_symbol_token(CH_RBRACE) :- !.   % }
 single_symbol_token(CH_HASH) :- !.     % #
+
+two_symbol_token(CH_LPAREN,CH_BAR) :- !.     % (|  FL_PARENBAR
+two_symbol_token(CH_BAR,CH_RPAREN) :- !.     % |)  FL_RIGHT_PARENBAR
+two_symbol_token(CH_LBRACKET,CH_BAR) :- !.   % [|  FL_BRACKBAR
+two_symbol_token(CH_BAR,CH_RBRACKET) :- !.   % |]  FL_RIGHT_BRACKBAR
+two_symbol_token(CH_DOT,CH_DOT) :- !.        % ..  FL_RANGE
 
 
 /****************************************************************************
@@ -1406,7 +1417,10 @@ read_comment_block(Ch,LN,CN,LN1,CN1,_,_,[Ch|TxChs],LLN,LCN,Tokens,Status) :-
 ****************************************************************************/
 read_symbols(PL,PC,Ch,LN,CN,LN1,CN1,Chars,LLN,LCN,NextCh,NLN,NCN,NNLN,NNCN) :-
 	( symbol_char(Ch),
-	    \+((twochar_symbol_breaker(Ch,NextSym), FLPEEKC(NextSym))) ->
+	    FLPEEKC(PeekCh),
+	    \+quasi_or_builtin_start(Ch,PeekCh),
+	    \+twochar_symbol_breaker(Ch,PeekCh)
+	->
 	    Chars=[Ch|Chs],
 	    get_char(LN1,CN1,C1,LN2,CN2),
 	    read_symbols(LN,CN,C1,LN1,CN1,LN2,CN2,
@@ -1424,7 +1438,11 @@ read_symbols(PL,PC,Ch,LN,CN,LN1,CN1,Chars,LLN,LCN,NextCh,NLN,NCN,NNLN,NNCN) :-
 
 %% 2-character symbol string breakers
 %% 1st arg is character, next is 1-char atom. Eg 0'$ '{'
-twochar_symbol_breaker(CH_DOLLAR,CH_LBRACE).  %% ${ - reification
+twochar_symbol_breaker(CH_DOLLAR,CH_LBRACE) :- !.  %% ${ - reification
+twochar_symbol_breaker(CH_BAR,CH_RBRACKET) :- !.   %% |] - FL_RIGHT_BRACKBAR
+twochar_symbol_breaker(CH_BAR,CH_RPAREN).          %% |) - FL_RIGHT_PARENBAR
+quasi_or_builtin_start(CH_SPECIAL_SYM,NextCh) :-
+	special_token_or_builtin_2nd_char(NextCh,_).
 
 /****************************************************************************
   read_transactional_symbols(+Char,+PrevLN,+PrevCN,+LN,+CN,+NextLN,+NextCN,
@@ -1447,12 +1465,12 @@ read_transactional_symbols(C2,LN1,CN1,LN2,CN2,LN,CN,TokenList,Status) :-
 ****************************************************************************/
 read_after_fullstop(DLN,DCN,Ch,LN,CN,LN1,CN1,TokenList,Status) :-
 	( Ch =:= CH_EOF_P ->
-	    flora_rule_delimeter_struct([CH_DOT],DLN,DCN,DLN,DCN,Tk),
+	    flora_rule_delimeter_struct([CH_RULE_DELIMITER],DLN,DCN,DLN,DCN,Tk),
 	    TokenList=[Tk],
 	    Status=[FLORA_EOF]
 
 	; is_whitespace(Ch) ->
-	    flora_rule_delimeter_struct([CH_DOT,Ch],DLN,DCN,LN,CN,Tk),
+	    flora_rule_delimeter_struct([CH_RULE_DELIMITER,Ch],DLN,DCN,LN,CN,Tk),
 	    TokenList=[Tk],
 	    Status=[FLORA_NOT_EOF],
 	    set_charpos(LN1,CN1)
@@ -1499,21 +1517,6 @@ symbol_char(CH_DOLLAR).      % $
 symbol_char(CH_SLASH).       % /
 symbol_char(CH_BACKQUOTE).   % `
 
-%% breaks special builtins that start with a CH_SPECIAL_SYM
-special_symbol_breaker(CH_DOT) :- !.
-special_symbol_breaker(CH_COMMA) :- !.
-special_symbol_breaker(CH_SEMICOL) :- !.
-special_symbol_breaker(CH_COLON) :- !.
-special_symbol_breaker(CH_EXCLAMATION) :- !.
-special_symbol_breaker(CH_BAR) :- !.
-special_symbol_breaker(CH_RBRACKET) :- !.
-special_symbol_breaker(CH_RPAREN) :- !.
-special_symbol_breaker(CH_GREATER) :- !.
-special_symbol_breaker(CH_LESS) :- !.
-special_symbol_breaker(CH_PLUS) :- !.
-special_symbol_breaker(CH_MINUS) :- !.
-special_symbol_breaker(Ch) :- is_whitespace(Ch).
-
 
 /****************************************************************************
   read_number(+Char,+LineNo,+CharNo,+NextLN,+NextCN,-Tokens,-Status)
@@ -1527,7 +1530,9 @@ read_number(C1,LN1,CN1,LN,CN,TokenList,Status) :-
 	    append([C1|TxChs],[CH_QUOTE],TxStr),
 	    read_after_base(NNLN,NNCN,N,TxStr,LN1,CN1,NLN,NCN,TokenList,Status)
 
-	; NextCh =:= CH_DOT ->
+	%% '.', but not '..': '..' is a token used in cardinality constraints
+	; NextCh =:= CH_DOT, \+FLPEEKC(CH_DOT)
+	->
 	    get_char(NNLN,NNCN,Ch,LineNo,CharNo),
 	    ( is_digit(Ch) ->
 		append([C1|TxChs],[CH_DOT],TxStr),
@@ -1774,4 +1779,15 @@ read_float(Char,LN,CN,LN1,CN1,Integer,TxChs,BLN,BCN,TokenList,Status) :-
 	  TokenList=[Tk|Tokens],
 	  read_tokens(C1,LNO1,CNO1,LNO2,CNO2,Tokens,Status)
 	).
+
+
+
+%% quasi-variable or quasi-constant
+special_token_or_builtin_2nd_char(CH_HASH,quasi) :- !.
+special_token_or_builtin_2nd_char(CH_AT,quasi) :- !.
+special_token_or_builtin_2nd_char(CH_VARSYM,quasi) :- !.
+%% builtin or data type
+special_token_or_builtin_2nd_char(CH_UNDERSCORE,builtin) :- !.
+special_token_or_builtin_2nd_char(CH_DOUBLEQUOTE,builtin) :- !.
+special_token_or_builtin_2nd_char(Char,builtin) :- is_alphanum_int(Char).
 

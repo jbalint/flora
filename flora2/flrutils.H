@@ -52,6 +52,7 @@
 	flora_concat_items/2,
 	flora_match_substring/3,
 	flora_copy_input/2,
+	flora_double_quotes/2,
 	flora_write_atom/1,
 	flora_delete_from_list/3,
 	flora_running_under/1
@@ -59,6 +60,7 @@
 
 :- import
 	length/2,
+	flatten/2,
 	memberchk/2,
 	member/2,
 	append/3
@@ -104,7 +106,7 @@
 
 :- import
 	FLBOOTSTRAP/0,
-	'_isloaded'/1
+	'\\isloaded'/1
    from flora2.
 
 :- import

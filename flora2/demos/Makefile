@@ -65,7 +65,7 @@ recompile: $(ALL) finish
 	@cat $(SVFILE)
 
 .flr${PROLOGEXT}:
-	echo "import ('_compile')/1 from flora2. '_compile'($*)." >> cmd...
+	echo "import ('\\\\compile')/1 from flora2. '\\\\compile'($*)." >> cmd...
 
 init:
 	rm -f $(SVFILE)
@@ -90,3 +90,4 @@ finish:
 clean:
 	/bin/rm -f *${PROLOGEXT} *${PROLOGEXT}_gpp *${OBJEXT} *.O *.bak *.fdb *.fld *.flt *.fls *.fls *.flm *.con *~ .*~ .#* cmd*
 	/bin/rm -f .flora_aux_files/*
+	/bin/rm -f .ergo_aux_files/*

@@ -52,7 +52,7 @@
 #include "flora_prefix.h"
 
 #define FLORA_LIB_PREFIX          "fllib"
-#define FLORA_DATATYPE_FUNC       "_datatype"
+#define FLORA_DATATYPE_FUNC       "\\datatype"
 #define FLORA_LIB_PREFIX_LEN      5
 #define FLORA_DATATYPE_FUNC_LEN   7
 

@@ -53,6 +53,7 @@ CLEAN:
 	-@if exist *.fls2 erase *.fls2
 	-@if exist *.flm erase *.flm
 	-@if exist .flora_aux_files\*.xwam del /q .flora_aux_files
+	-@if exist .ergo_aux_files\*.xwam del /q .ergo_aux_files
 	-@if exist *~ erase *~
 	-@if exist *.bak erase *.bak
 	-@if exist .#* erase .#*

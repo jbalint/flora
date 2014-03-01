@@ -44,13 +44,13 @@
 	mustDefine(?,?),
 	write(?)@?.
 
-?- Method[mustDefine(on)]@_sys.
+?- Method[mustDefine(on)]@\sys.
 ?- Method[mustDefine(off, (?[=>?],
-			     ?[*=>?],
+			     ?[|=>?|],
 			     ?[=>%?],
-			     ?[*=>%?],
+			     ?[|=>%?|],
 			     ?[?=>?],
-			     ?[?*=>?])@?A)]@_sys.
+			     ?[|?=>?|])@?A)]@\sys.
 
 :- export write(?,?,?).
 
@@ -60,10 +60,10 @@ write(?Obj,?Module,?FileName) :-
 	  flora_slash(?S),
 	  flora_concat_atoms([?FloraDir,?S,pkgs,?S,include,?S,'javaAPI.flh'],
 	                     ?IncludeFile)
-	)@_prolog(flrporting),
+	)@\prolog(flrporting),
 	// copy include file to stdout and replace PROXY_CLASS with class name
 	flora_copy_and_preprocess(?IncludeFile,?,
-	                          [' -D PROXY_CLASS=',?Obj])@_prolog(flrutils),
+	                          [' -D PROXY_CLASS=',?Obj])@\prolog(flrutils),
         writeBooleanMethods(?Obj,?Module,booleanMethodInh,DATA),
         writeBooleanMethods(?Obj,?Module,booleanMethodNoninh,DATA),
         writeBooleanMethods(?Obj,?Module,booleanMethodInh,SIGNATURE),
@@ -79,27 +79,27 @@ write(?Obj,?Module,?FileName) :-
         writeValueMethods(?Obj,?Module,valueMethodNoninh,SIGNATURE),
         closeFile. 
  
-openFile(?FileName) :- ?FileName[tell]@_io.
-closeFile :- indent(0), writeln('}')@_prolog, told@_prolog.
+openFile(?FileName) :- ?FileName[tell]@\io.
+closeFile :- indent(0), writeln('}')@\prolog, told@\prolog.
 
 /* Find all the methods of the object and write them to the java file */
 
 writeBooleanMethods(?Obj,?Module,?Inherit,?DataOrSign) :-
 	if ?Inherit == booleanMethodInh
-        then ?MethodList=collectset{?M|?Obj[*=>?M]@?Module}
-        else ?MethodList=collectset{?M|?Obj[=>?M; *=>?M]@?Module}, 
+        then ?MethodList=setof{?M|?Obj[|=>?M|]@?Module,good_method(?M)}
+        else ?MethodList=setof{?M|(?Obj[=>?M]; ?Obj[|=>?M|])@?Module,good_method(?M)}, 
         callXOnList(?Inherit,?MethodList,?DataOrSign).
 
 writeProceduralMethods(?Obj,?Module,?Inherit,?DataOrSign) :-
 	if ?Inherit == proceduralMethodInh
-        then abort('Inheritable procedural methods are not yet supported')@_sys
-        else ?MethodList=collectset{?M|?Obj[=>%?M]@?Module},
+        then abort('Inheritable procedural methods are not yet supported')@\sys
+        else ?MethodList=setof{?M|?Obj[=>%?M]@?Module,good_method(?M)},
         callXOnList(?Inherit,?MethodList,?DataOrSign).
 
 writeValueMethods(?Obj,?Module,?Inherit,?DataOrSign) :-
 	if ?Inherit == valueMethodInh
-        then ?MethodList=collectset{?M|?Obj[?M*=>?_X]@?Module}
-        else ?MethodList=collectset{?M|?Obj[?M=>?_X; ?M*=>?_X]@?Module},
+        then ?MethodList=setof{?M|?Obj[|?M=>?_X|]@?Module,good_method(?M)}
+        else ?MethodList=setof{?M|(?Obj[?M=>?_X]; ?Obj[|?M=>?_X|])@?Module,good_method(?M)},
         callXOnList(?Inherit,?MethodList,?DataOrSign).
 
 /* Predicate to call the X function on each term in the list */
@@ -170,11 +170,11 @@ boolMethodGetProto(?Method,?Inherit,?DataOrSign) :-
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
         format('public boolean getB~w~w_',
-	       [?Modifier1,?Modifier2])@_prolog(format),
-        write(?FnName)@_io,
-        write('(')@_prolog,                
+	       [?Modifier1,?Modifier2])@\prolog(format),
+        write(?FnName)@\io,
+        write('(')@\prolog,                
         writeParlist(?FnArgs),
-        writeln(')')@_prolog.
+        writeln(')')@\prolog.
 
 boolMethodGetAllProto(?Method,?Inherit,?DataOrSign) :-
 	?Method =.. [?H|?FnArgs],
@@ -183,25 +183,25 @@ boolMethodGetAllProto(?Method,?Inherit,?DataOrSign) :-
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
         format('public Iterator<HashMap<String,FloraObject>> getB~w~wall_',
-	       [?Modifier1,?Modifier2])@_plg(format),
-        write(?FnName)@_io,
-        write('(')@_prolog,                
+	       [?Modifier1,?Modifier2])@\plg(format),
+        write(?FnName)@\io,
+        write('(')@\prolog,                
         writeParlist(?FnArgs),
-        writeln(')')@_prolog.
+        writeln(')')@\prolog.
 
 boolMethodGetBody(?Method,?Inherit,?DataOrSign) :-
 	indent(1),
-        writeln('{')@_prolog,
+        writeln('{')@\prolog,
 	parentCallGetBody(?Method,?Inherit,getboolean,?DataOrSign),
 	indent(1),
-        writeln('}\n')@_prolog.
+        writeln('}\n')@\prolog.
 
 boolMethodGetAllBody(?Method,?Inherit,?DataOrSign) :-
 	indent(1),
-        writeln('{')@_prolog,
+        writeln('{')@\prolog,
         parentCallGetBody(?Method,?Inherit,getbooleanAll,?DataOrSign),
 	indent(1),
-        writeln('}\n')@_prolog.
+        writeln('}\n')@\prolog.
 
 boolMethodSetProto(?Method,?Inherit,?DataOrSign) :-
 	?Method =.. [?H|?FnArgs],
@@ -210,18 +210,18 @@ boolMethodSetProto(?Method,?Inherit,?DataOrSign) :-
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
         format('public boolean setB~w~w_',
-	       [?Modifier1,?Modifier2])@_prolog(format),
-        write(?FnName)@_io,
-        write('(')@_prolog,                
+	       [?Modifier1,?Modifier2])@\prolog(format),
+        write(?FnName)@\io,
+        write('(')@\prolog,                
         writeParlist(?FnArgs),
-        writeln(')')@_prolog.
+        writeln(')')@\prolog.
 
 boolMethodSetBody(?Method,?Inherit,?DataOrSign) :-
 	indent(1),
-        writeln('{')@_prolog,
+        writeln('{')@\prolog,
 	parentCallSetBody(?Method,?Inherit,setboolean,?DataOrSign),
 	indent(1),
-        writeln('}\n')@_prolog.
+        writeln('}\n')@\prolog.
                 
 boolMethodDeleteProto(?Method,?Inherit,?DataOrSign) :-
 	?Method =.. [?H|?FnArgs],
@@ -230,18 +230,18 @@ boolMethodDeleteProto(?Method,?Inherit,?DataOrSign) :-
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
         format('public boolean deleteB~w~w_',
-	       [?Modifier1,?Modifier2])@_prolog(format),
-        write(?FnName)@_io,
-	write('(')@_prolog,               
+	       [?Modifier1,?Modifier2])@\prolog(format),
+        write(?FnName)@\io,
+	write('(')@\prolog,               
         writeParlist(?FnArgs),
-        writeln(')')@_prolog.
+        writeln(')')@\prolog.
 
 boolMethodDeleteBody(?Method,?Inherit,?DataOrSign) :-
 	indent(1),
-        writeln('{')@_prolog,
+        writeln('{')@\prolog,
 	parentCallDeleteBody(?Method,?Inherit,deleteboolean,?DataOrSign),
 	indent(1),
-        writeln('}\n')@_prolog.
+        writeln('}\n')@\prolog.
 
 // Procedural
 procMethodGet(?Method,?Inherit,?DataOrSign) :-
@@ -267,11 +267,11 @@ procMethodGetProto(?Method,?Inherit,?DataOrSign) :-
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
         format('public boolean getP~w~w_',
-	       [?Modifier1,?Modifier2])@_plg(format),
-        write(?FnName)@_io,
-        write('(')@_prolog,
+	       [?Modifier1,?Modifier2])@\plg(format),
+        write(?FnName)@\io,
+        write('(')@\prolog,
         writeParlist(?FnArgs),
-        writeln(')')@_prolog.
+        writeln(')')@\prolog.
 
 procMethodGetAllProto(?Method,?Inherit,?DataOrSign) :-
 	?Method =.. [?H|?FnArgs],
@@ -280,25 +280,25 @@ procMethodGetAllProto(?Method,?Inherit,?DataOrSign) :-
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
         format('public Iterator<HashMap<String,FloraObject>> getallP~w~w_',
-	       [?Modifier1,?Modifier2])@_prolog(format),
-        write(?FnName)@_io,
-        write('(')@_prolog,                
+	       [?Modifier1,?Modifier2])@\prolog(format),
+        write(?FnName)@\io,
+        write('(')@\prolog,                
         writeParlist(?FnArgs),
-        writeln(')')@_prolog.
+        writeln(')')@\prolog.
 
 procMethodGetBody(?Method,?Inherit,?DataOrSign) :-
 	indent(1),
-        writeln('{')@_prolog,
+        writeln('{')@\prolog,
 	parentCallGetBody(?Method,?Inherit,getprocedural,?DataOrSign),
 	indent(1),
-        writeln('}\n')@_prolog.
+        writeln('}\n')@\prolog.
 
 procMethodGetAllBody(?Method,?Inherit,?DataOrSign) :-
 	indent(1),
-        writeln('{')@_prolog,
+        writeln('{')@\prolog,
         parentCallGetBody(?Method,?Inherit,getproceduralAll,?DataOrSign),
 	indent(1),
-        writeln('}\n')@_prolog.
+        writeln('}\n')@\prolog.
 
 procMethodSetProto(?Method,?Inherit,?DataOrSign) :-
 	?Method =.. [?H|?FnArgs],
@@ -307,18 +307,18 @@ procMethodSetProto(?Method,?Inherit,?DataOrSign) :-
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
         format('public boolean setP~w~w_',
-	       [?Modifier1,?Modifier2])@_prolog(format),
-        write(?FnName)@_io,
-        write('(')@_prolog,                
+	       [?Modifier1,?Modifier2])@\prolog(format),
+        write(?FnName)@\io,
+        write('(')@\prolog,                
         writeParlist(?FnArgs),
-        writeln(')')@_prolog.
+        writeln(')')@\prolog.
 
 procMethodSetBody(?Method,?Inherit,?DataOrSign) :-
 	indent(1),
-        writeln('{')@_prolog,
+        writeln('{')@\prolog,
 	parentCallSetBody(?Method,?Inherit,setprocedural,?DataOrSign),
 	indent(1),
-        writeln('}\n')@_prolog.
+        writeln('}\n')@\prolog.
                 
 procMethodDeleteProto(?Method,?Inherit,?DataOrSign) :-
 	?Method =.. [?H|?FnArgs],
@@ -327,18 +327,18 @@ procMethodDeleteProto(?Method,?Inherit,?DataOrSign) :-
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
         format('public boolean deleteP~w~w_',
-	       [?Modifier1,?Modifier2])@_prolog(format),
-        write(?FnName)@_io,
-	write('(')@_prolog,               
+	       [?Modifier1,?Modifier2])@\prolog(format),
+        write(?FnName)@\io,
+	write('(')@\prolog,               
         writeParlist(?FnArgs),
-        writeln(')')@_prolog.
+        writeln(')')@\prolog.
 
 procMethodDeleteBody(?Method,?Inherit,?DataOrSign) :-
 	indent(1),
-        writeln('{')@_prolog,
+        writeln('{')@\prolog,
 	parentCallDeleteBody(?Method,?Inherit,deleteprocedural,?DataOrSign),
 	indent(1),
-        writeln('}\n')@_prolog.
+        writeln('}\n')@\prolog.
 
 
 /* The set and the get functions involve writing the prototype and the
@@ -376,11 +376,11 @@ valueMethodSetProtoOneVal(?Method,?Inherit,?DataOrSign):-
 	(?DataOrSign==DATA, !, ?Modifier1=D ; ?Modifier1=S),
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
-        format('public boolean setV~w~w_',[?Modifier1,?Modifier2])@_plg(format),
-        write(?FnName)@_io,
-        write('(')@_prolog,
+        format('public boolean setV~w~w_',[?Modifier1,?Modifier2])@\plg(format),
+        write(?FnName)@\io,
+        write('(')@\prolog,
         writeParlist(?FnArgs),
-        writeln(?Msg)@_prolog.
+        writeln(?Msg)@\prolog.
     
 valueMethodSetProto(?Method,?Inherit,?DataOrSign) :-
 	?Method =.. [?H|?FnArgs],
@@ -389,11 +389,11 @@ valueMethodSetProto(?Method,?Inherit,?DataOrSign) :-
 	(?DataOrSign==DATA, !, ?Modifier1=D ; ?Modifier1=S),
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
-        format('public boolean setV~w~w_',[?Modifier1,?Modifier2])@_plg(format),
-        write(?FnName)@_io,
-        write('(')@_prolog,
+        format('public boolean setV~w~w_',[?Modifier1,?Modifier2])@\plg(format),
+        write(?FnName)@\io,
+        write('(')@\prolog,
         writeParlist(?FnArgs),
-        writeln(?Msg)@_prolog.
+        writeln(?Msg)@\prolog.
 
 valueMethodGetProto(?Method,?Inherit,?DataOrSign) :-
 	?Method =.. [?H|?FnArgs],
@@ -402,11 +402,11 @@ valueMethodGetProto(?Method,?Inherit,?DataOrSign) :-
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
         format('public Iterator<FloraObject> getV~w~w_',
-	       [?Modifier1,?Modifier2])@_plg(format),
-        write(?FnName)@_io,
-        write('(')@_prolog,
+	       [?Modifier1,?Modifier2])@\plg(format),
+        write(?FnName)@\io,
+        write('(')@\prolog,
         writeParlist(?FnArgs),
-        write(')')@_prolog.
+        write(')')@\prolog.
 
 valueMethodGetAllProto(?Method,?Inherit,?DataOrSign) :-
 	?Method =.. [?H|?FnArgs],
@@ -415,11 +415,11 @@ valueMethodGetAllProto(?Method,?Inherit,?DataOrSign) :-
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
         format('public Iterator<HashMap<String,FloraObject>> getallV~w~w_',
-	       [?Modifier1,?Modifier2])@_plg(format),
-        write(?FnName)@_io,
-        write('(')@_prolog,
+	       [?Modifier1,?Modifier2])@\plg(format),
+        write(?FnName)@\io,
+        write('(')@\prolog,
         writeParlist(?FnArgs),
-        write(')')@_prolog.
+        write(')')@\prolog.
 
 valueMethodDeleteProtoOneVal(?Method,?Inherit,?DataOrSign):-
 	?Method =.. [?H|?FnArgs],
@@ -429,11 +429,11 @@ valueMethodDeleteProtoOneVal(?Method,?Inherit,?DataOrSign):-
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
         format('public boolean deleteV~w~w_',
-	       [?Modifier1,?Modifier2])@_plg(format),
-        write(?FnName)@_io,
-        write('(')@_prolog,
+	       [?Modifier1,?Modifier2])@\plg(format),
+        write(?FnName)@\io,
+        write('(')@\prolog,
         writeParlist(?FnArgs),
-        writeln(?Msg)@_prolog.
+        writeln(?Msg)@\prolog.
 
 valueMethodDeleteProto(?Method,?Inherit,?DataOrSign) :-
 	?Method =.. [?H|?FnArgs],
@@ -443,11 +443,11 @@ valueMethodDeleteProto(?Method,?Inherit,?DataOrSign) :-
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
         format('public boolean deleteV~w~w_',
-	       [?Modifier1,?Modifier2])@_plg(format),
-        write(?FnName)@_io,
-        write('(')@_prolog,
+	       [?Modifier1,?Modifier2])@\plg(format),
+        write(?FnName)@\io,
+        write('(')@\prolog,
         writeParlist(?FnArgs),
-        writeln(?Msg)@_prolog.
+        writeln(?Msg)@\prolog.
 
 valueMethodDeleteAllProto(?Method,?Inherit,?DataOrSign) :-
 	?Method =.. [?H|?FnArgs],
@@ -456,48 +456,48 @@ valueMethodDeleteAllProto(?Method,?Inherit,?DataOrSign) :-
 	(?Inherit==INHERITABLE, !, ?Modifier2=I ; ?Modifier2=N),
 	indent(1),
         format('public boolean deleteV~w~w_',
-	       [?Modifier1,?Modifier2])@_plg(format),
-        write(?FnName)@_io,
-        write('(')@_prolog,
+	       [?Modifier1,?Modifier2])@\plg(format),
+        write(?FnName)@\io,
+        write('(')@\prolog,
         writeParlist(?FnArgs),
-        write(')')@_prolog.
+        write(')')@\prolog.
 
 /* Writing the body */
 
 valueMethodSetBody(?Method,?Inherit,?DataOrSign) :-
 	indent(1),
-        writeln('{')@_prolog,
+        writeln('{')@\prolog,
         parentCallSetBody(?Method,?Inherit,setvalue,?DataOrSign),
 	indent(1),
-        writeln('}\n')@_prolog.
+        writeln('}\n')@\prolog.
 
 valueMethodGetBody(?Method,?Inherit,?DataOrSign) :-
 	indent(1),
-        writeln('{')@_prolog,
+        writeln('{')@\prolog,
         parentCallGetBody(?Method,?Inherit,getvalue,?DataOrSign),
 	indent(1),
-        writeln('}\n')@_prolog.
+        writeln('}\n')@\prolog.
 
 valueMethodGetAllBody(?Method,?Inherit,?DataOrSign) :-
 	indent(1),
-        writeln('{')@_prolog,
+        writeln('{')@\prolog,
         parentCallGetBody(?Method,?Inherit,getvalueAll,?DataOrSign),
 	indent(1),
-        writeln('}\n')@_prolog.
+        writeln('}\n')@\prolog.
 
 valueMethodDeleteBody(?Method,?Inherit,?DataOrSign) :- 
 	indent(1),
-        writeln('{')@_prolog,
+        writeln('{')@\prolog,
         parentCallDeleteBody(?Method,?Inherit,deletevalue,?DataOrSign),
 	indent(1),
-        writeln('}\n')@_prolog.
+        writeln('}\n')@\prolog.
 
 valueMethodDeleteAllBody(?Method,?Inherit,?DataOrSign) :-
 	indent(1),
-        writeln('{')@_prolog,
+        writeln('{')@\prolog,
         parentCallDeleteAllBody(?Method,?Inherit,?DataOrSign),
 	indent(1),
-        writeln('}\n')@_prolog.
+        writeln('}\n')@\prolog.
 
 parentCallSetBody(?Method,?Inherit,?Type,?DataOrSign) :-
 	?Method =.. [?H|?FnArgs],
@@ -508,20 +508,20 @@ parentCallSetBody(?Method,?Inherit,?Type,?DataOrSign) :-
 
 writeVectorParsInit:-
 	indent(2),
-        writeln('Vector<Object> pars = new Vector<Object>();')@_prolog.
+        writeln('Vector<Object> pars = new Vector<Object>();')@\prolog.
 
 writeProxySetCall(?FnName,?Inherit,?Type,?DataOrSign) :-    
 	(?Inherit==INHERITABLE, !, ?Modifier=I ; ?Modifier=N),
 	indent(2),
         format('return sourceFloraObject.~w(moduleName,"',
-	       [?Type])@_plg(format),
-        write(?FnName)@_io,
-        write('",')@_prolog,
-        write(?Inherit)@_io,
-        write(',')@_prolog,
-        write(?DataOrSign)@_io,
-	(?Type==setvalue, !, writeln(',pars,value);')@_prolog
-        ; writeln(',pars);')@_prolog
+	       [?Type])@\plg(format),
+        write(?FnName)@\io,
+        write('",')@\prolog,
+        write(?Inherit)@\io,
+        write(',')@\prolog,
+        write(?DataOrSign)@\io,
+	(?Type==setvalue, !, writeln(',pars,value);')@\prolog
+        ; writeln(',pars);')@\prolog
         ).
 
 parentCallGetBody(?Method,?Inherit,?Type,?DataOrSign) :-
@@ -534,13 +534,13 @@ parentCallGetBody(?Method,?Inherit,?Type,?DataOrSign) :-
 writeProxyGetCall(?FnName,?Inherit,?Type,?DataOrSign) :-
 	indent(2),
         format('return sourceFloraObject.~w(moduleName,"',
-	       [?Type])@_plg(format),
-        write(?FnName)@_io,
-        write('",')@_prolog,
-        write(?Inherit)@_io,
-        write(',')@_prolog,
-        write(?DataOrSign)@_io,
-        writeln(',pars);')@_prolog.
+	       [?Type])@\plg(format),
+        write(?FnName)@\io,
+        write('",')@\prolog,
+        write(?Inherit)@\io,
+        write(',')@\prolog,
+        write(?DataOrSign)@\io,
+        writeln(',pars);')@\prolog.
 
 
 parentCallGetAllBody(?Method,?Inherit,?Type,?DataOrSign) :-
@@ -561,14 +561,14 @@ parentCallDeleteBody(?Method,?Inherit,?Type,?DataOrSign) :-
 writeProxyDeleteBody(?FnName,?Inherit,?Type,?DataOrSign) :-
 	indent(2),
         format('return sourceFloraObject.~w(moduleName,"',
-	       [?Type])@_plg(format),
-        write(?FnName)@_io,
-        write('",')@_prolog,
-        write(?Inherit)@_io,
-        write(',')@_prolog,
-        write(?DataOrSign)@_io,
-	(?Type == deletevalue, !, writeln(',pars,value);')@_prolog
-        ; writeln(',pars);')@_prolog
+	       [?Type])@\plg(format),
+        write(?FnName)@\io,
+        write('",')@\prolog,
+        write(?Inherit)@\io,
+        write(',')@\prolog,
+        write(?DataOrSign)@\io,
+	(?Type == deletevalue, !, writeln(',pars,value);')@\prolog
+        ; writeln(',pars);')@\prolog
 	).
 
 parentCallDeleteAllBody(?Method,?Inherit,?DataOrSign) :-
@@ -580,21 +580,21 @@ parentCallDeleteAllBody(?Method,?Inherit,?DataOrSign) :-
 
 writeProxyDeleteAllBody(?FnName,?Inherit,?DataOrSign) :- 
 	indent(2),
-        write('return sourceFloraObject.deletevalue(moduleName,"')@_prolog,
-        write(?FnName)@_io,
-        write('",')@_prolog,
-        write(?Inherit)@_io,
-        write(',')@_prolog,
-        write(?DataOrSign)@_io,
-        writeln(',pars);')@_prolog.
+        write('return sourceFloraObject.deletevalue(moduleName,"')@\prolog,
+        write(?FnName)@\io,
+        write('",')@\prolog,
+        write(?Inherit)@\io,
+        write(',')@\prolog,
+        write(?DataOrSign)@\io,
+        writeln(',pars);')@\prolog.
     
 /* Predicates to write parameter lists */
 writeParlist([]) :- true.
 writeParlist([?A|?X]) :-
-        write('Object ')@_prolog,
-        write(?A)@_io,
+        write('Object ')@\prolog,
+        write(?A)@\io,
 	unless ?X == [] do (
-	    write(', ')@_prolog,
+	    write(', ')@\prolog,
 	    writeParlist(?X)
 	).
 
@@ -602,19 +602,24 @@ writeParlist([?A|?X]) :-
 writeBodyList([]) :- true.
 writeBodyList([?A|?X]) :-
 	indent(2),
-        write('pars.add(')@_prolog,
-        write(?A)@_io,
-        writeln(');')@_prolog,
+        write('pars.add(')@\prolog,
+        write(?A)@\io,
+        writeln(');')@\prolog,
         writeBodyList(?X).    
 
 writeGetAllBodyList([]) :- true.
 writeGetAllBodyList([?A|?X]) :-
 	indent(2),
-	write('pars.add("Par_')@_prolog,
-        write(?A)@_io,
-        writeln('");')@_prolog,
+	write('pars.add("Par_')@\prolog,
+        write(?A)@\io,
+        writeln('");')@\prolog,
         writeGetAllBodyList(?X).    
 
 indent(0) :- !.
-indent(1) :- !, write('    ')@_prolog.
-indent(?N) :- ?N>1, write('  ')@_prolog, ?N1 is ?N-1, indent(?N1).
+indent(1) :- !, write('    ')@\prolog.
+indent(?N) :- ?N>1, write('  ')@\prolog, ?N1 is ?N-1, indent(?N1).
+
+good_method(?M) :-
+	\isground(?M),
+	// should really check if the method name is alphanumeric
+	\+memberchk(?M,[(?,?),(?;?),(?-?),(?+?)])@\prolog(basics).

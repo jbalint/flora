@@ -73,8 +73,8 @@ public class InterPrologTest {
 			
 			PrologMessageListener listener = new PrologMessageListener();
 			engine.addPrologOutputListener(listener);
-			//String goal = "S_rnd='_load(''/export/u1/homes/elenius/projects/RAVE/ontology/owl/swrl/sqwrl.flr''>>main).',L_rnd=[],flora_query(S_rnd,L_rnd,St,Xw,Ex),buildInitiallyFlatTermModel([[],St,Xw,Ex],TM)";
-			String goal = "S_rnd='_load(''test/sqwrl.flr''>>main).',L_rnd=[],flora_query(S_rnd,L_rnd,St,Xw,Ex),buildInitiallyFlatTermModel([[],St,Xw,Ex],TM)";
+			//String goal = "S_rnd='\\load(''/export/u1/homes/elenius/projects/RAVE/ontology/owl/swrl/sqwrl.flr''>>main).',L_rnd=[],flora_query(S_rnd,L_rnd,St,Xw,Ex),buildInitiallyFlatTermModel([[],St,Xw,Ex],TM)";
+			String goal = "S_rnd='\\load(''test/sqwrl.flr''>>main).',L_rnd=[],flora_query(S_rnd,L_rnd,St,Xw,Ex),buildInitiallyFlatTermModel([[],St,Xw,Ex],TM)";
 			Object[] solutions = engine.deterministicGoal(goal, "[TM]");
 			System.out.println(Arrays.toString(solutions));
 			System.out.println(listener.getString());
