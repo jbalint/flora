@@ -32,6 +32,7 @@
 
 :- import
 	negate_wrapper/2,
+	negate_predicate/2,
 	flora_module_predicate/4,
 	is_flora_callable_literal/1,
 	flora_decode_predicate/7
@@ -499,65 +500,67 @@ FLLIBMETAUNIV(X,Y) :-
 	       Args = [HypoOp|Goal],
 	       Y = [WRAP_HILOG(FL_HYPOTHETICAL,HypoOp)|Goal]
 	   %% \+(literal) 
-	   ; is_negation(FullWrapper,Op) ->
-	       Y = [WRAP_HILOG(FL_NEGATION,Op)|Args]
+	   ; is_negation(FullWrapper,FL_PLGNAF) ->
+	       Y = [WRAP_HILOG(FL_NEGATION,FL_PLGNAF)|Args]
 	   %% libraries like insert
-	   ; update_wrapper(FullWrapper,WrapName)
-	   ->
+	   ; update_wrapper(FullWrapper,WrapTerm) ->
 	       Args = [_Mod|UpdateArgs] ->
-	       Y = [WRAP_HILOG(update,WrapName)|UpdateArgs]
-	   ; clause_wrapper(FullWrapper,WrapName)
-	   ->
+	       Y = [WrapTerm|UpdateArgs]
+	   ; clause_wrapper(FullWrapper,WrapTerm) ->
 	       Args = [Id,
 		       _,  %% DescrVarTerm
 		       Descriptor,
 		       RuleType,
 		       Head,Body],
-	       Y = [WRAP_HILOG(metaquery,WrapName),RuleType,
+	       Y = [WrapTerm,RuleType,
 		    Id,Descriptor,Head,Body]
 	   %% Aggregates look like (fllibavg(...), ...)
-	   ; aggregate_wrapper(FullWrapper,WrapName)
-	   -> Y = [WRAP_HILOG(aggregate,WrapName)|Args]
+	   ; aggregate_wrapper(FullWrapper,WrapTerm) ->
+	       Y = [WrapTerm|Args]
 	   %% newmodule, erasemodule
-	   ; moduleop_wrapper(FullWrapper,WrapName)
-	   ->
+	   ; moduleop_wrapper(FullWrapper,WrapTerm) ->
 	       Args = [_Mod|RestArgs],
-	       Y = [WRAP_HILOG(moduleop,WrapName)|RestArgs]
+	       Y = [WrapTerm|RestArgs]
 	   %% if-then-else and friends
-	   ; control_wrapper(FullWrapper,WrapName)
-	   ->
+	   ; control_wrapper(FullWrapper,WrapTerm) ->
 	       %% if-then-else
 	       (Args = [_Mod,A1,A2,A3,_,_] ->
-		   Y = [WRAP_HILOG(control,WrapName),A1,A2,A3]
+		   Y = [WrapTerm,A1,A2,A3]
 	       %% while-do, do-until, etc.
 	       ; Args = [_Mod,A1,A2,_,_] ->
-		   Y = [WRAP_HILOG(control,WrapName),A1,A2]
+		   Y = [WrapTerm,A1,A2]
 	       %% catch, throw, newoid
-	       ; Y = [WRAP_HILOG(control,WrapName)|Args]
+	       ; Y = [WrapTerm|Args]
 	       )
-	   ; 
-	       is_negation(X,FL_NEG)
+	   ; logic_binconnective_wrapper(FullWrapper,WrapTerm),
+	       Args = [_,_]
 	   ->
-	       flrwrapper:negate_predicate(X,PosLit),
+	       Y = [WrapTerm|Args]
+	   ; 
+	       is_negation(X,FL_NEG) ->
+	       negate_predicate(X,PosLit),
 	       Y = [WRAP_HILOG(FL_NEGATION,FL_NEG),PosLit] 
 	   ;   %% FLSYSRULEUPDATE(....) - a reified rule
-	       rule_wrapper(FullWrapper,WrapName)
-	   ->
+	       rule_wrapper(FullWrapper,WrapName) ->
 	       %% The arguments must match FLSYSRULEUPDATE(...).
 	       %% Always check when changing FLSYSRULEUPDATE!!!
 	       Args = [Id,FileName,_DescrVarTerm,_RuleNum,DescrMetaFacts,RuleHd,RuleBody,_HV,_BV,__DTvars,_H2BF,_H2BB,_PreBody,_PostBody,_DefeatCond],
 	       Y = [WRAP_HILOG(WrapName,Id,FileName),DescrMetaFacts,RuleHd,RuleBody]
 	   ;   %% FLSYSINSQUERYSIG(....) - a reified latent query
-	       latent_query_wrapper(FullWrapper,WrapName)
-	   ->
+	       latent_query_wrapper(FullWrapper,WrapName) ->
 	       Args = [Id,FileName,Mod,_RuleNum,DescrMetaFacts,IC_Body],
 	       Y = [WRAP_HILOG(WrapName,Id,FileName,Mod),DescrMetaFacts,IC_Body]
+	   ;  is_delaylit(FullWrapper), Args = [Builtin,_,_,RealArgs],
+	       delayedlit_wrapper(Builtin,Descriptor)
+	   -> Y = [Descriptor|RealArgs]
+	   ;  is_prologlit(FullWrapper), Args = [Module,PlgTerm],
+	       prologlit_wrapper(Module,Descriptor)
+	   -> Y = [Descriptor,PlgTerm]
 	   ;
 	       Y = [BaseWrap|Args]
 	   )
 	;
-	    PredType == (hilog)
-	->
+	    PredType == (hilog) ->
 	    flrtrim_last(Args,ArgsTrimmed),
 	    ArgsTrimmed = [HiLogPredName|PredArgs],
 	    (BaseWrap==WRAP_TABLED_HILOG
@@ -566,9 +569,7 @@ FLLIBMETAUNIV(X,Y) :-
 	    ;  Y = [WRAP_HILOG('%hilog',HiLogPredName,WS)|PredArgs]
 	    )
 
-	;
-	    PredType == (flogic)
-	->
+	; PredType == (flogic) ->
 	    flrtrim_last(Args,ArgsTrimmed),
 	    %% convert wrapper names to arrows
 	    flogic_wrapper(BaseWrap,FlogicSymbol,_),
@@ -576,9 +577,8 @@ FLLIBMETAUNIV(X,Y) :-
 
 	;
 	    %% neg-Negated F-logic or HiLog
-	    is_negation(PredType,FL_NEG)
-	->
-	    flrwrapper:negate_predicate(X,PosLit),
+	    is_negation(PredType,FL_NEG) ->
+	    negate_predicate(X,PosLit),
 	    Y = [WRAP_HILOG(FL_NEGATION,FL_NEG),PosLit] 
 	),
 	!.
@@ -586,8 +586,7 @@ FLLIBMETAUNIV(X,Y) :-
 FLLIBMETAUNIV(X,Y) :-
 	is_list(Y),
 	Y = [Head|Args],
-	(atom(Head)
-	-> X =.. Y
+	(atom(Head) -> X =.. Y
 	;
 	    Head = WRAP_HILOG(hilog,FunctName) %% HiLog term
 	->
@@ -623,23 +622,33 @@ FLLIBMETAUNIV(X,Y) :-
 	    flora_add_last(Args,AugmentedArgs,FL_CONTEXT(WS,_,_)),
 	    flora_module_predicate(FullWrapper,AugmentedArgs,WS,X)
 	; %% tabled neg hilog or neg flogic op.
-	    Head = WRAP_HILOG(FL_NEGATION,FL_NEG)
-	->
+	    Head = WRAP_HILOG(FL_NEGATION,FL_NEG) ->
 	    Args = [Literal],
-	    flrwrapper:negate_predicate(Literal,X)
-	;
-	    Head = WRAP_HILOG(FL_HYPOTHETICAL,Op)
-	->
-	    is_hypothetical(Library),
-	    X =.. [Library,Op|Args]
+	    negate_predicate(Literal,X)
 	; %% \+ something
-	    Head = WRAP_HILOG(FL_NEGATION,Op)
-	->
-	    is_negation(Predicate,Op),
+	    Head = WRAP_HILOG(FL_NEGATION,FL_PLGNAF) ->
+	    is_negation(Predicate,FL_PLGNAF),
 	    X =.. [Predicate|Args]
+	; %% naf something
+	    Head = WRAP_HILOG(FL_NEGATION,FL_RULELOGNAF) ->
+	    is_negation(Predicate,FL_RULELOGNAF),
+	    Args = [Subg],
+	    flrwrapper:flora_decode_module_name(Subg,Module),
+	    flrnegation:flora_apply_negation_wrapper(Subg,Module,SubgWrapped),
+	    X =.. [Predicate,SubgWrapped]
+
 	;
-	    Head = WRAP_HILOG(flogic,_)
-	->
+	    Head = WRAP_HILOG(FL_HYPOTHETICAL,Op) ->
+	    is_hypothetical(Library,Op),
+	    X =.. [Library,Op|Args]
+	;   delayedlit_wrapper(Builtin,Head) ->
+	    X = FLLIBDELAYEDLITERAL(Builtin,_,_,Args)
+	;   prologlit_wrapper(Module,Head), Args = [PlgLit] ->
+	    X = Module:PlgLit
+	;   logic_binconnective_wrapper(Connective,Head), Args = [Left,Right]
+	->  X =.. [Connective,Left,Right]
+	;
+	    Head = WRAP_HILOG(flogic,_) ->
 	    flora_decode_goal_as_atom(X,Xdecoded),
 	    flora_decode_goal_as_atom(Y,Ydecoded),
 	    flora_abort([Xdecoded,'=..',Ydecoded,
@@ -676,55 +685,56 @@ flogic_wrapper(WRAP_EXISTS, '[]', 1).
 
 %% used to skip internal libraries in decomposition of prolog terms
 %% =.. simply fails on such libraries
-update_wrapper(FLLIBINSERT,insert).
-update_wrapper(FLLIBINSERTALL,insertall).
-update_wrapper(FLLIBDELETE,delete).
-update_wrapper(FLLIBDELETEALL,deleteall).
-update_wrapper(FLLIBERASE,erase).
-update_wrapper(FLLIBERASEALL,eraseall).
-update_wrapper(FLLIBBTINSERT,tinsert).
-update_wrapper(FLLIBBTINSERTALL,tinsertall).
-update_wrapper(FLLIBBTDELETE,tdelete).
-update_wrapper(FLLIBBTDELETEALL,tdeleteall).
-update_wrapper(FLLIBBTERASE,terase).
-update_wrapper(FLLIBBTERASEALL,teraseall).
+update_wrapper(FLLIBINSERT,WRAP_HILOG(update,insert)).
+update_wrapper(FLLIBINSERTALL,WRAP_HILOG(update,insertall)).
+update_wrapper(FLLIBDELETE,WRAP_HILOG(update,delete)).
+update_wrapper(FLLIBDELETEALL,WRAP_HILOG(update,deleteall)).
+update_wrapper(FLLIBERASE,WRAP_HILOG(update,erase)).
+update_wrapper(FLLIBERASEALL,WRAP_HILOG(update,eraseall)).
+update_wrapper(FLLIBBTINSERT,WRAP_HILOG(update,tinsert)).
+update_wrapper(FLLIBBTINSERTALL,WRAP_HILOG(update,tinsertall)).
+update_wrapper(FLLIBBTDELETE,WRAP_HILOG(update,tdelete)).
+update_wrapper(FLLIBBTDELETEALL,WRAP_HILOG(update,tdeleteall)).
+update_wrapper(FLLIBBTERASE,WRAP_HILOG(update,terase)).
+update_wrapper(FLLIBBTERASEALL,WRAP_HILOG(update,teraseall)).
 
-update_wrapper(FLLIBINSERTRULE_A,insertrule_a).
-update_wrapper(FLLIBINSERTRULE_Z,insertrule_z).
-update_wrapper(FLLIBDELETERULE_A,deleterule_a).
-update_wrapper(FLLIBDELETERULE_Z,deleterule_z).
-update_wrapper(FLLIBDELETERULE,deleterule).
-update_wrapper(FLLIBREFRESH,refresh).
+update_wrapper(FLLIBINSERTRULE_A,WRAP_HILOG(update,insertrule_a)).
+update_wrapper(FLLIBINSERTRULE_Z,WRAP_HILOG(update,insertrule_z)).
+update_wrapper(FLLIBDELETERULE_A,WRAP_HILOG(update,deleterule_a)).
+update_wrapper(FLLIBDELETERULE_Z,WRAP_HILOG(update,deleterule_z)).
+update_wrapper(FLLIBDELETERULE,WRAP_HILOG(update,deleterule)).
+update_wrapper(FLLIBREFRESH,WRAP_HILOG(update,refresh)).
 
-moduleop_wrapper(FLLIBNEWMODULE,newmodule).
-moduleop_wrapper(FLLIBERASEMODULE,erasemodule).
+moduleop_wrapper(FLLIBNEWMODULE,WRAP_HILOG(moduleop,newmodule)).
+moduleop_wrapper(FLLIBERASEMODULE,WRAP_HILOG(moduleop,erasemodule)).
 
-clause_wrapper(FLLIBCLAUSE,clause).
+clause_wrapper(FLLIBCLAUSE,WRAP_HILOG(metaquery,clause)).
 
-aggregate_wrapper(FLLIBAVG,avg).
-aggregate_wrapper(FLLIBSUM,sum).
-aggregate_wrapper(FLLIBMAX,max).
-aggregate_wrapper(FLLIBMIN,min).
-aggregate_wrapper(FLLIBCOUNT,count).
-aggregate_wrapper(FLLIBCOLLECTSET,setof).
-aggregate_wrapper(FLLIBCOLLECTBAG,bagof).
-aggregate_wrapper(FLLIBSORTBY,sortby).
-aggregate_wrapper(FLLIBSETSORTBY,setsotrby).
-aggregate_wrapper(FLLIBBAGSORTBY,bagsortby).
+aggregate_wrapper(FLLIBAVG,WRAP_HILOG(aggregate,avg)).
+aggregate_wrapper(FLLIBSUM,WRAP_HILOG(aggregate,sum)).
+aggregate_wrapper(FLLIBMAX,WRAP_HILOG(aggregate,max)).
+aggregate_wrapper(FLLIBMIN,WRAP_HILOG(aggregate,min)).
+aggregate_wrapper(FLLIBCOUNT,WRAP_HILOG(aggregate,count)).
+aggregate_wrapper(FLLIBCOLLECTSET,WRAP_HILOG(aggregate,setof)).
+aggregate_wrapper(FLLIBCOLLECTBAG,WRAP_HILOG(aggregate,bagof)).
+aggregate_wrapper(FLLIBSORTBY,WRAP_HILOG(aggregate,sortby)).
+aggregate_wrapper(FLLIBSETSORTBY,WRAP_HILOG(aggregate,setsotrby)).
+aggregate_wrapper(FLLIBBAGSORTBY,WRAP_HILOG(aggregate,bagsortby)).
 
-control_wrapper(FLLIBIFTHENELSE,ifthenelse).
-control_wrapper(FLLIBIFTHEN,ifthen).
-control_wrapper(FLLIBUNLESSDO,unlessdo).
-control_wrapper(FLLIBWHILEDO,whiledo).
-control_wrapper(FLLIBDOUNTIL,dountil).
-control_wrapper(FLLIBWHILELOOP,whileloop).
-control_wrapper(FLLIBLOOPUNTIL,loopuntil).
+control_wrapper(FLLIBIFTHENELSE,WRAP_HILOG(control,ifthenelse)).
+control_wrapper(FLLIBIFTHEN,WRAP_HILOG(control,ifthen)).
+control_wrapper(FLLIBUNLESSDO,WRAP_HILOG(control,unlessdo)).
+control_wrapper(FLLIBWHILEDO,WRAP_HILOG(control,whiledo)).
+control_wrapper(FLLIBDOUNTIL,WRAP_HILOG(control,dountil)).
+control_wrapper(FLLIBWHILELOOP,WRAP_HILOG(control,whileloop)).
+control_wrapper(FLLIBLOOPUNTIL,WRAP_HILOG(control,loopuntil)).
 
-control_wrapper(FLLIBCATCH,catch).
-control_wrapper(FLLIBTHROW,throw).
-control_wrapper(FLLIBNEWOID,newoid).
+control_wrapper(FLLIBCATCH,WRAP_HILOG(control,catch)).
+control_wrapper(FLLIBTHROW,WRAP_HILOG(control,throw)).
+control_wrapper(FLLIBNEWOID,WRAP_HILOG(control,newoid)).
 
 rule_wrapper(FLSYSRULEUPDATE,rule).
+
 latent_query_wrapper(FLSYSINSQUERYSIG,insert_latentquery).
 latent_query_wrapper(FLSYSDELQUERYSIG,delete_latentquery).
 
@@ -737,6 +747,23 @@ is_negation(FLLIBMODLIT(FL_NEGLIBMOD,_,_,_), FL_NEG).
 
 is_hypothetical(FLLIBHYPOTHETICAL,'<>').
 is_hypothetical(FLLIBIMPOSSIBLE,'~<>').
+
+is_delaylit(FLLIBDELAYEDLITERAL).
+delayedlit_wrapper(FL_IS_INTERNAL,WRAP_HILOG(builtin,FL_IS)).
+delayedlit_wrapper(FL_C_UNEQUAL,WRAP_HILOG(builtin,FL_C_UNEQUAL)).
+delayedlit_wrapper(FL_C_NOTSAME,WRAP_HILOG(builtin,FL_C_NOTSAME)).
+delayedlit_wrapper(FL_GT,WRAP_HILOG(builtin,FL_GT)).
+delayedlit_wrapper(FL_LT,WRAP_HILOG(builtin,FL_LT)).
+delayedlit_wrapper(FL_EQGT,WRAP_HILOG(builtin,FL_EQGT)).
+delayedlit_wrapper(FL_EQLT,WRAP_HILOG(builtin,FL_EQLT)).
+delayedlit_wrapper(FL_MATHEQ,WRAP_HILOG(builtin,FL_MATHEQ)).
+delayedlit_wrapper(FL_MATHNOTEQ,WRAP_HILOG(builtin,FL_MATHNOTEQ)).
+
+is_prologlit(FL_PROLOG_MODULE_TIE).
+prologlit_wrapper(PlgModule,WRAP_HILOG(prologlit,PlgModule)) :- atom(PlgModule).
+
+logic_binconnective_wrapper(FL_AND_CONNECTIVE,WRAP_HILOG(logic,and)).
+logic_binconnective_wrapper(FL_OR_CONNECTIVE,WRAP_HILOG(logic,or)).
 
 compare_wrappers(Wrap1,Wrap2) :- Wrap1 = Wrap2, !.
 compare_wrappers(Wrap1,Wrap2) :-

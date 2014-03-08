@@ -30,6 +30,7 @@
 
 #include "flora_terms.flh"
 #include "flora_porting.flh"
+#include "flora_exceptions.flh"
 #include "flora_tabling_methods.flh"
 
 %% In assert this means: use better register allocation. Assert last.
@@ -85,7 +86,7 @@
    from flrtrim.
 
 :- import
-	flora_abort/1,
+	flora_abort/2,
         flora_concat_atoms/2
    from flrporting.
 
@@ -226,7 +227,8 @@ get_canonical_form(FLLIBMODLIT(Wrap,Term,Mod,_FWContext),Canon) :-
 		),
                 Canon = FLCANON(RealNW,NA,NM,RealNC,RealPredType)
             ;
-                flora_abort([Message,'transactional predicate expected'])
+                flora_abort([Message,'transactional predicate expected'],
+			    FLORA_ABORT_NOTRACE)
             )
 
         ; Term = FLLIBMODLIT(_W,_A,_M,_C) ->
@@ -246,7 +248,8 @@ get_canonical_form(FLLIBMODLIT(Wrap,Term,Mod,_FWContext),Canon) :-
 		    NM=Mod
 		)
             ;
-                flora_abort([Message,'transactional predicate expected'])
+                flora_abort([Message,'transactional predicate expected'],
+			    FLORA_ABORT_NOTRACE)
             )
 
 	; (Term = FL_NEG_Atm(TermArg) ; Term = WRAP_HILOG(FL_NEG_Atm,TermArg)), TermArg =.. [WRAP_HILOG|_] ->
@@ -652,7 +655,8 @@ flora_bind_libmodobj([],[]) :- !.
 flora_bind_libmodobj([H|_Tail],_NewList) :-
         var(H),
         !,
-        flora_abort('uninstantiated element in the rule list of insertrule{...}').
+        flora_abort('uninstantiated element in the rule list of insertrule{...}',
+		    FLORA_ABORT_NOTRACE).
 flora_bind_libmodobj([FLSYSRULEUPDATE(Id,FileN,DescrVarTerm,StmtNum,DescrMetaFacts,HeadList,Body,HVars,BVars,PreBody,PostBody,DefeatCond)|L],[FLSYSRULEUPDATE(Id,FileN,DescrVarTerm,StmtNum,DescrMetaFacts,NewHeadList,Body,HVars,BVars,PreBody,PostBody,DefeatCond)|NL]) :-
         !,
         flora_bind_libmodobj(HeadList,NewHeadList),
@@ -668,7 +672,8 @@ flora_bind_libmodobj([FLLIBMODOBJ(Ctxt,W,A,M,C,P)|L], [P|NL]) :-
         !,
         FLLIBMODOBJ(Ctxt,W,A,M,C,P),
         ( P=FLLIBMODLIT(_,_,_,_) ->
-            flora_abort('uninstantiated predicate in an argument position in the rule head of insertrule{...}')
+            flora_abort('uninstantiated predicate in an argument position in the rule head of insertrule{...}',
+			FLORA_ABORT_NOTRACE)
         ;
             flora_bind_libmodobj(L,NL)
         ).
@@ -935,13 +940,16 @@ flora_check_dynmod_type_consistency(FLLIBMODLIT(_,Term,_M,_C)) :-
 
 flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_LIBMOD,Term,M,_C)) :-
         !,
-        flora_abort([Term,'@',M, ': the idiom ?Variable@module requires that the variable is bound to a HiLog term or a non-transactional formula']).
+        flora_abort([Term,'@',M, ': the idiom ?Variable@module requires that the variable is bound to a HiLog term or a non-transactional formula'],
+		    FLORA_ABORT_NOTRACE).
 flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_NEGLIBMOD,Term,M,_C)) :-
         !,
-        flora_abort([Term,'@',M, ': the idiom neg ?Variable@module requires that the variable is bound to a HiLog term or a non-transactional formula']).
+        flora_abort([Term,'@',M, ': the idiom neg ?Variable@module requires that the variable is bound to a HiLog term or a non-transactional formula'],
+		    FLORA_ABORT_NOTRACE).
 flora_check_dynmod_type_consistency(FLLIBMODLIT(FL_TRANSLIBMOD,Term,M,_C)) :-
         !,
-        flora_abort([Term,'@',M, ': the idiom %?Variable@module requires that the variable is bound to a HiLog term or a transactional formula']).
+        flora_abort([Term,'@',M, ': the idiom %?Variable@module requires that the variable is bound to a HiLog term or a transactional formula'],
+		    FLORA_ABORT_NOTRACE).
 
 %% catchall case
 flora_check_dynmod_type_consistency(_Arg).
@@ -1055,8 +1063,10 @@ is_naf_literal(FLLIBNAFDELAY(Lit),PosLit) :-
 	nonvar(Lit),
 	!,
 	is_naf_literal(Lit,PosLit).
-is_naf_literal(FLLIBMODLIT(Wrap,WRAP_HILOG(FL_RULELOGNAF,PosLit),Mod,FWContext),
+is_naf_literal(FLLIBMODLIT(Wrap,NegLit,Mod,FWContext),
 	       FLLIBMODLIT(Wrap,PosLit,Mod,FWContext)) :-
+	nonvar(NegLit),
+	NegLit = WRAP_HILOG(FL_RULELOGNAF,PosLit),
 	!.
 is_naf_literal(FLLIBMODLIT(_Wrap,NegLit,_Mod,_FWContext), PosLit) :-
 	nonvar(NegLit),
@@ -1074,3 +1084,4 @@ strip_delay_checker((OutGoal, FLORA_DELAY_CHECKER(_,_)),Result) :-
 	; Result = OutGoal
 	).
 strip_delay_checker(InGoal,InGoal).
+

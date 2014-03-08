@@ -21,6 +21,10 @@ if exist binary-distribution.txt goto binary
 REM  The Windows version doesn't support --testing, so we just delete the switch
 if exist flrtesthook.flh del flrtesthook.flh
 
+set thiscommand=makeflora
+if [%0] == [makeergo]  set thiscommand=makeergo
+if [%0] == [makeergo.bat]  set thiscommand=makeergo
+
 set tabling_method=/* default tabling */
 if [%1] == [-S] set tabling_method=#define FLORA_SUBSUMPTIVE_TABLING
 if [%1] == [-S] shift
@@ -67,6 +71,7 @@ if [%1] == [-c64]  nmake /nologo /f NMakefile64.mak PROLOG=%PROLOG% PROLOGDIR=%P
 cd ..
 
 if exist hooks\ergo.switch del hooks\ergo.switch
+
 REM If making ergo, create ergo.switch
 if [%0] == [makeergo]  @echo ergo > hooks\ergo.switch
 if [%0] == [makeergo.bat]  @echo ergo > hooks\ergo.switch
@@ -86,8 +91,8 @@ goto end
 :usage
 @echo.
 @echo +++++ Usage:
-@echo +++++   makeflora [-c] path-for-\XSB\bin\xsb      (32 bit installations)
-@echo +++++   makeflora [-c64] path-for-\XSB\bin\xsb64  (64 bit installations)
+@echo +++++   %thiscommand% [-c] path-to-\XSB\bin\xsb      (32 bit installations)
+@echo +++++   %thiscommand% [-c64] path-to-\XSB\bin\xsb64  (64 bit installations)
 @echo.
 goto end
 
