@@ -57,7 +57,7 @@ flora-packages.pdf: flora-packages.dvi
 	dvipdf flora-packages
 
 clean:
-	/bin/rm -f  *.bak *~ .*~ .#*
+	/bin/rm -f  *.bak *~ .*~ .#* *.aux *.toc *.ind
 
 veryclean: clean
 	/bin/rm -f  *.aux *.bbl *.blg *.dvi *.idx *.ilg *.ind *.log \

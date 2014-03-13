@@ -513,22 +513,30 @@ coder_write_codelist([T|L],Status) :-
         are not supposed to unify with normal HiLog terms.
 ****************************************************************************/
 coder_write_code(Term,Status) :-
-	( is_prrule(Term,Head,Body)
-	-> coder_write_rule(Head,Body,Status)
+	is_prrule(Term,Head,Body),
+	!,
+	coder_write_rule(Head,Body,Status).
 
-	; is_prfact(Term,Head)
-	-> coder_write_fact(Head,Status)
+coder_write_code(Term,Status) :-
+	is_prfact(Term,Head),
+	!,
+	coder_write_fact(Head,Status).
 
-	; is_prquery(Term,Goal)
-	-> coder_write_query(Goal,Status)
+coder_write_code(Term,Status) :-
+	is_prquery(Term,Goal),
+	!,
+	coder_write_query(Goal,Status).
 
-	; is_prdirective(Term,Direct) 
-	-> coder_write_direct(Direct,Status)
+coder_write_code(Term,Status) :-
+	is_prdirective(Term,Direct),
+	!,
+	coder_write_direct(Direct,Status).
 
-	; is_prudf_definition(Term,Name,N,UDFCode,PredName,PredCode) 
-	-> coder_write_udf_definition(Name,N,UDFCode,PredName,PredCode,Status),
-	   coder_write_udf_used(Name,N,UDFCode,PredCode,Status)
-	).
+coder_write_code(Term,Status) :-
+	is_prudf_definition(Term,Name,N,UDFCode,PredName,PredCode),
+	!,
+	coder_write_udf_definition(Name,N,UDFCode,PredName,PredCode,Status),
+	coder_write_udf_used(Name,N,UDFCode,PredCode,Status).
 
 
 
@@ -901,9 +909,10 @@ flora_write_struct(Term,Context,Status) :-
 	  put(CH_RPAREN)
         ).
 
-%% any quantifiers that sipped through are eliminated
+%% any quantifiers that slipped through are eliminated
 flora_write_struct(Term,Context,Status) :-
 	is_prquantifier(Term,_Quant,Formula,_QuantVars,_FreeVars),
+	!,
 	flora_write_struct(Formula,Context,Status).
 
 flora_write_struct(Term,_Context,Status) :-
@@ -1121,46 +1130,62 @@ coder_write_atomlist([H|L]) :-
         by the compiler.
 ****************************************************************************/
 coder_write_wsstruct(WS,Term,Context,Status) :-
-	( is_prfloralib(WS,WSAtom,_) ->
-	    %% a call to Flora module
-	    coder_write_sysmod(WSAtom,Term,Context,Status)
+	is_prfloralib(WS,WSAtom,_),
+	!,
+	%% a call to Flora module
+	coder_write_sysmod(WSAtom,Term,Context,Status).
 
-	%% If this module, then use the method for writing with THIS workspace
-	; is_prthismodule(WS) ->
-	    flora_write_struct(Term,Context,Status)
+%% If this module, then use the method for writing with THIS workspace
+coder_write_wsstruct(WS,Term,Context,Status) :-
+	is_prthismodule(WS),
+	!,
+	flora_write_struct(Term,Context,Status).
 
-	; is_pratomlit(Term,Context,Wrap,List,_Index) ->
-	    coder_write_wsliteral(WS,Wrap,List,Context,Status)
+coder_write_wsstruct(WS,Term,Context,Status) :-
+	is_pratomlit(Term,Context,Wrap,List,_Index),
+	!,
+	coder_write_wsliteral(WS,Wrap,List,Context,Status).
 
-        ; is_prtransactionalatomlit(Term,Context,Wrap,List,_Index) ->
-	    coder_write_wsliteral(WS,Wrap,List,Context,Status)
+coder_write_wsstruct(WS,Term,Context,Status) :-
+        is_prtransactionalatomlit(Term,Context,Wrap,List,_Index),
+	!,
+	coder_write_wsliteral(WS,Wrap,List,Context,Status).
 
-	; is_prtermlit(Term,Context,Wrap,FObj,Args) ->
-	    coder_write_wsliteral(WS,Wrap,[FObj|Args],Context,Status)
+coder_write_wsstruct(WS,Term,Context,Status) :-
+	is_prtermlit(Term,Context,Wrap,FObj,Args),
+	!,
+	coder_write_wsliteral(WS,Wrap,[FObj|Args],Context,Status).
 
-	; is_prtransactionaltermlit(Term,Context,Wrap,FObj,Args) ->
-	    coder_write_wsliteral(WS,Wrap,[FObj|Args],Context,Status)
+coder_write_wsstruct(WS,Term,Context,Status) :-
+	is_prtransactionaltermlit(Term,Context,Wrap,FObj,Args),
+	!,
+	coder_write_wsliteral(WS,Wrap,[FObj|Args],Context,Status).
 
-	; is_flogic(Term,Context,F,Args) ->
-	    coder_write_wsliteral(WS,F,Args,Context,Status)
+coder_write_wsstruct(WS,Term,Context,Status) :-
+	is_flogic(Term,Context,F,Args),
+	!,
+	coder_write_wsliteral(WS,F,Args,Context,Status).
 	
-	; is_prologterm(Term,F,N,Args) ->
-	    (is_prmodularized_atom(F,Atm,Mod,_) -> flora_modularize_atom(Atm,Mod,FAtom)
-	    ; is_prmodularized_atom(F,Atm,_) -> flora_modularize_atom(Atm,WS,FAtom)
-	    ; is_pratom(F,FAtom,Index) -> true
-	    ; is_prbuiltin_identifier(F,FAtom,Index)
-	    ),
-	    coder_write_prolog(FAtom,N,Args,Context,Status)
+coder_write_wsstruct(WS,Term,Context,Status) :-
+	is_prologterm(Term,F,N,Args),
+	!,
+	(is_prmodularized_atom(F,Atm,Mod,_) -> flora_modularize_atom(Atm,Mod,FAtom)
+	; is_prmodularized_atom(F,Atm,_) -> flora_modularize_atom(Atm,WS,FAtom)
+	; is_pratom(F,FAtom,Index) -> true
+	; is_prbuiltin_identifier(F,FAtom,Index)
+	),
+	coder_write_prolog(FAtom,N,Args,Context,Status).
 
-	; is_prologterm(Term,F,N,Args,Module) ->
-	    (is_pratom(F,FAtom,Index) ; is_prbuiltin_identifier(F,FAtom,Index)),
-	    flora_write_quoted_atom(FL_PROLOG_MODULE_TIE),
-	    put(CH_LPAREN),
-	    coder_write_modulename(Module),
-	    put(CH_COMMA),
-	    coder_write_prolog(FAtom,N,Args,Context,Status),
-	    put(CH_RPAREN)
-        ).
+coder_write_wsstruct(_WS,Term,Context,Status) :-
+	is_prologterm(Term,F,N,Args,Module),
+	!,
+	(is_pratom(F,FAtom,Index) ; is_prbuiltin_identifier(F,FAtom,Index)),
+	flora_write_quoted_atom(FL_PROLOG_MODULE_TIE),
+	put(CH_LPAREN),
+	coder_write_modulename(Module),
+	put(CH_COMMA),
+	coder_write_prolog(FAtom,N,Args,Context,Status),
+	put(CH_RPAREN).
 
 
 /****************************************************************************
@@ -1170,21 +1195,29 @@ coder_write_wsstruct(WS,Term,Context,Status) :-
   Workspace is already reduced to an atom.
 ****************************************************************************/
 coder_write_sysmod(WS,Term,Context,Status) :-
-	( is_pratomlit(Term,Context,Wrap,List,_Index) ->
-	    coder_write_wsliteral(WS,Wrap,List,Context,Status)
+	is_pratomlit(Term,Context,Wrap,List,_Index),
+	!,
+	coder_write_wsliteral(WS,Wrap,List,Context,Status).
 
-        ; is_prtransactionalatomlit(Term,Context,Wrap,List,_Index) ->
-	    coder_write_wsliteral(WS,Wrap,List,Context,Status)
+coder_write_sysmod(WS,Term,Context,Status) :-
+        is_prtransactionalatomlit(Term,Context,Wrap,List,_Index),
+	!,
+	coder_write_wsliteral(WS,Wrap,List,Context,Status).
 
-	; is_prtermlit(Term,Context,Wrap,FObj,Args) ->
-	    coder_write_wsliteral(WS,Wrap,[FObj|Args],Context,Status)
+coder_write_sysmod(WS,Term,Context,Status) :-
+	is_prtermlit(Term,Context,Wrap,FObj,Args),
+	!,
+	coder_write_wsliteral(WS,Wrap,[FObj|Args],Context,Status).
 
-	; is_prtransactionaltermlit(Term,Context,Wrap,FObj,Args) ->
-	    coder_write_wsliteral(WS,Wrap,[FObj|Args],Context,Status)
+coder_write_sysmod(WS,Term,Context,Status) :-
+	is_prtransactionaltermlit(Term,Context,Wrap,FObj,Args),
+	!,
+	coder_write_wsliteral(WS,Wrap,[FObj|Args],Context,Status).
 
-	; is_flogic(Term,Context,F,Args) ->
-	    coder_write_wsliteral(WS,F,Args,Context,Status)
-	).
+coder_write_sysmod(WS,Term,Context,Status) :-
+	is_flogic(Term,Context,F,Args),
+	!,
+	coder_write_wsliteral(WS,F,Args,Context,Status).
 
 
 /****************************************************************************
@@ -1313,11 +1346,9 @@ coder_write_syslib(Lib,2,[List,Cond],_Context,Status) :-
 	put(CH_RPAREN).
 
 coder_write_syslib(Lib,N,Args,Context,Status) :-
-	( Lib == FLLIBMODLIT, N == 3 ->
-	    Args=[P,WS,FWContext]
+	( Lib == FLLIBMODLIT, N == 3 -> Args=[P,WS,FWContext]
 
-	; Lib == FLLIBMODOBJ, N == 5 ->
-	    Args=[HeadOrBody,P,WS,FWContext,Object]
+	; Lib == FLLIBMODOBJ, N == 5 -> Args=[HeadOrBody,P,WS,FWContext,Object]
 	),
 	!,
 	%% These two structures are used to construct a dynamic call
@@ -1367,11 +1398,8 @@ coder_write_syslib(Lib,N,Args,Context,Status) :-
 	).
 
 coder_write_syslib(Lib,N,Args,Context,Status) :-
-	( Lib == FLNEGLIBMODLIT, N == 3 ->
-	    Args=[P,WS,FWContext]
-
-	; Lib == FLNEGLIBMODOBJ, N == 5 ->
-	    Args=[HeadOrBody,P,WS,FWContext,Object]
+	( Lib==FLNEGLIBMODLIT, N==3 -> Args=[P,WS,FWContext]
+	; Lib==FLNEGLIBMODOBJ, N==5 -> Args=[HeadOrBody,P,WS,FWContext,Object]
 	),
 	!,
 	%% These two structures are used to construct a dynamic call
@@ -1393,8 +1421,8 @@ coder_write_syslib(Lib,N,Args,Context,Status) :-
 	    Wrap=FL_LIBMOD
 
 	;
-	  is_flogic(P,Context,Wrap,ObjList),
-	  is_prlist(PArgs,ObjList,[],_I)
+	    is_flogic(P,Context,Wrap,ObjList),
+	    is_prlist(PArgs,ObjList,[],_I)
 	;
 	    %% This is for debugging. If you define a predicate as
 	    %% 'prolog' and use it as p@? then this might be triggered
@@ -1606,23 +1634,28 @@ coder_build_codelist([T|L],DWS,Code,Status) :-
         By default, it assumes the code is built for the Flora modules.
 ****************************************************************************/
 coder_build_code(Term,DWS,Code,Status) :-
-	(
 	%% Is this case impossible??
-	  is_prrule(Term,Head,Body) ->
-	    coder_build_rule(Head,Body,DWS,Code,Status)
+	is_prrule(Term,Head,Body),
+	!,
+	coder_build_rule(Head,Body,DWS,Code,Status).
 
-	%% Is this case impossible??
-	; is_prfact(Term,Head) ->
-	    coder_build_fact(Head,DWS,Code,Status)
+%% Is this case impossible??
+coder_build_code(Term,DWS,Code,Status) :-
+	is_prfact(Term,Head),
+	!,
+	coder_build_fact(Head,DWS,Code,Status).
 
-	%% NOTE: there is no such a thing as a latent query in the shell!
-	; is_prquery(Term,GoalTerm) ->
-	    coder_build_query(GoalTerm,DWS,Code,Status)
+%% NOTE: there is no such a thing as a latent query in the shell!
+coder_build_code(Term,DWS,Code,Status) :-
+	is_prquery(Term,GoalTerm),
+	!,
+	coder_build_query(GoalTerm,DWS,Code,Status).
 
-	%% Is this case impossible??
-	; is_prdirective(Term,Direct) ->
-	    coder_build_directive(Direct,DWS,Code,Status)
-	).
+%% Is this case impossible??
+coder_build_code(Term,DWS,Code,Status) :-
+	is_prdirective(Term,Direct),
+	!,
+	coder_build_directive(Direct,DWS,Code,Status).
 
 
 /****************************************************************************
@@ -1849,6 +1882,7 @@ flora_build_struct(Term,DWS,Context,VarList,Code,(CodeInd,NO_INDEX),Status) :-
 %% any quantifiers that sipped through are eliminated
 flora_build_struct(Term,DWS,Context,VarList,Code,CodeInd,Status) :-
 	is_prquantifier(Term,_Quant,Formula,_QuantVars,_FreeVars),
+	!,
 	flora_build_struct(Formula,DWS,Context,VarList,Code,CodeInd,Status).
 
 flora_build_struct(Term,DWS,Context,VarList,Code,(CodeInd,NO_INDEX),Status) :-
@@ -2194,11 +2228,8 @@ coder_build_syslib(Lib,2,[List,Cond],DWS,_Context,VarList,Code,CodeInd,Status) :
 	). 
 
 coder_build_syslib(Lib,N,Args,DWS,Context,VarList,Code,CInd,Status) :-
-	( Lib == FLLIBMODLIT, N == 3 ->
-	    Args=[P,WS,FWContext]
-
-	; Lib == FLLIBMODOBJ, N == 5 ->
-	    Args=[HeadOrBody,P,WS,FWContext,Object]
+	( Lib == FLLIBMODLIT, N == 3 -> Args=[P,WS,FWContext]
+	; Lib == FLLIBMODOBJ, N == 5 -> Args=[HeadOrBody,P,WS,FWContext,Object]
 	),
 	!,
 	( is_pratomlit(P,Context,Wrap,[A],Ind) ->
@@ -2243,11 +2274,8 @@ coder_build_syslib(Lib,N,Args,DWS,Context,VarList,Code,CInd,Status) :-
 	).
 
 coder_build_syslib(Lib,N,Args,DWS,Context,VarList,Code,CInd,Status) :-
-	( Lib == FLNEGLIBMODLIT, N == 3 ->
-	    Args=[P,WS,FWContext]
-
-	; Lib == FLNEGLIBMODOBJ, N == 5 ->
-	    Args=[HeadOrBody,P,WS,FWContext,Object]
+	( Lib == FLNEGLIBMODLIT, N==3 -> Args=[P,WS,FWContext]
+	; Lib == FLNEGLIBMODOBJ, N==5 -> Args=[HeadOrBody,P,WS,FWContext,Object]
 	),
 	!,
 	( is_pratomlit(P,Context,Wrap,[A],Ind) ->
