@@ -36,7 +36,7 @@
 
 
 /***************************************************************************
-  closure rules for neg X::Y
+  contrapositive closure rules for neg X::Y
 ***************************************************************************/
 FLNEGPREFIX(WRAP_SUB)(X,Y,FL_CONTEXT(Caller,_,_)) :-
 	FLNEGTRAILERPREFIX(WRAP_SUB)(X,Y,FL_CONTEXT(Caller,_,_)).
@@ -44,10 +44,17 @@ FLNEGPREFIX(WRAP_SUB)(X,Y,FL_CONTEXT(Caller,_,_)) :-
 FLNEGPREFIX(WRAP_SUB)(X,Y,FL_CONTEXT(Caller,_,_)) :-
 	FLTRAILERPREFIX(WRAP_SUB)(Y,X,FL_CONTEXT(Caller,_,_)).
 
+%% X::Z, \neg X::Y |= \neg Z::Y
 FLNEGPREFIX(WRAP_SUB)(Z,Y,FL_CONTEXT(Caller,_,_)) :-
 	silent_sub(X,Z,FL_CONTEXT(Caller,_,_)),
 	FLNEGTRAILERPREFIX(WRAP_SUB)(X,Y,FL_CONTEXT(Caller,_,_)).
 
+%% \neg X::Z, Y::Z |= \neg X::Y
+FLNEGPREFIX(WRAP_SUB)(X,Y,FL_CONTEXT(Caller,_,_)) :-
+	silent_sub(Y,Z,FL_CONTEXT(Caller,_,_)),
+	FLNEGTRAILERPREFIX(WRAP_SUB)(X,Z,FL_CONTEXT(Caller,_,_)).
+
+%% X:Z, \neg X:Y |= \neg Z::Y
 FLNEGPREFIX(WRAP_SUB)(Z,Y,FL_CONTEXT(Caller,_,_)) :-
         WRAP_ISA(X,Z,FL_CONTEXT(Caller,_,_)),
 	FLNEGTRAILERPREFIX(WRAP_ISA)(X,Y,FL_CONTEXT(Caller,_,_)).
@@ -60,6 +67,7 @@ FLNEGPREFIX(WRAP_SUB)(Z,Y,FL_CONTEXT(Caller,_,_)) :-
 FLNEGPREFIX(WRAP_ISA)(O,C,FL_CONTEXT(Caller,_,_)) :-
 	FLNEGTRAILERPREFIX(WRAP_ISA)(O,C,FL_CONTEXT(Caller,_,_)).
 
+%% \neg O:C, S::C |= \neg O:S
 FLNEGPREFIX(WRAP_ISA)(O,S,FL_CONTEXT(Caller,_,_)) :-
 	silent_sub(S,C,FL_CONTEXT(Caller,_,_)),
 	FLNEGTRAILERPREFIX(WRAP_ISA)(O,C,FL_CONTEXT(Caller,_,_)).

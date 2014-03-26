@@ -31,6 +31,7 @@
 
 :- import flloadtrailer/2, fltrailersemantics/2 from flrutils.
 :- import flora_abort/1 from flrporting.
+:- import flora_optimizer_registry/2 from flrregistry.
 
 
 
@@ -45,10 +46,27 @@
   the use by the encapsulation.
 *****************************************************************************/
 FLLIBSEMANTICS(_CurrentModule,Options,TargetModule) :-
-	fltrailersemantics(Options,TargetModule).
+	(basics:select(FL_SUBCLASSING(Opt),Options,RestOptions)
+	->
+	    (flora_optimizer_registry(FL_SUBCLASSING(Opt),TargetModule) -> true
+	    ; Opt = STRICT_SUB
+	    )
+	; RestOptions = Options
+	),
+	fltrailersemantics(RestOptions,TargetModule).
 
 FLLIBSETSEMANTICS(_CurrentModule,Options,TargetModule) :-
-	flloadtrailer(Options,TargetModule),
+	(basics:select(FL_SUBCLASSING(Opt),Options,RestOptions)
+	->
+	    (flora_optimizer_registry(FL_SUBCLASSING(Opt),TargetModule) -> true
+	    ;
+		retractall(flora_optimizer_registry(FL_SUBCLASSING(_),TargetModule)),
+		assert(flora_optimizer_registry(FL_SUBCLASSING(Opt),TargetModule)),
+		catch(abolish_all_tables,_,true)
+	    )
+	;  RestOptions = Options
+	),
+	flloadtrailer(RestOptions,TargetModule),
 	!.
 
 FLLIBSETSEMANTICS(_CurrentModule,_Options,TargetModule) :-

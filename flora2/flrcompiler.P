@@ -1066,6 +1066,9 @@ disjunct_code([Goal|GList],ConjGoal) :-
 ****************************************************************************/
 %% atomobj_struct/2
 atomobj_struct(FLATOM(Atm,I),PRATOM(Atm,I)) :- !.
+atomobj_struct(FLBUILTIN_IDENTIFIER(Atm,I),PRATOM(AtmReplacement,I)) :-
+	flora_prlgdef_repl(Atm,0,AtmReplacement,usermod),
+	!.
 atomobj_struct(FLBUILTIN_IDENTIFIER(Atm,I),PRATOM(Atm,I)) :- !.
 atomobj_struct(Atm,PRATOM(Atm,NO_INDEX)) :- atomic(Atm).
 %% atomobj_struct/3
@@ -1661,7 +1664,7 @@ catch_struct(Goal,Error,Handler,Code) :-
 throw_struct(Error,Code) :-
 	florasyslib_struct(FLLIBTHROW,1,[Error],Code).
 
-%% true{...}, false{...}, unknown{...}. Opname is FL_TRUE, FL_FALSE, FL_UNKNOWN
+%% true{...}, false{...}, undefined{...}. Opname==FL_TRUE/FL_FALSE/FL_UNDEFINED
 truthvalue_struct(Formula,Opname,Code) :-
 	modularized_pratom_struct(FL_TRUTHVALUE_TABLED_CALL,NO_INDEX,FunCode),
 	prologterm_struct(FunCode,1,[Formula],WrappedFormula),
@@ -3617,6 +3620,9 @@ compile_symbol_literal(ParserTerm,Status) :-
 	    compile_symbol_term(Funct,N,Args,FL_THISMODULE,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status)
 	; is_flatom(ParserTerm,_Atom) ->
 	    compile_symbol_term(ParserTerm,0,NULL,FL_THISMODULE,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status)
+	; is_flbuiltin_identifier(ParserTerm,Atom,Idx) ->
+	    flatom_struct(Atom,Idx,ParserTerm1),
+	    compile_symbol_term(ParserTerm1,0,NULL,FL_THISMODULE,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status)
 	; is_fltransactionalatom(ParserTerm,_Atom) ->
 	    compile_symbol_term(ParserTerm,0,NULL,FL_THISMODULE,FUNCTION_SYMBOL,TRANSACTIONAL_SYMBOL,Status)
 	; is_fltransactionaltermdescriptor(ParserTerm,Funct,Arity) ->
@@ -3647,6 +3653,9 @@ compile_symbol_literal(ParserTerm,WS,SymContext,Status) :-
 	    compile_symbol_term(Funct,N,Args,WS,SymContext,NONTRANSACTIONAL_SYMBOL,Status)
 	; is_flatom(ParserTerm,_Atom) ->
 	    compile_symbol_term(ParserTerm,0,NULL,WS,SymContext,NONTRANSACTIONAL_SYMBOL,Status)
+	; is_flbuiltin_identifier(ParserTerm,Atom,Idx) ->
+	    flatom_struct(Atom,Idx,ParserTerm1),
+	    compile_symbol_term(ParserTerm1,0,NULL,WS,SymContext,NONTRANSACTIONAL_SYMBOL,Status)
 	; is_fltransactionalatom(ParserTerm,_Atom) ->
 	    compile_symbol_term(ParserTerm,0,NULL,WS,SymContext,TRANSACTIONAL_SYMBOL,Status)
 	;
@@ -4762,9 +4771,10 @@ compile_udf_definition(Function,Body,ReturnValue,CodeList-ListTail,FactDiffList,
 		),
 		approx_flindex(Funct,FunctIndex),
 		compile_descriptor_list([]-FunctIndex,FL_DESCRMODE_UDFRULE,DescrIdCode,DescrVarsTerm,_,_),
-		( Body=NULL ->
+		( Body==NULL ->
 		    %% UDFs are always compiled as rules: add a dummy body
-		    flatom_struct(FL_TRUE,NO_INDEX,RealBody),
+		    flatom_struct(FL_TRUE,NO_INDEX,RealBodyPre),
+		    flplib_struct(RealBodyPre,RealBody),
 		    new_udfrule_body(RealBody,FunctIndex,
 				     ReturnValue,NewReturnValue,NewBody),
 		    %% empty descr list - just generate new rule id
@@ -5513,15 +5523,22 @@ compile_metauniv(Left,Right,OidCode,Code,Status) :-
 	%% don't want module name to be tacked on unless requested
 	%% LeftCode becomes bound to the OID code of Left
 	%% ObjCode is later conjuncted with the result
-	compile_body_pathexp_top(Left,FL_THISMODULE,LeftCode,OidCodeLeft,ObjCode,[],S1),
+	compile_body_pathexp_top(Left,FL_THISMODULE,LeftCode,OidCodeLeft,LeftObjCode,[],S1),
 	( no_errors_found(S1) ->
 	    set_context(no_symbol_check),
 	    compile_body_pathexp_top(Right,FL_THISMODULE,RightCode,OidCodeRight,RightObjCode,[],Status),
 	    clear_context(no_symbol_check),
 	    ( no_errors_found(Status) ->
-	       metauniv_struct(LeftCode,RightCode,UnivCode),
-		conjunct_code([UnivCode,ObjCode,RightObjCode],Code),
-		conjunct_struct(OidCodeLeft,OidCodeRight,OidCode)
+		%% OidCodeLeft normally contains the juicy part of the term to
+		%% be decomposed. If it is NULL then OidCodeLeft contains
+		%% a plain HiLog/Prolog term or something like that.
+		(OidCodeLeft == NULL -> UnivLeftCode = LeftCode
+		; UnivLeftCode = OidCodeLeft
+		),
+		metauniv_struct(UnivLeftCode,RightCode,UnivCode),
+		conjunct_code([UnivCode,LeftObjCode,RightObjCode],Code),
+		%%conjunct_struct(OidCodeLeft,OidCodeRight,OidCode)
+		OidCode = OidCodeRight
 	    ; true
 	    )
 	;
@@ -7876,7 +7893,9 @@ compile_body_specbody(Object,SpecTerm,WS,NULL,Code,BodyFrontList,Status) :-
 %% Obj[true], Obj[fail], Obj[!] translate as true, fail, and !
 compile_body_specbody(_Object,SpecTerm,_WS,NULL,Code,[],Status) :-
 	is_flpassthru(SpecTerm,P),
-	is_flatom(P, Atom, I),
+	(is_flatom(P, Atom, I)
+	; is_flbuiltin_identifier(P,Atom,I)
+	),
 	!,
 	(Atom==FL_CUT -> cut_struct(I,Code)
 	; atomobj_struct(P,Code)
@@ -8051,7 +8070,7 @@ convert_FLLIBMODLIT_to_FLLIBMODOBJ(Index,Args,LibModObjVar,PrLibModObj) :-
 
 /****************************************************************************
   compile_truthvalue(+Form,+Op,-OidCode,-Code,-Status)
-  Compiles true{...}, false{...}, unknown{...}
+  Compiles true{...}, false{...}, undefined{...}
 ****************************************************************************/
 compile_truthvalue(Formula,Op,Code,Status) :-
 	atomobj_struct(Op,OpCode),

@@ -36,6 +36,13 @@
 #define CANOBRACE	canobrace
 #define CANOEMPTYTERM	canoemptyterm
 
+#define CANOPARENBAR	canoparenbar
+#define CANOBRACKBAR	canobrackbar
+#define CANOBRACEBAR	canobracebar
+#define CANOBACKPAREN	canobackparen
+#define CANOBACKBRACK	canobackbrack
+#define CANOBACKBRACE	canobackbrace
+
 #define SETARGATTRIBUTE parsesetarg
 
 %% Types of DB literal parsing:
@@ -151,8 +158,8 @@ BinaryRelationship := PathExpression '::' PathExpression
 
 ObjectSpecification := PathExpression '[' SpecBody ']'
 
-SpecBody := ('not')? MethodSpecification
-SpecBody := 'neg'    ExplicitlyNegatableMethodSpecification
+SpecBody := ('\naf')? MethodSpecification
+SpecBody := '\neg'    ExplicitlyNegatableMethodSpecification
 SpecBody := SpecBody ',' SpecBody
 SpecBody := SpecBody ';' SpecBody
 
@@ -232,7 +239,7 @@ NewoidOp := 'skolem{' Variable '}'
 
 CatchExpr := 'catch{' Body, Term, Body '}'
 ThrowExpr := 'throw{' Term '}'
-TruthTest := 'true{' Body '}' | 'unknown{' Body '}' | 'false{' Body '}'
+TruthTest := 'true{' Body '}' | 'undefined{' Body '}' | 'false{' Body '}'
 ****************************************************************************/
 
 
@@ -369,8 +376,44 @@ canonical_form(ARGUMENT(FL_BRACKET,I1,_I2),CANOLIST([],[],0,I1,NO_INDEX),I1) :- 
 canonical_form(ARGUMENT(FL_BRACE,Arg,I1,_I2),CANOBRACE(AList,N,I1),I1) :-
 	!,
 	comma_separated_list(Arg,AList,N).
-
 canonical_form(ARGUMENT(FL_BRACE,I1,_I2),CANOBRACE([],0,I1),I1) :- !.
+
+%% (|
+canonical_form(ARGUMENT(FL_PARENBAR,Arg,I1,_I2),CANOPARENBAR(AList,N,I1),I1) :-
+	!,
+	comma_separated_list(Arg,AList,N).
+canonical_form(ARGUMENT(FL_PARENBAR,I1,_I2),CANOPARENBAR([],0,I1),I1) :- !.
+
+%% [|
+canonical_form(ARGUMENT(FL_BRACKBAR,Arg,I1,_I2),CANOBRACKBAR(AList,N,I1),I1) :-
+	!,
+	comma_separated_list(Arg,AList,N).
+canonical_form(ARGUMENT(FL_BRACKBAR,I1,_I2),CANOBRACKBAR([],0,I1),I1) :- !.
+
+%% {|
+canonical_form(ARGUMENT(FL_BRACEBAR,Arg,I1,_I2),CANOBRACEBAR(AList,N,I1),I1) :-
+	!,
+	comma_separated_list(Arg,AList,N).
+canonical_form(ARGUMENT(FL_BRACEBAR,I1,_I2),CANOBRACEBAR([],0,I1),I1) :- !.
+
+%% \(
+canonical_form(ARGUMENT(FL_BACKPAREN,Arg,I1,_I2),CANOBACKPAREN(AList,N,I1),I1) :-
+	!,
+	comma_separated_list(Arg,AList,N).
+canonical_form(ARGUMENT(FL_BACKPAREN,I1,_I2),CANOBACKPAREN([],0,I1),I1) :- !.
+
+%% \[
+canonical_form(ARGUMENT(FL_BACKBRACK,Arg,I1,_I2),CANOBACKBRACK(AList,N,I1),I1) :-
+	!,
+	comma_separated_list(Arg,AList,N).
+canonical_form(ARGUMENT(FL_BACKBRACK,I1,_I2),CANOBACKBRACK([],0,I1),I1) :- !.
+
+%% \{
+canonical_form(ARGUMENT(FL_BACKBRACE,Arg,I1,_I2),CANOBACKBRACE(AList,N,I1),I1) :-
+	!,
+	comma_separated_list(Arg,AList,N).
+canonical_form(ARGUMENT(FL_BACKBRACE,I1,_I2),CANOBACKBRACE([],0,I1),I1) :- !.
+
 
 canonical_form(ARGUMENT(FL_PARENTHESIS,I1,_I2),CANOEMPTYTERM(I1),I1) :- !.
 
@@ -646,6 +689,7 @@ get_flname_struct_aux(QUOTED_ATOM(Name),I,FLATOM(Name,I)).
 %% Gets confused and can't load system modules like @\sys, etc.
 
 get_flbuiltin_identifier_struct(OBJECT(BUILTIN_IDENTIFIER(Name),I),FLATOM(Name,I))  :- !.
+is_builtin_identifier_struct(OBJECT(BUILTIN_IDENTIFIER(Name),I),Name,I).
 
 %% get_atom/2 - operates on canonical terms
 get_atom(OBJECT(Type,Idx),Out) :- get_atom_aux(Type,Idx,Out).
@@ -685,7 +729,7 @@ get_transactionalinteger(OBJECT(TRANSACTIONAL_NUMBER(N),_I),N) :- integer(N).
 
 get_index(CANOTERM(_F,_N,B,_L,Ifunct,Ibrace),Index) :-
 	!,
-	(memberchk(B,[FL_BRACKET,FL_BRACE,FL_BRACKBAR]) -> Index=Ibrace
+	(memberchk(B,[FL_BRACKET,FL_BRACE,FL_BRACKBAR,FL_PARENBAR,FL_BRACEBAR,FL_BACKBRACK,FL_BACKPAREN,FL_BACKBRACE]) -> Index=Ibrace
 	; Index=Ifunct
 	).
 
@@ -694,6 +738,13 @@ get_index(CANOLIST(_L,_T,_N,Index,_Ib),Index).
 get_index(CANOBRACE(_L,_N,Index),Index).
 get_index(CANOEMPTYTERM(Index),Index).
 get_index(OBJECT(_PrimitiveType,Index),Index).
+
+get_index(CANOPARENBAR(_L,_N,Index),Index).    % (|
+get_index(CANOBRACKBAR(_L,_N,Index),Index).    % [|
+get_index(CANOBRACEBAR(_L,_N,Index),Index).    % {|
+get_index(CANOBACKPAREN(_L,_N,Index),Index).   % \(
+get_index(CANOBACKBRACK(_L,_N,Index),Index).   % \[
+get_index(CANOBACKBRACE(_L,_N,Index),Index).   % \{
 
 %% Operates on FL-terms
 %% Check if this is used!!!
@@ -742,13 +793,13 @@ is_annotated_statement(CANOTERM(Funct,2,FL_PARENTHESIS,[Descriptor,Statement],_I
 
 is_user_defined_function(CANOTERM(Funct,1,FL_PARENTHESIS,[CANOTERM(Funct2,2,FL_PARENTHESIS,[CANOTERM(Funct3,2,FL_PARENTHESIS,[Function,ReturnValue],_,_),Body],_,_)],_If,_Ip),Function,Body,ReturnValue) :-
 	get_name(Funct,FL_UDFF),
-	(get_name(Funct2,FL_UDFIF_INTERNAL) ; get_name(Funct2,FL_IMPLYOP)),
+	(get_name(Funct2,FL_UDFIF) ; get_name(Funct2,FL_IMPLYOP)),
 	get_name(Funct3,FL_UDFEQ).
 
 %% Error: definition of UDF but the third functor is not :=
 is_user_defined_function_typo(CANOTERM(Funct,1,FL_PARENTHESIS,[CANOTERM(Funct2,2,FL_PARENTHESIS,[CANOTERM(Funct3,2,FL_PARENTHESIS,[_Function,_ReturnValue],_,_),_Body],_,_)],_If,_Ip),_Function,_Body,_ReturnValue,Funct3) :-
 	get_name(Funct,FL_UDFF),
-	(get_name(Funct2,FL_UDFIF_INTERNAL) ; get_name(Funct2,FL_IMPLYOP)),
+	(get_name(Funct2,FL_UDFIF) ; get_name(Funct2,FL_IMPLYOP)),
 	!.
 
 %% Error: definition of UDF but the second functor is :=
@@ -1005,10 +1056,9 @@ is_flnumber_struct(FLNUMBER(Num,_I),Num).
 is_flstring_struct(FLSTRING(_Str,_I)).
 is_flstring_struct(FLSTRING(Str,I),Str,I).
 
-%%is_fltransactionalstring_struct(FLTRANSACTIONALSTRING(_Str,_I)).
 is_fltransactionalstring_struct(FLTRANSACTIONALSTRING(Str,I),Str,I).
 
-%%is_flbuiltin_identifier_struct(FLBUILTIN_IDENTIFIER(_BuiltinName,_I)).
+is_flbuiltin_identifier_struct(FLBUILTIN_IDENTIFIER(Name,_I),Name).
 
 is_fldatatype_struct(FLDATATYPE(_Sort,_Lit,_I)).
 
@@ -1032,16 +1082,18 @@ fllist_struct(Front,Tail,Index,FLLIST(Front,Tail,Index)).
 is_fllist_struct(FLLIST(_Front,_Tail,_Idx)).
 is_fllist_struct(FLLIST(Front,Tail,Idx), Front, Tail, Idx).
 
+%% simulates FL_TRUECONST object as if created by the lexer
+trueconst_obj(OBJECT(BUILTIN_IDENTIFIER(FL_TRUECONST),NO_INDEX)).
+
 flcut_struct(Index,FLCUT(Index)).
 %% primitive structures with index for textual information
 
 %% Atoms that are passed down as literals when they appear in an object spec.
 %% For instance, Obj[true], Obj[fail], Obj[!].
 is_passthru_atom(FL_CUT).
-is_passthru_atom(FL_TRUE).
-is_passthru_atom(FL_UNDEFINED).
-is_passthru_atom(FL_FAIL).
-is_passthru_atom(FL_FALSE).
+is_passthru_atom(FL_TRUECONST).
+is_passthru_atom(FL_UNDEFCONST).
+is_passthru_atom(FL_FALSECONST).
 %% The following are prolog predicates with no separate meaning in FLORA-2
 is_passthru_pred(FL_UNIVEQ,2).
 is_passthru_pred(FL_UNIVNOTEQ,2).
@@ -1051,7 +1103,7 @@ is_passthru_pred(FL_ORDERLT,2).
 is_passthru_pred(FL_ORDEREQLT,2).
 is_passthru_pred(FL_ORDERGT,2).
 is_passthru_pred(FL_ORDEREQGT,2).
-is_passthru_pred(FL_IS_INTERNAL,2).
+is_passthru_pred(FL_IS,2).
 is_passthru_pred(FL_MATHEQ,2).
 is_passthru_pred(FL_MATHNOTEQ,2).
 is_passthru_pred(FL_LT,2).
@@ -1303,10 +1355,10 @@ is_clauseop(FL_CLAUSE) :- !.
 
 is_reifyop(FL_REIFYOP) :- !.
 
-is_truthvalue_op(FL_TRUE) :- !.
-is_truthvalue_op(FL_FALSE) :- !.
-is_truthvalue_op(FL_FAIL) :- !.
-is_truthvalue_op(FL_UNKNOWN) :- !.
+%% true{...}, false{...}, undefined{...}
+is_truthvalue_op(FL_TRUE_PRIMITIVE) :- !.
+is_truthvalue_op(FL_FALSE_PRIMITIVE) :- !.
+is_truthvalue_op(FL_UNDEFINED_PRIMITIVE) :- !.
 
 is_tag_primitive_op(FL_TAG_PRIMITIVE) :- !.
 is_prefixprimitive_op(FL_PREFIX_PRIMITIVE) :- !.
@@ -1386,17 +1438,17 @@ flcontrolconstruct_struct(Cond,Action,FLUNLESSDO,FLUNLESSDO(Cond,Action)).
 %% Arg 1: parser's wrapper for control construct
 %% Arg 2: top-level keyword of control construct
 %% Arg 3: second keyword of construct
-get_control_construct_definition(FLWHILEDO,FL_WHILE_INTERNAL,FL_DO_INTERNAL).
-get_control_construct_definition(FLWHILELOOP,FL_WHILE_INTERNAL,FL_LOOP_INTERNAL).
-get_control_construct_definition(FLDOUNTIL,FL_DO_INTERNAL,FL_UNTIL_INTERNAL).
-get_control_construct_definition(FLLOOPUNTIL,FL_LOOP_INTERNAL,FL_UNTIL_INTERNAL).
-get_control_construct_definition(FLUNLESSDO,FL_UNLESS_INTERNAL,FL_DO_INTERNAL).
+get_control_construct_definition(FLWHILEDO,FL_WHILE,FL_DO).
+get_control_construct_definition(FLWHILELOOP,FL_WHILE,FL_LOOP).
+get_control_construct_definition(FLDOUNTIL,FL_DO,FL_UNTIL).
+get_control_construct_definition(FLLOOPUNTIL,FL_LOOP,FL_UNTIL).
+get_control_construct_definition(FLUNLESSDO,FL_UNLESS,FL_DO).
 
-control_construct_real_name(FL_WHILE_INTERNAL,FL_WHILE).
-control_construct_real_name(FL_DO_INTERNAL,FL_DO).
-control_construct_real_name(FL_LOOP_INTERNAL,FL_LOOP).
-control_construct_real_name(FL_UNLESS_INTERNAL,FL_UNLESS).
-control_construct_real_name(FL_UNTIL_INTERNAL,FL_UNTIL).
+control_construct_real_name(FL_WHILE,while).
+control_construct_real_name(FL_DO,do).
+control_construct_real_name(FL_LOOP,loop).
+control_construct_real_name(FL_UNLESS,unless).
+control_construct_real_name(FL_UNTIL,until).
 
 convert_to_quoted_atomobj(OBJECT(Type,Idx),Out) :-
 	convert_to_quoted_atomobj_aux(Type,Idx,Out).
@@ -1439,7 +1491,7 @@ set_context(X) :-
 	!,
 	flora_set_counter(X,1).
 set_context(X) :-
-	abort([X, ': ',FLSYSTEM,' compiler bug. Invalid parser context.']).
+	abort([X, ': ',FLSYSTEM,' compiler bug. Invalid parser context']).
 
 has_context(X) :-
 	flora_get_counter(X,1).
@@ -1573,7 +1625,7 @@ parse_canonical(CanoniTerm,Code,Status) :-
 parse_directive(CanoniTerm,Code,Status) :-
 	(CanoniTerm = CANOTERM(_Funct,_Arity,_,_L,If,_Ip)
 	; is_obj_identifier_struct(CanoniTerm,_,If)
-	; get_flbuiltin_identifier_struct(CanoniTerm,_)
+	; is_builtin_identifier_struct(CanoniTerm,_,If)
 	),
 	(export_directive(CanoniTerm,NULL,CodeList,Status)
 	; operator_directive(CanoniTerm,CodeList,Status)
@@ -1678,14 +1730,13 @@ list2commalist([A|L], Code) :-
 
    importmodule_directive(+CanoniTerm,-CodeList,-Status)
 *************************************************************************/
-importmodule_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Modules],_If,_Ip),Code,Status) :-
+importmodule_directive(CANOTERM(Funct,_N,FL_BRACE,Modules,_If,_Ip),Code,Status) :-
 	%% check directive name.
 	get_name(Funct,FL_IMPORTMODULE),
-	comma_separated_canoterm_to_list(Modules,TermList),
-	importmodule_parse_termlist(TermList,Code,Status),
+	importmodule_parse_termlist(Modules,Code,Status),
 	!.
 %% error
-importmodule_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,_Args,If,_Ip),_Code,Status) :-
+importmodule_directive(CANOTERM(Funct,_N,FL_BRACE,_Args,If,_Ip),_Code,Status) :-
 	%% check directive name.
 	get_name(Funct,FL_IMPORTMODULE),
 	!,
@@ -1765,9 +1816,9 @@ exec_export_directive(CanoniTerm,WS,CodeList,Status):-
  The work-horse that does the parsing both in the executable and
  non-executable case.
 ****************************************************************************/
-export_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,_If,_Ip),WS,[Code],Status) :-
+export_directive(CANOTERM(Funct,_N,FL_BRACE,Args,_If,_Ip),WS,[Code],Status) :-
 	%% check directive name.
-	get_name(Funct,FL_EXPORT_INTERNAL),
+	get_name(Funct,FL_EXPORT),
 	%% parse the exported terms
 	regularize_export_spec(Args,WS,TermList),
 	%% parse the list
@@ -1776,9 +1827,9 @@ export_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,_If,_Ip),WS,[Code],Status
 	!.
 
 %% error case.
-export_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,_Args,If,_Ip),_WS,_Code,Status) :-
+export_directive(CANOTERM(Funct,_N,FL_BRACE,_Args,If,_Ip),_WS,_Code,Status) :-
 	%% check directive name.
-	get_name(Funct,FL_EXPORT_INTERNAL),
+	get_name(Funct,FL_EXPORT),
 	!,
 	parsing_error(If,ERROR_EXPORT_PATH,Status).
 
@@ -1797,6 +1848,12 @@ regularize_export_spec([CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip)],WS,ListCode
 	comma_separated_canoterm_to_list(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),List),
 	%% regularize to a list
 	export_compose_term_list(List,[],WS,_IsUpd,ListCode).
+
+%% no workspaces within the export expressions
+regularize_export_spec([CANOTERM(Funct,_N,FL_PARENTHESIS,_Args,_If,_Ip)],_WS,_ListCode) :-
+	get_name(Funct,FL_AT),
+	!,
+	fail.
 
 %% for all other cases.
 %% :-(export( (term1),(term2),(term3) ))
@@ -2347,8 +2404,8 @@ parse_operator_list([T|L],Number,Associativity,[Code|CodeList],Status) :-
 /****************************************************************************
   index_directive(+CanoniTerm,-CodeList,-Status)
 ****************************************************************************/
-index_directive(CANOTERM(Funct,N,FL_PARENTHESIS,[L|_Rest],_If,_Ip),[Code],Status) :-
-    get_name(Funct,FL_INDEX_INTERNAL),
+index_directive(CANOTERM(Funct,N,FL_BRACE,[L|_Rest],_If,_Ip),[Code],Status) :-
+    get_name(Funct,FL_INDEX),
     ( N==1 ->
         ( minus_pair(L,Arity,Pos) ->
             Status = NO_ERRORS,
@@ -2375,8 +2432,8 @@ minus_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),A,Pos) :-
 /****************************************************************************
   exec_index_directive(+CanoniTerm,-CodeList,-Status)
 ****************************************************************************/
-exec_index_directive(CANOTERM(Funct,1,FL_PARENTHESIS,[L],_If,_Ip),[Code],Status) :-
-    get_name(Funct,FL_INDEX_INTERNAL),
+exec_index_directive(CANOTERM(Funct,1,FL_BRACE,[L],_If,_Ip),[Code],Status) :-
+    get_name(Funct,FL_INDEX),
     ( minus_var_pair(L,Arity,Pos) ->
         Status = NO_ERRORS,
         flindxdirect_struct(Arity,Pos,Code)
@@ -2386,7 +2443,7 @@ exec_index_directive(CANOTERM(Funct,1,FL_PARENTHESIS,[L],_If,_Ip),[Code],Status)
 
 
 exec_index_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,_T,_If,Ip),[_Code],Status) :-
-    get_name(Funct,FL_INDEX_INTERNAL),
+    get_name(Funct,FL_INDEX),
     parsing_error(Ip,ERROR_INDXDIREC,Status).
 
 minus_var_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Arity,Pos) :-
@@ -2427,27 +2484,25 @@ minus_var_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Arity,Pos) :-
   Table those predicates.
   Used for sensors and builtins primarily
 ****************************************************************************/
-prolog_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Status) :-
-	get_name(Funct,FL_PROLOG_INTERNAL),
+prolog_directive(CANOTERM(Funct,_N,FL_BRACE,Args,If,_Ip),[Code],Status) :-
+	get_name(Funct,FL_PROLOG),
 	!,
-	comma_separated_canoterm_to_list(Args,ArgList),
-	make_pred_arity_pair_list(ArgList,ArgCode,Status),
+	make_pred_arity_pair_list(Args,ArgCode,Status),
 	flprologdirect_struct(ArgCode,If,Code).
 
-exec_prolog_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[_Args],If,_Ip),[_Code],Status) :-
-	get_name(Funct,FL_PROLOG_INTERNAL),
+exec_prolog_directive(CANOTERM(Funct,_N,FL_BRACE,_Args,If,_Ip),[_Code],Status) :-
+	get_name(Funct,FL_PROLOG),
 	!,
 	parsing_error(If,NO_EXEC_PROLOG_DIRECTIVE,Status).
 
-table_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Status) :-
-	get_name(Funct,FL_TABLE_INTERNAL),
+table_directive(CANOTERM(Funct,_N,FL_BRACE,Args,If,_Ip),[Code],Status) :-
+	get_name(Funct,FL_TABLE),
 	!,
-	comma_separated_canoterm_to_list(Args,ArgList),
-	make_pred_arity_slash_list(ArgList,ArgCode,Status),
+	make_pred_arity_slash_list(Args,ArgCode,Status),
 	fltabledirect_struct(ArgCode,If,Code).
 
-exec_table_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[_Args],If,_Ip),[_Code],Status) :-
-	get_name(Funct,FL_TABLE_INTERNAL),
+exec_table_directive(CANOTERM(Funct,_N,FL_BRACE,_Args,If,_Ip),[_Code],Status) :-
+	get_name(Funct,FL_TABLE),
 	!,
 	parsing_error(If,NO_EXEC_TABLE_DIRECTIVE,Status).
 
@@ -2456,20 +2511,18 @@ nontabled_module_directive(CanoniTerm,[Code],NO_ERRORS) :-
 	!,
 	flnontabled_module_struct(Code).
 
-usesensor_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Status) :-
+usesensor_directive(CANOTERM(Funct,_N,FL_BRACE,Args,If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_USESENSOR),
 	!,
-	comma_separated_canoterm_to_list(Args,ArgList),
 	set_context(parsing_usesensor_directive),
-	make_pred_arity_slash_list(ArgList,ArgCode,Status),
+	make_pred_arity_slash_list(Args,ArgCode,Status),
 	clear_context(parsing_usesensor_directive),
 	flusesensordirect_struct(ArgCode,If,Code).
 
-usefunction_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Status) :-
+usefunction_directive(CANOTERM(Funct,_N,FL_BRACE,Args,If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_USEUDF),
 	!,
-	comma_separated_canoterm_to_list(Args,ArgList),
-	make_pred_arity_slash_list(ArgList,ArgCode,Status),
+	make_pred_arity_slash_list(Args,ArgCode,Status),
 	flusefunctiondirect_struct(ArgCode,If,Code).
 	
 
@@ -2487,13 +2540,13 @@ usefunction_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[Args],If,_Ip),[Code],Sta
       The bindings for these vars are supplied by the compiler.
 ****************************************************************************/
 %% version with an explicit XSB module for sensor
-defsensor_directive(CANOTERM(Funct,3,FL_PARENTHESIS,[SensorCall,SensorXSBMod,DelayCond],_If,Ip),Code,Status) :-
+defsensor_directive(CANOTERM(Funct,3,FL_BRACE,[SensorCall,SensorXSBMod,DelayCond],_If,Ip),Code,Status) :-
 	get_name(Funct,FL_DEFSENSOR),
 	!,
 	defsensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,Code,Status).
 
 %% version without explicit XSB module
-defsensor_directive(CANOTERM(Funct,2,FL_PARENTHESIS,[SensorCall,DelayCond],_If,Ip),Code,Status) :-
+defsensor_directive(CANOTERM(Funct,2,FL_BRACE,[SensorCall,DelayCond],_If,Ip),Code,Status) :-
 	get_name(Funct,FL_DEFSENSOR),
 	!,
 	defsensor_directive_internal(SensorCall,usermod,DelayCond,Ip,Code,Status).
@@ -2538,7 +2591,9 @@ defsensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,[Code],Status)
 setsemantics_directive(CANOTERM(Funct,_N,FL_BRACE,Args,_If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_SETSEMANTICS),
 	!,
+	set_context(static_setsemantics_directive),
 	parse_semantics_directive_args(DISALLOW_VARIABLES,Args,ArgsCode,Status),
+	clear_context(static_setsemantics_directive),
 	(Status == NO_ERRORS -> flsetsemanticsdirect_struct(ArgsCode,Code)
 	;
 	  true
@@ -2639,11 +2694,10 @@ is_valid_setruntime_option(unification,[Arg]) :-
   defeasible_directive(+CanoniTerm,-CodeList,-Status)
 
       :- use_argumentation_theory.
-      :- use_argumentation_theory(module).
    or
       :- use_argumentation_theory{module}.
 ****************************************************************************/
-defeasible_directive(CANOTERM(Funct,1,_,[Arg],_If,_Ip),[Code],NO_ERRORS) :-
+defeasible_directive(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,_Ip),[Code],NO_ERRORS) :-
 	get_name(Funct,FL_DEFEASIBLE_DIRECTIVE),
 	(is_obj_identifier_struct(Arg,Atom,Index)
 	;
@@ -2687,13 +2741,13 @@ strict_rule_default_directive(CanoniTerm,[Code],NO_ERRORS) :-
 /****************************************************************************
    verbatim_directive(+CanoniTerm,-CodeList,-Status)
 
-       :- verbatim(string)
+       :- verbatim{string}
 
    This passes STRING (which is supposed to be an atom) straight to the output
    (the .P file). Useful when one wants to include something in the output
    file directly.
 ****************************************************************************/
-verbatim_directive(CANOTERM(Funct,1,_,[Arg],_If,Ip),[Code],Status) :-
+verbatim_directive(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,Ip),[Code],Status) :-
 	get_name(Funct,FL_VERBATIM),
 	!,
 	fixup_object(Arg,ArgAtmObj),
@@ -2730,18 +2784,15 @@ suppress_rule_signatures_directive(CanoniTerm,[Code],NO_ERRORS) :-
   cmpopt_directive(+CanoniTerm,-CodeList,-Status)
   Compiling the :- compiler_options directive of FLORA-2
 ****************************************************************************/
-cmpopt_directive(CANOTERM(Funct,1,FL_PARENTHESIS,[T],_If,_Ip),[Code],Status) :-
+cmpopt_directive(CANOTERM(Funct,_N,FL_BRACE,Options,_If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_CMPOPT),
 	!,
-	( T=CANOLIST(List,[],_N,_I,_Ib) ->
-	    parse_cmpoptlist(List,TCode,Status),
-	    ( Status == NO_ERRORS ->
-		flcmpoptdirect_struct(TCode,Code)
-	    ;
-		true
+	( parse_cmpoptlist(Options,TCode,Status) ->
+	    ( Status == NO_ERRORS -> flcmpoptdirect_struct(TCode,Code)
+	    ; true
 	    )
 	;
-	    parsing_error(T,EXP_OPTLIST,Status)
+	    parsing_error(Funct,ERROR_CMPOPT,Status)
 	).
 
 parse_cmpoptlist([],[],NO_ERRORS) :- !.
@@ -2760,18 +2811,17 @@ parse_cmpoptlist([H|T],[HCode|TCode],Status) :-
   Compiling the prefix directive in the form of
     :- uriprefix A="abcd",B="efgh",....
 ****************************************************************************/
-prefixdef_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,[T],_If,_Ip),Code,Status) :-
+prefixdef_directive(CANOTERM(Funct,_N,FL_BRACE,Args,_If,_Ip),Code,Status) :-
 	get_name(Funct,Name),
 	%% Locality=local/global. Local prefixes aren't inherited by added files
 	(Name == FL_PREFIXDEF -> Locality = global
 	; Name == FL_LOCALPREFIXDEF -> Locality = local
 	),
-	comma_separated_canoterm_to_list(T,TermList),
-	prefixdef_parse_term_list(TermList,Locality,Code,Status),
+	prefixdef_parse_term_list(Args,Locality,Code,Status),
 	!.
 
 %% error case.
-prefixdef_directive(CANOTERM(Funct,_N,FL_PARENTHESIS,_Args,If,_Ip),[],Status) :-
+prefixdef_directive(CANOTERM(Funct,_N,_,_Args,If,_Ip),[],Status) :-
 	get_name(Funct,Name),
 	memberchk(Name,[FL_PREFIXDEF,FL_LOCALPREFIXDEF]),
 	!,
@@ -2831,26 +2881,24 @@ prefixdef_parse_term(CANOTERM(_Funct,_N,_FL_PARENTHESIS,_Args,If,_Ip),_,[],Statu
   ignoredep_directive(+CanoniTerm,-CodeList,-Status)
   Compiling the :- ignore_depchk directive
 ****************************************************************************/
-ignoredep_directive(CANOTERM(Funct,1,FL_PARENTHESIS,[T],_If,_Ip),[Code],Status) :-
+ignoredep_directive(CANOTERM(Funct,_N,FL_BRACE,Args,_If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_IGNOREDEP),
-        ( comma_separated_canoterm_to_list(T,PreList) ->
-            parse_body_template_list(PreList,LCode,Status),
+        ( parse_body_template_list(Args,LCode,Status) ->
             flignoredepdirect_struct(LCode,Code)
 	;
-	    parsing_error(T,EXP_SPECLIST,Status)
+	    parsing_error(Funct,EXP_SPECLIST,Status)
 	).
 
 /****************************************************************************
   symbol_context_directive(+CanoniTerm,-CodeList,-Status)
   Compiling the :- ignore_depchk directive
 ****************************************************************************/
-symbol_context_directive(CANOTERM(Funct,1,FL_PARENTHESIS,[T],_If,_Ip),[Code],Status) :-
+symbol_context_directive(CANOTERM(Funct,_N,FL_BRACE,Args,_If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_SYMBOL_CONTEXT),
-        ( comma_separated_canoterm_to_list(T,PreList) ->
-            parse_body_symbol_list(PreList,LCode,Status),
+        ( parse_body_symbol_list(Args,LCode,Status) ->
             flsymbolcontextdirect_struct(LCode,Code)
 	;
-	    parsing_error(T,EXP_TERMSLIST,Status)
+	    parsing_error(Funct,EXP_TERMSLIST,Status)
 	).
 
 /****************************************************************************
@@ -3097,8 +3145,10 @@ parse_toplevel_annotated_statement(Descriptors,Statement,VarsOK,Code,Status) :-
 		   into a kosher list used for rule heads.
 		*/
 		; strip_flfact_list(Code1,Head) ->
-		    %% unwrap flfact(s)
-		    flatom_struct(FL_TRUE,NO_INDEX,BodyCode),
+		    trueconst_obj(TruePredObject),
+		    flobject_struct(TruePredObject,BodyCode),
+		    %%flatom_struct(FL_TRUE,NO_INDEX,BodyCode1),
+		    %%flplib_struct(BodyCode1,BodyCode),
 		    flrule_struct(Head,BodyCode,CodeConstr)
 		),
 		parse_descriptor_list(Descriptors,VarsOK,CodeLab,Status),
@@ -3682,18 +3732,18 @@ parse_rule_body(CANOTERM(Funct,N,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) 
 
 %% At this point, CanoniTerm is not a logical formula.
 parse_rule_body(CANOTERM(Funct,1,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status) :-
-	get_name(Funct,FL_IF_INTERNAL),
+	get_name(Funct,FL_IF),
 	!,
 	%% Module name is distributive over if-then-else statement.
         parse_body_ifthenelse(CANOTERM(Funct,1,FL_PARENTHESIS,Args,If,Ip),WS,DWS,Code,Status).
 
 parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_WS,_DWS,_Code,Status) :-
-	get_name(Funct,FL_THEN_INTERNAL),
+	get_name(Funct,FL_THEN),
 	!,
         parsing_error(If,ERROR_THENBODY,Status).
 
 parse_rule_body(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),_WS,_DWS,_Code,Status) :-
-	get_name(Funct,FL_ELSE_INTERNAL),
+	get_name(Funct,FL_ELSE),
 	!,
         parsing_error(If,ERROR_ELSEBODY,Status).
 
@@ -4044,7 +4094,7 @@ parse_body_ifthenelse(CanoniTerm,WS,DWS,Code,Status) :-
 ****************************************************************************/
 parse_body_ifthenelse(CANOTERM(Funct,1,FL_PARENTHESIS,[CTerm],If,_Ip),WS,DWS,
 		      NextKeyword,NextTerm,Code,Status) :-
-	get_name(Funct,FL_IF_INTERNAL),
+	get_name(Funct,FL_IF),
 	!,
 	parse_body_ifthenelse(CTerm,WS,DWS,NK1,NT1,CondStruct,S1),
 	( S1 == NO_ERRORS ->
@@ -4076,10 +4126,10 @@ parse_body_ifthenelse(CANOTERM(Funct,1,FL_PARENTHESIS,[CTerm],If,_Ip),WS,DWS,
 
 parse_body_ifthenelse(CANOTERM(Funct,2,FL_PARENTHESIS,[STerm,NextTerm],If,_Ip),WS,DWS,
 		      NextKeyword,NextTerm,Code,Status) :-
-	( get_name(Funct,FL_THEN_INTERNAL) ->
+	( get_name(Funct,FL_THEN) ->
 	    NextKeyword=then(If)
 
-	; get_name(Funct,FL_ELSE_INTERNAL) ->
+	; get_name(Funct,FL_ELSE) ->
 	    NextKeyword=else(If)
 	),
 	!,
@@ -4365,7 +4415,7 @@ parse_body_literal(CANOTERM(Funct,2,FL_BRACE,[Prolog,Hilog],_If,_Ip),DWS,Code,St
 /*
 %% We'd like to restrict the use of true{...}, but top level is too much.
 %% Need some kind of stratification.
-%% true{...}, false{...}, unknown{...} - check that they are used at top level
+%% true{...}, false{...}, undefined{...} - check that they are used at top level
 parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[_Arg],_If,Ip),_DWS,_Code,Status) :-
 	get_name(Funct,Atom),
 	is_truthvalue_op(Atom),
@@ -4374,7 +4424,7 @@ parse_body_literal(CANOTERM(Funct,1,FL_BRACE,[_Arg],_If,Ip),_DWS,_Code,Status) :
 	parsing_error(Ip,ERROR_TRUTHVALUED_OP,Status).
 */
 
-%% true{...}, false{...}, unknown{...}
+%% true{...}, false{...}, undefined{...}
 parse_body_literal(CANOTERM(Funct,_N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	get_name(Funct,Atom),
 	is_truthvalue_op(Atom),
@@ -4614,6 +4664,7 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
 	DWS==NULL,
 	!,
 	set_context(clause_construct),
+	set_context(implicit_reification),
 	(   %% when clause{...} has descriptors then it is parsed either as a
 	    %% single argument [DescrHeadBodyTerm] or [Mode,DescrHeadBodyTerm]
 	    (Args = [RulePattern], ModeCode = NULL
@@ -4687,6 +4738,7 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,If,Ip),DWS,Code,Status) :-
         ;
             parsing_error(Ip,ERROR_CLAUSE,Status)
         ),
+	clear_context(implicit_reification),
 	clear_context(clause_construct).
 
 valid_clause_mode(STATIC_CLAUSE) :- !.
@@ -6408,10 +6460,12 @@ parse_body_attmethspec(CanoniTerm,DWS,Type,Code,Status) :-
             Status = S1
         ).
 
-%% Obj[true], Obj[fail], Obj[!] - interpreted as true, false, !
+%% Obj[\true], Obj[\false], Obj[!] - interpreted as true, false, !
 parse_body_attmethspec(CanoniTerm,DWS,_Type,Code,Status) :-
 	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,ANY_PATHEXP,C,Status),
-	is_flatom_struct(C,Atom),
+	(is_flatom_struct(C,Atom)
+	; is_flbuiltin_identifier_struct(C,Atom)
+	),
 	is_passthru_atom(Atom),
         !,
 	(Status == NO_ERRORS -> flpassthru_struct(C,Code); true).
@@ -6420,7 +6474,9 @@ parse_body_attmethspec(CanoniTerm,DWS,_Type,Code,Status) :-
 parse_body_attmethspec(CanoniTerm,DWS,_Type,Code,Status) :-
 	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,PURE_PATHEXPS_ONLY,C,Status),
 	flterm_struct(Funct,Arity,_Args,C), % decompose C
-	is_flatom_struct(Funct,Atom),
+	(is_flatom_struct(Funct,Atom)
+	; is_flbuiltin_identifier_struct(Funct,Atom)
+	),
 	is_passthru_pred(Atom,Arity),
         !,
 	(Status == NO_ERRORS -> flpassthru_struct(C,Code); true).
@@ -7412,17 +7468,17 @@ check_update_builtin(Mode,CANOTERM(Funct,N,FL_PARENTHESIS,_Args,If,_Ip),Status) 
 ****************************************************************************/
 /*
 check_update_ifthenelse(CANOTERM(Funct,1,FL_PARENTHESIS,_Args,If,_Ip),Status) :-
-        get_name(Funct,FL_IF_INTERNAL),
+        get_name(Funct,FL_IF),
         !,
         parsing_error(If,NO_UPDATEIF,Status).
 
 check_update_ifthenelse(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),Status) :-
-        get_name(Funct,FL_THEN_INTERNAL),
+        get_name(Funct,FL_THEN),
         !,
         parsing_error(If,NO_UPDATETHEN,Status).
 
 check_update_ifthenelse(CANOTERM(Funct,2,FL_PARENTHESIS,_Args,If,_Ip),Status) :-
-        get_name(Funct,FL_ELSE_INTERNAL),
+        get_name(Funct,FL_ELSE),
         !,
         parsing_error(If,NO_UPDATEELSE,Status).
 */
@@ -8098,7 +8154,10 @@ parse_dynrule_no_module(CanoniTerm,DWS,Descriptors,Code,Status) :-
 	    parse_dynhead_top(CanoniTerm,DWS,HCL,Status),
 	    ( Status == NO_ERRORS ->
 		%% convert annotated fact to rule by adding ":- true"
-		flatom_struct(FL_TRUE,NO_INDEX,BodyCode),
+		trueconst_obj(TruePredObject),
+		flobject_struct(TruePredObject,BodyCode),
+		%%flatom_struct(FL_TRUE,NO_INDEX,BodyCode1),
+		%%flplib_struct(BodyCode1,BodyCode),
 		fldynrule_struct(HCL,BodyCode,Descriptors,RuleCode),
 		%% add default workspace, if any
                 flora_get_module_from_spec(DWS,_ModuleType,Module),
@@ -8278,13 +8337,16 @@ is_valid_semantics_direct_option(ALLOW_VARIABLES,Opt,Val) :-
 	).
 is_valid_semantics_direct_option(DISALLOW_VARIABLES,Opt,Val) :-
 	!,
+	valid_semantics_direct_opt_name(Opt),
 	is_flatom_struct(Val,Atom),
 	valid_semantics_direct_option(Opt,Atom).
 
 valid_semantics_direct_opt_name(FL_EQUALITY).
 valid_semantics_direct_opt_name(FL_INHERITANCE).
-valid_semantics_direct_opt_name(FL_CUSTOM).
 valid_semantics_direct_opt_name(FL_TABLING).
+valid_semantics_direct_opt_name(FL_SUBCLASSING) :-
+	\+has_context(static_setsemantics_directive).
+valid_semantics_direct_opt_name(FL_CUSTOM).
 valid_semantics_direct_option(FL_EQUALITY,NONE).
 valid_semantics_direct_option(FL_EQUALITY,BASIC).
 %%valid_semantics_direct_option(FL_EQUALITY,FLOGIC).
@@ -8294,6 +8356,8 @@ valid_semantics_direct_option(FL_TABLING,FL_SUBSUMPTIVE).
 valid_semantics_direct_option(FL_TABLING,FL_VARIANT).
 valid_semantics_direct_option(FL_TABLING,FL_INCREMENTAL).
 valid_semantics_direct_option(FL_TABLING,FL_NONINCREMENTAL).
+valid_semantics_direct_option(FL_SUBCLASSING,STRICT_SUB).
+valid_semantics_direct_option(FL_SUBCLASSING,NONSTRICT_SUB).
 valid_semantics_direct_option(FL_CUSTOM,NONE).
 valid_semantics_direct_option(FL_CUSTOM,X) :- atom(X).
 
@@ -9227,6 +9291,7 @@ is_flupdaterule(FLUPDATERULE(Op,RuleList),Op,RuleList).
 is_flruleworkspace(FLRULEWORKSPACE(R,WS),R,WS).
 is_fldynrule(FLDYNRULE(Head,Body,DescriptorList),Head,Body,DescriptorList).
 is_fltoken(FLTOKEN(Token,Suffix,I),Token,Suffix,I).
+is_flplib(FLPLIB(Goal),Goal).
 
 flwriteline(ParserTerm) :-
 	flwrite(ParserTerm),
@@ -9266,12 +9331,12 @@ flwrite(ParserTerm) :-
 flwrite(ParserTerm) :-
 	is_flrulelognaf(ParserTerm,Pos),
 	!,
-	write('naf '),
+	write('\\naf '),
 	flwrite(Pos).
 flwrite(ParserTerm) :-
 	is_flneg(ParserTerm,Pos,_Idx),
 	!,
-	write('neg '),
+	write('\\neg '),
 	flwrite(Pos).
 flwrite(ParserTerm) :-
 	is_flifthenelse(ParserTerm,Cond,Then,Else),
@@ -9368,7 +9433,8 @@ flwrite(ParserTerm) :-
 flwrite(ParserTerm) :-
 	(is_flatom_struct(ParserTerm,Name) ;
 	    is_flnumber_struct(ParserTerm,Name) ;
-	    is_flstring_struct(ParserTerm,Name,_)
+	    is_flstring_struct(ParserTerm,Name,_) ;
+	    is_flbuiltin_identifier_struct(ParserTerm,Name)
 	),
 	!,
 	write(Name).
@@ -9398,6 +9464,10 @@ flwrite(ParserTerm) :-
 	(number(Suffix)->write(Suffix)
 	; true
 	).
+flwrite(ParserTerm) :-
+	is_flplib(ParserTerm,Pterm),
+	!,
+	flwrite(Pterm).
 flwrite(ParserTerm) :-
 	is_fllist_struct(ParserTerm,Front,Tail,_),
 	!,

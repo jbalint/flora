@@ -50,7 +50,7 @@ CLEAN:
 	-@if exist *$(PROLOGEXT) erase *$(PROLOGEXT)
 	-@if exist *$(PROLOGEXT)_gpp erase *$(PROLOGEXT)_gpp
 	-@if exist *$(OBJEXT) erase *$(OBJEXT)
-	-@if exist *.flh erase *.fdb
+	-@if exist *.fdb erase *.fdb
 	-@if exist *.fld erase *.fld
 	-@if exist *.flt erase *.flt
 	-@if exist *.fls erase *.fls

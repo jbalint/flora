@@ -36,15 +36,28 @@
 #define TKCNT		tkcnt	/* index counter for tokens */
 #define RLCNT		rlcnt	/* sequence number counter for rules */
 
-/*
-** The fictitious infix operator which is assumed to invisibly exist
-** between the annotation (with metadata) and the following term.
-*/
+%% The fictitious infix operator which is assumed to invisibly exist
+%% between the annotation (with metadata) and the following term.
 #define DESCRIPTOR_INFOP         INFOP(FL_DESCRIPTORFUNC,x,x,2000,0)
 
 #include "flora_characters.flh"
 #include "flora_errors.flh"
 #include "flora_terms.flh"
+
+set_context(X) :-
+	atom(X),
+	!,
+	flora_set_counter(X,1).
+set_context(X) :-
+	abort([X, ': ',FLSYSTEM,' compiler bug. Invalid composer context']).
+
+has_context(X) :-
+	flora_get_counter(X,1).
+
+clear_context(X) :-
+	atom(X),
+	!,
+	flora_set_counter(X,0).
 
 
 /***************************************************************************
@@ -183,14 +196,29 @@ is_sole_operand(TRANSACTIONAL_BUILTIN(_,_)) :- !.
 
 
 is_sole_operand(IDENTIFIER(I,_)) :-
-	\+ flora_opdef(_,_,I), \+ flora_op_synonym(I,_), !.
+	!,
+	(has_context(textual_mode) -> true
+	; \+ flora_opdef(_,_,I),
+	    \+ flora_op_synonym(I,_)
+	).
 is_sole_operand(QUOTED_ATOM(QA,_)) :-
+	!,
+	(has_context(textual_mode) -> true
 	%% quoted atoms are never synonymized
-	\+ flora_opdef(_,_,QA), !.
-is_sole_operand(SYMBOL_TOKEN(ST,_)) :-
-	\+ flora_opdef(_,_,ST), \+ flora_op_synonym(ST,_), !.
+	; \+ flora_opdef(_,_,QA)
+	).
 is_sole_operand(BUILTIN_IDENTIFIER(BI,_)) :-
-	\+ flora_opdef(_,_,BI), \+ flora_op_synonym(BI,_), !.
+	!,
+	(has_context(textual_mode) -> true
+	; \+ flora_opdef(_,_,BI),
+	    \+ flora_op_synonym(BI,_)
+	).
+%% don't check textual_mode: we want the symbols like ':' to be operators
+%% in the textual mode
+is_sole_operand(SYMBOL_TOKEN(ST,_)) :-
+	!,
+	\+ flora_opdef(_,_,ST),
+	\+ flora_op_synonym(ST,_).
 
 coder_op_synonym(IDENTIFIER(I,_)) :- flora_op_synonym(I,_), !.
 %% Quoted atoms are never synonymized
@@ -200,6 +228,7 @@ coder_op_synonym(BUILTIN_IDENTIFIER(I,_)) :- flora_op_synonym(I,_), !.
 
 /***************************************************************************
   These symbol tokens are not allowed to be directly used as atoms.
+  These continue to serve as operators even in textual mode.
 ***************************************************************************/
 is_sole_operator(SYMBOL_TOKEN(FL_AND_CONNECTIVE,_),FL_AND_CONNECTIVE) :- !.
 is_sole_operator(SYMBOL_TOKEN(FL_OR_CONNECTIVE,_),FL_OR_CONNECTIVE) :- !.
@@ -270,19 +299,27 @@ is_suffix(O,A,P) :-
 
 
 /**************************************************************************/
-is_left_brace(SYMBOL_TOKEN(FL_PARENTHESIS,_),FL_PARENTHESIS) :- !.
-is_left_brace(SYMBOL_TOKEN(FL_BRACKET,_),FL_BRACKET) :- !.
-is_left_brace(SYMBOL_TOKEN(FL_BRACE,_),FL_BRACE) :- !.
-is_left_brace(SYMBOL_TOKEN(FL_PARENBAR,_),FL_PARENBAR) :- !.
-is_left_brace(SYMBOL_TOKEN(FL_BRACKBAR,_),FL_BRACKBAR) :- !.
+is_left_brace(SYMBOL_TOKEN(FL_PARENTHESIS,_),FL_PARENTHESIS) :- !.  % (
+is_left_brace(SYMBOL_TOKEN(FL_BRACKET,_),FL_BRACKET) :- !.          % [
+is_left_brace(SYMBOL_TOKEN(FL_BRACE,_),FL_BRACE) :- !.              % {
+is_left_brace(SYMBOL_TOKEN(FL_PARENBAR,_),FL_PARENBAR) :- !.        % (|
+is_left_brace(SYMBOL_TOKEN(FL_BRACKBAR,_),FL_BRACKBAR) :- !.        % [|
+is_left_brace(SYMBOL_TOKEN(FL_BRACEBAR,_),FL_BRACEBAR) :- !.        % {|
+is_left_brace(SYMBOL_TOKEN(FL_BACKPAREN,_),FL_BACKPAREN) :- !.      % \(
+is_left_brace(SYMBOL_TOKEN(FL_BACKBRACK,_),FL_BACKBRACK) :- !.      % \[
+is_left_brace(SYMBOL_TOKEN(FL_BACKBRACE,_),FL_BACKBRACE) :- !.      % \{
 
 
 /**************************************************************************/
-is_right_brace(SYMBOL_TOKEN(FL_RIGHT_PARENTHESIS,_),FL_PARENTHESIS) :- !.
-is_right_brace(SYMBOL_TOKEN(FL_RIGHT_BRACKET,_),FL_BRACKET) :- !.
-is_right_brace(SYMBOL_TOKEN(FL_RIGHT_BRACE,_),FL_BRACE) :- !.
-is_right_brace(SYMBOL_TOKEN(FL_RIGHT_PARENBAR,_),FL_PARENBAR) :- !.
-is_right_brace(SYMBOL_TOKEN(FL_RIGHT_BRACKBAR,_),FL_BRACKBAR) :- !.
+is_right_brace(SYMBOL_TOKEN(FL_RIGHT_PARENTHESIS,_),FL_PARENTHESIS) :- !.  % )
+is_right_brace(SYMBOL_TOKEN(FL_RIGHT_BRACKET,_),FL_BRACKET) :- !.          % ]
+is_right_brace(SYMBOL_TOKEN(FL_RIGHT_BRACE,_),FL_BRACE) :- !.              % }
+is_right_brace(SYMBOL_TOKEN(FL_RIGHT_PARENBAR,_),FL_PARENBAR) :- !.        % |)
+is_right_brace(SYMBOL_TOKEN(FL_RIGHT_BRACKBAR,_),FL_BRACKBAR) :- !.        % |]
+is_right_brace(SYMBOL_TOKEN(FL_RIGHT_BRACEBAR,_),FL_BRACEBAR) :- !.        % |}
+is_right_brace(SYMBOL_TOKEN(FL_RIGHT_BACKPAREN,_),FL_BACKPAREN) :- !.      % \)
+is_right_brace(SYMBOL_TOKEN(FL_RIGHT_BACKBRACK,_),FL_BACKBRACK) :- !.      % \]
+is_right_brace(SYMBOL_TOKEN(FL_RIGHT_BACKBRACE,_),FL_BACKBRACE) :- !.      % \}
 
 
 /**************************************************************************/
@@ -522,7 +559,11 @@ flora_compose(PrevToken,TmStack,OpStack,N,WHITESPACE(_),Term,Status) :-
 flora_compose(PrevToken,TmStack,OpStack,N,CurToken,Term,Status) :-
 	is_left_brace(CurToken,B),
 	!,
-	see_left(PrevToken,TmStack,OpStack,N,B,Term,Status).
+	(is_left_brace(CurToken,FL_BACKPAREN) -> set_context(textual_mode)
+	; true
+	),
+	see_left(PrevToken,TmStack,OpStack,N,B,Term,Status),
+	clear_context(textual_mode).
 
 flora_compose(PrevToken,TmStack,OpStack,N,CurToken,Term,Status) :-
 	is_right_brace(CurToken,B),
@@ -604,6 +645,7 @@ flora_compose(PrevToken,TmStack,OpStack,N,CurToken,Term,Status) :-
 
 flora_compose(PrevToken,TmStack,OpStack,N,CurToken,Term,Status) :-
 	is_atom_operator(CurToken,_),
+	\+has_context(textual_mode),
 	!,
 	compose_atom_operator(PrevToken,TmStack,OpStack,N,CurToken,Term,Status).
 
@@ -756,6 +798,11 @@ see_operand(PREOP(S,A,P,I),TS,OS,N,O,Term,Status) :-
 	    object_struct(O,N,T),
 	    flora_compose(OPRND(T),TS,[PREOP(S,A,P,I)|OS],N+1,Term,Status)
 	).
+
+
+#if exists("hooks/flrcomposertext.P")
+#include "hooks/flrcomposertext.P"
+#endif
 
 see_operand(SUFOP(_S,_A,_P,I),_TS,_OS,N,O,_Term,_Status) :-
 	!,

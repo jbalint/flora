@@ -494,7 +494,7 @@ FLLIBMETAUNIV(X,Y) :-
 	       strip_operator_encoding(FunctorArgs,FunctorArgsStripped),
 	       Y = [WRAP_HILOG(hilog,HiLogFunctorName)|FunctorArgsStripped]
 	   ; is_naf_literal(X,PosLit) ->
-	       Y = [WRAP_HILOG(FL_NEGATION,FL_RULELOGNAF),YPosLit],
+	       Y = [WRAP_HILOG(FL_NEGATION,naf),YPosLit],
 	       FLLIBUNIVEQFORM(PosLit,YPosLit)
 	   ; is_hypothetical(FullWrapper,_) ->
 	       Args = [HypoOp|Goal],
@@ -539,7 +539,7 @@ FLLIBMETAUNIV(X,Y) :-
 	   ; 
 	       is_negation(X,FL_NEG) ->
 	       negate_predicate(X,PosLit),
-	       Y = [WRAP_HILOG(FL_NEGATION,FL_NEG),PosLit] 
+	       Y = [WRAP_HILOG(FL_NEGATION,neg),PosLit] 
 	   ;   %% FLSYSRULEUPDATE(....) - a reified rule
 	       rule_wrapper(FullWrapper,WrapName) ->
 	       %% The arguments must match FLSYSRULEUPDATE(...).
@@ -579,7 +579,7 @@ FLLIBMETAUNIV(X,Y) :-
 	    %% neg-Negated F-logic or HiLog
 	    is_negation(PredType,FL_NEG) ->
 	    negate_predicate(X,PosLit),
-	    Y = [WRAP_HILOG(FL_NEGATION,FL_NEG),PosLit] 
+	    Y = [WRAP_HILOG(FL_NEGATION,neg),PosLit] 
 	),
 	!.
 
@@ -622,7 +622,7 @@ FLLIBMETAUNIV(X,Y) :-
 	    flora_add_last(Args,AugmentedArgs,FL_CONTEXT(WS,_,_)),
 	    flora_module_predicate(FullWrapper,AugmentedArgs,WS,X)
 	; %% tabled neg hilog or neg flogic op.
-	    Head = WRAP_HILOG(FL_NEGATION,FL_NEG) ->
+	    Head = WRAP_HILOG(FL_NEGATION,neg) ->
 	    Args = [Literal],
 	    negate_predicate(Literal,X)
 	; %% \+ something
@@ -630,17 +630,33 @@ FLLIBMETAUNIV(X,Y) :-
 	    is_negation(Predicate,FL_PLGNAF),
 	    X =.. [Predicate|Args]
 	; %% naf something
-	    Head = WRAP_HILOG(FL_NEGATION,FL_RULELOGNAF) ->
+	    Head = WRAP_HILOG(FL_NEGATION,naf) ->
 	    is_negation(Predicate,FL_RULELOGNAF),
 	    Args = [Subg],
 	    flrwrapper:flora_decode_module_name(Subg,Module),
 	    flrnegation:flora_apply_negation_wrapper(Subg,Module,SubgWrapped),
 	    X =.. [Predicate,SubgWrapped]
 
-	;
+	; %% hypothetical
 	    Head = WRAP_HILOG(FL_HYPOTHETICAL,Op) ->
 	    is_hypothetical(Library,Op),
 	    X =.. [Library,Op|Args]
+	; %% aggregate
+	    Head = WRAP_HILOG(aggregate,_Op) ->
+	    aggregate_wrapper(Library,Head),
+	    X =.. [Library|Args]
+	; %% control
+	    Head = WRAP_HILOG(control,_Op) ->
+	    control_wrapper(Library,Head),
+	    X =.. [Library|Args]
+	; %% update
+	    Head = WRAP_HILOG(update,_Op) ->
+	    update_wrapper(Library,Head),
+	    %% need to wrap each Lit in Args with
+	    %% FLSYSDBUPDATE(Lit,Storage,Module) or
+	    %% FLSYSRULEUPDATE(Id,_,DescrVarTerm,_,DescrMetaFacts,Head,Body,_,_,DTvars,H2BF,H2BB,PreBody,PostBody,DefeatCond)
+	    %% Not done, as it is quite delicate
+	    X =.. [Library|Args]
 	;   delayedlit_wrapper(Builtin,Head) ->
 	    X = FLLIBDELAYEDLITERAL(Builtin,_,_,Args)
 	;   prologlit_wrapper(Module,Head), Args = [PlgLit] ->
@@ -666,8 +682,8 @@ flogic_wrapper(WRAP_MVDSIG, '=>', 3).
 flogic_wrapper(WRAP_IMVDSIG, '*=>', 3).
 flogic_wrapper(WRAP_MVDCONDEF, '{:}', 4).
 flogic_wrapper(WRAP_IMVDCONDEF, '{:}*', 4).
-flogic_wrapper(WRAP_MVDINC, '+>', 3).
-flogic_wrapper(WRAP_IMVDINC, '*+>', 3).
+flogic_wrapper(WRAP_MVDINC, '+>>', 3).
+flogic_wrapper(WRAP_IMVDINC, '*+>>', 3).
 flogic_wrapper(WRAP_MVDTOLIST, '->->', 3).
 flogic_wrapper(WRAP_IMVDTOLIST, '*->->', 3).
 flogic_wrapper(WRAP_ISA, ':', 2).
@@ -749,7 +765,7 @@ is_hypothetical(FLLIBHYPOTHETICAL,'<>').
 is_hypothetical(FLLIBIMPOSSIBLE,'~<>').
 
 is_delaylit(FLLIBDELAYEDLITERAL).
-delayedlit_wrapper(FL_IS_INTERNAL,WRAP_HILOG(builtin,FL_IS)).
+delayedlit_wrapper(FL_IS,WRAP_HILOG(builtin,is)).
 delayedlit_wrapper(FL_C_UNEQUAL,WRAP_HILOG(builtin,FL_C_UNEQUAL)).
 delayedlit_wrapper(FL_C_NOTSAME,WRAP_HILOG(builtin,FL_C_NOTSAME)).
 delayedlit_wrapper(FL_GT,WRAP_HILOG(builtin,FL_GT)).

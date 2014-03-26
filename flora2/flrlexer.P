@@ -534,7 +534,10 @@ read_tokens(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status) :-
 	( is_whitespace(Char) ->
 	    read_whitespace(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status)
 
-        ; Char =:= CH_PERCENT ->
+        ; Char =:= CH_PERCENT,
+	    FLPEEKC(NextNextChar),
+	    NextNextChar =\= CH_PERCENT
+	->
             read_transactional_token(Char,LineNo,CharNo,NextLN,NextCN,TokenList,Status)
 
 	; is_alpha_or_underscore_int(Char) ->
@@ -909,14 +912,23 @@ read_quasi_constvar(C1,LN1,CN1,LN,CN,TokenList,Status) :-
 	    )
 	;   Ch =:= CH_QUESTION,  % \?Char, Char = digit|letter
 	    FLPEEKC(TryChar),
-	    is_alphanum_int(TryChar),
+	    is_alphanum_int(TryChar) ->
 	    get_char(NextLN,NextCN,NextCh,LNN,CNN),
 	    get_char(LNN,CNN,NCh,NNLN,NNCN),
 	    flora_quasi_constvar_struct([C1,Ch],[NextCh],LN1,CN1,NextLN,NextCN,Tk)
+	;  
+	    (flora_current_compile_filename(FileN), ! ; true),
+	    Status=[FLORA_EOF,error(FileN,QUAZIVAR_EXPECTED)],
+	    flora_quasi_constvar_struct([Ch],LN1,C1, LN,CN,Tk),
+	    set_charpos(LN1,C1)
 	),
-	TokenList=[Tk|Tokens],
 	!,
-	read_tokens(NCh,NLN,NCN,NNLN,NNCN,Tokens,Status).
+	(var(Status) ->
+	    TokenList=[Tk|Tokens],
+	    read_tokens(NCh,NLN,NCN,NNLN,NNCN,Tokens,Status)
+	; 
+	    TokenList=[Tk]
+	).
 
 
 /****************************************************************************
@@ -1214,11 +1226,20 @@ single_symbol_token(CH_LBRACE) :- !.   % {
 single_symbol_token(CH_RBRACE) :- !.   % }
 single_symbol_token(CH_HASH) :- !.     % #
 
-two_symbol_token(CH_LPAREN,CH_BAR) :- !.     % (|  FL_PARENBAR
-two_symbol_token(CH_BAR,CH_RPAREN) :- !.     % |)  FL_RIGHT_PARENBAR
-two_symbol_token(CH_LBRACKET,CH_BAR) :- !.   % [|  FL_BRACKBAR
-two_symbol_token(CH_BAR,CH_RBRACKET) :- !.   % |]  FL_RIGHT_BRACKBAR
-two_symbol_token(CH_DOT,CH_DOT) :- !.        % ..  FL_RANGE
+two_symbol_token(CH_PERCENT,CH_PERCENT) :- !.    % %%  FL_INT_DIV
+two_symbol_token(CH_DOT,CH_DOT) :- !.            % ..  FL_RANGE
+two_symbol_token(CH_LPAREN,CH_BAR) :- !.         % (|  FL_PARENBAR
+two_symbol_token(CH_BAR,CH_RPAREN) :- !.         % |)  FL_RIGHT_PARENBAR
+two_symbol_token(CH_LBRACKET,CH_BAR) :- !.       % [|  FL_BRACKBAR
+two_symbol_token(CH_BAR,CH_RBRACKET) :- !.       % |]  FL_RIGHT_BRACKBAR
+two_symbol_token(CH_LBRACE,CH_BAR) :- !.         % {|  FL_BRACEBAR
+two_symbol_token(CH_BAR,CH_RBRACE) :- !.         % |}  FL_RIGHT_BRACEBAR
+two_symbol_token(CH_BACKSLASH,CH_LPAREN) :- !.   % \(  FL_BACKPAREN
+two_symbol_token(CH_BACKSLASH,CH_RPAREN) :- !.   % \)  FL_RIGHT_BACKPAREN
+two_symbol_token(CH_BACKSLASH,CH_LBRACKET) :- !. % \[  FL_BACKBRACK
+two_symbol_token(CH_BACKSLASH,CH_RBRACKET) :- !. % \]  FL_RIGHT_BACKBRACK
+two_symbol_token(CH_BACKSLASH,CH_LBRACE) :- !.   % \{  FL_BACKBRACE
+two_symbol_token(CH_BACKSLASH,CH_RBRACE) :- !.   % \}  FL_RIGHT_BRACKBAR
 
 
 /****************************************************************************
