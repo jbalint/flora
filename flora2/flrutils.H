@@ -98,6 +98,7 @@
 
 :- import
 	storage_find_fact/2,
+	storage_delete_fact/3,
 	storage_insert_fact/3
    from storage.
 
@@ -145,6 +146,9 @@
 
 :- import FLORA_INCLUDE_PRJ_INFO/2 from usermod.
 :- dynamic FLORA_INCLUDE_PRJ_INFO/2.
+
+:- import FL_TEXTUAL_INFO_PRED/6 from usermod.
+:- dynamic FL_TEXTUAL_INFO_PRED/6.
 
 :- import
 	flora_clear_compilation_permaoptions/0,
