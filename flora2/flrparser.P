@@ -1637,6 +1637,7 @@ parse_directive(CanoniTerm,Code,Status) :-
 	; defsensor_directive(CanoniTerm,CodeList,Status)
 	; usefunction_directive(CanoniTerm,CodeList,Status)
 	; setsemantics_directive(CanoniTerm,CodeList,Status)
+	; semantics_directive(CanoniTerm,CodeList,Status)
 	; cmpopt_directive(CanoniTerm,CodeList,Status)
 	; prefixdef_directive(CanoniTerm,CodeList,Status)
 	; ignoredep_directive(CanoniTerm,CodeList,Status)
@@ -1686,6 +1687,7 @@ exec_directive(CanoniTerm,FloraModSpec,Code,Status) :-
 	; exec_semantics_directive(CanoniTerm,CodeList,Status)
 	; exec_setruntime_directive(CanoniTerm,CodeList,Status)
 	; prefixdef_directive(CanoniTerm,CodeList,Status)
+	; exec_symbol_context_directive(CanoniTerm,CodeList,Status)
 	),
 	!.
 
@@ -2609,9 +2611,12 @@ exec_setsemantics_directive(CANOTERM(Funct,_N,FL_BRACE,Args,_If,_Ip), [Code],Sta
   This is like setsemantics, but it is a query rather than command,
   so variables are allowed.
 ****************************************************************************/
+semantics_directive(CANOTERM(Funct,_N,FL_BRACE,_Args,If,_Ip), _Code,Status) :-
+	get_name(Funct,FL_SEMANTICS),
+	!,
+	parsing_error(If,ERROR_EXECUTABLE_DIRECTIVE_ONLY,Status).
 
-exec_semantics_directive(CANOTERM(Funct,_N,FL_BRACE,Args,_If,_Ip),
-			      [Code],Status) :-
+exec_semantics_directive(CANOTERM(Funct,_N,FL_BRACE,Args,_If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_SEMANTICS),
 	!,
 	parse_semantics_directive_args(ALLOW_VARIABLES,Args,ArgsCode,Status),
@@ -2895,6 +2900,10 @@ symbol_context_directive(CANOTERM(Funct,_N,FL_BRACE,Args,_If,_Ip),[Code],Status)
 	;
 	    parsing_error(Funct,EXP_TERMSLIST,Status)
 	).
+exec_symbol_context_directive(CANOTERM(Funct,_N,FL_BRACE,_Args,_If,_Ip),_Code,Status) :-
+	get_name(Funct,FL_SYMBOL_CONTEXT),
+	!,
+	parsing_error(Funct,ERROR_COMPILETIME_DIRECTIVE_ONLY,Status).
 
 /****************************************************************************
   parse_body_symbol_list(+List,-CodeList,-Status)
@@ -3229,6 +3238,12 @@ parse_udf_function(CANOTERM(Funct,2,FL_PARENTHESIS,[_L,_R],_If,_Ip),_Code,Status
 	get_atom(Funct,FL_AT),
 	!,
 	parsing_error(Funct,ERROR_UDF,Status).
+
+parse_udf_function(CANOTERM(Funct,_N,FL_PARENTHESIS,_Args,_If,_Ip),_Code,Status) :-
+	get_atom(Funct,FAtom),
+	flora_reserved_builtin(FAtom,_),
+	!,
+	parsing_error(Funct,ERROR_RESERVED_SYMBOL,Status).
 
 parse_udf_function(CanoniTerm,Code,Status) :-
 	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,NULL,PURE_PATHEXPS_ONLY,Code,Status).
@@ -5667,6 +5682,12 @@ parse_prlgterm(CanoniTerm,_DWS,_Code,Status) :-
   using flterm_struct
 
 ****************************************************************************/
+parse_body_term(Funct,N,_Args,_TransFlag,_DWS,_Code,Status) :-
+	get_atom(Funct,FAtom),
+	flora_reserved_builtin(FAtom,_),
+	\+flora_reserved_builtin(FAtom,N),
+	!,
+	parsing_error(Funct,ERROR_RESERVED_ARITY,Status).
 parse_body_term(Funct,N,Args,_TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,FAtom),
 	flora_argdef(FAtom,N,ArgTypes,DWS),
@@ -6706,6 +6727,12 @@ parse_one_sort_speclet(CanoniTerm,_,Status) :-
   This predicate is called to parse a term in a rule head. Parsing of its
   arguments is adjusted according to its arguments mode definition.
 ****************************************************************************/
+parse_head_term(Funct,N,_Args,_TransFlag,_DWS,_Code,Status) :-
+	get_atom(Funct,FAtom),
+	flora_reserved_builtin(FAtom,_),
+	\+flora_reserved_builtin(FAtom,N),
+	!,
+	parsing_error(Funct,ERROR_RESERVED_ARITY,Status).
 parse_head_term(Funct,N,Args,_TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,FAtom),
 	flora_argdef(FAtom,N,ArgTypes,DWS),
@@ -8321,6 +8348,11 @@ parse_one_semantics_directive_option(AllowVariables,F,[Arg|Args],[OptCode|OtherO
 		parsing_error(Ind,ERROR_SETSEMOPT,Status)
 	    )
 	).
+parse_one_semantics_directive_option(_AllowVariables,F,_Args,_,Status) :-
+	get_atom(F,FAtom),
+	executable_only_semantics_direct_opt_name(FAtom),
+	!,
+	parsing_error(F,ERROR_EXECUTABLE_DIRECTIVE_ONLY,Status).
 
 
 is_valid_semantics_direct_option(ALLOW_VARIABLES,Opt,Val) :-
@@ -8335,6 +8367,9 @@ is_valid_semantics_direct_option(DISALLOW_VARIABLES,Opt,Val) :-
 	valid_semantics_direct_opt_name(Opt),
 	is_flatom_struct(Val,Atom),
 	valid_semantics_direct_option(Opt,Atom).
+
+
+executable_only_semantics_direct_opt_name(FL_SUBCLASSING).
 
 valid_semantics_direct_opt_name(FL_EQUALITY).
 valid_semantics_direct_opt_name(FL_INHERITANCE).

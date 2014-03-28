@@ -159,7 +159,10 @@
 	flora_used_udf_registry/4
    from flrregistry.
 
-:- import flora_nodefp/2 from flrnodefp.
+:- import
+	flora_reserved_builtin/2,
+	flora_nodefp/2
+   from flrnodefp.
 
 :- import flora_simple_primitive/4 from flrsimpleprimitive.
 

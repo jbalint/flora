@@ -24,3 +24,4 @@
 
 
 :- export flora_nodefp/2.
+:- export flora_reserved_builtin/2.

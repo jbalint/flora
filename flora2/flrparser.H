@@ -63,7 +63,10 @@
 
 :- import flora_conflict_operator/3 from flroperator.
 
-:- import flora_nodefp/2 from flrnodefp.
+:- import
+	flora_reserved_builtin/2,
+	flora_nodefp/2
+   from flrnodefp.
 
 :- import flora_nowsp/2 from flrnowsp.
 
