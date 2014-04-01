@@ -65,11 +65,11 @@ ALL::  $(ALLOBJS)
 	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
 	cd ..\syslib
 	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
+	cd ..\debugger
+	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
 	cd ..\lib
 	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
 	cd ..\AT
-	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
-	cd ..\debugger
 	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"
 	cd ..\pkgs
 	nmake /nologo /f NMakefile.mak PROLOG="$(PROLOG)" PROLOGDIR="$(PROLOGDIR)"

@@ -17,7 +17,7 @@
 
 ;;
 ;; Put
-;;   (setq auto-mode-alist (cons '("\\.fl[rih]$" . flora-mode) auto-mode-alist))
+;;   (setq auto-mode-alist (cons '(\("\\.flr$"\|"\\.ergo$"\) . flora-mode) auto-mode-alist))
 ;;   (autoload 'flora-mode "flora" "Major mode for editing Flora-2 programs." t)
 
 ;;; Code:

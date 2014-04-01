@@ -6,9 +6,9 @@
 ; A compiled version of XSB must exist at the location of XSBBaseDir
 
 #define MyAppName "Flora-2"
-#define FlrVersion "0.99.5"
+#define FlrVersion "1.0"
 #define XSBVersion "3.4"
-#define MyAppVerName "Flora-2  v. "+FlrVersion+" (Olive Tree) and XSB "+XSBVersion
+#define MyAppVerName "Flora-2  v. "+FlrVersion+" (Cherimoya) and XSB "+XSBVersion
 #define MyAppPublisher "Flora-2"
 #define MyAppURL "http://flora.sourceforge.net/"
 #define MyAppUrlName "Flora-2 Web Site.url"
@@ -43,7 +43,7 @@ SolidCompression=yes
 PrivilegesRequired=none
 
 VersionInfoVersion={#FlrVersion}
-VersionInfoCopyright=© The Research Foundation of SUNY, 1986 - 2013
+VersionInfoCopyright=© The Research Foundation of SUNY, 1986 - 2014
 
 AllowRootDirectory=yes
 UninstallFilesDir="{userdocs}\Flora-2 uninstaller"
@@ -76,7 +76,7 @@ Name: shortcut; Description: "&Create a desktop shortcut to run Flora-2"; Compon
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
-BeveledLabel=Flora-2 {#FlrVersion} © The Research Foundation of SUNY, 1986 - 2013
+BeveledLabel=Flora-2 {#FlrVersion} © The Research Foundation of SUNY, 1986 - 2014
 
 [Dirs]
 Name: "{app}" ; Permissions: users-modify users-full
