@@ -23,5 +23,7 @@
 */
 
 
-:- export flora_nodefp/2.
-:- export flora_reserved_builtin/2.
+:- export
+	flora_reserved_builtin/2,
+	flora_nodefp_exception/2,
+	flora_nodefp/2.

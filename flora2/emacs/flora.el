@@ -17,7 +17,7 @@
 
 ;;
 ;; Put
-;;   (setq auto-mode-alist (cons '(\("\\.flr$"\|"\\.ergo$"\) . flora-mode) auto-mode-alist))
+;;   (setq auto-mode-alist (cons '("\\(\\.flr$\\|\\.ergo$\\)" . flora-mode) auto-mode-alist))
 ;;   (autoload 'flora-mode "flora" "Major mode for editing Flora-2 programs." t)
 
 ;;; Code:
@@ -126,16 +126,24 @@
 
 (defconst flora-font-lock-keywords
    (list
-    '("\\(\\(flora\\)? +\\?-\\|:-\\|\\.[ \t\n]*$\\)"
+    '("\\(\\(flora\\)? +\\?-\\|:-\\|-:\\|\\.[ \t\n]*$\\)"
       1 'flora-font-lock-query-face)
     ;; for objects
     '("\\([A-Za-z0-9_][A-Za-z0-9_!.]*\\) *\\["
+      1 'font-lock-type-face)
+    ;; for constants
+    '("[^A-Za-z0-9_]\\([0-9]+\\(.[0-9]+\\|[eE][-+]?[0-9]+\\)?\\)[^A-Za-z0-9_]"
+      1 'font-lock-constant-face)
+    ;; for variables
+    '("\\(\\?\\([A-Za-z_]+[A-Za-z0-9_]*\\)?\\)"
       1 'font-lock-variable-name-face)
-    '("\\b\\(\\\+\\|naf\\|avg\\|max\\|min\\|sum\\|count\\|setof\\|bagof\\|insert\\|delete\\|b?t_?insert\\|b?t_?delete\\|insertall\\|b?t_?insertall\\|deleteall\\|b?t_?deleteall\\|erase\\|eraseall\\|b?t_?erase\\|b?t_?eraseall\\|insertrule_?[az]?\\|deleterule\\|\\[a-z]+\\|p2h\\|semantics\||setsemantics\\|udf\\|caller\\|newoid\\|test\\|catch\\|clause\\|must\\|wish\\|exists?\\|forall\\|newmodule\\|erasemodule\\|udf\\|t?enable\\|t?disable\\|fl[A-Z][a-zA-Z]*\\)\\b"
+    '("\\b\\(\\\+\\|avg\\|max\\|min\\|sum\\|count\\|setof\\|bagof\\|insert\\|delete\\|b?t_?insert\\|b?t_?delete\\|insertall\\|b?t_?insertall\\|deleteall\\|b?t_?deleteall\\|erase\\|eraseall\\|b?t_?erase\\|b?t_?eraseall\\|insertrule_?[az]?\\|deleterule\\|\\[a-z]+\\|p2h\\|semantics\||setsemantics\\|udf\\|caller\\|newoid\\|test\\|catch\\|clause\\|must\\|wish\\|exists?\\|forall\\|newmodule\\|erasemodule\\|udf\\|t?enable\\|t?disable\\|fl[A-Z][a-zA-Z]*\\)\\b"
       1 'font-lock-keyword-face)
-    '("\\(@!\\|-->\\|@\\|@@\\)"
+    '("\\(\\\\[A-Za-z]+\\)"
+      1 'font-lock-keyword-face)
+    '("\\(@!\\|@\\|@@\\)"
       1 'flora-font-lock-bold-keyword-face)
-    '("\\(->\\|=>\\|->->\\|=>\\)"
+    '("\\(->\\|=>\\|->->\\|=>\\|-->\\)"
       1 'flora-font-lock-arrow-face)
     '("\\(:\\|[^[(]|[^])]\\)" 
       1 'font-lock-type-face)

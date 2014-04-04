@@ -288,6 +288,12 @@ TruthTest := 'true{' Body '}' | 'undefined{' Body '}' | 'false{' Body '}'
 canonical_form(ComposerTerm,CanoniTerm) :-
 	canonical_form(ComposerTerm,CanoniTerm,_Index).
 
+
+#if exists("hooks/flrparser_canonical.P")
+#include "hooks/flrparser_canonical.P"
+#endif
+
+
 %% This is to handle arguments enclosed by brackets.
 canonical_form(INFIX(S,Left,Right,Index),CanoniTerm,Index) :-
 	%% Need to break associativity of these F-logic path operators.
@@ -774,6 +780,11 @@ is_directive(CANOTERM(Funct,1,FL_PARENTHESIS,[Directive],_If,_Ip),Directive) :-
 
 is_query(CANOTERM(Funct,1,FL_PARENTHESIS,[Query],_If,_Ip),Query) :-
 	get_name(Funct,FL_QUERYOP).
+
+/*
+is_quantified_clause(CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],_,_),Left,Right) :-
+	get_atom(Funct,FL_QUANTVARCONNECTOR).
+*/
 
 %% latent query
 is_latent_query(CANOTERM(Funct,1,FL_PARENTHESIS,[IC],_If,_Ip),IC) :-
@@ -1612,7 +1623,7 @@ parse_canonical(CanoniTerm,Code,Status) :-
 	    )
 
 	; %% flora_parse_fact must be the last one to call.
-	  flora_parse_fact(CanoniTerm,Code,Status)
+	    flora_parse_fact(CanoniTerm,Code,Status)
         ).
 
 /****************************************************************************
@@ -2484,7 +2495,9 @@ minus_var_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),Arity,Pos) :-
 prolog_directive(CANOTERM(Funct,_N,FL_BRACE,Args,If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_PROLOG),
 	!,
+	set_context(restrict_reserved_keywords_arity),
 	make_pred_arity_pair_list(Args,ArgCode,Status),
+	clear_context(restrict_reserved_keywords_arity),
 	flprologdirect_struct(ArgCode,If,Code).
 
 exec_prolog_directive(CANOTERM(Funct,_N,FL_BRACE,_Args,If,_Ip),[_Code],Status) :-
@@ -2495,7 +2508,9 @@ exec_prolog_directive(CANOTERM(Funct,_N,FL_BRACE,_Args,If,_Ip),[_Code],Status) :
 table_directive(CANOTERM(Funct,_N,FL_BRACE,Args,If,_Ip),[Code],Status) :-
 	get_name(Funct,FL_TABLE),
 	!,
+	set_context(restrict_reserved_keywords_arity),
 	make_pred_arity_slash_list(Args,ArgCode,Status),
+	clear_context(restrict_reserved_keywords_arity),
 	fltabledirect_struct(ArgCode,If,Code).
 
 exec_table_directive(CANOTERM(Funct,_N,FL_BRACE,_Args,If,_Ip),[_Code],Status) :-
@@ -2562,6 +2577,15 @@ defsensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,[Code],Status)
 	    S1 = NO_ERRORS
 	;   parsing_error(Ip,INVALID_SENSOR_MOD, S1)
 	),
+	(S1 == NO_ERRORS,
+	    SensorCall = CANOTERM(SensFunct,_,_,_,_,_),
+	    %% if get_name/2 fails, it implies that SensFunct can't
+	    %% be a reserved keyword
+	    get_name(SensFunct,SensName),
+	    is_disallowed_reserved_builtin(SensName)
+	-> parsing_error(SensFunct,ERROR_RESERVED_SYMBOL,S11)
+	; S11 = S1
+	),
 	parse_pure_prolog_term(SensorCall,SensorModName,SensorCallCode,VarNameList1-Tail1,S2),
 	%% parse_pure_prolog_term returns its own error codes, so
 	%% we change them to a more appropriate error for this particular case
@@ -2577,7 +2601,7 @@ defsensor_directive_internal(SensorCall,SensorXSBMod,DelayCond,Ip,[Code],Status)
 	(subset(VarNameList2,VarNameList1) -> S4 = NO_ERRORS
 	; parsing_error(Ip,SENSOR_VARS_ERROR,S4)
 	),
-	merge_status([S1,S22,S33,S4],Status),
+	merge_status([S11,S22,S33,S4],Status),
 	flsensordirect_struct(SensorCallCode,DelayCondCode,Code).
 
 
@@ -3241,7 +3265,8 @@ parse_udf_function(CANOTERM(Funct,2,FL_PARENTHESIS,[_L,_R],_If,_Ip),_Code,Status
 
 parse_udf_function(CANOTERM(Funct,_N,FL_PARENTHESIS,_Args,_If,_Ip),_Code,Status) :-
 	get_atom(Funct,FAtom),
-	flora_reserved_builtin(FAtom,_),
+	%% don't allow the user to use reserved builtins as UDFs of any arity.
+	is_disallowed_reserved_builtin(FAtom),
 	!,
 	parsing_error(Funct,ERROR_RESERVED_SYMBOL,Status).
 
@@ -3454,6 +3479,13 @@ parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTH
 	is_delayquant(QuantAtom),
 	!,
 	parsing_error(QIndex,ERROR_DELAY_QUANT_IN_HEAD,Status).
+
+/*
+parse_head_literal(CANOTERM(Funct,2,FL_PARENTHESIS,[L,_R],_If,_Ip),_DWS,_Code,Status) :-
+	get_atom(Funct,FL_DESCRIPTORFUNC),
+	!,
+	parsing_error(L,ERROR_HDLITERAL,Status).
+*/
 
 parse_head_literal(CANOTERM(Funct,N,FL_PARENTHESIS,Args,_If,_Ip),DWS,Code,Status) :-
 	!,
@@ -5397,15 +5429,19 @@ make_pred_arity_slash_list([Spec|SpecList],[(Pred/Arity/Idx)|SpecListCode],Statu
 	;  S1 = Status
 	).
 
-make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[Pred,Arity],_If,_Ip),(PredName,Int,Idx),NO_ERRORS) :-
+make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[Pred,Arity],_If,_Ip),(PredName,Int,Idx),Status) :-
 	get_name(Funct,FL_SLASH),
 	get_atom(Pred,PredName,Idx),
 	get_integer(Arity,Int),
+	(is_contextually_disallowed_reserved_builtin(PredName,Int)
+	-> parsing_error(Pred,ERROR_RESERVED_SYMBOL,Status)
+	; Status = NO_ERRORS
+	),
 	!.
 
 %% :- usesensor allows pred@prologmodule/Arity
 %% No IRIs or curies for Prolog stuff
-make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[PredAtModCanoTerm,Arity],_If,_Ip),((PredName,ModName),Int,Idx),NO_ERRORS) :-
+make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[PredAtModCanoTerm,Arity],_If,_Ip),((PredName,ModName),Int,Idx),Status) :-
 	has_context(parsing_usesensor_directive),
 	get_name(Funct,FL_SLASH),
 	get_integer(Arity,Int),
@@ -5413,6 +5449,10 @@ make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[PredAtModCanoTerm,Arit
 	get_name(ModConnective,FL_AT),
 	get_name(Pred,PredName,Idx),
 	get_name(Mod,ModName),
+	(is_contextually_disallowed_reserved_builtin(PredName,Int)
+	-> parsing_error(Pred,ERROR_RESERVED_SYMBOL,Status)
+	; Status = NO_ERRORS
+	),
 	!.
 
 %% case when predicate is defined via an iri prefix
@@ -5423,8 +5463,13 @@ make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[Pred,Arity],_If,_Ip),(
 	get_atom(Funct2,F2),
 	is_curi_op(F2),
 	get_integer(Arity,Int),
-	parse_curi([Prefix,LocalName],DISALLOW_TRANS,NULL,PredNameCode,Status),
+	parse_curi([Prefix,LocalName],DISALLOW_TRANS,NULL,PredNameCode,Status1),
 	is_flatom_struct(PredNameCode,PredName),
+	(Status1==NO_ERRORS,
+	    is_contextually_disallowed_reserved_builtin(PredName,Int)
+	-> parsing_error(Pred,ERROR_RESERVED_SYMBOL,Status)
+	; Status = Status1
+	),
 	!.
 
 %% case when predicate is defined as a full IRI
@@ -5434,9 +5479,14 @@ make_one_pred_arity_pair(CANOTERM(Funct,2,FL_PARENTHESIS,[Pred,Arity],_If,_Ip),(
 	%% Funct2 is a datatype definition symbol ^^
 	get_atom(Funct2,F2),
 	is_datatypeop(F2),
-	parse_composer_datatype(Args,Ifp,_WS,PrefixCode,Status),
+	parse_composer_datatype(Args,Ifp,_WS,PrefixCode,Status1),
 	is_flatom_struct(PrefixCode,PredName),
 	get_integer(Arity,Int),
+	(Status1==NO_ERRORS,
+	    is_contextually_disallowed_reserved_builtin(PredName,Int)
+	-> parsing_error(Pred,ERROR_RESERVED_SYMBOL,Status)
+	; Status = Status1
+	),
 	!.
 
 /*
@@ -5684,8 +5734,11 @@ parse_prlgterm(CanoniTerm,_DWS,_Code,Status) :-
 ****************************************************************************/
 parse_body_term(Funct,N,_Args,_TransFlag,_DWS,_Code,Status) :-
 	get_atom(Funct,FAtom),
-	flora_reserved_builtin(FAtom,_),
-	\+flora_reserved_builtin(FAtom,N),
+	%% reserved builtins are redefinable, but since they are reserved we
+	%% don't want to allow the user to define these builtins with any other
+	%% arity. For instance, \opposes/2 & \opposes/4 are reserved for
+	%% specific uses, but we don't want the user to define, say, \opposes/5.
+	is_disallowed_reserved_builtin(FAtom,N),
 	!,
 	parsing_error(Funct,ERROR_RESERVED_ARITY,Status).
 parse_body_term(Funct,N,Args,_TransFlag,DWS,Code,Status) :-
@@ -6729,8 +6782,11 @@ parse_one_sort_speclet(CanoniTerm,_,Status) :-
 ****************************************************************************/
 parse_head_term(Funct,N,_Args,_TransFlag,_DWS,_Code,Status) :-
 	get_atom(Funct,FAtom),
-	flora_reserved_builtin(FAtom,_),
-	\+flora_reserved_builtin(FAtom,N),
+	%% reserved builtins are redefinable, but since they are reserved we
+	%% don't want to allow the user to define these builtins with any other
+	%% arity. For instance, \opposes/2 & \opposes/4 are reserved for
+	%% specific uses, but we don't want the user to define, say, \opposes/5.
+	is_disallowed_reserved_builtin(FAtom,N),
 	!,
 	parsing_error(Funct,ERROR_RESERVED_ARITY,Status).
 parse_head_term(Funct,N,Args,_TransFlag,DWS,Code,Status) :-
@@ -6959,7 +7015,8 @@ parse_head_pathexp(CANOBRACE(L,N,_I),_TransFlag,DWS,TermArgMode,Code,Status) :-
 
 parse_head_pathexp(CANOTERM(_Funct,_N,FL_BRACE,_Args,_If,Ip),_TransFlag,_DWS,_TermArgMode,_Code,Status) :-
 	!,
-	parsing_error(Ip,NO_AGGINHEAD,Status).
+	%%parsing_error(Ip,NO_AGGINHEAD,Status).
+	parsing_error(Ip,UNKNOWN_PRIMITIVE_HEAD,Status).
 
 parse_head_pathexp(CANOBRACE(_L,_N,I),_TransFlag,_DWS,_TermArgMode,_Code,Status) :-
 	!,
@@ -7478,6 +7535,7 @@ parse_p2h(Prolog,Hilog,DWS,Code,Status) :-
 check_update_builtin(Mode,CANOTERM(Funct,N,FL_PARENTHESIS,_Args,If,_Ip),Status) :-
 	get_atom(Funct,F),
 	flora_nodefp(F,N),
+	\+flora_nodefp_exception(F,N),
 	( Mode == FLINS -> parsing_error(If,NO_INSERT,Status)
 	; Mode == FLDEL -> parsing_error(If,NO_DELETE,Status)
         ; 
@@ -8646,10 +8704,34 @@ merge_status([S|Rest],T) :-
 	; T = S
 	).
 
+%% arrangements for making include-dependencies
 FLORA_INCLUDE_DEPENDENCY_CLOSURE(X,Y) :- FLORA_INCLUDE_DEPENDENCY(X,Y).
 FLORA_INCLUDE_DEPENDENCY_CLOSURE(X,Y) :-
 	FLORA_INCLUDE_DEPENDENCY(X,Z),
 	FLORA_INCLUDE_DEPENDENCY_CLOSURE(Z,Y).
+
+%% If arity is supplied then check if the args refer to a reserved
+%% builtin of the reserved arity.
+%% Else, check if the name is a name of a reserved builtin.
+is_disallowed_reserved_builtin(Atom) :- is_disallowed_reserved_builtin(Atom,_).
+is_disallowed_reserved_builtin(Atom,Arity) :-
+	(number(Arity) ->
+	    %% wrong builtin arity
+	    flora_reserved_builtin(Atom,_),
+	    \+flora_reserved_builtin(Atom,Arity)
+	%% disallowed builtin altogether
+	; flora_reserved_builtin(Atom,_)
+	).
+%% like is_disallowed_reserved_builtin/2, but also checks the context
+%% "restrict_reserved_keywords_arity"
+is_contextually_disallowed_reserved_builtin(Atom,Arity) :-
+	(number(Arity), has_context(restrict_reserved_keywords_arity) -> 
+	    %% wrong builtin arity
+	    flora_reserved_builtin(Atom,_),
+	    \+flora_reserved_builtin(Atom,Arity)
+	%% disallowed builtin altogether
+	; flora_reserved_builtin(Atom,_)
+	).
 
 %% TNF
 %% push head-negation through disj and conj
