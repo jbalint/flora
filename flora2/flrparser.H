@@ -105,6 +105,7 @@
    from flrdatatype_parse.
 
 :- import
+	flora_simple_delayed_primitive/3,
 	flora_simple_primitive/4
    from flrsimpleprimitive.
 
