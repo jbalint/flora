@@ -574,7 +574,7 @@ The region must be created in advance."
     (save-excursion
       (process-send-string
        flora-process-name 
-       (format " \\load('%s' >> %s).\n" tmpfile-name (if module module "main"))
+       (format " load{'%s' >> %s}.\n" tmpfile-name (if module module "main"))
        ))
     (show-flora-buffer)
     ))
@@ -622,7 +622,7 @@ Does not offer to save files."
     (run-flora-background)
     (process-send-string
      flora-process-name
-     (format "\\load('%s' >> %s).\n" file (if module module "main")))
+     (format "load{'%s' >> %s}.\n" file (if module module "main")))
     (show-flora-buffer)))
 
 (defun flora-load-file-to-module (module)

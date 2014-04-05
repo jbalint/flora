@@ -2733,7 +2733,7 @@ defeasible_directive(CANOTERM(Funct,1,FL_BRACE,[Arg],_If,_Ip),[Code],NO_ERRORS) 
 	%% 2nd argument of status in the defeasible theory
 	%% is to be compiled as reified
 	flora_get_flatomvar_name(ModuleCode,ModName),
-	flrarguments:flora_set_argdef(FL_STATUS,2,[FL_OID,FL_BODYFORMULA],ModName),
+	flora_set_argdef(FL_STATUS,2,[FL_OID,FL_BODYFORMULA],ModName),
 	fldefeasible_struct(ModuleCode,Code).
 
 defeasible_directive(CanoniTerm,[Code],NO_ERRORS) :-
@@ -2743,7 +2743,7 @@ defeasible_directive(CanoniTerm,[Code],NO_ERRORS) :-
 	%% 2nd argument of status in the defeasible theory
 	%% is to be compiled as reified
 	flora_get_flatomvar_name(ModuleCode,ModName),
-	flrarguments:flora_set_argdef(FL_STATUS,2,[FL_OID,FL_BODYFORMULA],ModName),
+	flora_set_argdef(FL_STATUS,2,[FL_OID,FL_BODYFORMULA],ModName),
 	fldefeasible_struct(ModuleCode,Code).
 
 /******************************************************************************
@@ -4649,10 +4649,39 @@ parse_body_literal(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),_DWS,Code,Status
 	(Status == NO_ERRORS -> flload_struct(C,Code)
 	; true
 	).
+%% load{...}
+parse_body_literal(CANOTERM(Funct,_N,FL_BRACE,Args,If,Ip),_DWS,Code,Status) :-
+	get_name(Funct,FL_LOADPRIM),
+	!,
+	( Args == [] ->
+	    flatom_struct(FL_INLINEMODULE,NO_INDEX,C1),
+	    fllist_struct([C1],[],If,C),
+	    Status = NO_ERRORS
+	;
+	  parse_loadlist(Args,[],Ip,C,Status)
+	),
+	(Status == NO_ERRORS -> flload_struct(C,Code)
+	; true
+	).
 
 %% \add(...)
 parse_body_literal(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),_DWS,Code,Status) :-
 	get_name(Funct,FL_ADD),
+	!,
+	( Args == []
+	->
+	    flatom_struct(FL_INLINEMODULE,NO_INDEX,C1),
+	    fllist_struct([C1],[],If,C),
+	    Status = NO_ERRORS
+	;
+	  parse_loadlist(Args,[],Ip,C,Status)
+	),
+	(Status == NO_ERRORS -> fladd_struct(C,Code)
+	; true
+	).
+%% add{...}
+parse_body_literal(CANOTERM(Funct,_N,FL_BRACE,Args,If,Ip),_DWS,Code,Status) :-
+	get_name(Funct,FL_ADDPRIM),
 	!,
 	( Args == []
 	->
@@ -4674,7 +4703,10 @@ parse_body_literal(CANOTERM(Funct,N,FL_BRACE,Args,_If,_Ip),DWS,Code,Status) :-
 	%% like FL_RULEENABLE, to loose the two last arguments \@F and \@
 	(N == N1 ; N is N1-2),
 	!,
-	parse_body_pathexplist(Args,DWS,PURE_PATHEXPS_ONLY,ArgCode,Status),
+	(flora_prim_argdef(PrimitiveName,N1,ArgTypes) ->
+	    parse_body_argpathexplist(Args,ArgTypes,DWS,PURE_PATHEXPS_ONLY,ArgCode,Status)
+	; parse_body_pathexplist(Args,DWS,PURE_PATHEXPS_ONLY,ArgCode,Status)
+	),
 	flsimpleprimitive_struct(PrimitiveName,ArgCode,Code).
 
 %% insertrule_a{...}, insertrule_z{...}, deleterule_a{...},

@@ -83,7 +83,11 @@
    from flrutils.
 */
 
-:- import flora_argdef/4 from flrarguments.
+:- import
+	flora_prim_argdef/3,
+	flora_set_argdef/4,
+	flora_argdef/4
+   from flrarguments.
 
 :- import
 	flora_delayed_builtin_literal/2

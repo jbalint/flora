@@ -31,4 +31,5 @@
 
 :- export
 	flora_set_argdef/4,
+	flora_prim_argdef/3,
 	flora_argdef/4.
