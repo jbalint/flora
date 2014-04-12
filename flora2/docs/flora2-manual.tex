@@ -1020,6 +1020,132 @@ semantics). The main differences are enumerated below.
 \end{enumerate}
 %%
 
+\section{Main Syntactic Elements of \FLSYSTEM}
+
+\FLSYSTEM has rich syntax, so it is useful to first list the various types
+of statements one may encounter in this manual.
+First, we should note that \FLSYSTEM does \emph{not} have any alphanumeric
+\emph{reserved} keywords, so the user is not restricted in that name space in
+any way. 
+The only reserved keywords are those that start with a backslash, e.g.,
+$\bs{}and$, $\bs{}or$, $\bs{}if$, etc.
+
+The main types of \FLSYSTEM statements are compiler and runtime directives,
+rules, queries, latent queries, and facts:
+%% 
+\begin{itemize}
+\item  \textbf{Compiler directives} have the form\\
+  %% 
+\begin{alltt}
+     :- \emph{directiveName}\{\emph{arguments}\}. 
+\end{alltt}
+  %% 
+  Some directives do not have arguments. Compiler directives affect the
+  compilation of the file in which they appear---typically the
+  semantic and optimization options.
+\item \textbf{Runtime directives} have the form\\  
+  %% 
+\begin{alltt}
+     ?- \emph{directiveName}\{\emph{arguments}\}. 
+\end{alltt}
+  %% 
+  Runtime directives are typically used to change the semantics of the
+  runtime environment at run time.
+\item \textbf{Rules} have the form\\
+    %% 
+\begin{alltt}
+     @!\{\emph{statementDescriptors}\}  \emph{ruleHead}  :-  \emph{ruleBody}. 
+\end{alltt}
+  %% 
+  Rules constitute the key part of an \FLSYSTEM knowledge base
+  as they represent the actual \emph{knowledge}.
+  The presence of rules is the main difference between knowledge bases and
+  mere databases.
+
+  The statement descriptor part
+  (\texttt{@!\{...\}})  is optional. The body of a rule is sometimes also
+  called a \emph{premise}. 
+\item \textbf{Queries} have the form\\
+   %% 
+\begin{alltt}
+     ?- \emph{ruleBody}.
+\end{alltt}
+  %% 
+  Syntactically queries have the same form as the rule bodies, but they use
+  the symbol ``\texttt{?-}''  to distinguish the two. Queries are
+  used to request information from the knowledge base.
+\item \textbf{Latent queries} have the form\\
+   %% 
+\begin{alltt}
+     @!\{\emph{statementDescriptors}\}  !- \emph{ruleBody}.
+\end{alltt}
+  %% 
+  Latent queries are similar to regular queries. However, regular
+  queries are considered to be \emph{immediate} requests for information
+  from the knowledge base, while latent queries are requests that intended to
+  be posed at a later time.  A latent query also has descriptors, which are
+  used to refer to the query and to invoke it.
+\item \textbf{Facts} are statements that are considered to be
+  unconditionally true; they have the form\\
+  %% 
+\begin{alltt}
+     @!\{\emph{statementDescriptors}\}  \emph{ruleHead}.
+\end{alltt}
+  %% 
+  Syntactically and conceptually, a fact is a rule without a premise.
+  The descriptor part of the syntax for facts is optional.
+\end{itemize}
+%% 
+
+Rule heads, bodies, queries, and their arguments are typically composed out
+of \emph{atomic formulas} with the help of connectives, such as
+conjunction, disjunction, the various negations, and more. The main forms
+of atomic formulas are
+%% 
+\begin{itemize}
+\item  F-logic \textbf{molecules} (or \textbf{frames}) are used for
+  object-oriented knowledge representation.
+\item  HiLog \textbf{predicates} are used for more traditional knowledge
+  representation. However, in \FLSYSTEM, predicates can be higher-order and
+  variables are allowed to range over them.
+\end{itemize}
+%% 
+The different types of molecules and predicates are described in the
+respective sections.
+The main components used to construct predicates and molecules include:
+%% 
+\begin{itemize}
+\item  \textbf{Variables}, which are statements of the form \emph{?Varname}.
+\item  \textbf{Constants}, which includes \emph{symbols},  \emph{strings},
+  \emph{numbers}, and various other data types.
+\item \textbf{Operators}, including arithmetic operators.
+\item \textbf{Quasi-constants} and
+  \textbf{quasi-variables}. Quasi-constants are symbols that get substituted
+  with real constants at compile time or at the time the knowledge base is
+  loaded.
+  
+  Examples of quasi-constants are \texttt{\bs{}@F} and \texttt{\bs{}@L},
+  which get substituted with the file name and the line number in which
+  these constants occur. Quasi-constants let one write
+  statements that refer to objects, such as the file name or line
+  number, which are either unknown at the time of writing or may change
+  later.  Quasi-constants never change during runtime---it is just that
+  their values are typically unknown at the time these constants are
+  written into the knowledge base by the knowledge engineer.
+
+  As example of a quasi-variable is \emph{\bs{}?C}. This variable can
+  appear in the body of a rule and it gets substituted
+  with the name of the module that invoked that rule. This is
+  a \emph{quasi}-variable because it gets 
+  instantiated by the runtime system and is not under the control of the
+  knowledge engineer. It is a \emph{variable} (rather than a constant) because
+  it may get instantiated with different values during runtime (because,
+  different modules may invoke the same rule).
+\item \textbf{Auxiliary symbols}, such as \texttt{->}, \texttt{!},
+  \texttt{[}, \texttt{(}, \texttt{[|},   etc., are used to glue together     
+  the aforesaid components to form atomic formulas.
+\end{itemize}
+%% 
 
 
 \section{Basic \FLSYSTEM Syntax}
@@ -1952,11 +2078,6 @@ that \FLSYSTEM replaces them by constants. However, this happens at \emph{run
 \end{itemize}
 %% 
 
-
-\subsection{Reserved Keywords}
-
-The only reserved keywords are those that start with a backslash, e.g.,
-$\bs{}and$, $\bs{}or$, $\bs{}if$, etc.
 
 \subsection{Synonyms}
 
@@ -4648,6 +4769,18 @@ primitive.\footnote{
   feature in creative ways.
 %%
 }
+
+\index{rule Id!in reified rules}
+\index{meta-data!in reified rules}
+%%
+Note that rule Ids and other meta-data (see
+Section~\ref{sec-rule-id}) can be supplied with reified rules just like it
+can be with regular rules. For instance,
+%% 
+\begin{verbatim}
+... :- ?X=${@!{abc[tag->foo]} head(?X):-body(?X,?Y)}.
+\end{verbatim}
+%% 
 
 \paragraph{Reification and meta-unification.}
 Reification should not be confused with meta-unification, although they are
@@ -8233,6 +8366,18 @@ As a result, the rule {\tt ?X:student :- \verb|%|enroll(?X,?\_T)} will be
 inserted in front of each of these two modules.  For this to be executed
 successfully, the module {\tt mod1} must already exist.
 
+\index{rule Id!in inserted rules}
+\index{meta-data!in inserted rules}
+Note: rule Ids and other meta-data (see Sectin~\ref{sec-rule-id})
+can be supplied with the insert operator: 
+%% 
+\begin{verbatim}
+ ?- insertrule{@!{abc[foo->bar]} ?X:student :- %enroll(?X,?_T)}.
+\end{verbatim}
+%% 
+Meta information can also be supplied with the \texttt{deleterule}
+operator. 
+
 
 \subsection{Deletion of Rules}
 \label{sec-deletingrule}
@@ -9529,8 +9674,14 @@ the occurrence of \texttt{!!} in \emph{that} rule will force the execution of
 \label{sec-rule-id}
 
 \index{rule Id}
-Every rule in \FLSYSTEM is assigned a unique \emph{rule Id}.  A rule Id
-is a triple of the form\\
+Every rule in \FLSYSTEM---whether it appears in a file, is inserted at run
+time, or is reified and lives as an object it its own right---is assigned a
+unique \emph{rule Id} and the user can also supply additional
+meta-data for it. The rule Id can be either given explicitly by the
+knowledge engineer or, if not given explicitly, is assigned by the system (at compile time for
+rules that live in files and at run time for inserted and reified rules).
+
+A rule Id is a triple of the form\\
 $(local\_id,file\_name,module)$, where
 %% 
 \begin{itemize}
@@ -9555,6 +9706,7 @@ statement in question.
 \index{rule descriptor}
 \index{descriptor!see \emph{rule descriptor}}
 \index{rule meta-data}
+\index{meta-data!in rules}
 \FLSYSTEM supports the use of rule \emph{descriptors} of the form
 %% 
 \begin{itemize}
@@ -9954,7 +10106,7 @@ at compile or load time.
 \emph{Latent queries} are a cross between queries and rules. From queries  
 they borrow the main purpose: to query the knowledge base. From rules
 they borrow the ability to use descriptors (so, latent queries have Ids and,
-possibly, other meta information) and the fact that such queries are not
+possibly, other meta-data) and the fact that such queries are not
 executed immediately. Instead, they are saved to be called on-demand some
 other time. Like rules, latent queries can also be inserted, deleted,
 enabled, disabled, and queries.
@@ -13463,22 +13615,22 @@ time.
 \FLSYSTEM has a rudimentary runtime optimizer, which can be invoked by
 executing the following commands:
 %%
-\index{\bs{}optimize}
+\index{optimize\{...\}}
 %%
 \begin{verbatim}
-     ?- \optimize(?OptimizerOption)  
-     ?- \optimize(?OptimizerOption,?Module)  
+     ?- optimize{?OptimizerOption}
+     ?- optimize{?OptimizerOption,?Module}
 \end{verbatim}
 %%
 The first command invokes the optimizer with the option {\tt
   ?OptimizerOption} in all modules and the second command does the same in a
 given module. The commands
 %%
-\index{\bs{}resetoptimization}
+\index{resetoptimization\{...\}}
 %%
 \begin{verbatim}
-     ?- \resetoptimization(?OptimizerOption)  
-     ?- \resetoptimization(?OptimizerOption,?Module)    
+     ?- resetoptimization{?OptimizerOption}
+     ?- resetoptimization{?OptimizerOption,?Module}
 \end{verbatim}
 %%
 disable the corresponding optimizer options.
@@ -13493,35 +13645,25 @@ the means to turn the optimizations on and off depending on the situation.
 
 At present, \FLSYSTEM has only two optimization option:
 %%
-\index{local\bs{}override!optimizer option}
+\index{local\_override!optimizer option}
 %%
 \begin{verbatim}
  local_override  
  class_expressions
 \end{verbatim}
 %%
-Invoking {\tt \bs{}optimize(local\_override,somemodule)} can, in some cases,
+Invoking {\tt optimize\{local\_override,somemodule\}} can, in some cases,
 speed up query processing by a factor of 10. This optimization typically
 helps programs that use inheritance in situations
 when inheritance is often overridden by locally defined methods.
 
-Invoking {\tt \bs{}optimize(class\_expressions,somemodule)} always improves
+Invoking {\tt optimize\{class\_expressions,somemodule\}} always improves
 performance, sometimes significantly and sometimes negligibly.
 However, this is done at the expense of disabling the subtype relationships
 that involve class expressions (see Section~\ref{sec-class-expr}).
 So, while {\tt class\_expressions} optimization is on, the usual
 subclass relationships among these expressions do not hold. For instance,
 {\tt c::(c;d)} and {\tt (c,d)::c} are false.
-
-The option {\tt \bs{}optimize(nonstrict\_subclasses,somemodule)} is, strictly
-speaking, does not affect performance. It is more of a semantic option.
-By default, \FLSYSTEM assumes that the subclass relationship \texttt{::}  is strict
-so there cannot be cycles through subclassing. If, for example, it
-discovers at runtime that, say, \texttt{c::d} and \texttt{b::d} then a
-warning is issued. Also, \texttt{c::c} is always false. However, if the
-\texttt{nonstrict\_subclasses} option is in effect in some module then
-cyclic subclass relationships do not trigger warnings and \texttt{c::c} is
-true in that module, for all classes. 
 
 
 \section{Compiler Directives}
