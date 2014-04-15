@@ -47,8 +47,7 @@
     from flrcanon.
 
 :- import
-	flora_generalize_last/2,
-	flora_add_last/3
+	flora_generalize_last/2
    from flrtrim.
 
 :- import flora_decode_goal_as_atom/2 from flrdecode.
@@ -64,7 +63,8 @@
    from usermod.
 
 :- import
-	flora_db_find_base/2
+	flora_db_find_base/2,
+	flora_db_find_base/3
    from flrstoragebase.
 :- import
         flora_check_export_registry_internal/4
@@ -77,7 +77,8 @@
 	flora_construct_delete_predicate/3,
 	flora_storage_convertlist/4,
 	flora_storage_is_negation_symbol/1,
-	(FL_ISBASEFACT)/1.
+	FL_ISBASEFACT/1,
+	FL_ISBASEFACT/2.
 
 /*
 %% Tabling these does not seem to have any effect
@@ -171,13 +172,8 @@ flora_construct_delete_predicate(ThisModuleName,ModuleName,P) :-
         flora_module_registry(ModuleName),
         flora_fdb_storage_name(ModuleName,StorageName),
         flora_check_export_registry_internal(ThisModuleName,ModuleName,EP,FLEXPORT_UPDATABLE),
-        ( var(EP) ->
-            flora_db_find_base(StorageName,EP),
-            flora_add_last(EP,P,ThisModuleName)
-        ;
-            flora_db_find_base(StorageName,EP),
-            EP = P
-        ).
+	flora_db_find_base(StorageName,EP),
+	P=EP.
 
 /*****************************************************************************
   flora_storage_convertlist(+ThisModule,+List,-CallList,-FactList)
@@ -199,7 +195,7 @@ flora_storage_convertlist(ThisModule,[P|Fs],CL,[P|FL]) :-
 flora_storage_convertlist(ThisModule,[FLSYSDBUPDATE(FL_DYNPROLOG_FACT(PF),_,_)|Fs],[PFgen|CL],[FLSYSDBUPDATE(FL_DYNPROLOG_FACT(PFgen),_)|FL]) :-
 	%% If inserted Prolog fact, then just use it
 	!,
-	flrtrim:flora_generalize_last(PF,PFgen),
+	flora_generalize_last(PF,PFgen),
 	flora_storage_convertlist(ThisModule,Fs,CL,FL).
 
 
@@ -275,3 +271,10 @@ FL_ISBASEFACT(Fact) :-
 	flora_fdb_storage_name(Module,StorageName),
 	convert_to_head_literal(Fact,HeadFact),
 	flora_db_find_base(StorageName,HeadFact).
+
+%% Check if Fact is a base fact
+FL_ISBASEFACT(Fact,StoredFact) :-
+	flora_decode_module_name(Fact,Module),
+	flora_fdb_storage_name(Module,StorageName),
+	convert_to_head_literal(Fact,HeadFact),
+	flora_db_find_base(StorageName,HeadFact,StoredFact).

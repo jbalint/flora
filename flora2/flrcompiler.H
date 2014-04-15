@@ -184,7 +184,7 @@
 	flora_compile_add/8,
 	flora_compile/10,
 	flora_clear_compilation_symbols/0,
-	%%flora_compiler_permaoption/1,
+	has_compiler_permaoption/1,
 	compiling_flrshell_command/0,
 	symbol/7,
 	nowarn_symbol/5,

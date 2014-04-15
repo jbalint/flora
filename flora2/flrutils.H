@@ -157,6 +157,7 @@
 	flora_compile/10,
         flora_compile_add/8,
 	flora_get_compilation_liboptions/1,
+	has_compiler_permaoption/1,
 	symbol/7,
 	nowarn_symbol/5,
 	set_turnoff_symbol_warnings_flag/1,

@@ -69,7 +69,8 @@
 #define BODYLITERAL         	 1
 #define HEADLITERAL         	 2
 
-#define SETARGATTRIBUTE          flrsetarg
+#define SETARGATTRIBUTE          flrsetargattr
+#define CONTEXTATTRIBUTE         flrcontextattr
 
 %% used in an error message
 #define ERRLINE_NO               ' on line '
@@ -1294,6 +1295,13 @@ head_context_info_structure(FWContext) :-
 	prologterm_struct(FL_CONTEXT,3,[CallerModStruct,Id1,Id2],FWContext).
 %% In the HEAD of static rules
 head_context_info_structure(FWContext) :-
+	has_context(compiling_facts),
+	!,
+	callermod_var_structure(CallerModStruct),
+	context_tracing_code(head,Id1,Id2),
+	prologterm_struct(FL_CONTEXT,3,[CallerModStruct,Id1,Id2],FWContextAttr),
+	put_attr(FWContext,CONTEXTATTRIBUTE,FWContextAttr).
+head_context_info_structure(FWContext) :-
 	callermod_var_structure(CallerModStruct),
 	context_tracing_code(head,Id1,Id2),
 	prologterm_struct(FL_CONTEXT,3,[CallerModStruct,Id1,Id2],FWContext).
@@ -1333,7 +1341,7 @@ context_tracing_code(LitContext,Id1,Id2) :-
 	    ; has_context(compiling_rule(DescrIdCode)), LitContext\==vars,
 		\+ has_context(compiling_goal_reification),
 		\+ has_context(compiling_update_literals)
-	    ; %% LitContext = vars or is not a (rule, reification, or update)
+	    ; %% LitContext = vars or isn't a rule, or is reification or update
 		new_context_prvariable(NO_INDEX,DescrIdCode)
 	    ),
 	    !,
@@ -2724,7 +2732,7 @@ has_permaoption(X) :- PERMAOPTION(X).
 flora_clear_compilation_permaoptions :- retractall(PERMAOPTION(_)).
 clear_one_permaoption(X) :- (retract(PERMAOPTION(X)) ; true), !.
 %% this is exported for others to use
-%%flora_compiler_permaoption(X) :- has_permaoption(X).
+has_compiler_permaoption(X) :- has_permaoption(X).
 
 set_context(X) :-
 	atom(X),
@@ -3836,8 +3844,8 @@ compile_factlist([F|FList],DescriptorIdCode,DescrVarsTerm,[H2BF|H2BCodeFront],[H
 	!,
 	( H2BF == NULL, H2BB == NULL ->
 	    compile_plain_fact(F,RuleList-RT,FactList-FT)
-	; make_rule_from_fact(F,H2BF,H2BB,RuleList-RT),
-	    %% make_rule_from_fact(F,DescriptorIdCode,DescrVarsTerm,H2BF,H2BB,RuleList-RT),
+	;
+	    make_rule_from_fact(F,H2BF,H2BB,RuleList-RT),
 	    FactList = FT
 	),
 	compile_factlist(FList,DescriptorIdCode,DescrVarsTerm,H2BCodeFront,H2BCodeBack,RT-RuleListTail,FT-FactListTail).
@@ -3848,7 +3856,8 @@ compile_factlist_add([F|FList],DescrIdCode,DescrVarsTerm,[H2BF|H2BCodeFront],[H2
 	( H2BF == NULL, H2BB == NULL ->
 	    compile_plain_fact(F,RuleList-RT,FactList-FT),
 	    MetaList = MT
-	; make_dynrule_from_fact(F,DescrIdCode,DescrVarsTerm,H2BF,H2BB,RuleList-RT,MetaList-MT),
+	; 
+	    make_dynrule_from_fact(F,DescrIdCode,DescrVarsTerm,H2BF,H2BB,RuleList-RT,MetaList-MT),
 	    FactList = FT
 	),
 	compile_factlist_add(FList,DescrIdCode,DescrVarsTerm,H2BCodeFront,H2BCodeBack,RT-RuleListTail,FT-FactListTail,MT-MetaTail).
@@ -3874,13 +3883,14 @@ compile_plain_fact(F,RulesList-RTail,FactList-FTail) :-
 	compile_plain_fact(F2,RuleTail-RTail,FactTail-FTail).
 compile_plain_fact(F,RL-RL,[FCode|ListTail]-ListTail) :-
 	!,
+	process_contextvars_in_prterm(F),
         collect_prvars(F,FVars),
-        get_dynrule_varlist(FVars,L),
-        %%sort(L,NL), %% sorting does nothing here
-	NL = L,
-        ( NL == [] -> fact_struct(F,FCode)
+        get_dynrule_varlist(FVars,DynVars),
+        %%sort(DynVars,NDynVars), %% sorting does nothing here
+	NDynVars = DynVars,
+        ( NDynVars == [] -> fact_struct(F,FCode)
         ;
-            add_fact_attr_code(NL,F,AugmentedF),
+            add_fact_attr_code(NDynVars,F,AugmentedF),
             fact_struct(AugmentedF,FCode)
         ),
 	!.
@@ -10640,3 +10650,26 @@ multiply_setarg_code(Code,MultCode) :-
 
 /******************************************************************************/
 
+%%%%%%%%%%% Context attributed vars: used in case of facts %%%%%%%%%%%%%%%%%%%%
+%% If it is a true fact then process_contextvars_in_prterm is called and
+%% context is made into just a prvariable
+%% If it is a fact-turned-rule then the attribute attached to the context
+%% variable (which is FL_CONTEXT(_,_,_)) is made into the context of that fact
+%% because when the coder writes this variable, it unifies with the context.
+:- install_verify_attribute_handler(CONTEXTATTRIBUTE,
+				    AttrVal,VarBinding,
+				    AttrVal=VarBinding).
+
+process_contextvars_in_prterm(PRTerm) :-
+	get_all_attrvars(PRTerm,AttrVars),
+	process_contextvars(AttrVars).
+
+process_contextvars([]) :- !.
+process_contextvars([H|Tail]) :-
+	get_attr(H,CONTEXTATTRIBUTE,Context),
+	!,
+	del_attr(H,CONTEXTATTRIBUTE),
+	new_context_prvariable(NO_INDEX,H),
+	process_contextvars(Tail).
+process_contextvars([_|Tail]) :-
+	process_contextvars(Tail).

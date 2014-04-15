@@ -42,12 +42,14 @@
 	flora_db_insert_base_bt/2,
 	flora_db_delete_base_bt/2,
 	flora_db_find_base/2,
+	flora_db_find_base/3,
 	flora_db_delete_all/1,
 	flora_new_db_storage/1,
 	flora_db_commit/1,
 	flora_db_reclaim_space/1,
 	flora_storage_fast_insert_fact/3,
-	flora_storage_find_fact/2.
+	flora_storage_find_fact/2,
+	flora_storage_find_fact/3.
 
 :- import incr_assert/1, incr_assert/3, incr_retract/1 from increval.
 :- import predicate_property/2 from curr_sym.
@@ -65,6 +67,7 @@
    from storage.
 :- import
 	storage_find_fact/2,
+	storage_find_fact/3,
 	storage_reclaim_space/1,
 	storage_delete_all/1,
 	storage_handle/4,
@@ -82,8 +85,6 @@
 
 :- import flora_call_hooks/5 from flrhooks.
 
-:- import flrtrim_last/2 from flora_ground.
-
 :- import
 	flora_storage_module/2,
 	flora_is_fdb_storage/1
@@ -95,16 +96,16 @@
 %% Lop off the last argument before inserting/querying the database
 %% exported
 flora_db_insert_base(StorageName,Call) :-
-	flrtrim_last(Call, CallSansContext),
+	generalize_fact_context(Call),
 	flora_storage_module(StorageName,Module),
-	%% Hooks get CallSansContext as an argument.
-	%% CallSansContext is used by around-hooks to pass info from
+	%% Hooks get Call as an argument.
+	%% Call is used by around-hooks to pass info from
 	%% before hooks to after hooks
 	call_if_fdb_storage(StorageName,
-			    flora_call_hooks(Module,INSERTFACT,CallSansContext,before,AroundHookLink)),
-	flora_storage_insert_fact(StorageName,CallSansContext,Call,_ResultFlag),
+			    flora_call_hooks(Module,INSERTFACT,Call,before,AroundHookLink)),
+	flora_storage_insert_fact(StorageName,Call,Call,_ResultFlag),
 	call_if_fdb_storage(StorageName,
-			    flora_call_hooks(Module,INSERTFACT,CallSansContext,after,AroundHookLink)).
+			    flora_call_hooks(Module,INSERTFACT,Call,after,AroundHookLink)).
 
 %% exported
 /*
@@ -119,46 +120,57 @@ flora_db_insert_base(StorageName,Call) :-
 	  we queried that Call is true. (Such a query will also check the DB.)
 */
 flora_db_delete_base(StorageName,Call) :-
-	flrtrim_last(Call, CallSansContext),
+	generalize_fact_context(Call),
 	flora_storage_module(StorageName,Module),
 	call_if_fdb_storage(StorageName,
-			    flora_call_hooks(Module,DELETEFACT,CallSansContext,before,AroundHookLink)),
+			    flora_call_hooks(Module,DELETEFACT,Call,before,AroundHookLink)),
 	%%may or may not be present in main memory.
-	flora_storage_delete_fact(StorageName,CallSansContext,Call,_ResultFlag),
+	flora_storage_delete_fact(StorageName,Call,Call,_ResultFlag),
 	call_if_fdb_storage(StorageName,
-			    flora_call_hooks(Module,DELETEFACT,CallSansContext,after,AroundHookLink)).
+			    flora_call_hooks(Module,DELETEFACT,Call,after,AroundHookLink)).
 
 %% exported
 flora_db_insert_base_bt(StorageName,Call) :-
-	flrtrim_last(Call, CallSansContext),
+	generalize_fact_context(Call),
 	flora_storage_module(StorageName,Module),
 	call_if_fdb_storage(StorageName,
-			    flora_call_hooks(Module,INSERTFACT,CallSansContext,before,AroundHookLink)),
-	flora_storage_insert_fact_bt(StorageName,CallSansContext,Call,_ResultFlag),
+			    flora_call_hooks(Module,INSERTFACT,Call,before,AroundHookLink)),
+	flora_storage_insert_fact_bt(StorageName,Call,Call,_ResultFlag),
 	call_if_fdb_storage(StorageName,
-			    flora_call_hooks(Module,INSERTFACT,CallSansContext,after,AroundHookLink)).
+			    flora_call_hooks(Module,INSERTFACT,Call,after,AroundHookLink)).
 
 %% exported
 flora_db_delete_base_bt(StorageName,Call) :-
-	flrtrim_last(Call, CallSansContext),
+	generalize_fact_context(Call),
 	flora_storage_module(StorageName,Module),
 	call_if_fdb_storage(StorageName,
-			    flora_call_hooks(Module,DELETEFACT,CallSansContext,before,AroundHookLink)),
-	flora_storage_delete_fact_bt(StorageName,CallSansContext,Call,_ResultFlag),
+			    flora_call_hooks(Module,DELETEFACT,Call,before,AroundHookLink)),
+	flora_storage_delete_fact_bt(StorageName,Call,Call,_ResultFlag),
 	call_if_fdb_storage(StorageName,
-			    flora_call_hooks(Module,DELETEFACT,CallSansContext,after,AroundHookLink)).
+			    flora_call_hooks(Module,DELETEFACT,Call,after,AroundHookLink)).
 
 
 %% Used to search database of facts
 %% exported
 flora_db_find_base(StorageName,Call) :-
-	flrtrim_last(Call, CallSansContext),
+	generalize_fact_context(Call),
 	flora_storage_module(StorageName,Module),
 	call_if_fdb_storage(StorageName,
-			    flora_call_hooks(Module,FINDFACT,CallSansContext,before,AroundHookLink)),
-	flora_storage_find_fact(StorageName,CallSansContext),
+			    flora_call_hooks(Module,FINDFACT,Call,before,AroundHookLink)),
+	flora_storage_find_fact(StorageName,Call),
 	call_if_fdb_storage(StorageName,
-			    flora_call_hooks(Module,FINDFACT,CallSansContext,after,AroundHookLink)).
+			    flora_call_hooks(Module,FINDFACT,Call,after,AroundHookLink)).
+
+%% Like flora_db_find_base/2, but also returns the actual stored fact.
+%% StoredFact may be different from Call.
+flora_db_find_base(StorageName,Call,StoredFact) :-
+	generalize_fact_context(Call),
+	flora_storage_module(StorageName,Module),
+	call_if_fdb_storage(StorageName,
+			    flora_call_hooks(Module,FINDFACT,Call,before,AroundHookLink)),
+	flora_storage_find_fact(StorageName,Call,StoredFact),
+	call_if_fdb_storage(StorageName,
+			    flora_call_hooks(Module,FINDFACT,Call,after,AroundHookLink)).
 
 
 
@@ -264,6 +276,11 @@ flora_new_db_storage(StorageName) :-
 flora_storage_find_fact(StorageName,Fct) :- 
 	storage_find_fact(StorageName,Fct).
 
+%% StoredFact is the fact as it is stored in the DB.
+%% May be different from Fct, which unifies with StoredFact.
+flora_storage_find_fact(StorageName,Fct,StoredFact) :- 
+	storage_find_fact(StorageName,Fct,StoredFact).
+
 
 %% Commit changes to the storage trie associated with StorageName
 %% (only if storage has been changed)
@@ -295,9 +312,8 @@ flora_storage_fast_insert_fact(StorageName,IncrFlag,Fact) :-
 	trie_intern_deterministic(Fact,Handle,_Leaf,_).
 
 flora_db_insert_base_fast(StorageName,Call) :-
-	flrtrim_last(Call,Fact),
-	flora_storage_fast_insert_fact(StorageName,INCREMENTAL_TRIE,Fact).
-	%%flora_abolish_table_call(Call).
+	generalize_fact_context(Call),
+	flora_storage_fast_insert_fact(StorageName,INCREMENTAL_TRIE,Call).
 
 %% In assert this means: use better register allocation. Assert last.
 #define CONSERVE_REGISTERS  3
@@ -354,3 +370,11 @@ flora_adaptive_retract(Fact) :-
 	    flora_abort(['internal error: deletion of a fact that is not opaque or dynamic: ', Fact])
 	).
 
+
+generalize_fact_context(Call) :-
+	callable(Call),
+	functor(Call,_,N),
+	N>0,
+	!,
+	machine:set_arg(Call,N,_).
+generalize_fact_context(_).
