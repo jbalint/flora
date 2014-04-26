@@ -127,6 +127,8 @@ fllibprogramans(Gs,NVs) :-
 /********************************************************************
   NVs is a list of output variables
   Gs is a list of goals to evaluate
+
+  This always fails so that the XSB stack will be released.
 ********************************************************************/
 flora_print_all(Gs,NVs) :-
 	NVs == [],
@@ -134,11 +136,16 @@ flora_print_all(Gs,NVs) :-
 	flora_cputime(T0),
 	flora_walltime(WT0),
 	flora_call_hooks(_Mod,QUERYHOOK,Gs,before,AroundHookLink),
+	%% Sometimes this may pick up XWamState>0 even if there is XWamState=0
+	%% Not sure how to avoid this without findall, but we don't want to
+	%% findall Gs if NVs==[], since this might result in multiple calls
 	(catch(flora_call(Gs,NVs,XWamState),
 	       Exception,
 	       flranswer_all_answers_query_handler_new(Exception,Gs,AroundHookLink)
 	      ),
-	    close_open_tables(cleanup)
+	    close_open_tables(cleanup),
+	    flora_call_hooks(_Mod,QUERYHOOK,Gs,after,AroundHookLink),
+	    flora_reclaim_storage_space
 	->
 	    (
 	      flora_cputime(T1),
@@ -247,7 +254,9 @@ flora_print_one(Gs,NVs) :-
 	    flora_write_Yes_or_Unknown(XWamState)
 	;
 	    flora_write_No
-	).
+	),
+	%% to release XSB stack
+	fail.
 flora_print_one(Gs,NVs) :-
 	    ( flora_call(Gs,NVs,XWamState),
 		flora_set_display_submode(answer),
@@ -257,7 +266,9 @@ flora_print_one(Gs,NVs) :-
 	    ;
 		flora_write_No
 	    ),
-	    flora_reclaim_storage_space.
+	    flora_reclaim_storage_space,
+	    %% to release XSB stack
+	    fail.
 
 
 /********************************************************************/
@@ -324,7 +335,8 @@ flora_write_matches([]).
 flora_write_matches([(M,XWamState)|Ms]) :-
 	flora_write_pairs(M,XWamState),
 	flora_stdfdbk_nl,
-	flora_write_matches(Ms).
+	flora_skip_identical_answers(M,Ms,PureMs),
+	flora_write_matches(PureMs).
 
 
 flora_write_pairs([],_).
@@ -341,6 +353,20 @@ flora_write_if_undefined(XWamState) :-
 	; flora_stdfdbk_string('  - undefined')
 	).
 
+%% skip answers matching M in sorted list. Return the skipped list
+/*
+   Without this pruning, the following can happen:
+   p(1) :- \true.
+   p(1) :- \undefined.
+   ?- p(?X).
+   X = 1
+   X = 1 - undefined
+*/
+flora_skip_identical_answers(_M,[],[]) :- !.
+flora_skip_identical_answers(M,[(M,_)|Rest],Out) :-
+	!,
+	flora_skip_identical_answers(M,Rest,Out).
+flora_skip_identical_answers(_M,List,List).
 
 /********************************************************************/
 %% This turns off trace, so that flora internal stuff done after a
@@ -490,61 +516,4 @@ flora_collect_all(Gs,NVs,TrueAns,UndefAns,Exception) :-
 	flora_reclaim_storage_space,
 	storage_delete_all(FLRANSWER_TRUE_TRIE),
 	storage_delete_all(FLRANSWER_UNDEF_TRIE).
-
-
-
-/*
-%% less efficient version
-flora_collect_all(Gs,NVs,TrueAns,UndefAns) :-
-	%% Construct a temporary trie-indexed predicate, FL_QUERY_PREDICATE
-	%% All answers are asserted into that predicate.
-	%% Since it is trie-indexed, duplicates are deleted.
-	%% Reason: some answer lists might have thousands or
-	%% millions of items, which takes a long time to sort. Sometimes
-	%% sort runs out of memory and crashes XSB. 
-	%% Having a trie-asserted query predicate adds a very small
-	%% penalty to each query, but overall speeds up 
-	%% returning the answers, and sometimes avoids crashes.
-	QueryTemplate =.. [FL_QUERY_PREDICATE,_|NVs], %% 1st arg = truth value
-	length([_|NVs],QueryArity),
-	dynamic(FL_QUERY_PREDICATE/QueryArity),
-	index(FL_QUERY_PREDICATE/QueryArity,trie),
-	
-	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,before,AroundHookLink),
-	catch(
-	      (flora_call(Gs,NVs,XWamState),
-		  (XWamState=:=0 -> TVal=0 ; TVal=1),
-		  arg(1,QueryTemplate,TVal), %% bind arg 1 to truth value
-		  assert(QueryTemplate),
-		  fail
-	      ; true
-	      ),
-	      Exception,
-	      flranswer_all_answers_query_handler(Exception,QueryTemplate,AroundHookLink)
-	     ),
-	(var(TrueAns)
-	->
-	    functor(TrueTemplate,FL_QUERY_PREDICATE,QueryArity),
-	    arg(1,TrueTemplate,0), %% select only true answers
-	    flora_findall(TrueTemplate, TrueTemplate, TrueAns1),
-	    sort(TrueAns1,TrueAns)
-	; true
-	),
-	(var(UndefAns)
-	->
-	    functor(UndefTemplate,FL_QUERY_PREDICATE,QueryArity),
-	    arg(1,UndefTemplate,1), %% select only undef answers
-	    flora_findall(UndefTemplate, UndefTemplate, UndefAns1),
-	    sort(UndefAns1,UndefAns)
-	; true
-	),
-	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
-	flora_reclaim_storage_space,
-	abolish(FL_QUERY_PREDICATE/QueryArity),
-	( TrueAns == [], UndefAns == [] -> fail
-	;
-	    true
-	).
-
-*/
 
