@@ -40,6 +40,7 @@
 #define FLRANSWER_UNDEF_TRIE  '_$_$flora_undef_answer_storage'
 #define FLRANSWER_FUNCTOR     answer
 
+#define FLRANSWER_ENDBALL     flranswer_endball
 
 :- import
 	timed_call/4
@@ -103,24 +104,41 @@
 fllibshellans(Gs,NVs) :-
 	flora_switch(all),
 	!,
-	flora_print_all(Gs,NVs).
+	catch(flora_print_all(Gs,NVs),FLRANSWER_ENDBALL,flora_end_of_answer_handler),
+	!,
+	%% to release XSB stack
+	fail.
 
 fllibshellans(Gs,NVs) :-
-	flora_print_one(Gs,NVs).
+	catch(flora_print_one(Gs,NVs),FLRANSWER_ENDBALL,flora_end_of_answer_handler),
+	!,
+	%% to release XSB stack
+	fail.
+
+flora_end_of_answer_handler :-
+	flora_reclaim_storage_space.
 
 
 /********************************************************************/
 fllibprogramans(Gs,NVs) :-
-	flora_print_all(Gs,NVs).
-/* The business of getting just one answer from a program query 
- * needs to be rethought. */
+	catch(flora_print_all(Gs,NVs),FLRANSWER_ENDBALL,flora_end_of_answer_handler),
+	!,
+	%% to release XSB stack
+	fail.
 /*
+%% The business of getting just one answer from a program query 
+%% needs to be thought out.
+fllibprogramans(Gs,NVs) :-
 	flora_switch(all),
 	!,
-	flora_print_all(Gs,NVs).
+	flora_print_all(Gs,NVs),
+	!,
+	fail.
 
 fllibprogramans(Gs,NVs) :-
-	flora_print_one(Gs,NVs).
+	flora_print_one(Gs,NVs),
+	!,
+	fail.
 */
 
 
@@ -135,17 +153,17 @@ flora_print_all(Gs,NVs) :-
 	!,
 	flora_cputime(T0),
 	flora_walltime(WT0),
+
 	flora_call_hooks(_Mod,QUERYHOOK,Gs,before,AroundHookLink),
+
 	%% Sometimes this may pick up XWamState>0 even if there is XWamState=0
 	%% Not sure how to avoid this without findall, but we don't want to
 	%% findall Gs if NVs==[], since this might result in multiple calls
 	(catch(flora_call(Gs,NVs,XWamState),
 	       Exception,
-	       flranswer_all_answers_query_handler_new(Exception,Gs,AroundHookLink)
+	       flranswer_one_answer_query_errhandler(Exception,Gs,AroundHookLink)
 	      ),
-	    close_open_tables(cleanup),
-	    flora_call_hooks(_Mod,QUERYHOOK,Gs,after,AroundHookLink),
-	    flora_reclaim_storage_space
+	    flora_call_hooks(_Mod,QUERYHOOK,Gs,after,AroundHookLink)
 	->
 	    (
 	      flora_cputime(T1),
@@ -158,8 +176,7 @@ flora_print_all(Gs,NVs) :-
 	      ; true
 	      ),
 	      flora_write_Yes_or_Unknown(XWamState)
-	    ),
-	    fail
+	    )
 	;
 	    flora_cputime(T1),
 	    flora_walltime(WT1),
@@ -170,9 +187,9 @@ flora_print_all(Gs,NVs) :-
 				     [WT,T])
 	    ; true
 	    ),
-	    flora_write_No,
-	    fail
-	).
+	    flora_write_No
+	),
+	throw(FLRANSWER_ENDBALL).
 
 flora_print_all(Gs,NVs) :-
 	flora_cputime(T0),
@@ -209,14 +226,13 @@ flora_print_all(Gs,NVs) :-
 			    TempL
 			   ),
 	      Exception,
-	      flranswer_all_answers_query_handler(Exception,QueryTemplate,AroundHookLink)
+	      flranswer_all_answers_query_errhandler(Exception,QueryTemplate,AroundHookLink)
 	     ),
 	flora_cputime(T1),
 	flora_walltime(WT1),
 	T is T1-T0,
 	WT is WT1-WT0,
 	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
-	flora_reclaim_storage_space,
 	abolish(FL_QUERY_PREDICATE/QueryArity),
 	sort(TempL,L),
 	( L = [] ->
@@ -226,9 +242,7 @@ flora_print_all(Gs,NVs) :-
 	    ;
 		true
 	    ),
-	    flora_write_No,
-	    !,
-	    fail
+	    flora_write_No
 	;
 	    flora_set_display_submode(answer),
 	    flora_write_matches(L),
@@ -239,10 +253,10 @@ flora_print_all(Gs,NVs) :-
 	    ;
 		true
 	    ),
-	    flora_write_Yes,
-	    !,
-	    fail
-	).
+	    flora_write_Yes
+	),
+	%% throw to close open tables
+	throw(FLRANSWER_ENDBALL).
 
 
 /********************************************************************/
@@ -255,20 +269,20 @@ flora_print_one(Gs,NVs) :-
 	;
 	    flora_write_No
 	),
-	%% to release XSB stack
-	fail.
+	%% throw to close open tables
+	throw(FLRANSWER_ENDBALL).
+
 flora_print_one(Gs,NVs) :-
-	    ( flora_call(Gs,NVs,XWamState),
-		flora_set_display_submode(answer),
-		flora_write_pairs(NVs,XWamState),
-		flora_set_display_submode(default),
-		flora_fail_unless_return
-	    ;
-		flora_write_No
-	    ),
-	    flora_reclaim_storage_space,
-	    %% to release XSB stack
-	    fail.
+	( flora_call(Gs,NVs,XWamState),
+	    flora_set_display_submode(answer),
+	    flora_write_pairs(NVs,XWamState),
+	    flora_set_display_submode(default),
+	    flora_fail_unless_return
+	;
+	    flora_write_No
+	),
+	%% throw to close open tables
+	throw(FLRANSWER_ENDBALL).
 
 
 /********************************************************************/
@@ -319,7 +333,7 @@ flora_call(Goal,_NVs,XWamState) :-
 	FLORA_DELAY_CHECKER(AttrVars,[]),
 	%% xwam_state MUST be after FLORA_DELAY_CHECKER to get correct state
 	xwam_state(DELAY_REG,XWamState),
-	%%writeln(final_xwam_state=XWamState+Goal),
+	%%DBGOUTLN(final_xwam_state=XWamState+Goal),
 	flora_commit_storage,
 	flora_handle_end_of_call.
 
@@ -391,21 +405,20 @@ flora_nonbuiltin_class(C) :- \+flora_builtin_datatype(C).
 
 
 %% clean up after query, if error
-flranswer_all_answers_query_handler(Exception,QueryTemplate,AroundHookLink) :-
+flranswer_all_answers_query_errhandler(Exception,QueryTemplate,AroundHookLink) :-
 	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
 	flora_reclaim_storage_space,
 	retractall(QueryTemplate),
-	%%abolish(QueryTemplate),
 	throw(Exception).
 
-flranswer_all_answers_query_handler_new(Exception,QueryTemplate,AroundHookLink) :-
+flranswer_all_answers_query_errhandler_collect(Exception,QueryTemplate,AroundHookLink) :-
 	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
 	flora_reclaim_storage_space,
 	storage_delete_all(FLRANSWER_TRUE_TRIE),
 	storage_delete_all(FLRANSWER_UNDEF_TRIE),
 	throw(Exception).
 
-flranswer_one_answer_query_handler_new(Exception,QueryTemplate,AroundHookLink) :-
+flranswer_one_answer_query_errhandler(Exception,QueryTemplate,AroundHookLink) :-
 	flora_call_hooks(_Mod,QUERYHOOK,QueryTemplate,after,AroundHookLink),
 	flora_reclaim_storage_space,
 	throw(Exception).
@@ -447,9 +460,9 @@ flora_collect_all(Gs,NVs,TrueAns,UndefAns,Exception) :-
 	flora_call_hooks(_Mod,QUERYHOOK,Gs,before,AroundHookLink),
 	(catch(flora_call(Gs,NVs,XWamState),
 	       Exception,
-	       flranswer_one_answer_query_handler_new(Exception,
-						      Gs,
-						      AroundHookLink)
+	       flranswer_one_answer_query_errhandler(Exception,
+						     Gs,
+						     AroundHookLink)
 	      ),
 	    close_open_tables(cleanup),
 	    (XWamState=:=0
@@ -494,9 +507,9 @@ flora_collect_all(Gs,NVs,TrueAns,UndefAns,Exception) :-
 	      ; true
 	      ),
 	      Exception,
-	      flranswer_all_answers_query_handler_new(Exception,
-	                                              QueryTemplate,
-						      AroundHookLink)
+	      flranswer_all_answers_query_errhandler_collect(Exception,
+							     QueryTemplate,
+							     AroundHookLink)
 	     ),
 	(var(Exception) ->  Exception = FLORA_NORMAL
 	; true

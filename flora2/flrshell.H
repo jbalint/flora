@@ -71,6 +71,8 @@
 	print_backtrace/1
    from error_handler.
 
+%%:- import FL_QUERY_PREDICATE0/1 from usermod.
+
 %%:- import close_open_tables/1 from machine.
 
 :- import flora_undefined_predicate_hook/3 from flrundefhook.
