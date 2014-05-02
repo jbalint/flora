@@ -29,6 +29,7 @@ ALLOBJS = flrio$(PROLOGEXT) \
 	  flrstorage$(PROLOGEXT) flrsystem$(PROLOGEXT) \
 	  flrbasetype$(PROLOGEXT) \
 	  flrparse$(PROLOGEXT) \
+	  flrshow$(PROLOGEXT) \
 	  flrtypeconstraint$(PROLOGEXT)
 
 OPTIONS = [optimize]

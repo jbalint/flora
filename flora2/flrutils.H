@@ -117,7 +117,7 @@
 	flora_tokens/2,
 	flora_token_text/6,
 	flora_symbol_token_struct/6,
-	flora_rule_delimeter_struct/6,
+	flora_rule_delimiter_struct/6,
 	flora_blank_line/1,
 	flora_current_compile_filename/1,
         flora_compile_filename_by_token/2

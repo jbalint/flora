@@ -61,7 +61,7 @@
 	flora_symbol_token_struct/6,
 	flora_transactional_symbol_token_struct/6,
 	flora_special_token_struct/6,
-	flora_rule_delimeter_struct/6,
+	flora_rule_delimiter_struct/6,
 	flora_blank_line/1,
 	flora_begin_file/1,
 	flora_end_file/1,

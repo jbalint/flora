@@ -33,6 +33,7 @@ ALL = 	flrio${PROLOGEXT} \
 	flrsystem${PROLOGEXT} \
 	flrbasetype${PROLOGEXT} \
 	flrparse${PROLOGEXT} \
+	flrshow${PROLOGEXT} \
 	flrtypeconstraint${PROLOGEXT}
 
 Option = [optimize]
