@@ -77,11 +77,9 @@
 	flora_prlgdef/2
    from flrprolog.
 
-/*
 :- import
-	flora_retractall_substitute/1
+	flora_read_then_parse_term_string/3
    from flrutils.
-*/
 
 :- import
 	flora_prim_argdef/3,
@@ -98,6 +96,7 @@
 :- import flora_special_builtin_synonym/2 from flrsynonym.
 
 :- import
+	flora_canonical_type_name/2,
 	flora_synonymous_type_names/2
    from flrdatatype.
 :- import

@@ -46,6 +46,13 @@
 	flora_write_goal/1
    from flrdecode.
 
+:- import
+	'\\isiri'/1,
+	'\\isstring'/1,
+	'\\issymbol'/1,
+	'\\isboolean'/1
+    from flrdatatype.
+
 
 ?- flora_load_library(FLLIBMETAOPS).
 
@@ -62,14 +69,26 @@
 	flora_dynrule_check_handler(AttrValue,VarBinding),
 	no_warnings
     ).
-:- install_attribute_portray_hook(FLDYNRULEVARCHECK,Attr,flora_write_oid(Attr)).
 
 :- install_verify_attribute_handler(
 	FLSEMANTICUNIFICATION,AttrValue,VarBinding,
 	flora_semantic_unification_handler(AttrValue,VarBinding),
 	no_warnings
     ).
+
+%% attribute here should be a check for the datatype.
+%% E.g., is_list(_), integer(_), etc.
+:- install_verify_attribute_handler(
+	FL_DT_VAR,AttrValue,VarBinding,
+	flora_DT_variable_handler(AttrValue,VarBinding),
+        no_warnings
+   ).
+
+:- install_attribute_portray_hook(FLDYNRULEVARCHECK,Attr,flora_write_oid(Attr)).
+
 :- install_attribute_portray_hook(FLSEMANTICUNIFICATION,Attr,flora_write_goal(Attr)).
+
+:- install_attribute_portray_hook(FL_DT_VAR,Attr,flrvar_dt_portray(Attr)).
 
 /****************** The actual handlers **************************************/
 
@@ -92,3 +111,36 @@ flora_dynrule_check_handler(AttributeValue,VariableBinding) :-
 %% to them as attributes.
 flora_semantic_unification_handler(AttributeValue,VariableBinding) :-
 	FLLIBUNIVEQFORM(AttributeValue,VariableBinding).
+
+
+flora_DT_variable_handler(AttrValue,VarBinding) :-
+	%% AttrValue is something like is_list(_) or integer(_)
+	arg(1,AttrValue,VarBinding),
+	call(AttrValue).
+
+%% Datatype var tests - assigned to type variables by the compilation
+flr_dt_list_test(X) :- is_list(X), !.
+flr_dt_list_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_list_test(_)).
+flr_dt_integer_test(X) :- integer(X), !.
+flr_dt_integer_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_integer_test(_)).
+flr_dt_real_test(X) :- real(X), !.
+flr_dt_real_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_real_test(_)).
+flr_dt_charlist_test(X) :- is_charlist(X), !.
+flr_dt_charlist_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_charlist_test(_)).
+flr_dt_iri_test(X) :- '\\isiri'(X), !.
+flr_dt_iri_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_iri_test(_)).
+flr_dt_string_test(X) :- '\\isstring'(X), !.
+flr_dt_string_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_string_test(_)).
+flr_dt_symbol_test(X) :- '\\issymbol'(X), !.
+flr_dt_symbol_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_symbol_test(_)).
+flr_dt_boolean_test(X) :- \+(\+'\\isboolean'(X)), !.
+flr_dt_boolean_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_boolean_test(_)).
+
+flrvar_dt_portray(flr_dt_list_test(_)) :- write('list').
+flrvar_dt_portray(flr_dt_integer_test(_)) :- write('integer').
+flrvar_dt_portray(flr_dt_real_test(_)) :- write('real').
+flrvar_dt_portray(flr_dt_charlist_test(_)) :- write('charlist').
+flrvar_dt_portray(flr_dt_iri_test(_)) :- write('iri').
+flrvar_dt_portray(flr_dt_string_test(_)) :- write('string').
+flrvar_dt_portray(flr_dt_symbol_test(_)) :- write('symbol').
+flrvar_dt_portray(flr_dt_boolean_test(_)) :- write('boolean').

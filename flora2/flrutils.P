@@ -3052,6 +3052,61 @@ util_read_parse_compile(Option,Tokens,RulesCode,SignCode,FactsCode,QueryCode,LQC
 
 
 /*************************************************************************
+  flora_read_then_parse_term(-ComposerTerm,-Status)
+  flora_read_then_parse_term(-InputTokens,-ComposerTerm,-Status)
+
+        Read standard input (one line) then compose and parse as term.
+
+        For reading file, Option is FLORA_FILE. For reading command line,
+        Option is FLORA_COMMANDLINE.
+
+        The output is ComposerTerm.
+        InputTokens is the list of tokens after tokenization.
+        Provided because it is sometimes useful.
+
+        flora_read_then_parse_term/2 is like flora_read_then_parse_term/3,
+	but discards InputTokens.
+
+*************************************************************************/
+flora_read_then_parse_term(ParserTerm,Status) :-
+	flora_read_then_parse_term(_InputTokens,ParserTerm,Status).
+flora_read_then_parse_term(InputTokens,ParserTerm,Status) :-
+	%% get InputTokens
+	flora_tokens(InputTokens,LexerStatus), 
+	count_errors(LexerStatus,LexErrNum),
+	( LexErrNum > 0 -> ErrNum=LexErrNum
+	; flora_blank_line(InputTokens) -> ErrNum = 0
+	; %% compose
+	    flora_compose(InputTokens,ComposerTerm,ComposerStatus),
+	    count_errors(ComposerStatus,CompoErrNum),
+	    ( CompoErrNum > 0 -> ErrNum=CompoErrNum
+	    ; %% parse
+		flora_parse_term_external(ComposerTerm,ParserTerm,ParserStatus),
+		count_errors(ParserStatus,ParErrNum),
+		( ParErrNum > 0 -> ErrNum=ParErrNum
+		; ErrNum = 0
+		)
+	    )
+        ),
+	(var(ComposerStatus) -> ComposerStatus = [] ; true),
+	(var(ParserStatus) -> ParserStatus = [] ; true),
+	(LexErrNum > 0 -> LexerInfo = lexer([(InputTokens,LexerStatus)])
+	; LexerInfo = lexer(NO_ERRORS)
+	),
+
+	EWS=[error(ErrNum),
+	     LexerInfo,
+	     composer(ComposerStatus),
+	     parser(ParserStatus) ],
+	print_warnings(EWS),
+	print_errors(EWS),
+
+	( flora_end_of_input(LexerStatus) -> Status=[FLORA_EOF|EWS]
+	; Status=[FLORA_NOT_EOF|EWS]
+	).
+
+
+/*************************************************************************
   flora_read_then_parse(-ParserTerm,-Status)
   flora_read_then_parse(-InputTokens,-ParserTerm,-Status)
 
@@ -3075,25 +3130,17 @@ flora_read_then_parse(InputTokens,ParserTerm,Status) :-
 	%% get InputTokens
 	flora_tokens(InputTokens,LexerStatus), 
 	count_errors(LexerStatus,LexErrNum),
-	( LexErrNum > 0 ->
-	    ErrNum=LexErrNum
-
-	; flora_blank_line(InputTokens) ->
-	    ErrNum = 0
-	;
-	    %% compose
+	( LexErrNum > 0 -> ErrNum=LexErrNum
+	; flora_blank_line(InputTokens) -> ErrNum = 0
+	; %% compose
 	    flora_compose(InputTokens,ComposerTerm,ComposerStatus),
 	    count_errors(ComposerStatus,CompoErrNum),
-	    ( CompoErrNum > 0 ->
-		ErrNum=CompoErrNum
-	    ;
-		%% parse
+	    ( CompoErrNum > 0 -> ErrNum=CompoErrNum
+	    ; %% parse
 		flora_parse(ComposerTerm,ParserTerm,ParserStatus),
 		count_errors(ParserStatus,ParErrNum),
-		( ParErrNum > 0 ->
-		    ErrNum=ParErrNum
-		;
-		    ErrNum = 0
+		( ParErrNum > 0 -> ErrNum=ParErrNum
+		; ErrNum = 0
 		)
 	    )
         ),
@@ -3102,18 +3149,16 @@ flora_read_then_parse(InputTokens,ParserTerm,Status) :-
 	(LexErrNum > 0 -> LexerInfo = lexer([(InputTokens,LexerStatus)])
 	; LexerInfo = lexer(NO_ERRORS)
 	),
+
 	EWS=[error(ErrNum),
 	     LexerInfo,
 	     composer(ComposerStatus),
 	     parser(ParserStatus) ],
-
 	print_warnings(EWS),
 	print_errors(EWS),
 
-	( flora_end_of_input(LexerStatus) ->
-	    Status=[FLORA_EOF|EWS]
-	;
-	    Status=[FLORA_NOT_EOF|EWS]
+	( flora_end_of_input(LexerStatus) -> Status=[FLORA_EOF|EWS]
+	; Status=[FLORA_NOT_EOF|EWS]
 	).
 
 %% used only for testing
@@ -3171,6 +3216,12 @@ flora_read_then_parse_string(String,ParserTerm,Status) :-
 	see_source(atom(String),IOPort,OldStdin),
 	!,
 	flora_read_then_parse(ParserTerm,Status),
+	seen_source(IOPort,OldStdin).
+
+flora_read_then_parse_term_string(String,ComposerTerm,Status) :-
+	see_source(atom(String),IOPort,OldStdin),
+	!,
+	flora_read_then_parse_term(ComposerTerm,Status),
 	seen_source(IOPort,OldStdin).
 
 flora_read_from_source(Source,Term) :-

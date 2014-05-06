@@ -1193,25 +1193,64 @@ transactionalvar_struct(Name,Index,PRTRANSACTIONALVARIABLE(Name,Index)).
 strobj_struct(FLSTRING(String,I),PRSTRING(String,I)).
 transactionalstrobj_struct(FLTRANSACTIONALSTRING(String,I),PRSTRING(String,I)).
 
+datatype_tester(FL_LISTTYPE,flr_dt_list_test).
+datatype_tester(FL_LONG,flr_dt_integer_test).
+datatype_tester(FL_DOUBLE,flr_dt_real_test).
+datatype_tester(FL_CHARLIST,flr_dt_charlist_test).
+datatype_tester(FL_STRING,flr_dt_string_test).
+datatype_tester(FL_IRI,flr_dt_iri_test).
+datatype_tester(FL_SYMBOL,flr_dt_symbol_test).
+datatype_tester(FL_BOOL,flr_dt_boolean_test).
+
 datatypeobj_struct(FLDATATYPE(Type,Lit,Idx),
-		   PRDATATYPE(TypeCode,LitCode,OutIdx),
+		   Object,
+		   VarBindingCode,
 		   Status) :-
 	!,
 	compile_body_pathexp_top(Type,FL_THISMODULE,TypeCode,_,_,[],_),
-	(is_flvariable(Lit,VarName,VarIdx)
-	->  add_underscore(VarName,InDataTypeVarName),
+	%% First case is special treatment of list, real, integer variables:
+	%% \list, \integer, \real, \long, \short, \charlist, \symbol, \boolean
+	(is_flvariable(Lit,VarName,VarIdx),
+	    is_prbuiltin_identifier(TypeCode,TypeName,_),
+	    datatype_tester(TypeName,TesterFun)
+	->
+	    varobj_struct(VarName,VarIdx,DTVarCode),
+	    Object = DTVarCode,
+	    %% construct data type test (eg, is_list(_), integer(_))
+	    atomobj_struct(TesterFun,DTTester),
+	    new_dontcare_prvariable(NO_INDEX,TestArgVar),
+	    prologterm_struct(DTTester,1,[TestArgVar],DTTesterCode),
+	    %% put is_list(_) as the attr val of FL_DT_VAR
+	    %% for the list variable
+	    new_dontcare_prvariable(VarIdx,NewAttrVar),
+	    attrvar_code(NewAttrVar,DTTesterCode,FL_DT_VAR,NewAttrVarCode),
+	    %% construct DTVarCode=NewAttrVar
+	    atomobj_struct(FL_UNIVEQ,UnivEQCode),
+	    prologterm_struct(UnivEQCode,2,[DTVarCode,NewAttrVar],ConnectorLit),
+	    %% VarBindingCode is the conjunction
+	    %%     put_attr(NewAttrVar,FL_DT_VAR,is_list(_))
+	    %%         /\ DTVarCode=NewAttrVar
+	    conjunct_struct(NewAttrVarCode,ConnectorLit,VarBindingCode),
+	    Status = NO_ERRORS
+	; is_flvariable(Lit,VarName,VarIdx) ->
+	    add_underscore(VarName,InDataTypeVarName),
 	    varobj_struct(InDataTypeVarName,VarIdx,LitCode),
-	    OutIdx = VarIdx, Status = NO_ERRORS
-	; is_fldatatypelist(Lit,ListOfLits)
-	-> compile_datatype_list(ListOfLits,LitCode0,Status),
+	    Object = PRDATATYPE(TypeCode,LitCode,VarIdx),
+	    VarBindingCode = NULL,
+	    Status = NO_ERRORS
+	; is_fldatatypelist(Lit,ListOfLits) ->
+	    compile_datatype_list(ListOfLits,LitCode0,Status),
 	    datatypelistobj_struct(LitCode0,LitCode),
-	    OutIdx=Idx
+	    VarBindingCode = NULL,
+	    Object = PRDATATYPE(TypeCode,LitCode,Idx)
 	;
-	    LitCode = Lit, OutIdx=Idx, Status = NO_ERRORS
+	    Object = PRDATATYPE(TypeCode,Lit,Idx),
+	    VarBindingCode = NULL,
+	    Status = NO_ERRORS
 	).
-datatypeobj_struct(FLTRANSACTIONALPREDSPEC(DTspec),Code,Status) :-
+datatypeobj_struct(FLTRANSACTIONALPREDSPEC(DTspec),Object,VarBindingCode,Status) :-
 	!,
-	datatypeobj_struct(DTspec,Code,Status).
+	datatypeobj_struct(DTspec,Object,VarBindingCode,Status).
 
 datatypelistobj_struct(ListLit,PRDATATYPELIST(ListLit)).
 
@@ -6936,13 +6975,13 @@ compile_body_literal(ParserTerm,WS,NULL,BodyLitCode,[],Status) :-
 compile_body_literal(ParserTerm,_WS,NULL,BodyLitCode,[],Status) :-
 	is_fldatatype(ParserTerm,_Sort,_Lit,_Index),
 	!,
-	datatypeobj_struct(ParserTerm,Code1,Status),
+	datatypeobj_struct(ParserTerm,Code1,_VarBindingCode,Status),
 	atomlit_struct(BODYLITERAL,Code1,BodyLitCode).
 
 compile_body_literal(ParserTerm,_WS,NULL,BodyLitCode,[],Status) :-
 	is_fltransactionaldatatype(ParserTerm,_Sort,_Lit,_Index),
 	!,
-	datatypeobj_struct(ParserTerm,Code1,Status),
+	datatypeobj_struct(ParserTerm,Code1,_VarBindingCode,Status),
 	transactionalatomlit_struct(BODYLITERAL,Code1,BodyLitCode).
 
 compile_body_literal(ParserTerm,_WS,_OidCode,_BodyLitCode,_BodyFrontL,[Err]) :-
@@ -7283,10 +7322,10 @@ compile_pathexp_no_workspace(ParserTerm,Object,NULL,NULL,[],Status) :-
 	verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
 	builtin_identifier_struct(ParserTerm,Object).
 
-compile_pathexp_no_workspace(ParserTerm,Object,NULL,NULL,[],Status) :-
+compile_pathexp_no_workspace(ParserTerm,Object,VarBindingCode,NULL,[],Status) :-
 	is_fldatatype(ParserTerm,_Sort,_Lit,_Index),
 	!,
-	datatypeobj_struct(ParserTerm,Object,Status).
+	datatypeobj_struct(ParserTerm,Object,VarBindingCode,Status).
 
 compile_pathexp_no_workspace(ParserTerm,Object,NULL,NULL,[],NO_ERRORS) :-
 	is_fltransactionalstring(ParserTerm,_S),
@@ -8470,13 +8509,13 @@ compile_head_literal(ParserTerm,_WS,HeadLitCode,H2BCodeFront,H2BCodeBack,Status)
 compile_head_literal(ParserTerm,_WS,HeadLitCode,NULL,NULL,Status) :-
 	is_fldatatype(ParserTerm,_Sort,_Lit,_Index),
 	!,
-	datatypeobj_struct(ParserTerm,Code1,Status),
+	datatypeobj_struct(ParserTerm,Code1,_VarBindingCode,Status),
 	atomlit_struct(HEADLITERAL,Code1,HeadLitCode).
 
 compile_head_literal(ParserTerm,_WS,HeadLitCode,NULL,NULL,Status) :-
 	is_fltransactionaldatatype(ParserTerm,_Sort,_Lit,_Index),
 	!,
-	datatypeobj_struct(ParserTerm,Code1,Status),
+	datatypeobj_struct(ParserTerm,Code1,_VarBindingCode,Status),
 	transactionalatomlit_struct(HEADLITERAL,Code1,HeadLitCode).
 
 compile_head_literal(ParserTerm,WS,HeadLitCode,NULL,NULL,Status) :-
@@ -8577,10 +8616,10 @@ compile_head_pathexp(ParserTerm,_WS,Object,NULL,NULL,NULL,Status) :-
 	verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
 	builtin_identifier_struct(ParserTerm,Object).
 
-compile_head_pathexp(ParserTerm,_WS,Object,NULL,NULL,NULL,Status) :-
+compile_head_pathexp(ParserTerm,_WS,Object,NULL,VarBindingCode,NULL,Status) :-
 	is_fldatatype(ParserTerm,_Sort,_Lit,_Index),
 	!,
-	datatypeobj_struct(ParserTerm,Object,Status).
+	datatypeobj_struct(ParserTerm,Object,VarBindingCode,Status).
 
 compile_head_pathexp(ParserTerm,_WS,Object,NULL,NULL,NULL,NO_ERRORS) :-
 	is_flstring(ParserTerm,_S),
@@ -8868,7 +8907,7 @@ compile_head_objspec(SpecBody,ObjTerm,WS,Object,Code,H2BCodeFront,H2BCodeBack,St
 	;
 	  compile_head_pathexp(ObjTerm,WS,Object,ObjCode,ObjH2BCodeFront,ObjH2BCodeBack,S),
 	  ( no_errors_found(S) -> 
-	      compile_head_specbody(Object,SpecBody,WS,SCode,SH2BCodeFront,SH2BCodeBack,Status),
+	      compile_head_specbody(SpecBody,Object,WS,SCode,SH2BCodeFront,SH2BCodeBack,Status),
 	      ( no_errors_found(Status) -> 
 		  conjunct_struct(ObjCode,SCode,Code),
 		  conjunct_struct(ObjH2BCodeFront,SH2BCodeFront,H2BCodeFront),
@@ -8883,20 +8922,19 @@ compile_head_objspec(SpecBody,ObjTerm,WS,Object,Code,H2BCodeFront,H2BCodeBack,St
 
 
 /****************************************************************************
-  compile_head_specbody(+Object,+SpecTerm,+WS,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
-  compile_head_mvd_attspec(+Object,+AttObj,+SpecType,+VL,+WS,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
+  compile_head_specbody(+SpecTerm,+Object,+WS,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
 ****************************************************************************/
-compile_head_specbody(Object,SpecTerm,_WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
+compile_head_specbody(SpecTerm,Object,_WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flworkspace(SpecTerm,Spec,SpecWS),
 	!,
-	compile_head_specbody(Object,Spec,SpecWS,Code,H2BCodeFront,H2BCodeBack,Status).
+	compile_head_specbody(Spec,Object,SpecWS,Code,H2BCodeFront,H2BCodeBack,Status).
 
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
+compile_head_specbody(SpecTerm,Object,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flconjunct(SpecTerm,L,R),
 	!,
-	compile_head_specbody(Object,L,WS,LCode,LH2BCodeFront,LH2BCodeBack,S),
+	compile_head_specbody(L,Object,WS,LCode,LH2BCodeFront,LH2BCodeBack,S),
 	( no_errors_found(S) -> 
-	    compile_head_specbody(Object,R,WS,RCode,RH2BCodeFront,RH2BCodeBack,Status),
+	    compile_head_specbody(R,Object,WS,RCode,RH2BCodeFront,RH2BCodeBack,Status),
 	    ( no_errors_found(Status) -> 
 		conjunct_struct(LCode,RCode,Code),
 		conjunct_struct(LH2BCodeFront,RH2BCodeFront,H2BCodeFront),
@@ -8908,17 +8946,17 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :
         ),
 	!.
 
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
+compile_head_specbody(SpecTerm,Object,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flneg(SpecTerm,G,Idx),
 	!,
-	compile_head_specbody(Object,G,WS,GCode,H2BCodeFront,H2BCodeBack,S),
+	compile_head_specbody(G,Object,WS,GCode,H2BCodeFront,H2BCodeBack,S),
 	!,
 	( no_errors_found(S) -> 
 	    neg_struct(GCode,Idx,Code,Status)
 	; Status = S
 	).
 
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
+compile_head_specbody(SpecTerm,Object,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flmvdattspec(SpecTerm,AttTerm,_ArrowType,VL,SpecType),
 	!,
 	compile_head_pathexp(AttTerm,WS,AObj,ACode,AH2BCodeFront,AH2BCodeBack,S),
@@ -8944,7 +8982,7 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :
         ),
 	!.
 
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
+compile_head_specbody(SpecTerm,Object,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flmethspec(SpecTerm,MethTerm,SpecType),
 	!,
 	compile_head_pathexp(MethTerm,WS,MethObj,MCode,H2BCodeFront,H2BCodeBack,PathexpStatus),
@@ -8960,7 +8998,7 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :
 	),
 	!.
 
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
+compile_head_specbody(SpecTerm,Object,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_fltranspec(SpecTerm,TranTerm,SpecType),
 	!,
 	compile_head_pathexp(TranTerm,WS,TranObj,TCode,H2BCodeFront,H2BCodeBack,PathexpStatus),
@@ -8978,7 +9016,7 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :
 
 
 %% signatures: =>
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
+compile_head_specbody(SpecTerm,Object,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flsigattspec(SpecTerm,AttTerm,_ArrowType,ValTerm,SpecType),
 	!,
 	compile_head_pathexp(AttTerm,WS,AttObj,ACode,AH2BCodeFront,AH2BCodeBack,S),
@@ -9010,7 +9048,7 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :
         ),
 	!.
 
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
+compile_head_specbody(SpecTerm,Object,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flsigattconspec(SpecTerm,AttTerm,ConstrTerm,_ArrowType,ValTerm,SpecType),
 	!,
 	compile_head_pathexp(AttTerm,WS,AttObj,ACode,AH2BCodeFront,AH2BCodeBack,S),
@@ -9052,7 +9090,7 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :
 
 
 %% boolean signatures: =>.
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
+compile_head_specbody(SpecTerm,Object,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_flboolsig(SpecTerm,AttTerm,_ArrowType,SpecType),
 	!,
 	compile_head_pathexp(AttTerm,WS,AttObj,ACode,H2BCodeFront,H2BCodeBack,PathexpStatus),
@@ -9070,7 +9108,7 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :
 
 
 %% boolean signatures: =>% for transactional method
-compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
+compile_head_specbody(SpecTerm,Object,WS,Code,H2BCodeFront,H2BCodeBack,Status) :-
 	is_fltransig(SpecTerm,AttTerm,_ArrowType,SpecType),
 	!,
 	compile_head_pathexp(AttTerm,WS,AttObj,ACode,H2BCodeFront,H2BCodeBack,PathexpStatus),
@@ -9086,6 +9124,9 @@ compile_head_specbody(Object,SpecTerm,WS,Code,H2BCodeFront,H2BCodeBack,Status) :
 	),
 	!.
 
+/*******************************************************************************
+  compile_head_mvd_attspec(+Object,+AttObj,+SpecType,+VL,+WS,-Code,-H2BCodeFront,-H2BCodeBack,-Status)
+*******************************************************************************/
 compile_head_mvd_attspec(_Obj,_AttObj,_SpecType,[],_WS,NULL,NULL,NULL,NO_ERRORS) :- !.
 
 compile_head_mvd_attspec(Object,AttObj,SpecType,[T|L],WS,Code,H2BCodeFront,H2BCodeBack,Status) :-

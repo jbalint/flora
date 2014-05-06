@@ -665,6 +665,11 @@ flora_get_flatom_name(FLATOM(Name,_),Name).
 flora_get_flatom_name(FLBUILTIN_IDENTIFIER(Name,_),Name).
 flora_get_flatom_name(FLTRANSACTIONALATOM(Name,_),Name).
 
+flora_get_flatom_name(FLTOKEN(Name,I),FLTOKEN,Name,I).
+flora_get_flatom_name(FLATOM(Name,I),FLATOM,Name,I).
+flora_get_flatom_name(FLBUILTIN_IDENTIFIER(Name,I),FLBUILTIN_IDENTIFIER,Name,I).
+flora_get_flatom_name(FLTRANSACTIONALATOM(Name,I),FLTRANSACTIONALATOM,Name,I).
+
 %% This is also exported. Operates on FL-terms
 flora_get_flatomvar_name(FLVAR(Name,_),Name1) :-
 	!,
@@ -1064,8 +1069,37 @@ is_flatom_struct(FLATOM(Atom,_I),Atom).
 is_flatom_struct(FLATOM(Atom,I),Atom,I).
 is_flnumber_struct(FLNUMBER(_Num,_I)).
 is_flnumber_struct(FLNUMBER(Num,_I),Num).
+is_flnumber_struct(FLNUMBER(Num,I),Num,I).
 is_flstring_struct(FLSTRING(_Str,_I)).
 is_flstring_struct(FLSTRING(Str,I),Str,I).
+
+base_datatype_tester(FL_LISTTYPE,is_fllist_struct(_),ERROR_LISTTYPE).
+base_datatype_tester(FL_LONG,is_flinteger_test(_),ERROR_INTEGER).
+base_datatype_tester(FL_DOUBLE,is_fldouble_test(_),ERROR_REAL).
+base_datatype_tester(FL_CHARLIST,is_charlist_test(_),ERROR_CHARLIST).
+base_datatype_tester(FL_SYMBOL,is_flatom_test(_),ERROR_SYMBOL).
+base_datatype_tester(FL_BOOL,is_bool_test(_),ERROR_BOOLEAN).
+
+is_flinteger_test(Struct) :-
+	is_flnumber_struct(Struct,Num),
+	integer(Num).
+is_fldouble_test(Struct) :-
+	is_flnumber_struct(Struct,Num),
+	number(Num).
+is_charlist_test(_).
+is_flatom_test(Struct) :-
+	is_flatom_struct(Struct,Atm),
+	flrdatatype:'\\issymbol'(Atm).
+is_bool_test(Struct) :-
+	is_flatom_struct(Struct,Atm),
+	bool_constant(Atm).
+bool_constant(FL_TRUE).
+bool_constant(FL_FALSE2).
+bool_constant(FL_UNDEFINED).
+
+convert_booleans(FLATOM(FL_TRUE,I),FLBUILTIN_IDENTIFIER(FL_TRUECONST,I)).
+convert_booleans(FLATOM(FL_FALSE2,I),FLBUILTIN_IDENTIFIER(FL_FALSECONST,I)).
+convert_booleans(FLATOM(FL_UNDEFINED,I),FLBUILTIN_IDENTIFIER(FL_UNDEFCONST,I)).
 
 is_fltransactionalstring_struct(FLTRANSACTIONALSTRING(Str,I),Str,I).
 
@@ -3074,8 +3108,11 @@ flora_parse_fact(CanoniTerm,Code,Status) :-
 	set_context(parsing_fact),
 	parse_head(CanoniTerm,CodeList,Status),
 	clear_context(parsing_fact),
-	flconjunct_list2list(CodeList,ConjunctlessList),
-	flfact_struct(ConjunctlessList,Code).
+	(Status == NO_ERRORS ->
+	    flconjunct_list2list(CodeList,ConjunctlessList),
+	    flfact_struct(ConjunctlessList,Code)
+	; true
+	).
 
 
 /****************************************************************************
@@ -3110,8 +3147,8 @@ flora_parse_rule(Head,Body,Code,Status) :-
         set_context(parsing_rulehead),
 	parse_head(Head,HeadCodeList,S),
         clear_context(parsing_rulehead),
-	flconjunct_list2list(HeadCodeList,ConjunctlessList),
 	( S == NO_ERRORS ->
+	    flconjunct_list2list(HeadCodeList,ConjunctlessList),
 	    parse_rule_body(Body,BodyCode,Status),
 	    flrule_struct(ConjunctlessList,BodyCode,Code)
 	;
@@ -8327,7 +8364,10 @@ parse_dynhead_top(CanoTerm,DWS,ConjunctlessList,Status) :-
 	    get_index(CanoTerm,Idx),
 	    multiply_setarg_code_list(HCLpre,HCL),
 	    to_TNF_list(HCL,Idx,CodeList,PARSER_TNF_FLAG,Status),
-	    flconjunct_list2list(CodeList,ConjunctlessList)
+	    (Status == NO_ERRORS ->
+		flconjunct_list2list(CodeList,ConjunctlessList)
+	    ; true
+	    )
 	; Status = S
 	).
 	
@@ -8635,15 +8675,50 @@ parse_composer_datatype(Args,If,DWS,Code,Status) :-
 	(Status1 == NO_ERRORS -> Status3 = Status2
 	; Status3 = Status1
 	),
-	flora_get_flatomvar_name(TypeCode,TypeName),
+	%% convert to canonical TypeCode/Name
+	flora_get_flatom_name(TypeCode,SyntaxType,TypeName,TypeIdx),
+	flora_canonical_type_name(TypeName,CanonTypeName),
+	flora_get_flatom_name(TypeCodeCanon,SyntaxType,CanonTypeName,TypeIdx),
 	(Status3 == NO_ERRORS ->
 	    (is_flstring_struct(LitCode,Literal,Idx) ->
-		(flora_synonymous_type_names(TypeName,FL_IRI)
-		-> atom_codes(LitAtm,Literal),
+		%% special treatment of FL_IRI
+		(flora_synonymous_type_names(TypeName,FL_IRI) ->
+		    atom_codes(LitAtm,Literal),
 		    flora_concat_atoms([FL_IRI_TYPE_PREFIX,LitAtm],IRI_atom),
 		    flatom_struct(IRI_atom,If,Code),
-		    flora_parse_datatype(DATATYPE(TypeName,Literal),If,_,Status)
-		; fldatatype_struct(TypeCode,Literal,Idx,Code),
+		    flora_parse_datatype(DATATYPE(FL_IRI,Literal),If,_,Status)
+		%% special treatment of Prolog builtin data types like
+		%% \integer, \real, \long, \short, \charlist, \symbol, \boolean
+		; base_datatype_tester(CanonTypeName,Tester,ErrorMsg)
+		->
+		    atom_codes(LitAtm,Literal),
+		    (CanonTypeName == FL_CHARLIST ->
+			flrporting:flora_double_dblquotes(LitAtm,LitAtmDbl),
+			flora_concat_atoms(['"',LitAtmDbl,'" .'],LitAtmSrc)
+		    ; CanonTypeName == FL_SYMBOL ->
+			flrporting:flora_double_quotes(LitAtm,LitAtmDbl),
+			flora_concat_atoms(['''',LitAtmDbl,''' .'],LitAtmSrc)
+		    ; flora_concat_atoms([LitAtm,' .'],LitAtmSrc)
+		    ),
+		    flora_read_then_parse_term_string(LitAtmSrc,Code1,Status4),
+		    arg(1,Tester,Code1),
+		    (call(Tester) ->
+			memberchk(lexer(Sl),Status4),
+			memberchk(composer(Sc),Status4),
+			memberchk(parser(Sp),Status4),
+			lists:append_lists([Sl,Sc,Sp],Status),
+			%% If type is double/float, convert integer to float
+			(CanonTypeName==FL_DOUBLE ->
+			    is_flnumber_struct(Code1,Number,NimIdx),
+			    Float is float(Number),
+			    is_flnumber_struct(Code,Float,NimIdx)
+			; CanonTypeName==FL_BOOL ->
+			    convert_booleans(Code1,Code)
+			; Code = Code1
+			)
+		    ; parsing_error(If,ErrorMsg,Status)
+		    )
+		; fldatatype_struct(TypeCodeCanon,Literal,Idx,Code),
 		    Status = NO_ERRORS
 		)
 	    ; is_fltransactionalstring_struct(LitCode,Literal,Idx) -> 
@@ -8652,20 +8727,20 @@ parse_composer_datatype(Args,If,DWS,Code,Status) :-
 		    flora_concat_atoms([FL_IRI_TYPE_PREFIX,LitAtm],IRI_atom),
 		    fltransactionalatom_struct(IRI_atom,If,Code),
 		    flora_parse_datatype(DATATYPE(TypeName,Literal),If,_,Status)
-		; fldatatype_struct(TypeCode,Literal,Idx,Code1),
+		; fldatatype_struct(TypeCodeCanon,Literal,Idx,Code1),
 		    fltransactionalqname_struct(Code1,Code),
 		    Status = NO_ERRORS
 		)
 	    ; is_flvar_struct(LitCode,_,Idx) ->
 		%% Not treating IRIs specially here: CHECK!
-		fldatatype_struct(TypeCode,LitCode,Idx,Code),
-		    Status = NO_ERRORS
+		fldatatype_struct(TypeCodeCanon,LitCode,Idx,Code),
+		Status = NO_ERRORS
 	    %% In datatype lists allow only explicit enumerations, no [...|...]
 	    ; is_fllist_struct(LitCode, FrontCode, [], Idx)
 	    %% Not treating IRIs specially here: CHECK!
 	    ->
 		fldatatype_listvalue_struct(FrontCode,FrontCodeListval),
-		fldatatype_struct(TypeCode,FrontCodeListval,Idx,Code),
+		fldatatype_struct(TypeCodeCanon,FrontCodeListval,Idx,Code),
 		Status = NO_ERRORS
 	    ;
 		parsing_error(If,ERROR_DATATYPE_LITERAL,Status)
