@@ -47,10 +47,11 @@
    from flrdecode.
 
 :- import
-	'\\isiri'/1,
-	'\\isstring'/1,
-	'\\issymbol'/1,
-	'\\isboolean'/1
+	%%FL_IRI/1,
+	%%FL_STRING/1,
+	%%FL_SYMBOL/1,
+	%%FL_BOOL/1,
+	flora_datatype_name/2
     from flrdatatype.
 
 
@@ -114,33 +115,38 @@ flora_semantic_unification_handler(AttributeValue,VariableBinding) :-
 
 
 flora_DT_variable_handler(AttrValue,VarBinding) :-
+	get_attr(VarBinding,FL_DT_VAR,BindingAttr),
+	!,
+	( %% vars of exactly the same type
+	  BindingAttr = AttrValue -> true
+	; %% two typed vars of different types - take intersection of the types
+	    BindingAttr = (TestVar,BindingTest),
+	    AttrValue = (TestVar,AttrTest),
+	    put_attr(VarBinding,FL_DT_VAR,(TestVar,(BindingTest,AttrTest)))
+	).
+flora_DT_variable_handler(AttrValue,VarBinding) :-
+	%% var of a user-defined DT bound to a constant of that type
+	flora_datatype_name(VarBinding,TypeName),
+	AttrValue = (_,AttrTest),
+	%% AttrTest is something like isa(_h12609,foo,_$ctxt(main,_h12606,4)))
+	arg(2,AttrTest,TypeName),
+	!.
+flora_DT_variable_handler(AttrValue,VarBinding) :-
 	%% AttrValue is something like is_list(_) or integer(_)
-	arg(1,AttrValue,VarBinding),
-	call(AttrValue).
+	AttrValue = (VarBinding,AttrTest),
+	call(AttrTest).
 
-%% Datatype var tests - assigned to type variables by the compilation
-flr_dt_list_test(X) :- is_list(X), !.
-flr_dt_list_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_list_test(_)).
-flr_dt_integer_test(X) :- integer(X), !.
-flr_dt_integer_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_integer_test(_)).
-flr_dt_real_test(X) :- real(X), !.
-flr_dt_real_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_real_test(_)).
-flr_dt_charlist_test(X) :- is_charlist(X), !.
-flr_dt_charlist_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_charlist_test(_)).
-flr_dt_iri_test(X) :- '\\isiri'(X), !.
-flr_dt_iri_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_iri_test(_)).
-flr_dt_string_test(X) :- '\\isstring'(X), !.
-flr_dt_string_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_string_test(_)).
-flr_dt_symbol_test(X) :- '\\issymbol'(X), !.
-flr_dt_symbol_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_symbol_test(_)).
-flr_dt_boolean_test(X) :- \+(\+'\\isboolean'(X)), !.
-flr_dt_boolean_test(X) :- get_attr(X,FL_DT_VAR,flr_dt_boolean_test(_)).
+flrvar_dt_portray((_,AttrTest)) :-
+	flr_dt_portray_printable(AttrTest,Printable),
+	write(type=Printable).
 
-flrvar_dt_portray(flr_dt_list_test(_)) :- write('list').
-flrvar_dt_portray(flr_dt_integer_test(_)) :- write('integer').
-flrvar_dt_portray(flr_dt_real_test(_)) :- write('real').
-flrvar_dt_portray(flr_dt_charlist_test(_)) :- write('charlist').
-flrvar_dt_portray(flr_dt_iri_test(_)) :- write('iri').
-flrvar_dt_portray(flr_dt_string_test(_)) :- write('string').
-flrvar_dt_portray(flr_dt_symbol_test(_)) :- write('symbol').
-flrvar_dt_portray(flr_dt_boolean_test(_)) :- write('boolean').
+flr_dt_portray_printable((Test1,Test2),(Class1,Class2)) :-
+	!,
+	flr_dt_portray_printable(Test1,Class1),
+	flr_dt_portray_printable(Test2,Class2).
+
+flr_dt_portray_printable(IsaTest,Class) :-
+	functor(IsaTest,Fun,3),
+	flrporting:flora_match_substring(WRAP_ISA,Fun,_),
+	arg(2,IsaTest,Class),
+	!.

@@ -945,6 +945,7 @@ available on the \FLSYSTEM Web site:
 {\input{./hooks/byexample}}
 
 
+\ifdef{\isfloraman}{
 \section{Differences Between \FLSYSTEM and the F-logic Syntax}
 
 \FLSYSTEM was developed years after the publication of the initial
@@ -1019,6 +1020,7 @@ semantics). The main differences are enumerated below.
 }{}
 \end{enumerate}
 %%
+}
 
 \section{Main Syntactic Elements of \FLSYSTEM}
 
@@ -1119,6 +1121,8 @@ The main components used to construct predicates and molecules include:
 \item  \textbf{Constants}, which includes \emph{symbols},  \emph{strings},
   \emph{numbers}, and various other data types.
 \item \textbf{Operators}, including arithmetic operators.
+  \index{quasi-constant}
+  \index{quasi-variable}
 \item \textbf{Quasi-constants} and
   \textbf{quasi-variables}. Quasi-constants are symbols that get substituted
   with real constants at compile time or at the time the knowledge base is
@@ -2382,6 +2386,99 @@ instead of the much more tedious
 \begin{verbatim}
    ?X=?Y, ?Y=?Z, ?Z=?W
    ?X!=1, ?X!=2, ?X!=3
+\end{verbatim}
+%% 
+
+\section{Typed Variables} \label{sec-typedvars}
+
+\index{typed variable}
+\index{variable!typed}
+Apart from the regular variables, \FLSYSTEM supports \emph{typed variables}.
+Typed variables can be bound to classes, which will restrict them so that
+they will be unifiable only with members of the specified classes. This
+includes the classes associated with all the primitive data types such as 
+\texttt{\bs{}integer}, \texttt{\bs{}real}, \texttt{\bs{}time},
+\texttt{\bs{}list}, \texttt{\bs{}duration}, etc., which are discussed in
+Section~\ref{sec-data-types}. 
+The syntax is \texttt{?Var$\hat{~}\hat{~}$Class}. The class can be a class
+name (which may have variables) or a class expression. For instance,
+%% 
+\begin{verbatim}
+    father(?X^^\integer,?Y^^Person) :- parent(?X,?Y), male(?X).
+    grandfather(?X^^\integer,?Y^^Person) :- father(?X,?Z^^Person),parent(Z,Y).
+    ?- foo(?Y^^(A,(B-C) ; \dateTyme).
+\end{verbatim}
+%% 
+As seen from the example, the type declaration can appear both in the head
+and the body of a rule. The semantics is that once the variable is bound 
+then the binding is checked for belonging to the specified
+class. Theoretically this is equivalent to making a test like
+\texttt{?X:Class} but in practice typed variables can be much more efficient.
+Testing \texttt{?X:Class} means enumerating the entire class
+\texttt{Class}, which can be expensive when the class is large and may not
+terminate, if the class is infinite (e.g., \texttt{?X:\bs{}integer}). 
+
+The \texttt{?Var$\hat{~}\hat{~}$Class} should be understood as a declaration,
+so it should be done only once per variable in the same rule.
+Multiple declarations are treated as intersections. For instance,
+%% 
+\begin{verbatim}
+    ?- ?X^^foo=?, ?X^^moo=?.
+
+    ?X = ?_h6272 { \$typed variable : type = (moo  ','  foo) } 
+
+    ?- ?X^^foo=?Y^^moo.
+
+    ?X = ?_h5593 { \$typed variable : type = (moo  ','  foo) } 
+    ?Y = ?_h5593 { \$typed variable : type = (moo  ','  foo) } 
+\end{verbatim}
+%% 
+Note that
+%% 
+\begin{verbatim}
+    p(?X:foo) :- ...
+    p(?X^^foo) :- ...
+\end{verbatim}
+%% 
+are very different things and using the first form is frequently a mistake,
+since the first form is equivalent to
+%% 
+\begin{verbatim}
+    p(?X), ?X:foo :- ...
+\end{verbatim}
+%% 
+That is, \texttt{?X:foo} is \emph{derived}, not checked. The second form,
+on the other hand, is equivalent to
+%% 
+\begin{verbatim}
+    p(?X) :- ?X:foo, ...
+\end{verbatim}
+%% 
+but using \texttt{?X$\hat{~}\hat{~}$foo}, as already mentioned, can be much
+more efficient, since the actual tests for class membership are done only
+when the variable gets bound. 
+
+Here are some more commented examples:
+%% 
+\begin{verbatim}
+    {1,2}:foo, {2,3}:moo.                       // facts
+
+    ?- ?^^foo = 4.                              // false
+    ?- ?^^foo = 1                               // true
+    ?- ?X^^foo = ?^^moo, ?X=3                   // false
+    ?- ?X^^foo = ?^^moo, ?X=2                   // true
+    ?- ?^^(foo-moo) = 2  // false
+    ?- ?^^(foo-moo) = 1  // true
+    ?- ?^^((foo-moo);(moo-foo)) = 2             // false
+    ?- ?^^((foo-moo);(moo-foo)) = 3             // true
+    ?- ?X^^\real=?, ?X^^\short=1                // false
+    ?- {1,2,-3}:{\integer,\short,\long},        // true
+          {1.2,3.4}:{\real,\float,\double},
+          [a,3] = ?X^^\list,
+          ?X:\list,
+          "abc"^^\charlist=?Y,
+          ?Y:\charlist,
+          writeln(test6=ok)@\plg.
 \end{verbatim}
 %% 
 
@@ -10919,10 +11016,13 @@ various abbreviations for this data type, we can also write it as
   "12:33:55"$\hat{~}\hat{~}$\bs{}t}.
 
 Variables can be also \emph{typed}, i.e., restricted to be bound only to 
-objects of a particular primitive data type. The notation is
-{\tt ?\emph{variablename}$\hat{~}\hat{~}$\emph{typename}}. 
+objects of a particular primitive data type.
+The notation is {\tt ?\emph{variablename}$\hat{~}\hat{~}$\emph{typename}}. 
 For instance, the variable {\tt ?X$\hat{~}\hat{~}$\bs{}time}  
 can be bound only to constants that have the primitive type {\tt \bs{}time}. 
+This mechanism is more general and allows bounding of variables to
+arbitrary classes, not just data types; it has already been deiscussed in
+Section~\ref{sec-typedvars}.
 
 The methods that are applicable to each particular primitive type vary from
 type to type. However, certain methods are more or less common:
@@ -11760,7 +11860,8 @@ This type name has a synonym: {\tt 'http://www.w3.org/2001/XMLSchema\#long'}.
 
 
 
-\subsection{ The Primitive Types $\bs{}$decimal and $\bs{}$integer}
+\subsection{ The Primitive Types $\bs{}$decimal, $\bs{}$integer, and
+  $\bs{}$short}
 
 \index{datatype!\bs{}decimal}
 \index{class!\bs{}decimal}
@@ -11769,10 +11870,9 @@ This type name has a synonym: {\tt 'http://www.w3.org/2001/XMLSchema\#long'}.
 At present, \FLSYSTEM does not implement the {\tt \bs{}decimal} and the {\tt
   \bs{}integer} types, which correspond to XML Schema arbitrary precision
 types decimal and integer.  Instead, {\tt \bs{}decimal}  is a synonym for
-{\tt \bs{}double} and {\tt \bs{}integer} for {\tt \bs{}long}.   
+{\tt \bs{}double}, while \texttt{\bs{}short} and  {\tt \bs{}integer} for {\tt \bs{}long}.   
 As usual, there are corresponding classes {\tt \bs{}integer} and {\tt
   \bs{}decimal}. 
-
 
 \subsection{ The Primitive Type $\bs{}$string}
 
@@ -11965,6 +12065,49 @@ The following methods are available from the standard module {\tt \bs{}basetype}
 %%
 As in Prolog, the part of a list term that follows the bar \verb,|,
 represents the tail of the list.
+
+\subsection{User-defined Types}\label{sec-udt}
+
+\index{user-defined type}
+\index{type!user-defined}
+%%
+\FLSYSTEM also supports \emph{user-defined types}. A user-defined type can
+be any atom, say \texttt{foo}, that is not reserved for the builtin types,
+i.e., is not prefixed with a ``\bs''. A literal of a user-defined type,
+such as \texttt{foo}, has the form 
+\texttt{"\textnormal{\textit{some string}}"$\hat{~}\hat{~}$foo}, i.e., it
+has the same form as the built-in data types. However, \FLSYSTEM does not
+prescribe the contents of the data type and, at present, there is no hook
+to let the user plug in a personal parser to sort out which literals
+belongs to the data type and which do not.
+
+\index{variable!typed}
+\index{typed variable}
+Typed variables, introduced in Section~\ref{sec-typedvars}, also work with
+user-defined types. Since \texttt{foo} may denote a class, a user-defined
+type, or both, such a variable, \texttt{?X$\hat{~}\hat{~}$foo} binds to
+\emph{both} the members of the class \texttt{foo} and the literals of type
+\texttt{foo}. For example,
+%% 
+\begin{verbatim}
+    {a,b}:foo.
+
+    ?- a=?X^^foo, b=?Y^^foo.      // true
+    ?- "abc"^^foo=?X^^foo.        // true
+    ?- d=?X^^foo.                 // false: d is not in class foo
+    ?- "abc"^^moo=?X^^foo.        // false: type mismatch
+    ?- "abc"^^foo=?X^^(foo;moo).  // false: don't use foo both as a class & type
+    ?- insert{"abc"^^foo:foo}, "abc"^^foo=?X^^(foo;moo).  // true
+\end{verbatim}
+%% 
+However, it is not recommended to use the same symbol both as a class and
+as a user-defined type at the same time in the same module. For example, in
+the next-to-last example above, \texttt{foo} is used as a class in the
+expression \texttt{?X$\hat{~}\hat{~}$(foo;moo)}, so it will not unify with the literal of type
+\texttt{foo} unless \texttt{"abc"$\hat{~}\hat{~}$foo} is a member of the
+class \texttt{foo}. That last possibility is illustrated by the last line
+in the above example.  
+
 
 
 \section{Cardinality Constraints}\label{sec-card-in-signatures}
@@ -12541,7 +12684,7 @@ described below. {\tt ?Result} gets bound to the evidence of type violation
   missing types (semistructured data) are ignored. As before, {\tt
     ?Mod} and {\tt ?Meth} can be variables.
 \item  If {\tt ?Atom} is of the form {\tt ?[|?Meth->?|]@?Mod} then only the
-  consistency between {\tt ->} and {\tt =>} is checked only for the frames
+  consistency between {\tt ->} and {\tt =>} is checked and only for frames
   that are statements about classes as a whole, i.e., the frame formulas of
   the form \texttt{?[|?Meth->?|]@?Mod} and \texttt{?[|?Meth=>?|]@?Mod}. The
   \texttt{obj[...]}-style frames are ignored.   
@@ -13906,7 +14049,7 @@ These synonyms are mentioned below, if they exist.
 \subsection{Input and Output}
 
 This library simplifies access to the most common Prolog I/O facilities.
-This library is preloaded into the system module {\tt io} and
+This library is preloaded into the system module {\tt \bs{}io} and
 can be accessed using the {\tt @\bs{}io} syntax.
 
 The purpose of the I/O library is not to replace the standard I/O predicates
@@ -14079,7 +14222,7 @@ for the most common file operations. These include:
 
 \FLSYSTEM keeps the facts that are part of the program or those that are
 inserted by the program in special data structures called \emph{storage
-  tries}.  The system module {\tt db}, accessible through the module
+  tries}.  The system module {\tt \bs{}db}, accessible through the module
 reference {\tt @\bs{}db}, provides primitives for controlling this
 storage. This module also has a longer synonym {\tt \bs{}storage}. 
 %%
@@ -14098,7 +14241,7 @@ storage. This module also has a longer synonym {\tt \bs{}storage}.
 
 \subsection{System Control}\label{sec-flora-syscontrol}
 
-The system module {\tt sys} provides primitives that affect the global
+The system module {\tt \bs{}sys} provides primitives that affect the global
 behavior of the system. It is accessible though the system module reference
 {\tt @\bs{}sys} (or through its synonym {\tt \bs{}system}). 
 %%

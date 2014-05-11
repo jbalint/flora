@@ -776,13 +776,6 @@ propagate_rulelog_naf(PROR(Goal1,Goal2),FreeVars,PRAND(Code1,Code2)) :-
 	!,
 	propagate_rulelog_naf(Goal1,FreeVars,Code1),
 	propagate_rulelog_naf(Goal2,FreeVars,Code2).
-/*
-  %% The following propagations are done in the parser (to_LT/2)
-propagate_rulelog_naf(Goal,_FreeVars,Code) :-
-	is_delay_naf_struct(Goal,PRRuleLogNaf),
-	!,
-	extract_goal_from_prrulelognaf(PRRuleLogNaf,Code).
-
 propagate_rulelog_naf(Goal,FreeVars,Code) :-
 	is_florasyslib_struct(Goal,_Idx,FLLIBIFTHEN,_N,[_Mod,Cond,Then|_]),
 	!,
@@ -795,6 +788,13 @@ propagate_rulelog_naf(Goal,FreeVars,Code) :-
 	propagate_rulelog_naf(Then,FreeVars,ThenNaffed),
 	propagate_rulelog_naf(Else,FreeVars,ElseNaffed),
 	conjunct_code([Cond,ThenNaffed,ElseNaffed],Code).
+
+/*
+%% The following propagations are done in the parser (to_LT/2)
+propagate_rulelog_naf(Goal,_FreeVars,Code) :-
+	is_delay_naf_struct(Goal,PRRuleLogNaf),
+	!,
+	extract_goal_from_prrulelognaf(PRRuleLogNaf,Code).
 
 propagate_rulelog_naf(Goal,FreeVars,Code) :-
 	is_prquantifier(Goal,Quantifier,Formula,_QuantVarLstObj,FreeVarListObj),
@@ -1193,60 +1193,58 @@ transactionalvar_struct(Name,Index,PRTRANSACTIONALVARIABLE(Name,Index)).
 strobj_struct(FLSTRING(String,I),PRSTRING(String,I)).
 transactionalstrobj_struct(FLTRANSACTIONALSTRING(String,I),PRSTRING(String,I)).
 
-datatype_tester(FL_LISTTYPE,flr_dt_list_test).
-datatype_tester(FL_LONG,flr_dt_integer_test).
-datatype_tester(FL_DOUBLE,flr_dt_real_test).
-datatype_tester(FL_CHARLIST,flr_dt_charlist_test).
-datatype_tester(FL_STRING,flr_dt_string_test).
-datatype_tester(FL_IRI,flr_dt_iri_test).
-datatype_tester(FL_SYMBOL,flr_dt_symbol_test).
-datatype_tester(FL_BOOL,flr_dt_boolean_test).
-
 datatypeobj_struct(FLDATATYPE(Type,Lit,Idx),
 		   Object,
 		   VarBindingCode,
 		   Status) :-
 	!,
 	compile_body_pathexp_top(Type,FL_THISMODULE,TypeCode,_,_,[],_),
-	%% First case is special treatment of list, real, integer variables:
-	%% \list, \integer, \real, \long, \short, \charlist, \symbol, \boolean
-	(is_flvariable(Lit,VarName,VarIdx),
-	    is_prbuiltin_identifier(TypeCode,TypeName,_),
-	    datatype_tester(TypeName,TesterFun)
+	(
+	/*
+	%% Variable over a user-defined datatype
+	%% UDTs are assumed to be classes, by convention: no special treatment
+	; is_flvariable(Lit,VarName,VarIdx),
+	    %% only the names that start with the udt prefix
+	    is_pratom(TypeCode,TypeName,_),
+	    flrprefixdef:FLLIBPREFIXPRIMITIVE(udt,UdtPrefix,_),
+	    flora_match_substring(UdtPrefix,TypeName,0)
 	->
-	    varobj_struct(VarName,VarIdx,DTVarCode),
-	    Object = DTVarCode,
-	    %% construct data type test (eg, is_list(_), integer(_))
-	    atomobj_struct(TesterFun,DTTester),
-	    new_dontcare_prvariable(NO_INDEX,TestArgVar),
-	    prologterm_struct(DTTester,1,[TestArgVar],DTTesterCode),
-	    %% put is_list(_) as the attr val of FL_DT_VAR
-	    %% for the list variable
-	    new_dontcare_prvariable(VarIdx,NewAttrVar),
-	    attrvar_code(NewAttrVar,DTTesterCode,FL_DT_VAR,NewAttrVarCode),
-	    %% construct DTVarCode=NewAttrVar
-	    atomobj_struct(FL_UNIVEQ,UnivEQCode),
-	    prologterm_struct(UnivEQCode,2,[DTVarCode,NewAttrVar],ConnectorLit),
-	    %% VarBindingCode is the conjunction
-	    %%     put_attr(NewAttrVar,FL_DT_VAR,is_list(_))
-	    %%         /\ DTVarCode=NewAttrVar
-	    conjunct_struct(NewAttrVarCode,ConnectorLit,VarBindingCode),
-	    Status = NO_ERRORS
-	; is_flvariable(Lit,VarName,VarIdx) ->
 	    add_underscore(VarName,InDataTypeVarName),
 	    varobj_struct(InDataTypeVarName,VarIdx,LitCode),
 	    Object = PRDATATYPE(TypeCode,LitCode,VarIdx),
 	    VarBindingCode = NULL,
 	    Status = NO_ERRORS
+	*/
+	%% Class-bound variable, date/time variable
+	is_flvariable(Lit,VarName,VarIdx) ->
+	  varobj_struct(VarName,VarIdx,DTVarCode),
+	  Object = DTVarCode,
+	  %% construct data type test: (NewVar,isa(NewVar,Class))
+	  new_dontcare_prvariable(NO_INDEX,TestArgVar),
+	  isaspec_struct(BODYLITERAL,TestArgVar,TypeCode,DTTesterCodePre),
+	  conjunct_struct(TestArgVar,DTTesterCodePre,DTTesterCode),
+	  %% put isa(_,Class) as the attr val of FL_DT_VAR
+	  %% for the class variable
+	  new_dontcare_prvariable(VarIdx,NewAttrVar),
+	  attrvar_code(NewAttrVar,DTTesterCode,FL_DT_VAR,NewAttrVarCode),
+	  %% construct DTVarCode=NewAttrVar
+	  atomobj_struct(FL_UNIVEQ,UnivEQCode),
+	  prologterm_struct(UnivEQCode,2,[DTVarCode,NewAttrVar],ConnectorLit),
+	  %% VarBindingCode is the conjunction
+	  %%     put_attr(NewAttrVar,FL_DT_VAR,is_list(_))
+	  %%         /\ DTVarCode=NewAttrVar
+	  conjunct_struct(NewAttrVarCode,ConnectorLit,VarBindingCode),
+	  Status = NO_ERRORS
+	%% list of data types
 	; is_fldatatypelist(Lit,ListOfLits) ->
-	    compile_datatype_list(ListOfLits,LitCode0,Status),
-	    datatypelistobj_struct(LitCode0,LitCode),
-	    VarBindingCode = NULL,
-	    Object = PRDATATYPE(TypeCode,LitCode,Idx)
-	;
-	    Object = PRDATATYPE(TypeCode,Lit,Idx),
-	    VarBindingCode = NULL,
-	    Status = NO_ERRORS
+	  compile_datatype_list(ListOfLits,LitCode0,Status),
+	  datatypelistobj_struct(LitCode0,LitCode),
+	  VarBindingCode = NULL,
+	  Object = PRDATATYPE(TypeCode,LitCode,Idx)
+	; %% a non-variable, non-list data type
+	  Object = PRDATATYPE(TypeCode,Lit,Idx),
+	  VarBindingCode = NULL,
+	  Status = NO_ERRORS
 	).
 datatypeobj_struct(FLTRANSACTIONALPREDSPEC(DTspec),Object,VarBindingCode,Status) :-
 	!,
@@ -2394,10 +2392,10 @@ collect_prdatatypevars(CompilerTermOrList,Vars,TVars) :-
 strip_underscore(Atom,NewAtom) :-
 	substring(Atom,1,_,NewAtom).
 
+/*
 add_underscore(Atom,NewAtom) :-
-	%%atom_codes(Atom,AtomChars),
-	%%atom_codes(NewAtom,[CH_UNDERSCORE|AtomChars]).
 	flora_concat_atoms(['_',Atom],NewAtom).
+*/
 
 
 /****************************************************************************
@@ -6976,7 +6974,19 @@ compile_body_literal(ParserTerm,_WS,NULL,BodyLitCode,[],Status) :-
 	is_fldatatype(ParserTerm,_Sort,_Lit,_Index),
 	!,
 	datatypeobj_struct(ParserTerm,Code1,_VarBindingCode,Status),
-	atomlit_struct(BODYLITERAL,Code1,BodyLitCode).
+	(is_prvariable(Code1,_,VIndex) ->
+	    %% Not to promote term to predicate, but to bind caller module
+	    %% Needed only for calls when a variable occurs by itself in
+	    %% the rule body:  ... :- ..., X, ,,,
+	    thismodule_struct(ThisModule),
+	    %% doesn't matter??
+	    body_context_info_structure(ThisModule,FWContext),
+	    %% ...:-...,X, is compiled into
+	    %%    FLLIBMODLIT(libmod_wrapper,X,FL_INVALIDMODULE,FWContext)
+	    atomobj_struct(FL_INVALIDMODULE,Module),
+	    florasyslib_struct(VIndex,FLLIBMODLIT,3,[Code1,Module,FWContext],BodyLitCode)
+	; atomlit_struct(BODYLITERAL,Code1,BodyLitCode)
+	).
 
 compile_body_literal(ParserTerm,_WS,NULL,BodyLitCode,[],Status) :-
 	is_fltransactionaldatatype(ParserTerm,_Sort,_Lit,_Index),
