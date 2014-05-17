@@ -43,23 +43,29 @@
 UDFHILOGPREDICATENAME(UDFTerm,Arity,Module,ReturnValue) :-
 	%% No cuts anywhere in this clause!
 	%% We do want the 2nd UDFHILOGPREDICATENAME/4 to fire!
-	get_base_pred(UDFTerm,BaseName,BasePredicate),
-	flora_defined_udf_registry(Module,BaseName,Arity,BasePredicate,_,CallCode),
+	get_base_pred(UDFTerm,BaseName,BasePred),
+	flora_defined_udf_registry(Module,BaseName,Arity,BasePred,_,CallCode),
 	arg(1,CallCode,ReturnValue),
 	call0(CallCode).
 
-UDFHILOGPREDICATENAME(UDFTerm,_Arity,_Module,UDFTerm).
+UDFHILOGPREDICATENAME(UDFTerm,Arity,Module,UDFTerm) :-
+	(get_base_pred(UDFTerm,BaseName,BasePred),
+	    nonvar(BaseName)
+	->
+	    \+flora_defined_udf_registry(Module,BaseName,Arity,BasePred,_,_)
+	; true
+	).
 
 
 %% working version
-get_base_pred(UDFTerm,BaseName,BasePredicate) :-
+get_base_pred(UDFTerm,BaseName,BasePred) :-
 	(UDFTerm =.. [WRAP_HILOG,OpName|Args] -> IfHilog = true
 	; UDFTerm =.. [OpName|Args],
 	    IfHilog = fail
 	),
-	( flora_op_synonym(OpName,BaseName)
+	( nonvar(OpName), flora_op_synonym(OpName,BaseName)
 	; BaseName = OpName
 	),
-	(IfHilog -> BasePredicate =.. [WRAP_HILOG,BaseName|Args]
-	; BasePredicate =.. [BaseName|Args]
+	(IfHilog -> BasePred =.. [WRAP_HILOG,BaseName|Args]
+	; BasePred =.. [BaseName|Args]
 	).
