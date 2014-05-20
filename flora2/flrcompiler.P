@@ -36,6 +36,12 @@
 :- compiler_options([xpp_on]).
 :- endif.
 
+#if exists("hooks/flrheadtop_compile.P") && exists("hooks/ergo.switch")
+#define COMPILING_ERGO
+#else
+#define COMPILING_FLORA
+#endif
+
 %%#define SHOW_COMPILE_INPUT
 %%#define SHOW_COMPILE_OUTPUT
 %%#define SHOW_COMPILE_ADD_INPUT
@@ -206,10 +212,12 @@ is_flplib(FLPLIB(P),P).
 flplib_struct(Goal,FLPLIB(Goal)).       %% from the parser
 %% @\prologall and @\prologall(module)
 %% Make sure the coder writes P2H_PREDICATE/4 as prolog
-is_flpliball(FLPLIBALL(P),P) :-
-	flora_define_prolog(P2H_PREDICATE,4).
-is_flpliball(FLPLIBALL(P,M),P,M) :-
-	flora_define_prolog(P2H_PREDICATE,4).
+is_flpliball(FLPLIBALL(P),P).
+is_flpliball(FLPLIBALL(P,M),P,M).
+/*
+is_flpliball(FLPLIBALL(P),P) :- flora_define_prolog(P2H_PREDICATE,4).
+is_flpliball(FLPLIBALL(P,M),P,M) :- flora_define_prolog(P2H_PREDICATE,4).
+*/
 
 is_flifthenelse(FLIFTHENELSE(Cond,Then,Else),Cond,Then,Else).
 is_flifthen(FLIFTHEN(Cond,Then),Cond,Then).
@@ -232,11 +240,15 @@ is_flcontrolconstruct(FLDOUNTIL(Cond,Action),FLLIBDOUNTIL,Cond,Action).
 is_flcontrolconstruct(FLLOOPUNTIL(Cond,Action),FLLIBLOOPUNTIL,Cond,Action).
 is_flcontrolconstruct(FLUNLESSDO(Cond,Action),FLLIBUNLESSDO,Cond,Action).
 
+is_flterm(FLTERM(Funct,Arity,Args),Funct,Arity,Args).
+/*
 is_flterm(FLTERM(Funct,Arity,Args),Funct,Arity,Args) :-
 	\+is_fltransactionalatom(Funct,_),
 	\+is_fltransactionalterm(Funct,_,_,_),
 	\+is_fltransactionalpredspec(Funct,_).
-is_fltransactionalterm(FLTRANSACTIONALTERM(Func,N,Args),Func,N,Args) :- !.
+*/
+is_fltransactionalterm(FLTRANSACTIONALTERM(Func,N,Args),Func,N,Args).
+/*
 is_fltransactionalterm(FLTERM(Term,Arity,Args),Funct,Arity,Args) :-
 	is_fltransactionalpredspec(Term,Funct),
 	!.
@@ -245,6 +257,7 @@ is_fltransactionalterm(FLTERM(Term,Arity,Args),Term,Arity,Args) :-
 	!.
 is_fltransactionalterm(FLTERM(F,Arity,Args),F,Arity,Args) :-
 	is_fltransactionalatom(F,_).
+*/
 
 is_flterm_or_flatom(Term,Funct,Arity,Args) :-
 	is_flterm(Term,Funct,Arity,Args),
@@ -303,11 +316,16 @@ is_fltolistattspec(FLTOLISTATTSPEC(Att,Arrow,Val,Type),Att,Arrow,Val,Type).
 is_flboolsig(FLBOOLSIG(Att,Arrow,Type),Att,Arrow,Type).
 is_fltransig(FLTRANSIG(Att,Arrow,Type),Att,Arrow,Type).
 
+/*
+%% Seems unused
 is_fltranspec(FLTRANSPEC(QN,Type),Tran,Type) :- 
 	is_fltransactionalpredspec(QN,Tran),
 	!.
-is_fltranspec(FLTRANSPEC(Tran,Type),Tran,Type) :- !.
+*/
+is_fltranspec(FLTRANSPEC(Tran,Type),Tran,Type).
 
+/*
+%% Seems unused
 is_fltranspec(FLMETHSPEC(Meth,Type),Tran,Type) :-
 	is_fltransactionalpredspec(Meth,Tran),
 	!.
@@ -317,13 +335,18 @@ is_fltranspec(FLMETHSPEC(QN,Type),QN,Type) :-
 is_fltranspec(FLMETHSPEC(QN,Type),QN,Type) :- 
 	is_fltransactionalterm(QN,_,_,_),
 	!.
+*/
 
+is_flmethspec(FLMETHSPEC(Meth,Type),Meth,Type).
+/*
 is_flmethspec(FLMETHSPEC(Meth,Type),Meth,Type) :-
 	\+is_fltransactionalterm(Meth,_,_,_),
 	\+is_fltransactionalpredspec(Meth,_),
 	\+is_fltransactionalatom(Meth,_).
+*/
 
-is_fltransactionalpredspec(FLTRANSACTIONALPREDSPEC(QN),QN).
+%% Seems unused
+%%is_fltransactionalpredspec(FLTRANSACTIONALPREDSPEC(QN),QN).
 
 is_flobjeql(FLOBJEQL(O1,O2),O1,O2).
 is_flcut(FLCUT(I),I).
@@ -337,7 +360,7 @@ get_flatom_name(Atom,Atom) :- atom(Atom).
 
 is_fltransactionalatom(FLTRANSACTIONALATOM(Atom,_I),Atom).
 %% transactional numbers are used only in :- index %arity-argument
-%%is_fltransactionalnumber(FLTRANSACTIONALNUMBER(Number,_I),Number).
+is_fltransactionalnumber(FLTRANSACTIONALNUMBER(Number,_I),Number).
 is_fltransactionalstring(FLTRANSACTIONALSTRING(String,_I),String).
 %% is_fltrans_atomnumberstring/1
 is_fltrans_atomnumberstring(FLTRANSACTIONALATOM(_,_)).
@@ -345,12 +368,15 @@ is_fltrans_atomnumberstring(FLTRANSACTIONALNUMBER(_,_)).
 is_fltrans_atomnumberstring(FLTRANSACTIONALSTRING(_,_)).
 
 %% basic building blocks
-is_flatom(FLATOM(Atom,_I),Atom) :- \+ is_fltransactionalatom(Atom,_).
-is_flatom(FLATOM(Atom,Index),Atom,Index) :- \+ is_fltransactionalatom(Atom,_).
+is_flatom(FLATOM(Atom,_I),Atom).
+is_flatom(FLATOM(Atom,Index),Atom,Index).
+%%is_flatom(FLATOM(Atom,_I),Atom) :- \+ is_fltransactionalatom(Atom,_).
+%%is_flatom(FLATOM(Atom,Index),Atom,Index) :- \+ is_fltransactionalatom(Atom,_).
 is_flnumber(FLNUMBER(Number,_I),Number).
 is_flstring(FLSTRING(String,_I),String).
 
-is_flatomnumberstringbuiltin(FLATOM(Atm,_)) :- \+is_fltransactionalatom(Atm,_).
+is_flatomnumberstringbuiltin(FLATOM(_Atm,_)).
+%%is_flatomnumberstringbuiltin(FLATOM(Atm,_)) :- \+is_fltransactionalatom(Atm,_).
 is_flatomnumberstringbuiltin(FLNUMBER(_,_)).
 is_flatomnumberstringbuiltin(FLSTRING(_,_)).
 is_flatomnumberstringbuiltin(FLBUILTIN_IDENTIFIER(_,_)).
@@ -640,6 +666,10 @@ is_pratomnumberstringbuiltin(PRATOM(Term,_),Term).
 is_pratomnumberstringbuiltin(PRNUMBER(Term,_),Term).
 is_pratomnumberstringbuiltin(PRSTRING(Term,_),Term).
 is_pratomnumberstringbuiltin(PRBUILTIN_IDENTIFIER(Term,_),Term).
+
+#ifdef COMPILING_FLORA
+is_prtransactionalnumber(PRTRANSACTIONALNUMBER(Number,I),Number,I).
+#endif
 
 is_prconjunct(PRAND(L,R),L,R).
 is_prdisjunct(PROR(L,R),L,R).
@@ -977,10 +1007,6 @@ head_neg_struct(Goal,_Idx,NegGoal,[]) :-
 	modularized_pratom_struct(NegAtom,Idx,FCode),
 	prologterm_struct(FCode,Arity,Args,NegGoal),
 	!.
-%% normal case
-head_neg_struct(Goal,_Idx,PRNEG(Goal),[]) :-
-	is_head_neg_negatable_literal(Goal),
-	!.
 
 head_neg_struct(Goal,Idx,Code,[]) :-
 	is_prvariable(Goal,_VarName,_Idx),
@@ -994,6 +1020,11 @@ head_neg_struct(Goal,_Idx,Code,[]) :-
 	is_florasyslib_struct(Goal,Idx,FLNEGLIBMODLIT,N,Args),
 	!,
 	florasyslib_struct(Idx,FLLIBMODLIT,N,Args,Code).
+
+%% normal case
+head_neg_struct(Goal,_Idx,PRNEG(Goal),[]) :-
+	is_head_neg_negatable_literal(Goal),
+	!.
 
 head_neg_struct(_Goal,Idx,_Code,[Err]) :-
 	compiling_error(Idx,ILLEGAL_NEGHEAD,Err).
@@ -1640,8 +1671,8 @@ prologterm_struct(F,N,Args,Module,PROLOGTERM(F,N,Args,ModuleCode)) :-
 prologliblit_struct(PrologTerm,PROLOGLIBLIT(PrologTerm)).
 %%is_prologliblit(PROLOGLIBLIT(PrologTerm),PrologTerm).
 
-is_prologterm(Term,Atom,Arity)    :- is_prologterm(Term,Atom,Arity,_), !.
-is_prologterm(Term,Atom,Arity)    :- is_prologterm(Term,Atom,Arity,_,_).
+is_prologterm(PROLOGTERM(F,N,_Args),F,N).
+is_prologterm(PROLOGTERM(F,N,_Args,_Module),F,N).
 
 is_modularizedprologterm(Term) :-
 	is_prologterm(Term,Fun,_N,_Args),
@@ -2249,9 +2280,10 @@ collect_prvars(Term,[Head|Vars],Vars) :-
         is_prvariable(Head,Name,Index).
 
 collect_prvars(Term,Vars,Vars) :-
-	( is_pratomnumberstringbuiltin(Term,_)
-	; is_prtransactionalnumber(Term,_,_)
-        ),
+	is_pratomnumberstringbuiltin(Term,_),
+	!.
+collect_prvars(Term,Vars,Vars) :-
+	is_prtransactionalnumber(Term,_,_),
 	!.
 collect_prvars(Term,NewVars,Vars) :-
 	is_prdatatype(Term,_Sort,Lit,_),
@@ -2295,10 +2327,7 @@ collect_flvars(ParserTermOrList,Vars) :-
 
 collect_flvars([],Vars,Vars) :- !.
 collect_flvars(ParserTerm,Vars,Vars) :-
-	var(ParserTerm),
-	!.
-collect_flvars(ParserTerm,Vars,Vars) :-
-	atomic(ParserTerm),
+	(var(ParserTerm) ; atomic(ParserTerm)),
 	!.
 collect_flvars([H|L],Vars,TVars) :-
 	!,
@@ -2315,10 +2344,13 @@ collect_flvars(ParserTerm,[NewParserTerm|Vars],Vars) :-
         is_flvariable(NewParserTerm,Name,Index).
 
 collect_flvars(ParserTerm,Vars,Vars) :-
-	( is_flatomnumberstringbuiltin(ParserTerm)
-	; is_fltrans_atomnumberstring(ParserTerm)
-	; is_fltoken(ParserTerm)
-        ),
+	is_flatomnumberstringbuiltin(ParserTerm),
+	!.
+collect_flvars(ParserTerm,Vars,Vars) :-
+	is_fltrans_atomnumberstring(ParserTerm),
+	!.
+collect_flvars(ParserTerm,Vars,Vars) :-
+	is_fltoken(ParserTerm),
 	!.
 
 collect_flvars(ParserTerm,NewVars,Vars) :-
@@ -2961,64 +2993,68 @@ compile_add_list_internal([ParserTerm|ParserTermList],RuleDiffList-RuleTail,Fact
           compile_annotated_construct_add, it will be bound.
 ******************************************************************************/
 compile_add_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
-	( is_flrule(ParserTerm,Head,Body) ->
-	    compile_rule_add(Head,Body,
-			     DescriptorIdCode,DescrVarsTerm,
-			     RuleDiffList,
-			     FactDiffList,MetaFactDiffList,
-			     Status),
-	    QueryList = _Q-_Q,
-	    LatentQueryList = _LQ-_LQ,
-	    UDFPreds=UDFPredsTail
+	is_flrule(ParserTerm,Head,Body),
+	compile_rule_add(Head,Body,
+			 DescriptorIdCode,DescrVarsTerm,
+			 RuleDiffList,
+			 FactDiffList,MetaFactDiffList,
+			 Status),
+	QueryList = _Q-_Q,
+	LatentQueryList = _LQ-_LQ,
+	UDFPreds=UDFPredsTail.
 
-	; is_flfact(ParserTerm,Head) ->
-	    compile_fact_add(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,MetaFactDiffList,Status),
-	    QueryList = _Q-_Q,
-	    LatentQueryList = _LQ-_LQ,
-	    UDFPreds=UDFPredsTail
+compile_add_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_flfact(ParserTerm,Head),
+	compile_fact_add(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,MetaFactDiffList,Status),
+	QueryList = _Q-_Q,
+	LatentQueryList = _LQ-_LQ,
+	UDFPreds=UDFPredsTail.
 
-	; is_flquery(ParserTerm,Body) ->
-	    compile_query(Body,QueryList,Status),
-	    RuleDiffList = _R-_R,
-	    LatentQueryList = _LQ-_LQ,
-	    FactDiffList = _Fact - _Fact,
-	    UDFPreds=UDFPredsTail
+compile_add_internal(ParserTerm,_DescriptorIdCode,_DescrVarsTerm,RuleDiffList,FactDiffList,QueryList,LatentQueryList,_MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_flquery(ParserTerm,Body),
+	compile_query(Body,QueryList,Status),
+	RuleDiffList = _R-_R,
+	LatentQueryList = _LQ-_LQ,
+	FactDiffList = _Fact - _Fact,
+	UDFPreds=UDFPredsTail.
 
-	; is_fllatent_query(ParserTerm,Body) ->
-	    %% Note: latent queries are always annotated.
-	    %% So, this must have been called from
-	    %% compile_annotated_construct_add.
-	    %% Therefore, MetaFactDiffList must be bound
-	    compile_latent_query(DescriptorIdCode,MetaFactDiffList,Body,FL_DESCRMODE_LATENT_ADDQUERY,LatentQueryList,Status),
-	    RuleDiffList = _R-_R,
-	    QueryList = _Q-_Q,
-	    FactDiffList = _Fact - _Fact,
-	    UDFPreds=UDFPredsTail
+compile_add_internal(ParserTerm,DescriptorIdCode,_DescrVarsTerm,RuleDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_fllatent_query(ParserTerm,Body),
+	%% Note: latent queries are always annotated.
+	%% So, this must have been called from
+	%% compile_annotated_construct_add.
+	%% Therefore, MetaFactDiffList must be bound
+	compile_latent_query(DescriptorIdCode,MetaFactDiffList,Body,FL_DESCRMODE_LATENT_ADDQUERY,LatentQueryList,Status),
+	RuleDiffList = _R-_R,
+	QueryList = _Q-_Q,
+	FactDiffList = _Fact - _Fact,
+	UDFPreds=UDFPredsTail.
 
-	; is_fldirective(ParserTerm,DirectList,DirctIdx) ->
-	    compile_directive_add(DirectList,DirctIdx,RuleDiffList,FactDiffList,Status),
-	    QueryList = _Q-_Q,
-	    LatentQueryList = _LQ-_LQ,
-	    UDFPreds=UDFPredsTail
+compile_add_internal(ParserTerm,_DescriptorIdCode,_DescrVarsTerm,RuleDiffList,FactDiffList,QueryList,LatentQueryList,_MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_fldirective(ParserTerm,DirectList,DirctIdx),
+	compile_directive_add(DirectList,DirctIdx,RuleDiffList,FactDiffList,Status),
+	QueryList = _Q-_Q,
+	LatentQueryList = _LQ-_LQ,
+	UDFPreds=UDFPredsTail.
 
+compile_add_internal(ParserTerm,_DescriptorIdCode,_DescrVarsTerm,RuleDiffList,FactDiffList,QueryList,LatentQueryList,_MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_flannotated_construct(ParserTerm,Descriptor,MainPartOfRule),
+	compile_annotated_construct_add(Descriptor,MainPartOfRule,RuleDiffList,FactDiffList,QueryList,LatentQueryList,Status),
+	UDFPreds=UDFPredsTail.
 
-	; is_flannotated_construct(ParserTerm,Descriptor,MainPartOfRule) ->
-	    compile_annotated_construct_add(Descriptor,MainPartOfRule,RuleDiffList,FactDiffList,QueryList,LatentQueryList,Status),
-	    UDFPreds=UDFPredsTail
+compile_add_internal(ParserTerm,_DescriptorIdCode,_DescrVarsTerm,RuleDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_fludfunction(ParserTerm,Function,Body,ReturnValue),
+	compile_udf_definition(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
+	QueryList = _Q-_Q,
+	LatentQueryList = _LQ-_LQ,
+	MetaFactDiffList = _M-_M.
 
-	; is_fludfunction(ParserTerm,Function,Body,ReturnValue) ->
-	    compile_udf_definition(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
-	    QueryList = _Q-_Q,
-	    LatentQueryList = _LQ-_LQ,
-	    MetaFactDiffList = _M-_M
-
-	; is_fludfunctionfact(ParserTerm,Function,Value) ->
-	    compile_udf_definition(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
-	    QueryList = _Q-_Q,
-	    LatentQueryList = _LQ-_LQ,
-	    MetaFactDiffList = _M-_M
-        ),
-	!.
+compile_add_internal(ParserTerm,_DescriptorIdCode,DescrVarsTerm,RuleDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_fludfunctionfact(ParserTerm,Function,Value),
+	compile_udf_definition(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
+	QueryList = _Q-_Q,
+	LatentQueryList = _LQ-_LQ,
+	MetaFactDiffList = _M-_M.
 
 /****************************************************************************
   compile_rule_add(+Head,+Body,+DescriptorIdCode,+DescrVarsTerm,-RuleDiffList,-FactDiffList,-MetaFactDiffList,-Status)
@@ -3191,96 +3227,101 @@ compile_list_internal([ParserTerm|ParserTermList],RuleDiffList-RuleTail,SigDiffL
             Otherwise MetaFactDiffList is unbound.
 ******************************************************************************/
 compile_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
-	( is_flrule(ParserTerm,Head,Body) ->
-	    UDFPreds=UDFPredsTail,
-	    (var(DescriptorIdCode) ->
-		%% MetaFactDiffList is nonvar, if compile_internal is called by
-		%% compile_annotated_construct (it is = []-[] then)
-		approx_flindex(ParserTerm,RuleIdx),
-		compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_RULE,DescriptorIdCode,DescrVarsTerm,MetaFactDiffList,_)
-	    ; true
-	    ),
-	    compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,Status),
-	    QueryList = _Q-_Q,
-	    LatentQueryList = _LQ-_LQ
+	is_flrule(ParserTerm,Head,Body),
+	UDFPreds=UDFPredsTail,
+	(var(DescriptorIdCode) ->
+	    %% MetaFactDiffList is nonvar, if compile_internal is called by
+	    %% compile_annotated_construct (it is = []-[] then)
+	    approx_flindex(ParserTerm,RuleIdx),
+	    compile_descriptor_list([]-RuleIdx,FL_DESCRMODE_RULE,DescriptorIdCode,DescrVarsTerm,MetaFactDiffList,_)
+	; true
+	),
+	compile_rule(Head,Body,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,Status),
+	QueryList = _Q-_Q,
+	LatentQueryList = _LQ-_LQ.
 
-	; is_flfact(ParserTerm,Head) ->
-	    %% DefaultMetaFactDiffList is empty diff list Var-Var
-	    %% if Head is a real fact.
-	    %% If Head is compliled as a rule then it is the default metafact
-	    %% list (i.e., contains rule enabler, tag and type properties).
-	    %% We have to keep DefaultMetaFactDiffList as an argument to
-	    %% compile_fact because we don't know at this pint if ParserTerm
-	    %% is going to turn into a rule and thus can't know if
-	    %% DefaultMetaFactDiffList will be empty or not.
-	    compile_fact(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,DefaultMetaFactDiffList,Status),
-	    %% currently MetaFactDiffList is always a Var1-Var2 here,
-	    %% since annotated
-	    %% facts are converted to rules by the parser.
-	    %% But in the future this may change, we we take precaution
-	    %% Here we unify the MetaFactDiffList with DefaultMetaFactDiffList
-	    (var(DescriptorIdCode) -> MetaFactDiffList = DefaultMetaFactDiffList
-	    ; true
-	    ),
-	    UDFPreds=UDFPredsTail,
-	    QueryList = _Q-_Q,
-	    LatentQueryList = _LQ-_LQ
+compile_internal(ParserTerm,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_flfact(ParserTerm,Head),
+	%% DefaultMetaFactDiffList is empty diff list Var-Var
+	%% if Head is a real fact.
+	%% If Head is compliled as a rule then it is the default metafact
+	%% list (i.e., contains rule enabler, tag and type properties).
+	%% We have to keep DefaultMetaFactDiffList as an argument to
+	%% compile_fact because we don't know at this pint if ParserTerm
+	%% is going to turn into a rule and thus can't know if
+	%% DefaultMetaFactDiffList will be empty or not.
+	compile_fact(Head,DescriptorIdCode,DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,DefaultMetaFactDiffList,Status),
+	%% currently MetaFactDiffList is always a Var1-Var2 here,
+	%% since annotated
+	%% facts are converted to rules by the parser.
+	%% But in the future this may change, we we take precaution
+	%% Here we unify the MetaFactDiffList with DefaultMetaFactDiffList
+	(var(DescriptorIdCode) -> MetaFactDiffList = DefaultMetaFactDiffList
+	; true
+	),
+	UDFPreds=UDFPredsTail,
+	QueryList = _Q-_Q,
+	LatentQueryList = _LQ-_LQ.
 
-	; is_flquery(ParserTerm,Body) ->
-	    UDFPreds=UDFPredsTail,
-	    compile_query(Body,QueryList,Status),
-	    RuleDiffList = _R-_R,
-	    LatentQueryList = _LQ-_LQ,
-	    SigDiffList = _S-_S,
-	    FactDiffList = _Fact - _Fact,
-	    MetaFactDiffList = _M-_M
+compile_internal(ParserTerm,_DescriptorIdCode,_DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_flquery(ParserTerm,Body),
+	UDFPreds=UDFPredsTail,
+	compile_query(Body,QueryList,Status),
+	RuleDiffList = _R-_R,
+	LatentQueryList = _LQ-_LQ,
+	SigDiffList = _S-_S,
+	FactDiffList = _Fact - _Fact,
+	MetaFactDiffList = _M-_M.
 
-	; is_fllatent_query(ParserTerm,Body) ->
-	    UDFPreds=UDFPredsTail,
-	    %% Note: latent queries are always annotated.
-	    %% So, this must have been called from
-	    %% compile_annotated_construct/9.
-	    %% Therefore, MetaFactDiffList must be bound
-	    %% This is why we don't bind it further.
-	    %% However, we pass an empty diff list to
-	    %% compile_latent_query/6 because this is static compile,
-	    %% and the needed metafacts will be generated.
-	    %% So, FLLIBINSQUERYSIG/7 does not need to.
-	    %% Actually, compile_annotated_construct/9 passes []-[] to
-	    %% compile_internal/11 anyway.
-	    compile_latent_query(DescriptorIdCode,[]-[],Body,FL_DESCRMODE_LATENT_QUERY,LatentQueryList,Status),
-	    RuleDiffList = _R-_R,
-	    QueryList = _Q-_Q,
-	    SigDiffList = _S-_S,
-	    FactDiffList = _Fact - _Fact
+compile_internal(ParserTerm,DescriptorIdCode,_DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,_MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_fllatent_query(ParserTerm,Body),
+	UDFPreds=UDFPredsTail,
+	%% Note: latent queries are always annotated.
+	%% So, this must have been called from
+	%% compile_annotated_construct/9.
+	%% Therefore, MetaFactDiffList must be bound
+	%% This is why we don't bind it further.
+	%% However, we pass an empty diff list to
+	%% compile_latent_query/6 because this is static compile,
+	%% and the needed metafacts will be generated.
+	%% So, FLLIBINSQUERYSIG/7 does not need to.
+	%% Actually, compile_annotated_construct/9 passes []-[] to
+	%% compile_internal/11 anyway.
+	compile_latent_query(DescriptorIdCode,[]-[],Body,FL_DESCRMODE_LATENT_QUERY,LatentQueryList,Status),
+	RuleDiffList = _R-_R,
+	QueryList = _Q-_Q,
+	SigDiffList = _S-_S,
+	FactDiffList = _Fact - _Fact.
 
-	; is_fldirective(ParserTerm,DirectList,DirctIdx) ->
-	    UDFPreds=UDFPredsTail,
-	    compile_directive(DirectList,DirctIdx,RuleDiffList,FactDiffList,Status),
-	    QueryList = _Q-_Q,
-	    LatentQueryList = _LQ-_LQ,
-	    SigDiffList = _S-_S,
-	    MetaFactDiffList = _M-_M
+compile_internal(ParserTerm,_DescriptorIdCode,_DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_fldirective(ParserTerm,DirectList,DirctIdx),
+	UDFPreds=UDFPredsTail,
+	compile_directive(DirectList,DirctIdx,RuleDiffList,FactDiffList,Status),
+	QueryList = _Q-_Q,
+	LatentQueryList = _LQ-_LQ,
+	SigDiffList = _S-_S,
+	MetaFactDiffList = _M-_M.
 
-	; is_flannotated_construct(ParserTerm,DescriptorList,MainPartOfRule) ->
-	    compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,Status),
-	    UDFPreds=UDFPredsTail
+compile_internal(ParserTerm,_DescriptorIdCode,_DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_flannotated_construct(ParserTerm,DescriptorList,MainPartOfRule),
+	compile_annotated_construct(DescriptorList,MainPartOfRule,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,Status),
+	UDFPreds=UDFPredsTail.
 
-	; is_fludfunction(ParserTerm,Function,Body,ReturnValue) ->
-	    compile_udf_definition(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
-	    QueryList = _Q-_Q,
-	    LatentQueryList = _LQ-_LQ,
-	    SigDiffList = _S-_S,
-	    MetaFactDiffList = _M-_M
+compile_internal(ParserTerm,_DescriptorIdCode,_DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_fludfunction(ParserTerm,Function,Body,ReturnValue),
+	compile_udf_definition(Function,Body,ReturnValue,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
+	QueryList = _Q-_Q,
+	LatentQueryList = _LQ-_LQ,
+	SigDiffList = _S-_S,
+	MetaFactDiffList = _M-_M.
 
-	; is_fludfunctionfact(ParserTerm,Function,Value) ->
-	    compile_udf_definition(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
-	    QueryList = _Q-_Q,
-	    LatentQueryList = _LQ-_LQ,
-	    SigDiffList = _S-_S,
-	    MetaFactDiffList = _M-_M
-        ),
-	!.
+compile_internal(ParserTerm,_DescriptorIdCode,_DescrVarsTerm,RuleDiffList,SigDiffList,FactDiffList,QueryList,LatentQueryList,MetaFactDiffList,UDFPreds-UDFPredsTail,Status) :-
+	is_fludfunctionfact(ParserTerm,Function,Value),
+	compile_udf_definition(Function,NULL,Value,RuleDiffList,FactDiffList,UDFPreds-UDFPredsTail,Status),
+	QueryList = _Q-_Q,
+	LatentQueryList = _LQ-_LQ,
+	SigDiffList = _S-_S,
+	MetaFactDiffList = _M-_M.
 
 /***************************************************************************
   referenced_once(+Status_rf,-Status)
@@ -3326,6 +3367,7 @@ compile_directive([D|L],DirIdx,RuleList-RuleTail,FactDiffList,Status) :-
         ),
 	!.
 
+%% TODO: optimize for preprocessor
 compile_direct(DirectTerm,_DirIdx,[Code],Status) :-
 	is_flexport_list(DirectTerm,Term),
 	compile_export(Term,Direct,Status),
@@ -5277,7 +5319,7 @@ prconjunct2list(Code,[Code|ListTail],ListTail) :- !.
                 appended to the code of the body
 ****************************************************************************/
 
-#if exists("hooks/flrheadtop_compile.P") && exists("hooks/ergo.switch")
+#ifdef COMPILING_ERGO
 #include "hooks/flrheadtop_compile.P"
 #else
 compile_head_top(ParserTerm,ParserTerm,Context,Code,H2BCodeFront,H2BCodeBack,Status) :-
@@ -7293,7 +7335,6 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,NULL,[],Status) :-
 	!,
 	(memberchk(Suffix, [FL_SPECIAL_FILE_TOKEN,FL_SPECIAL_LINE_TOKEN]) ->
 	    special_variable_struct(Suffix,Object),
-	    Code = NULL,
 	    Status = NO_ERRORS
 	; Suffix == FL_SPECIAL_CALLER_TOKEN ->
 	    new_prvariable(NO_INDEX,Object),
@@ -7586,12 +7627,13 @@ compile_body_objref(ObjTerm,SpecType,AttTerm,WS,Object,OidCode,Code,Status) :-
   compile_body_bin_relation(+ObjTerm1,+RelType,+ObjTerm2,+Workdpace,-Object,-OidCode,-Code,-Status)
 ****************************************************************************/
 compile_body_bin_relation(ObjTerm1,RelType,ObjTerm2,WS,Obj1,OidCode,Code,Status) :-
-	compile_body_pathexplist([ObjTerm1,ObjTerm2],WS,[Obj1,Obj2],OidCode,OCode,[],PathexpStatus),
+	compile_body_pathexplist([ObjTerm1,ObjTerm2],WS,[Obj1,Obj2],OidCode,OCode,BodyFrontList,PathexpStatus),
 	!,
 	( no_errors_found(PathexpStatus) -> 
 	    birelate_struct(BODYLITERAL,Obj1,RelType,Obj2,TCode),
 	    attach_workspace(TCode,WS,WTCode,WSStatus),
-	    conjunct_struct(WTCode,OCode,Code)
+	    conjunct_code(BodyFrontList,BodyFrontCode),
+	    conjunct_code([BodyFrontCode,WTCode,OCode],Code)
 	;
 	    WSStatus = NO_ERRORS
         ),

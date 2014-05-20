@@ -96,6 +96,44 @@
 :- import flora_special_builtin_synonym/2 from flrsynonym.
 
 :- import
+	is_fltransig/4,
+	is_flboolsig/4,
+	is_flsigconstr/3,
+	is_flsigattconspec/6,
+	is_fltranspec/3,
+	is_flmethspec/3,
+	is_flmvdattspec/5,
+	is_flsigattspec/5,
+	is_flobjspec/4,
+	is_flbirelate/4,
+	is_fltoken/3,
+	is_fltoken/4,
+	is_flplib/2,
+	is_fltransactionalstring/2,
+	is_fltransactionalnumber/2,
+	is_fltransactionalatom/2,
+	is_flinsert/4,
+	is_flinsert/3,
+	is_fldelete/4,
+	is_fldelete/3,
+	is_flupdaterule/3,
+	is_flrulelognaf/2,
+	is_flconjunct/3,
+	is_fldisjunct/3,
+	is_flifthenelse/4,
+	is_fllogicquantifier/5,
+	is_flifthen/3,
+	is_flneg/3,
+	is_flruleworkspace/3,
+	is_flworkspace/3,
+	is_flterm/4,
+	is_flrule/3,
+	is_fldynrule/4,
+	is_flquery/2,
+	is_flfact/2
+   from flrcompiler.
+
+:- import
 	flora_canonical_type_name/2,
 	flora_synonymous_type_names/2
    from flrdatatype.
@@ -131,7 +169,6 @@
 :- export
 	flora_reset_parser/0,
 	FLORA_INCLUDE_DEPENDENCY_CLOSURE/2,
-
 	flwrite/1,
 	flwriteline/1,
 	flwritelinelist/1,
@@ -153,3 +190,8 @@
 	fldisjunct_struct/3,
 	flthismodule_struct/1,
 	flnumber_struct/3.
+
+
+%% compiler silencer
+:- export '_$_$flrparser_dummy_export'.
+

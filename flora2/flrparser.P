@@ -24,7 +24,18 @@
 */
 
 
+:- if('NOWARN'(
+	   (flrregistry:flora_configuration(installdir,FlrDir),
+	    machine:slash(S),
+	    fmt_write_string(Opt,'%s%sopt%soptcompile.P',arg(FlrDir,S,S)),
+	    fmt_write_string(Switch,'%s%shooks%sergo.switch',arg(FlrDir,S,S)),
+	    file_exists(Opt),
+	    file_exists(Switch))
+      )).
+:- compiler_options([xpp_on(gpp,optcompile)]).
+:- else.
 :- compiler_options([xpp_on]).
+:- endif.
 
 #define PARSING_FLORA
 
@@ -1170,13 +1181,13 @@ flobjref_struct(FL_INHERIMVD,Object,Attribute,FLOBJREF(Object,Attribute,INHERITA
 %% If the term is -(Number) or +(Number) then convert to flnumber
 %% Otherwise, normal term
 flterm_struct(Fun,1,[NumberObj],NumberObj) :-
-	nonvar(NumberObj),
 	is_flatom_struct(Fun,FL_PLUS),
+	nonvar(NumberObj),
 	is_flnumber_struct(NumberObj),
 	!.
 flterm_struct(Fun,1,[NumberObj],NumberObj1) :-
-	nonvar(NumberObj),
 	is_flatom_struct(Fun,FL_MINUS),
+	nonvar(NumberObj),
 	flnumber_struct(Num,Index, NumberObj),
 	!,
 	Num1 is -Num,
@@ -8860,16 +8871,6 @@ is_contextually_disallowed_reserved_builtin(Atom,Arity) :-
 %% push head-negation through disj and conj
 %% we need this in order to know how to parse insert{complex-fact}
 %% as well as to know if to issue parsing errors when neg is in the head
-is_flconjunct(FLCONJUNCT(L,R),L,R).
-is_fldisjunct(FLDISJUNCT(L,R),L,R).
-is_flneg(FLNEG(Goal,Idx),Goal,Idx).
-is_flrulelognaf(FLRULELOGNAF(Goal),Goal).
-is_flworkspace(FLWORKSPACE(P,WS),P,WS).
-is_flbirelate(FLBIRELATE(Obj1,RelType,Obj2),Obj1,RelType,Obj2).
-is_fllogicquantifier(FLQUANTIFIER(Quant,VarNames,FormulaCode,Idx),
-		     Quant,VarNames,FormulaCode,Idx).
-is_flifthenelse(FLIFTHENELSE(Cond,Then,Else),Cond,Then,Else).
-is_flifthen(FLIFTHEN(Cond,Then),Cond,Then).
 dual_quantifier(FL_FORALL,FL_EXISTS).
 dual_quantifier(FL_EXISTS,FL_FORALL).
 dual_quantifier(FL_EXIST,FL_FORALL).
@@ -9495,38 +9496,6 @@ convert_forall(Goal,Goal).
 %%% flwrite: Writes parsed terms in an easier to understand form.
 %%% Does only a minimal job, since this is just to simplify debugging
 %%% transforms and testing. Doesn't try to faithfully reconstruct Flora-2 syntax
-is_flrule(FLRULE(Head,Body),Head,Body).
-is_flfact(FLFACT(Head),Head).
-is_flquery(FLQUERY(Body),Body).
-
-is_flmethspec(FLMETHSPEC(Meth,Type),Meth,Type).
-is_fltranspec(FLTRANSPEC(QN,Type),QN,Type).
-is_flmvdattspec(FLMVDATTSPEC(Att,Arrow,Val,Type),Att,Arrow,Val,Type).
-
-is_flsigattspec(FLSIGATTSPEC(Att,Arrow,Val,Type),Att,Arrow,Val,Type).
-is_flsigconstr(FLSIGCONSTR(Lower,Upper),Lower,Upper).
-
-is_flobjspec(FLOBJSPEC(Obj,Spec,Type),Obj,Spec,Type).
-is_flboolsig(FLBOOLSIG(Att,Arrow,Type),Att,Arrow,Type).
-is_fltransig(FLTRANSIG(Att,Arrow,Type),Att,Arrow,Type).
-
-is_flsigattconspec(FLSIGATTCONSPEC(Att,Constr,Arrow,Val,Type),Att,Constr,Arrow,Val,Type).
-
-is_flbirelate(FLBIRELATE(Obj1,RelType,Obj2),Obj1,RelType,Obj2).
-is_flterm(FLTERM(Funct,Arity,Args),Funct,Arity,Args).
-is_fltransactionalatom(FLTRANSACTIONALATOM(Atom,_I),Atom).
-is_fltransactionalnumber(FLTRANSACTIONALNUMBER(Number,_I),Number).
-is_fltransactionalstring(FLTRANSACTIONALSTRING(String,_I),String).
-
-is_flinsert(FLINSERT(Op,List,Cond),Op,List,Cond).
-is_flinsert(FLINSERT(Op,List),Op,List).
-is_fldelete(FLDELETE(Op,List,Cond),Op,List,Cond).
-is_fldelete(FLDELETE(Op,List),Op,List).
-is_flupdaterule(FLUPDATERULE(Op,RuleList),Op,RuleList).
-is_flruleworkspace(FLRULEWORKSPACE(R,WS),R,WS).
-is_fldynrule(FLDYNRULE(Head,Body,DescriptorList),Head,Body,DescriptorList).
-is_fltoken(FLTOKEN(Token,Suffix,I),Token,Suffix,I).
-is_flplib(FLPLIB(Goal),Goal).
 
 flwriteline(ParserTerm) :-
 	flwrite(ParserTerm),
@@ -9858,3 +9827,33 @@ multiply_setarg_code_list([Code|RestCode],MultCodeList) :-
 #else
 to_Cranial_list(ParserTerm,ParserTerm,[NULL]).
 #endif
+
+
+/* These are to silence the compiler. The respective predicates get
+** eliminated by the precompiler in ergo, but not in flora. */
+'_$_$flrparser_dummy_export' :-
+    	false, %% to prevent elimination of is_fldynrule/4 by the preprocessor
+    	is_fldynrule(_,_,_,_),
+	is_flsigattconspec(_,_,_,_,_,_),
+	is_flneg(_,_,_),
+	is_flsigattspec(_,_,_,_,_),
+	is_flrulelognaf(_,_),
+	is_flmethspec(_,_,_),
+	is_flruleworkspace(_,_,_),
+	is_flconjunct(_,_,_),
+	is_fldisjunct(_,_,_),
+	is_flplib(_,_),
+	is_fltoken(_,_,_),
+	is_flifthenelse(_,_,_,_),
+	is_flmvdattspec(_,_,_,_,_),
+	is_flrule(_,_,_),
+	is_flterm(_,_,_,_),
+	is_flupdaterule(_,_,_),
+	is_flsigconstr(_,_,_),
+	is_flifthen(_,_,_),
+	is_fltranspec(_,_,_),
+	is_flquery(_,_),
+	is_flaggregt_struct(_),
+	is_flreify_struct(_),
+	is_flstring_struct(_),
+	is_fldatatype_struct(_).
