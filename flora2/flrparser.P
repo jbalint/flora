@@ -226,11 +226,11 @@ Functor := PathExpression
 Arguments := PathExpression (',' PathExpression)*
 
 Aggregate := AggregateOperator '{' TargetVariable (GroupingVariables)? '|' Body '}'
-AggregateOperator := 'max' | 'min' | 'avg' | 'sum' | 'collectset' | 'collectbag'
+AggregateOperator := 'max' | 'min' | 'avg' | 'sum' | 'setof' | 'setof'
 %% Note: only one TargetVariable is permitted.
 %% It must be a variable, not a term. If you need to aggregate over terms,
-%% as for example, in collectset/collectbag, use the following idiom:
-%%      S = collectset{ V | ... , V=Term }
+%% as for example, in setof/setof, use the following idiom:
+%%      S = setof{ V | ... , V=Term }
 TargetVariable := variable
 GroupingVariables := '[' variable, (',' variable)* ']'
 
@@ -1062,6 +1062,7 @@ fltransactionalobject_struct_aux(TRANSACTIONAL_ASCII_STRING(Str),I,FLTRANSACTION
 
 fltransactionalqname_struct(QN,FLTRANSACTIONALPREDSPEC(QN)).
 is_fltransactionalpredspec_struct(FLTRANSACTIONALPREDSPEC(_QN)).
+is_fltransactionalpredspec_struct(FLTRANSPEC(_QN)).
 
 %% transactional numbers are used only in :- index %arity-argument
 fltransactionalnumber_struct(OBJECT(TRANSACTIONAL_NUMBER(Num),I),FLTRANSACTIONALNUMBER(Num,I))  :- !.
@@ -1192,6 +1193,7 @@ flterm_struct(Fun,1,[NumberObj],NumberObj1) :-
 	!,
 	Num1 is -Num,
 	flnumber_struct(Num1,Index, NumberObj1).
+flterm_struct(FLTRANSACTIONALPREDSPEC(Funct),Arity,Args,FLTRANSACTIONALTERM(Funct,Arity,Args)) :- !.
 flterm_struct(Funct,Arity,Args,FLTERM(Funct,Arity,Args)).
 
 flarith_struct(Term,FLARITH(Term)).
@@ -1218,10 +1220,17 @@ flsigattconspec_struct(Attribute,Constr,Arrow,Value,Type,FLSIGATTCONSPEC(Attribu
 flincattspec_struct(Attribute,Arrow,Value,Type,FLINCATTSPEC(Attribute,Arrow,Value,Type)).
 %% a[b->->c]
 fltolistattspec_struct(Attribute,Arrow,Value,Type,FLTOLISTATTSPEC(Attribute,Arrow,Value,Type)).
+
+flboolsig_struct(FLTRANSACTIONALPREDSPEC(Attribute),Arrow,Type,FLTRANSIG(Attribute,Arrow,Type)) :- !.
 flboolsig_struct(Attribute,Arrow,Type,FLBOOLSIG(Attribute,Arrow,Type)).
+
+fltransig_struct(FLTRANSACTIONALPREDSPEC(Attribute),Arrow,Type,FLTRANSIG(Attribute,Arrow,Type)) :- !.
 fltransig_struct(Attribute,Arrow,Type,FLTRANSIG(Attribute,Arrow,Type)).
 
+flmethspec_struct(FLTRANSACTIONALPREDSPEC(Method),Type,FLTRANSPEC(Method,Type)) :- !.
 flmethspec_struct(Method,Type,FLMETHSPEC(Method,Type)).
+
+fltranspec_struct(FLTRANSACTIONALPREDSPEC(Tran),Type,FLTRANSPEC(Tran,Type)) :- !.
 fltranspec_struct(Tran,Type,FLTRANSPEC(Tran,Type)).
 
 flsigconstr_struct(LowerBound,UpperBound,FLSIGCONSTR(LowerBound,UpperBound)). 
@@ -6212,11 +6221,18 @@ parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,DWS,_
 	parse_curi(Args,TransFlag,DWS,Code,Status).
 
 % To handle literal^^sort 
-parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,Args,If,_Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
+parse_body_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],If,_Ip),TransFlag,DWS,_TermArgMode,Code,Status) :-
 	get_atom(Funct,F),
 	is_datatypeop(F),
 	!,
-	parse_composer_datatype(Args,If,DWS,Code,Status).
+	parse_composer_datatype([Left,Right],If,DWS,Code,Status1),
+	(Status1 == NO_ERRORS,
+	    is_fltransactionalpredspec_struct(Code),
+	    TransFlag == DISALLOW_TRANS
+	->
+	    parsing_error(Left,ERROR_TRANSACTIONAL_SYMBOL,Status)
+	; Status = Status1
+	).
 
 %% This clause handles module specification @\prolog() and @\prologall()
 %% in the argument position.
@@ -6361,6 +6377,7 @@ nowspathexp(S) :-
   Args here is what's inside the brackets ...[Args]
   InherType: INHERITABLE/NONINHERITABLE
 ****************************************************************************/
+%% parse_body_objspec/7
 parse_body_objspec(Obj,N,Args,DWS,Type,Code,Status) :-
 	parse_body_pathexp(Obj,DISALLOW_TRANS,DWS,ANY_PATHEXP,O,S),
 	( S == NO_ERRORS ->
@@ -6378,6 +6395,7 @@ parse_body_objspec(Obj,N,Args,DWS,Type,Code,Status) :-
 	  Status = S
         ).
 
+%% parse_body_objspec/5
 parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,F),
 	(F == FL_AND_CONNECTIVE; F == FL_OR_CONNECTIVE),
@@ -6400,6 +6418,7 @@ parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],_If,_Ip),DWS,Type,Code,
 
 %% This parses obj[naf foo->bar], obj[naf foo], obj[\+foo->bar], or obj[\+foo] 
 %% in object specifications
+%% parse_body_objspec/5
 parse_body_objspec(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,F),
 	(is_plgnafop(F); is_rulelognafop(F); is_negop(F)),
@@ -6422,6 +6441,7 @@ parse_body_objspec(CANOTERM(Funct,_N,FL_PARENTHESIS,Args,If,Ip),DWS,Type,Code,St
 
 %% existantial quantifier under default negation in
 %% obj[not exists(?X,?Y)^goo->bar]
+%% parse_body_objspec/5
 parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTHESIS,Vars,_,_),Goal],_If,_Ip),DWS,Type,Code,Status) :-
 	get_atom(Funct,FL_QUANTVARCONNECTOR),
 	get_atom(Quant,QuantAtom,QuantIdx),
@@ -6445,6 +6465,7 @@ parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTH
 	  true
         ).
 
+%% parse_body_objspec/5
 parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTHESIS,_Vars,_,_),_Goal],_If,_Ip),_DWS,_Type,_Code,Status) :-
 	get_atom(Funct,FL_QUANTVARCONNECTOR),
 	get_atom(Quant,QuantAtom,QuantIdx),
@@ -6453,6 +6474,7 @@ parse_body_objspec(CANOTERM(Funct,2,FL_PARENTHESIS,[CANOTERM(Quant,_N,FL_PARENTH
 	parsing_error(QuantIdx,NO_LOG_QUANTIFIERS,Status).
 
 
+%% parse_body_objspec/5
 parse_body_objspec(CanoniTerm,DWS,Type,Code,Status) :-
 	parse_body_attmethspec(CanoniTerm,DWS,Type,Code,Status).
 	
@@ -6539,7 +6561,7 @@ parse_body_attmethspec(CANOTERM(Funct,1,FL_PARENTHESIS,[A],_If,_Ip),DWS,Type,Cod
 	    flboolsig_struct(ACode,F,Type,Code),
 	    Status = NO_ERRORS
 	;
-	    %% passing NONINHERITABLE so as to not a get an error about
+	    %% passing NONINHERITABLE so as to not get an error about
 	    %% inheriitable default transactions, ERROR_TRANS_DEFAULT_VALUE
 	    parse_body_attmethspec(A,DWS,NONINHERITABLE,ACode2,S2),
 	    (S2 == NO_ERRORS ->
@@ -6594,7 +6616,7 @@ parse_body_attmethspec(CanoniTerm,_DWS,Type,Code,Status) :-
 	; fltranspec_struct(C,Type,Code),
 	    Status = NO_ERRORS
 	).
-        
+
 %% Transactional method spec. Possibly with a prefix macro.
 parse_body_attmethspec(CanoniTerm,DWS,Type,Code,Status) :-
 	parse_body_pathexp(CanoniTerm,ALLOW_TRANS,DWS,ANY_PATHEXP,C,S1),
@@ -6609,14 +6631,16 @@ parse_body_attmethspec(CanoniTerm,DWS,Type,Code,Status) :-
 	    ; fltranspec_struct(C,Type,Code),
 		Status = NO_ERRORS
 	    )
-        ;
-	    %% error
+        ; %% error
             Status = S1
         ).
+        
+parse_body_attmethspec(CanoniTerm,DWS,Type,Code,Status) :-
+	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,ANY_PATHEXP,C,Status),
+	parse_body_attmethspec_aux(C,Status,Type,Code).
 
 %% Obj[\true], Obj[\false], Obj[!] - interpreted as true, false, !
-parse_body_attmethspec(CanoniTerm,DWS,_Type,Code,Status) :-
-	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,ANY_PATHEXP,C,Status),
+parse_body_attmethspec_aux(C,Status,_Type,Code) :-
 	(is_flatom_struct(C,Atom)
 	; is_flbuiltin_identifier_struct(C,Atom)
 	),
@@ -6625,8 +6649,7 @@ parse_body_attmethspec(CanoniTerm,DWS,_Type,Code,Status) :-
 	(Status == NO_ERRORS -> flpassthru_struct(C,Code); true).
 
 %% Obj[X>Y], Obj[X=Y], etc.
-parse_body_attmethspec(CanoniTerm,DWS,_Type,Code,Status) :-
-	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,PURE_PATHEXPS_ONLY,C,Status),
+parse_body_attmethspec_aux(C,Status,_Type,Code) :-
 	flterm_struct(Funct,Arity,_Args,C), % decompose C
 	(is_flatom_struct(Funct,Atom)
 	; is_flbuiltin_identifier_struct(Funct,Atom)
@@ -6635,8 +6658,7 @@ parse_body_attmethspec(CanoniTerm,DWS,_Type,Code,Status) :-
         !,
 	(Status == NO_ERRORS -> flpassthru_struct(C,Code); true).
 
-parse_body_attmethspec(CanoniTerm,DWS,Type,Code,Status) :-
-	parse_body_pathexp(CanoniTerm,DISALLOW_TRANS,DWS,ANY_PATHEXP,C,Status),
+parse_body_attmethspec_aux(C,Status,Type,Code) :-
 	(Status == NO_ERRORS -> flmethspec_struct(C,Type,Code)
 	; true
 	).
@@ -6887,12 +6909,12 @@ parse_head_term(Funct,N,Args,_TransFlag,DWS,Code,Status) :-
 	    true
 	).
 
-parse_head_term(Funct,_N,Args,_TransFlag,DWS,Code,Status) :-
+parse_head_term(Funct,_N,[Left,Right],TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_datatypeop(F),
 	!,
 	get_index(Funct,If),
-	parse_composer_datatype(Args,If,DWS,Code,Status).
+	parse_composer_datatype([Left,Right],If,DWS,Code,Status1).
 
 parse_head_term(Funct,2,Args,TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,F),
@@ -7053,8 +7075,15 @@ parse_head_pathexp(CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],If,_Ip),TransFla
 
 	; is_curi_op(F) -> parse_curi([Left,Right],TransFlag,DWS,Code,Status)
 
-	; is_datatypeop(F) -> parse_composer_datatype([Left,Right],If,DWS,Code,Status)
-	    
+	; is_datatypeop(F) ->
+	    parse_composer_datatype([Left,Right],If,DWS,Code,Status1),
+	    (Status1 == NO_ERRORS,
+		is_fltransactionalpredspec_struct(Code),
+		TransFlag == DISALLOW_TRANS
+	    ->
+		parsing_error(Left,ERROR_TRANSACTIONAL_SYMBOL,Status)
+	    ; Status = Status1
+	    )
 	;
 	    parse_head_term(Funct,2,[Left,Right],TransFlag,DWS,Code,Status)
         ).
@@ -7949,11 +7978,18 @@ parse_db_pathexp(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,Args,_If,_Ip),TransFlag,D
 	!,
 	parse_curi(Args,TransFlag,DWS,Code,Status).
 
-parse_db_pathexp(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),_TransFlag,DWS,_TermArgMode,Code,Status) :-
+parse_db_pathexp(_Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,DWS,_TermArgMode,Code,Status) :-
 	get_atom(Funct,F),
 	is_datatypeop(F),
 	!,
-	parse_composer_datatype([L,R],If,DWS,Code,Status).
+	parse_composer_datatype([L,R],If,DWS,Code,Status1),
+	(Status1 == NO_ERRORS,
+	    is_fltransactionalpredspec_struct(Code),
+	    TransFlag == DISALLOW_TRANS
+	->
+	    parsing_error(L,ERROR_TRANSACTIONAL_SYMBOL,Status)
+	; Status = Status1
+	).
 
 parse_db_pathexp(Mode,CANOTERM(Funct,2,FL_PARENTHESIS,[L,R],If,_Ip),TransFlag,_DWS,TermArgMode,Code,Status) :-
 	get_atom(Funct,FL_AT),
@@ -8761,7 +8797,8 @@ parse_composer_datatype(Args,If,DWS,Code,Status) :-
 		parsing_error(If,ERROR_DATATYPE_LITERAL,Status)
 	    )
 	; Status = Status3
-	).
+	),
+	!.
 
 parse_composer_datatype(_Args,If,_DWS,_Code,Status) :-
 	parsing_error(If,ERROR_DATATYPE_NAME,Status).
@@ -9832,7 +9869,7 @@ to_Cranial_list(ParserTerm,ParserTerm,[NULL]).
 /* These are to silence the compiler. The respective predicates get
 ** eliminated by the precompiler in ergo, but not in flora. */
 '_$_$flrparser_dummy_export' :-
-    	false, %% to prevent elimination of is_fldynrule/4 by the preprocessor
+    	false, %% prevents elimination of the next call by the preprocessor
     	is_fldynrule(_,_,_,_),
 	is_flsigattconspec(_,_,_,_,_,_),
 	is_flneg(_,_,_),

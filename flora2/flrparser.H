@@ -193,5 +193,5 @@
 
 
 %% compiler silencer
-:- export '_$_$flrparser_dummy_export'.
+:- export '_$_$flrparser_dummy_export'/0.
 

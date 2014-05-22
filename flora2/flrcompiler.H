@@ -121,6 +121,7 @@
         is_prvariable/1,
         is_prvariable/3,
         is_prtransactionalvariable/3,
+        is_prtransactionalnumber/3,
         is_pratom/2,
         is_pratom/3,
         is_prnumber/3,
@@ -291,3 +292,6 @@
 	is_fltranspec/3,
 	is_flmethspec/3,
 	is_flaggregate/6.
+
+%% compiler silencer
+:- export '_$_$flrcompiler_dummy_export'/0.
