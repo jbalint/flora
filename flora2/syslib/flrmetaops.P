@@ -34,6 +34,7 @@
 	negate_wrapper/2,
 	negate_predicate/2,
 	flora_module_predicate/4,
+	flora_fdb_storage_name/2,
 	is_flora_callable_literal/1,
 	flora_decode_predicate/7
    from flrwrapper.
@@ -42,6 +43,7 @@
 :- import
 	get_canonical_form/2,
 	convert_to_body_literal/2,
+	convert_to_head_literal/2,
 	is_naf_literal/2,
         flora_check_dynmod_type_consistency/1
     from flrcanon.
@@ -520,8 +522,7 @@ FLLIBMETAUNIV(X,Y) :-
 	       Y = [WRAP_HILOG(FL_NEGATION,FL_PLGNAF)|Args]
 	   %% libraries like insert
 	   ; update_wrapper(FullWrapper,WrapTerm) ->
-	       Args = [_Mod|UpdateArgs] ->
-	       Y = [WrapTerm|UpdateArgs]
+	       Y = [WrapTerm|Args]
 	   ; clause_wrapper(FullWrapper,WrapTerm) ->
 	       Args = [Id,
 		       _,  %% DescrVarTerm
@@ -680,11 +681,9 @@ FLLIBMETAUNIV(X,Y) :-
 	; %% update
 	    Head = WRAP_HILOG(update,_Op) ->
 	    update_wrapper(Library,Head),
-	    %% need to wrap each Lit in Args with
-	    %% FLSYSDBUPDATE(Lit,Storage,Module) or
-	    %% FLSYSRULEUPDATE(Id,_,DescrVarTerm,_,DescrMetaFacts,Head,Body,_,_,DTvars,H2BF,H2BB,PreBody,PostBody,DefeatCond)
-	    %% Not done, as it is quite delicate
-	    X =.. [Library|Args]
+	    Args = [Module,UpdateList],
+	    wrap_update_list(Module,UpdateList,UpdateListWrapped),
+	    X =.. [Library,Module,UpdateListWrapped]
 	;   delayedlit_wrapper(Builtin,Head) ->
 	    X = FLLIBDELAYEDLITERAL(Builtin,_,_,Args)
 	;   prologlit_wrapper(Module,Head), Args = [PlgLit] ->
@@ -859,3 +858,15 @@ strip_operator_encoding_args([Term|Rest],[Stripped|StrippedRest]) :-
 	strip_operator_encoding(Term,Stripped),
 	strip_operator_encoding_args(Rest,StrippedRest).
 
+%% for update operators in =.. when the right side is given as a list
+%% and the left side is a variable
+wrap_update_list(_,[],[]) :- !.
+wrap_update_list(Module,[H|UpdateList],[WH|UpdateListWrapped]) :-
+		(H = FLSYSRULEUPDATE(_,_,_,_,_,_,_,_,_,_,_,_,_,_,_) -> WH = H
+		; H = FLSYSDBUPDATE(_,_,_) -> WH = H
+		; 
+		    flora_fdb_storage_name(Module,StorageName),
+		    convert_to_head_literal(H,DH),
+		    WH = FLSYSDBUPDATE(DH,StorageName,Module)
+		),
+		wrap_update_list(Module,UpdateList,UpdateListWrapped).
