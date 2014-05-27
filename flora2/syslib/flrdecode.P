@@ -130,6 +130,11 @@
 	flora_display_symbol/2.
 
 :- dynamic display_mode/1, display_submode/1.
+%% place to hold the module of the rule head. used to display rules as
+%% (head :- body)@module
+%% The head is displayed without modules to make the display syntactically
+%% correct. Body is displayed with modules.
+:- dynamic FLORA_SYMBOL('rule_head_module')/1.
 
 
 
@@ -326,7 +331,15 @@ flora_decode_goal(CallIn,[FL_VARSYM,CallIn],_Depth) :-
 flora_decode_goal(CallIn,Code,Depth) :-
 	%% goal_cut_untrans gets rid of various irregularities like ';;'/2
 	goal_cut_untrans(CallIn,Call),
-	classify_call(Call, Type,Basename,ArgList,Module),
+	classify_call(Call, Type,Basename,ArgList,HeadModule),
+	(has_context(displaying_rule_head) ->
+	    %% asserting the head module is inefficient when there are many
+	    %% reified rules. Need to find a better ad a more elegant way
+	    retractall(FLORA_SYMBOL('rule_head_module')(_)),
+	    assert(FLORA_SYMBOL('rule_head_module')(HeadModule)),
+	    Module = ''
+	; Module = HeadModule
+	),
 	(Type = (basefact,CallType)
 	-> Code = ['isbasefact{', [RestCode], '}']
 	;  Code = RestCode, Type = CallType
@@ -391,10 +404,12 @@ flora_decode_oid(Call,Code) :-
 %%%%%%%%%%%%%%%%%%%% decode_head %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 decode_head(Head,HeadCode,Depth) :-
 	Depth1 is Depth+1,
+	set_context(displaying_rule_head),
 	(is_list(Head)
 	-> decode_list_add_separator(Head,HeadCode,flora_decode_goal(_,_,Depth1),', ')
 	; flora_decode_goal(Head,HeadCode,Depth1)
-	).
+	),
+	clear_context(displaying_rule_head).
 
 
 
@@ -799,7 +814,7 @@ decode_update_literals([FLSYSDBUPDATE(Lit,_Storage,_Module)|T],[LitCode,Comma|TC
 	(T == [] -> Comma = '' ; Comma = ', '),
 	decode_update_literals(T,TCode).
 decode_update_literals([FLSYSRULEUPDATE(Id,_,_DescrVarTerm,_,_DescrMetaFacts,Head,Body,_,_,_DTvars,_H2BF,_H2BB,_PreBody,_PostBody,_DefeatCond)|T],
-		       [[RuleIdCode, HeadCode,' :- ', BodyCode],Comma|TCode])
+		       [[ModuleStart,RuleIdCode, HeadCode,' :- ', BodyCode,ModuleEnd],Comma|TCode])
       :-
 	!,
 	(is_void(Id) -> RuleIdCode = ''
@@ -809,6 +824,10 @@ decode_update_literals([FLSYSRULEUPDATE(Id,_,_DescrVarTerm,_,_DescrMetaFacts,Hea
 	),
 	decode_head(Head,HeadCode,0),
         decode_literal_internal(Body,BodyCode,0,0),
+	(FLORA_SYMBOL('rule_head_module')(Module), atom(Module) ->
+	    ModuleStart = '(', ModuleEnd = [')@',Module]
+	; ModuleStart = '', ModuleEnd = ''
+	),
 	(T == [] -> Comma = '' ; Comma = ', '),
 	decode_update_literals(T,TCode).
 decode_update_literals([H|T],[HCode|TCode]) :-
@@ -1604,7 +1623,7 @@ decode_literal_internal(call(Subcall),[ReifyStart,'call(',SubcallCode,')',ReifyE
 	flora_decode_goal(Subcall,SubcallCode,Depth1).
 
 decode_literal_internal(FLSYSRULEUPDATE(Id,_,_DescrVarTerm,_,_DescrMetaFacts,Head,Body,_,_,_DTvars,_H2BF,_H2BB,_PreBody,_PostBody,_DefeatCond),
-			[ReifyStart,RuleIdCode,HeadCode, ' :- ', BodyCode, ReifyEnd],
+			[ReifyStart,ModuleStart,RuleIdCode,HeadCode, ' :- ', BodyCode,ModuleEnd,ReifyEnd],
 			Level, Depth) :-
 	!,
 	(is_void(Id) -> RuleIdCode = ''
@@ -1615,6 +1634,11 @@ decode_literal_internal(FLSYSRULEUPDATE(Id,_,_DescrVarTerm,_,_DescrMetaFacts,Hea
 	(Level==0 -> ReifyStart='',ReifyEnd='' ; ReifyStart='${',ReifyEnd='}'),
 	Depth1 is Depth+1,
 	decode_head(Head,HeadCode,Depth1),
+	(Level==0 -> ModuleStart='', ModuleEnd=''
+	; FLORA_SYMBOL('rule_head_module')(Module), atom(Module) ->
+	    ModuleStart = '(', ModuleEnd = [')@',Module]
+	; ModuleStart = '', ModuleEnd = ''
+	),
 	flora_decode_goal(Body,BodyCode,Depth1).
 
 decode_literal_internal(FLSYSINSQUERYSIG(Id,_,_,_,_,_,Body,_),
