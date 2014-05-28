@@ -33,8 +33,6 @@
 
 :- import eval/2 from eval.
 
-:- import memberchk/2 from basics.
-
 :- import
 	flora_retractall_substitute/1
    from flrutils.
