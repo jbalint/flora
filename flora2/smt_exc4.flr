@@ -1,0 +1,86 @@
+// http://www.kr.tuwien.ac.at/staff/bruijn/priv/teaching/swt/exercises.html#ex4
+
+// Airbus and Boeing are airplane manufacturers.
+{Airbus, Boeing}:planemfg.
+
+// Airplane manufacturers have a name and they manufacture airplanes.
+planemfg[|name => \string|].
+planemfg[|mfg -> airplanes|].
+?X[name -> ?X] :- ?X:planemfg.
+
+// Airbus manufactures the airplanes a310, a330 and a380. Boeing manufactures the airplanes b747, b777. a310, a330, a380, b747, and b777 are airplanes.
+Airbus[model->{a310, a330, a380}].
+Boeing[model->{b747, b777}].
+?X:airplaneModel :- ?_Mfg[model->?X].
+
+// Lufthansa and british airways are airlines.
+{Lufthansa, BritishAirways}:airline.
+?X[ownsModel -> ?Y] :- ?X:airline[airplanes(?Y) -> ?_].
+
+// Lufthansa has three airplanes of type b747 with serial numbers x345, x567, x789, and 2 of type a380 with serial numbers a8766, and a578; British airways has one airplane of type a330 with serial number a234.
+Lufthansa[airplanes(b747) -> {x345, x567, x789},
+	      airplanes(a380) -> {a8766, a578}].
+BritishAirways[airplanes(a330) -> a234].
+?Serial:airplane :- ?_Mfg[airplanes(?_Model:airplaneModel) -> ?Serial].
+?Serial[model -> ?Model] :- ?_Mfg[airplanes(?Model:airplaneModel) -> ?Serial].
+
+// Each airplane has a total number of flights and a number of flights since the last maintenance.
+airplane[|totalFlights => \integer,
+	      flightsSinceMaint => \integer|].
+
+// If an airplane has had more than 15 flights since the last maintenance, it is scheduled for maintenance.
+scheduledForMaint(?X) :- (?X:airplane).flightsSinceMaint > 15.
+
+// The maintenance schedule of each airplane includes information about the date of each maintenance and the total number of flights the plane has had when the maintenance was done.
+airplane[|maint(\integer) => \integer|].
+
+?Plane[daysSinceMaint -> ?Days] :-
+	currentDate(?_Date),
+	?Days \is ?_Date - max{?_LastMaint[?Plane] |
+                           ?Plane:airplane[maint(?_LastMaint) -> ?_]}.
+?Plane[airline -> ?Airline] :-
+	?Airline:airline[airplanes(?_Model) -> ?Plane:airplane].
+
+// If the last maintenance was more than 100 days ago, the plane is scheduled for maintenance.
+scheduledForMaint(?Plane) :-
+	//\neg grounded(?Plane),
+	(?Plane:airplane).daysSinceMaint > 100.
+	//?Plane.daysSinceMaint < 150.
+
+// If an airplane has not had maintenance for over 150 days, the plane is grounded.
+grounded(?Plane) :-
+	(?Plane:airplane).daysSinceMaint > 150.
+
+// Model the planes such that at least one has had more than 15 flights since the last maintenance, at least one had its last maintenance between 100 and 150 days ago, and one had its maintenance more than 150 days age.
+
+// Write queries to check the following:
+
+// Query the manufacturers of which Lufthansa owns airplanes.
+// %AirlineOwns(+?Airline, -?Owns)
+// %AirlineOwns(?Airline, ?Owns) :- ?Airline:airline[airplanes(?_Model) -> ?_],
+// 	                             ?Owns:planemfg[model -> ?_Model].
+%AirlineOwns(?Airline, ?Owns) :-
+	?Owns = (?Airline:airline).ownsModel.
+
+// Query which airplanes are scheduled for services at Lufthansa, and British Airways, respectively
+// %PlanesForService(+?Airline, -?Plane)
+%PlanesForService(?Airline, ?Plane) :-
+	scheduledForMaint(?Plane),
+	(?Plane:airplane).airline = ?Airline.
+
+// Query which airplanes are grounded at Lufthansa, and British Airways, respectively
+// %PlanesGrounded(+?Airline, -?Plane)
+%PlanesGrounded(?Airline, ?Plane) :-
+	grounded(?Plane),
+	(?Plane:airplane).airline = ?Airline.
+
+// Make sure the programs use the extension flr, e.g. myOntology.flr. Load the program in flora using flLoad myOntology. Execute query by entering the body of the query, following by a dot '.', e.g. ?- ?x:person.
+
+// Tip: use integers to model dates.
+
+
+
+x345[flightsSinceMaint -> 1, maint(1) -> 0].
+x567[flightsSinceMaint -> 20].
+x789[maint(500) -> 25].
+currentDate(500).
