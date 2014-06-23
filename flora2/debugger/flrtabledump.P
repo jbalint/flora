@@ -55,7 +55,7 @@
 :- import
 	%%flora_escape_atom/2,
 	flora_display_symbol/2,
-	%%flora_display_mode/1,
+	%%flora_display_schema/1,
 	flora_decode_oid_as_atom_substitute_vars/2
    from flrdecode.
 
@@ -68,15 +68,18 @@
 
 :- export
 	flora_dump_incomplete_tables/1,
+	flora_dump_incomplete_tables/2,
 	flora_dump_incomplete_tables_after_exception/1,
+	flora_dump_incomplete_tables_after_exception/2,
 	flora_dump_tables/2,
-	flora_dump_tables/3.
+	flora_dump_tables/4.
 
 
 flora_dump_tables(File,AtomicGoal) :-
-	flora_dump_tables(File,AtomicGoal,summary).
+	flora_dump_tables(File,AtomicGoal,summary,hide).
 %% Option: summary/subgoal/answers. Answers is the most detailed.
-flora_dump_tables(File,AtomicGoal,Option) :-
+%% HideNonuserTablesOption: hide/show
+flora_dump_tables(File,AtomicGoal,Option,HideNonuserTablesOption) :-
 	atom(File),
 	!,
 	(memberchk(Option,[subgoals,subgoal,goal]) ->
@@ -92,15 +95,15 @@ flora_dump_tables(File,AtomicGoal,Option) :-
 	convert_to_head_literal(AtomicGoal,AtomicGoalH),
 	flora_generalize_last(AtomicGoalH,FinalGoal),
 	tell(File),
-	convert_tabledump_to_flora(FinalGoal,Options1),
+	convert_tabledump_to_flora(FinalGoal,Options1,HideNonuserTablesOption),
 	told.
-flora_dump_tables(_File,_AtomicGoal,_Option) :-
+flora_dump_tables(_File,_AtomicGoal,_Option,_HideOpt) :-
 	flora_abort('\\tabledump: argument 1 must be a file name or `userout'' (for standard output)', FLORA_ABORT_NOTRACE).
 
-convert_tabledump_to_flora(AtomicGoal,Options) :-
+convert_tabledump_to_flora(AtomicGoal,Options,HideNonuserTablesOption) :-
 	( table_dump(AtomicGoal,[results(TblDescriptor)|Options]),
 	    nonvar(TblDescriptor),
-	    write_one_table_record(TblDescriptor),
+	    write_one_table_record(TblDescriptor,HideNonuserTablesOption),
 	    file_io:flush_output,
 	    fail
 	; true
@@ -109,7 +112,8 @@ convert_tabledump_to_flora(AtomicGoal,Options) :-
 
 write_answers_for_subgoals([]) :- !.
 write_answers_for_subgoals([First|Rest]) :-
-	(First = Subgoal - times_called(Calls) - answers(Answers) - AnsList - Status
+	(First = Subgoal - times_called(Calls)
+		    - answers(Answers) - AnsList - Status
 	;
 	    First = Subgoal - times_called(Calls) - answers(Answers) - Status
 	),
@@ -156,30 +160,35 @@ write_rule_id(_).
 
 %% dump incomplete tables then read them and write to File
 flora_dump_incomplete_tables(File) :-
+	flora_dump_incomplete_tables(File,hide).
+%% HideNonuserTablesOption: hide/show
+flora_dump_incomplete_tables(File,HideNonuserTablesOption) :-
 	flora_file_op(tmpfilename,TmpFile),
 	tell(TmpFile),
 	print_incomplete_tables,
 	told,
-	flora_dump_incomplete_tables(TmpFile,File),
+	flora_dump_incomplete_tables1(TmpFile,File,HideNonuserTablesOption),
 	flora_file_op(rm,TmpFile).
 
 %% Assume InFile has a dump of incomplete tables.
 %% Read it, convert to flora format and put the result in OutFile
-flora_dump_incomplete_tables(InFile,OutFile) :-
+flora_dump_incomplete_tables1(InFile,OutFile,HideNonuserTablesOption) :-
 	see(InFile),
 	tell(OutFile),
-	convert_incomplete_tables_to_flora,
+	convert_incomplete_tables_to_flora(HideNonuserTablesOption),
 	told,
 	seen.
 
-convert_incomplete_tables_to_flora :-
+convert_incomplete_tables_to_flora(HideNonuserTablesOption) :-
 	repeat,
 	read(SCCrecord),
 	(SCCrecord == end_of_file, !
 	;
 	    nonvar(SCCrecord),
 	    SCCrecord = Goal - scc(SN),
-	    \+ irrelevant_goal(Goal),
+	    (HideNonuserTablesOption == hide -> \+ irrelevant_goal(Goal)
+	    ; true %% show all tables
+	    ),
 	    write_according_to_display_mode(Goal),
 	    write('[scc->'),
 	    write(SN),
@@ -189,17 +198,19 @@ convert_incomplete_tables_to_flora :-
 	),
 	!.
 
-write_one_table_record(TblDescriptor) :-
+write_one_table_record(TblDescriptor,HideNonuserTablesOption) :-
 	(
 	  TblDescriptor = (summary = Goal - subgoals(NSG)
-		 - total_times_called(NC) - total_answers(R))
+			  - total_times_called(NC) - total_answers(R))
 	;
 	  TblDescriptor = (details = Goal - subgoals(NSG) - details(AnsList))
 	),
 	!,
 	NSG =\= 0,
 
-	\+ irrelevant_goal(Goal),
+	(HideNonuserTablesOption == hide -> \+ irrelevant_goal(Goal)
+	; true %% show all tables
+	),
 
 	/*
 	%% This hides too much. Better do it on a case-by-case basis
@@ -230,8 +241,11 @@ write_one_table_record(TblDescriptor) :-
 %% ?- set_prolog_flag(exception_pre_action,print_incomplete_tables)
 %% before the abort
 flora_dump_incomplete_tables_after_exception(DumpFile) :-
+	flora_dump_incomplete_tables_after_exception(DumpFile,hide).
+%% HideNonuserTablesOption: hide/show
+flora_dump_incomplete_tables_after_exception(DumpFile,HideNonuserTablesOption) :-
 	get_scc_dumpfile(InFile),
-	flora_dump_incomplete_tables(InFile,DumpFile),
+	flora_dump_incomplete_tables1(InFile,DumpFile,HideNonuserTablesOption),
 	flora_file_op(rm,InFile).
 
 /*
@@ -274,7 +288,7 @@ write_according_to_display_mode(Goal) :-
 	flora_decode_oid_as_atom_substitute_vars(Goal,FloraGoal),
 	write(FloraGoal).
 	/*
-	(flora_display_mode(silk) ->
+	(flora_display_schema(silk) ->
 	    flora_escape_atom(FloraGoal,Escaped),
 	    write(Escaped)
 	;   write(FloraGoal)

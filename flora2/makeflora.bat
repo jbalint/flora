@@ -73,8 +73,7 @@ cd ..
 if exist hooks\ergo.switch del hooks\ergo.switch
 
 REM If making ergo, create ergo.switch
-if [%0] == [makeergo]  @echo ergo > hooks\ergo.switch
-if [%0] == [makeergo.bat]  @echo ergo > hooks\ergo.switch
+if [%thiscommand%] == [makeergo]  @echo ergo > hooks\ergo.switch
 
 REM The following commands touch files
 cd flrincludes
@@ -83,7 +82,7 @@ copy /b flora_exceptions.flh +,,
 cd ..
 copy /b flrversion.P +,,
 copy /b flora2.P +,,
-nmake /nologo /f NMakefile.mak PROLOG=%PROLOG%
+nmake /nologo /f NMakefile.mak PROLOG=%PROLOG% PROLOGDIR=%PROLOGDIR%
 
 
 goto end

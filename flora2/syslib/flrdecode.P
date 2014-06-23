@@ -26,6 +26,8 @@
 
 :- compiler_options([xpp_on]).
 
+#mode standard Prolog
+
 #include "flrheader.flh"
 #include "flora_terms.flh"
 #include "flora_porting.flh"
@@ -74,6 +76,7 @@
 	flora_get_counter/2,
 	flora_concat_items/2,
 	flora_concat_atoms/2,
+        flora_term_to_atom/2,
 	flora_get_substring/4,
 	flora_match_substring/5
    from flrporting.
@@ -121,16 +124,16 @@
 
 :- export
 	flora_write_varnames/1,
+	flora_set_display_schema/1,
 	flora_set_display_mode/1,
-	flora_set_display_submode/1,
 	flora_escape_atom/2,
 	set_context/1,
 	clear_context/1,
+	flora_display_schema/1,
 	flora_display_mode/1,
-	flora_display_submode/1,
 	flora_display_symbol/2.
 
-:- dynamic display_mode/1, display_submode/1.
+:- dynamic display_schema/1, display_mode/1.
 %% place to hold the module of the rule head. used to display rules as
 %% (head :- body)@module
 %% The head is displayed without modules to make the display syntactically
@@ -142,6 +145,10 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% flora_write_goal %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 flora_write_goal(Stream,Goal) :-
+	flora_display_schema(raw),
+	!,
+	write(Stream,Goal).
+flora_write_goal(Stream,Goal) :-
 	flora_decode_goal(Goal,Code,0),
 	flatten(Code,FlatCode),
 	write_flat_code(Stream,FlatCode).
@@ -151,6 +158,10 @@ flora_write_goal(Goal) :-
 	telling(Stream),
 	flora_write_goal(Stream,Goal).
 
+flora_write_goal_substitute_vars(Stream,Goal) :-
+	flora_display_schema(raw),
+	!,
+	write(Stream,Goal).
 flora_write_goal_substitute_vars(Stream,Goal) :-
 	flora_decode_goal_as_atom_substitute_vars(Goal,Code),
 	write(Stream,Code).
@@ -164,6 +175,10 @@ flora_write_goal_substitute_vars(Goal) :-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% flora_write_oid %%%%%%%%%%%%%%%%%%%%%%%%%%%
 	
 flora_write_oid(Stream,Goal) :-
+	flora_display_schema(raw),
+	!,
+	write(Stream,Goal).
+flora_write_oid(Stream,Goal) :-
 	flora_decode_oid(Goal,Code),
 	flatten(Code,FlatCode),
 	write_flat_code(Stream,FlatCode).
@@ -173,6 +188,10 @@ flora_write_oid(Goal) :-
 	telling(Stream),
 	flora_write_oid(Stream,Goal).
 
+flora_write_oid_substitute_vars(Stream,Goal) :-
+	flora_display_schema(raw),
+	!,
+	write(Stream,Goal).
 flora_write_oid_substitute_vars(Stream,Goal) :-
 	flora_decode_oid_as_atom_substitute_vars(Goal,Code),
 	write(Stream,Code).
@@ -263,9 +282,17 @@ write_flat_code_without_ws(Stream,[H|T]) :-
 
 %%%%%%%%%%%%%%%%%%%%%%%% flora_decode_goal_as_atom/2 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 flora_decode_goal_as_atom(Goal,CodeAtom) :-
+	flora_display_schema(raw),
+	!,
+	flora_term_to_atom(Goal,CodeAtom).
+flora_decode_goal_as_atom(Goal,CodeAtom) :-
 	flora_decode_goal_as_list(Goal,Code),
 	flora_concat_items(Code,CodeAtom).
 
+flora_decode_goal_as_atom_substitute_vars(Goal,CodeAtom) :-
+	flora_display_schema(raw),
+	!,
+	flora_term_to_atom(Goal,CodeAtom).
 flora_decode_goal_as_atom_substitute_vars(Goal,CodeAtom) :-
 	copy_term(Goal,Goal1),
 	flrterm_vars(Goal1,Vars,0),
@@ -279,9 +306,17 @@ flora_decode_goal_as_list(Goal,FlatCode) :-
 
 %%%%%%%%%%%%%%%%%%%%%%%% flora_decode_oid_as_atom/2 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 flora_decode_oid_as_atom(Goal,CodeAtom) :-
+	flora_display_schema(raw),
+	!,
+	flora_term_to_atom(Goal,CodeAtom).
+flora_decode_oid_as_atom(Goal,CodeAtom) :-
 	flora_decode_oid_as_list(Goal,Code),
 	flora_concat_items(Code,CodeAtom).
 
+flora_decode_oid_as_atom_substitute_vars(Goal,CodeAtom) :-
+	flora_display_schema(raw),
+	!,
+	flora_term_to_atom(Goal,CodeAtom).
 flora_decode_oid_as_atom_substitute_vars(Goal,CodeAtom) :-
 	copy_term(Goal,Goal1),
 	flrterm_vars(Goal1,Vars,0),
@@ -1006,9 +1041,9 @@ decode_anon_oid(NewOid,Code) :-
 	( flora_match_substring('|_',NewOid,forward,_,Pos1) ->
 	    %% New unnumbered oid: looks like '...|_Num'.
 	    %% Converted from \# by the parser
-	    (flora_display_submode(answer) ->
-		Code = [NewOid, '  (', Symbol, ')']
-	    ; flora_display_submode(debug) -> Code = [NewOid]
+	    (flora_display_mode(answer) ->
+		Code = [Symbol, '  (', NewOid, ')']
+	    ; flora_display_mode(debug) -> Code = [NewOid]
 	    ;  Code = [Symbol]
 	    )
 	  ; flora_match_substring('|',NewOid,forward,_,Pos1) ->
@@ -1017,15 +1052,15 @@ decode_anon_oid(NewOid,Code) :-
 	    ; true
 	    ),
 	    flora_get_substring(NewOid,Pos1,Pos2,OidNumber),
-	    (flora_display_submode(answer) ->
-		Code = [NewOid, '  (', Symbol, OidNumber, ')']
-	    ; flora_display_submode(debug) -> Code = [NewOid]
+	    (flora_display_mode(answer) ->
+		Code = [Symbol, OidNumber, '  (', NewOid, ')']
+	    ; flora_display_mode(debug) -> Code = [NewOid]
 	    ;  Code = [Symbol,OidNumber]
 	    )
 	;
-	    (flora_display_submode(answer) ->
-		Code = [NewOid, '  (', Symbol, ')']
-	    ; flora_display_submode(debug) -> Code = [NewOid]
+	    (flora_display_mode(answer) ->
+		Code = [Symbol, '  (', NewOid, ')']
+	    ; flora_display_mode(debug) -> Code = [NewOid]
 	    ;  Code = [Symbol]
 	    )
 	).
@@ -1808,22 +1843,22 @@ escape([H|L],[CH_BACKSLASH,HC|EL],needs_quoting) :-
         !,
         escape(L,EL,_Flag).
 escape([CH_BACKSLASH,CH_QUOTE|L],[CH_QUOTE,CH_QUOTE|EL],needs_quoting) :-
-	flora_display_mode(flora),
+	flora_display_schema(flora),
 	!,
 	escape(L,EL,_).
 /*
 escape([CH_BACKSLASH,CH_QUOTE|L],[CH_BACKSLASH,CH_QUOTE|EL],needs_quoting) :-
-	flora_display_mode(silk),
+	flora_display_schema(silk),
 	!,
 	escape(L,EL,_).
 */
 escape([CH_QUOTE|L],[CH_QUOTE,CH_QUOTE|EL],needs_quoting) :-
-	flora_display_mode(flora),
+	flora_display_schema(flora),
 	!,
 	escape(L,EL,_).
 /*
 escape([CH_QUOTE|L],[CH_BACKSLASH,CH_QUOTE|EL],needs_quoting) :-
-	flora_display_mode(silk),
+	flora_display_schema(silk),
 	!,
 	escape(L,EL,_).
 */
@@ -1870,11 +1905,19 @@ is_void(X) :-
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Display mode stuff
-%%  Currently the only display mode is: flora
+%% Display schema/mode stuff
+%%  Currently display schemas are: flora/raw
+%%  Display modes: default/debug/answer
 %%  Other modes are disabled now, but keeping this stuff in case we reuse
 %%  this infrastructure for something else
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+flora_set_display_schema(Mode) :-
+	valid_display_schema(Mode),
+	!,
+	(retract(display_schema(_)), ! ; true),
+	assert(display_schema(Mode)).
+flora_set_display_schema(Mode) :-
+	flora_abort(['Invalid FLORA-2 display schema: ', Mode]).
 flora_set_display_mode(Mode) :-
 	valid_display_mode(Mode),
 	!,
@@ -1882,28 +1925,22 @@ flora_set_display_mode(Mode) :-
 	assert(display_mode(Mode)).
 flora_set_display_mode(Mode) :-
 	flora_abort(['Invalid FLORA-2 display mode: ', Mode]).
-flora_set_display_submode(Mode) :-
-	valid_display_submode(Mode),
-	!,
-	(retract(display_submode(_)), ! ; true),
-	assert(display_submode(Mode)).
-flora_set_display_submode(Mode) :-
-	flora_abort(['Invalid FLORA-2 display submode: ', Mode]).
 
-%%valid_display_mode(silk).
-valid_display_mode(flora).
+%%valid_display_schema(silk).
+valid_display_schema(flora).
+valid_display_schema(raw).
 
-valid_display_submode(debug).
-valid_display_submode(answer).
-valid_display_submode(default).
+valid_display_mode(debug).
+valid_display_mode(answer).
+valid_display_mode(default).
 
+flora_display_schema(Mode) :- display_schema(Mode), !.
+flora_display_schema(flora) :- \+ display_schema(_).
 flora_display_mode(Mode) :- display_mode(Mode), !.
-flora_display_mode(flora) :- \+ display_mode(_).
-flora_display_submode(Mode) :- display_submode(Mode), !.
-flora_display_submode(default) :- \+ display_submode(_).
+flora_display_mode(default) :- \+ display_mode(_).
 
 flora_display_symbol(SymType,Symbol) :-
-	flora_display_mode(Mode),
+	flora_display_schema(Mode),
 	display_table(SymType,Mode,Symbol).
 
 display_table(isa,flora,FL_ISA).
@@ -1911,9 +1948,15 @@ display_table(sub,flora,FL_SUB).
 display_table(terminator,flora,FL_RULE_DELIMITER).
 display_table(skolem,flora,FL_NEWOID).
 display_table(cardinality,flora,FL_RANGE).
+%%------------------------
+display_table(terminator,raw,FL_RULE_DELIMITER).
+%%display_table(isa,raw,FL_ISA).
+%%display_table(sub,raw,FL_SUB).
+%%display_table(skolem,raw,FL_NEWOID).
+%%display_table(cardinality,raw,FL_RANGE).
 
 flora_display_type_name(SymType,Typename) :-
-	flora_display_mode(Mode),
+	flora_display_schema(Mode),
 	display_datatype_name(SymType,Mode,Typename).
 
 %% display_datatype_name(Type,Mode,CanonName)
