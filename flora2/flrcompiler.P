@@ -26,8 +26,8 @@
 :- if('NOWARN'(
 	   (flrregistry:flora_configuration(installdir,FlrDir),
 	    machine:slash(S),
-	    fmt_write_string(Opt,'%s%sopt%soptcompile.P',arg(FlrDir,S,S)),
-	    fmt_write_string(Switch,'%s%shooks%sergo.switch',arg(FlrDir,S,S)),
+	    fmt_write_string(Opt,'"%s%sopt%soptcompile.P"',arg(FlrDir,S,S)),
+	    fmt_write_string(Switch,'"%s%shooks%sergo.switch"',arg(FlrDir,S,S)),
 	    file_exists(Opt),
 	    file_exists(Switch))
       )).
@@ -35,6 +35,8 @@
 :- else.
 :- compiler_options([xpp_on]).
 :- endif.
+#mode standard Prolog
+
 
 #if exists("hooks/flrheadtop_compile.P") && exists("hooks/ergo.switch")
 #define COMPILING_ERGO
@@ -1306,7 +1308,6 @@ workspace_struct(P,WS,PRWORKSPACE(P,WS)).
 is_prworkspace(PRWORKSPACE(P,WS),P,WS).
 thismodule_struct(PRTHISMODULE(PRTHISMODULE)).
 
-%% TODO: check if we actually need to wrap this with PRWORKSPACETERM
 workspaceterm_struct(WS,PRWORKSPACETERM(WSTerm)) :-
 	compile_workspace_term(WS,WSTerm).
 
@@ -1569,14 +1570,13 @@ has_prologlit([H|Rest],Idx) :-
    WSCode is where the final code is produced.
 */
 attach_workspace(InCode,WS,WSCode,Status) :- 
-	(WS == FL_THISMODULE -> WSCode = InCode, Status = []
+	(WS == FL_THISMODULE -> WSCode = InCode, Status = NO_ERRORS
 	; is_modularizedprologterm(InCode) ->
 	    (is_flvariable(WS,_,Idx)
 	    -> compiling_error(Idx,NO_PROLOG_WITH_VARMODULE,Err),
 		Status = [Err]
 	    ;
-		workspacelit_struct(InCode,WS,WSCode),
-		Status = NO_ERRORS
+		workspacelit_struct(InCode,WS,WSCode,Status)
 	    )
 	;   is_prologterm(InCode,_,_) ->
 	    %% If prolog term occurs under the scope of a FLORA-2 module, 
@@ -1584,25 +1584,25 @@ attach_workspace(InCode,WS,WSCode,Status) :-
 	    WSCode = InCode,
 	    Status = NO_ERRORS
 	;
-	    workspacelit_struct(InCode,WS,WSCode),
-	    Status = NO_ERRORS
+	    workspacelit_struct(InCode,WS,WSCode,Status)
 	),
 	!.
 
 %% sometimes P might already be compiled and have a workspace.
 %% Eg, if it came as head_neg_struct.
-workspacelit_struct(P,_WS,Code) :-
+workspacelit_struct(P,_WS,Code,NO_ERRORS) :-
 	is_prworkspace(P,_,_),
 	!,
 	Code = P.
-workspacelit_struct(P,WS,Code) :-
+workspacelit_struct(P,WS,Code,Status) :-
 	thismodule_struct(ThisModuleName),
 	(is_flvariable(WS,WSVarName,Index)
 	->
 	    varobj_struct(WSVarName,Index,WSVarCode),
 	    body_context_info_structure(ThisModuleName,FWContext),
 	    %% a call to a Flora user module
-	    florasyslib_struct(Index,FLLIBMODLIT,3,[P,WSVarCode,FWContext],Code)
+	    florasyslib_struct(Index,FLLIBMODLIT,3,[P,WSVarCode,FWContext],Code),
+	    Status = NO_ERRORS
 
 	%% X@module or X@\module
         %% or %X@module or %X@\module
@@ -1610,19 +1610,40 @@ workspacelit_struct(P,WS,Code) :-
 	    compile_workspace_term(WS,WSCode),
 	    body_context_info_structure(ThisModuleName,FWContext),
 	    %% a call to a module
-	    florasyslib_struct(Index,FLLIBMODLIT,3,[P,WSCode,FWContext],Code)
+	    florasyslib_struct(Index,FLLIBMODLIT,3,[P,WSCode,FWContext],Code),
+	    Status = NO_ERRORS
 
 	; is_flatom(WS,WSAtom,Index) ->
 	    atomobj_struct(WSAtom,Index,WSCode),
-	    workspace_struct(P,WSCode,Code)
+	    workspace_struct(P,WSCode,Code),
+	    Status = NO_ERRORS
 
 	%%; (WS == FL_THISMODULE ; is_fltoken(WS,FL_THISMODULE,_)) ->
 	; is_fltoken(WS,FL_THISMODULE,_) ->
 	    thismodule_struct(WSCode),
-	    workspace_struct(P,WSCode,Code)
-	;
+	    workspace_struct(P,WSCode,Code),
+	    Status = NO_ERRORS
+	;   %% Using ...@\?C 
+	    %% This is currently unsupported. We need to pass OidCode out
+	    %%  of this predicate, since this is what creates the code
+	    %% to bind thecaller variable
+	    is_fltoken(WS,FL_SPECIAL_VAR_TOKEN,FL_SPECIAL_CALLER_TOKEN,Idx) ->
+	    %% CHANGE _OidCode/_Status to OidCode/Status once ...@\?C gets support
+	    compile_pathexp_no_workspace(WS,WSCode,_OidCode,_,_,_Status),
+	    body_context_info_structure(ThisModuleName,FWContext),
+	    %% a call to a module
+	    florasyslib_struct(Index,FLLIBMODLIT,3,[P,WSCode,FWContext],Code),
+	    %% temporary error until supported
+	    compiling_error(Idx,ERROR_WSQUASI_VAR,Stat),
+	    Status = [Stat]
+	; is_prfloralib(WS,_,_) ->
 	    %% a Flora system module
-	    workspace_struct(P,WS,Code)
+	    workspace_struct(P,WS,Code),
+	    Status = NO_ERRORS
+	;
+	    (approx_flindex(WS,ErrIdx) ; approx_prindex(WS,ErrIdx)) ->
+	    compiling_error(ErrIdx,ERROR_WSNAME,Stat),
+	    Status = [Stat]
 	),
 	!.
 
@@ -7349,6 +7370,7 @@ compile_pathexp_no_workspace(ParserTerm,Object,OidCode,NULL,[],Status) :-
 	!,
 	(memberchk(Suffix, [FL_SPECIAL_FILE_TOKEN,FL_SPECIAL_LINE_TOKEN]) ->
 	    special_variable_struct(Suffix,Object),
+	    OidCode=NULL,
 	    Status = NO_ERRORS
 	; Suffix == FL_SPECIAL_CALLER_TOKEN ->
 	    new_prvariable(NO_INDEX,Object),
@@ -7382,10 +7404,13 @@ compile_pathexp_no_workspace(ParserTerm,Object,NULL,NULL,[],NO_ERRORS) :-
 	strobj_struct(ParserTerm,Object).
 
 compile_pathexp_no_workspace(ParserTerm,Object,NULL,NULL,[],Status) :-
-	is_flbuiltin_identifier(ParserTerm,_Ident),
+	is_flbuiltin_identifier(ParserTerm,Ident),
 	!,
-	verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
-	builtin_identifier_struct(ParserTerm,Object).
+	(Ident == FL_PI_NUMBER -> numobj_struct(FL_PI_NUMBER_VALUE,Object)
+	; Ident == FL_E_NUMBER -> numobj_struct(FL_E_NUMBER_VALUE,Object)
+	; verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
+	    builtin_identifier_struct(ParserTerm,Object)
+	).
 
 compile_pathexp_no_workspace(ParserTerm,Object,VarBindingCode,NULL,[],Status) :-
 	is_fldatatype(ParserTerm,_Sort,_Lit,_Index),
@@ -8677,10 +8702,13 @@ compile_head_pathexp(ParserTerm,_WS,Object,NULL,NULL,NULL,NO_ERRORS) :-
 	compile_transactionalvar_without_trans(Name,Index,Object).
 
 compile_head_pathexp(ParserTerm,_WS,Object,NULL,NULL,NULL,Status) :-
-	is_flbuiltin_identifier(ParserTerm,_Ident),
+	is_flbuiltin_identifier(ParserTerm,Ident),
 	!,
-	verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
-	builtin_identifier_struct(ParserTerm,Object).
+	(Ident == FL_PI_NUMBER -> numobj_struct(FL_PI_NUMBER_VALUE,Object)
+	; Ident == FL_E_NUMBER -> numobj_struct(FL_E_NUMBER_VALUE,Object)
+	; verify_symbol_context(ParserTerm,0,FUNCTION_SYMBOL,NONTRANSACTIONAL_SYMBOL,Status),
+	    builtin_identifier_struct(ParserTerm,Object)
+	).
 
 compile_head_pathexp(ParserTerm,_WS,Object,NULL,VarBindingCode,NULL,Status) :-
 	is_fldatatype(ParserTerm,_Sort,_Lit,_Index),

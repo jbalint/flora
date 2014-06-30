@@ -18,9 +18,6 @@ REM        path-for-\XSB\bin\... has a file extension, e.g., \xsb\bin\wxsb.bat
 
 if exist binary-distribution.txt goto binary
 
-REM  The Windows version doesn't support --testing, so we just delete the switch
-if exist flrtesthook.flh del flrtesthook.flh
-
 set thiscommand=makeflora
 if [%0] == [makeergo]  set thiscommand=makeergo
 if [%0] == [makeergo.bat]  set thiscommand=makeergo

@@ -25,6 +25,7 @@
 
 
 :- compiler_options([xpp_on]).
+#mode standard Prolog
 
 #include "flora_porting.flh"
 #include "flora_terms.flh"
@@ -180,7 +181,6 @@
 	flora_intern_code/4
    from flrcoder.
 
-%% support for undefinedness
 :- import 
 	flora_debug_code/3
    from flrundefined.

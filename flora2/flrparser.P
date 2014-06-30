@@ -27,8 +27,8 @@
 :- if('NOWARN'(
 	   (flrregistry:flora_configuration(installdir,FlrDir),
 	    machine:slash(S),
-	    fmt_write_string(Opt,'%s%sopt%soptcompile.P',arg(FlrDir,S,S)),
-	    fmt_write_string(Switch,'%s%shooks%sergo.switch',arg(FlrDir,S,S)),
+	    fmt_write_string(Opt,'"%s%sopt%soptcompile.P"',arg(FlrDir,S,S)),
+	    fmt_write_string(Switch,'"%s%shooks%sergo.switch"',arg(FlrDir,S,S)),
 	    file_exists(Opt),
 	    file_exists(Switch))
       )).
@@ -36,6 +36,8 @@
 :- else.
 :- compiler_options([xpp_on]).
 :- endif.
+#mode standard Prolog
+
 
 #define PARSING_FLORA
 
@@ -778,11 +780,17 @@ get_index(FLDATATYPE(_Sort,_Lit,Index),Index).
 
 
 %% get_spectoken/2
+get_spectoken(OBJECT(Type,_Idx),Atom) :- get_spectoken_aux(Type,Atom).
+%% get_spectoken_aux/2
 %% unnumbered oids
-get_spectoken(OBJECT(Type,Idx),Atom) :- get_spectoken_aux(Type,Idx,Atom).
-get_spectoken_aux(SPECIAL_TOKEN(Atom),_I,Atom).
-%% numbered anon oids and things like \?F, \?L
-get_spectoken_aux(SPECIAL_TOKEN(Atom,_Suffix),_I,Atom).
+get_spectoken_aux(SPECIAL_TOKEN(Atom),Atom).
+%% numbered anon oids and quasi-variables/quasi-constants like \?F, \?L
+get_spectoken_aux(SPECIAL_TOKEN(Atom,_Suffix),Atom).
+
+%% get_spectoken/3
+get_spectoken(OBJECT(Type,_Idx),Atom,Suff) :- get_spectoken_aux(Type,Atom,Suff).
+%% get_spectoken_aux/3
+get_spectoken_aux(SPECIAL_TOKEN(Atom,Suffix),Atom,Suffix).
 
 
 is_conjunction(CANOTERM(Funct,2,FL_PARENTHESIS,[Left,Right],_,_),Left,Right) :-
@@ -4102,7 +4110,9 @@ parse_workspace(CanoniTerm,FLORAUSERMOD(ThisModToken),NO_ERRORS) :-
 	%% system module needs to be loaded.
 	%% However, in case of a system module \@ gets substituted with
 	%% FLORA_THIS_MODULE_NAME, so at compile time we get the right module.
-	get_spectoken(CanoniTerm,FL_THISMODULE),
+	(get_spectoken(CanoniTerm,FL_THISMODULE)
+	; get_spectoken(CanoniTerm,FL_SPECIAL_VAR_TOKEN,FL_SPECIAL_CALLER_TOKEN)
+	),
 	!,
 	flobject_struct(CanoniTerm,ThisModToken).
 
@@ -6909,12 +6919,12 @@ parse_head_term(Funct,N,Args,_TransFlag,DWS,Code,Status) :-
 	    true
 	).
 
-parse_head_term(Funct,_N,[Left,Right],TransFlag,DWS,Code,Status) :-
+parse_head_term(Funct,_N,[Left,Right],_TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,F),
 	is_datatypeop(F),
 	!,
 	get_index(Funct,If),
-	parse_composer_datatype([Left,Right],If,DWS,Code,Status1).
+	parse_composer_datatype([Left,Right],If,DWS,Code,Status).
 
 parse_head_term(Funct,2,Args,TransFlag,DWS,Code,Status) :-
 	get_atom(Funct,F),

@@ -24,6 +24,7 @@
 
 
 :- compiler_options([xpp_on]).
+#mode standard Prolog
 
 #include "flora_porting.flh"
 
