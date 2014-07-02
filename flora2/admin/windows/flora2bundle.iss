@@ -7,7 +7,7 @@
 
 #define MyAppName "Flora-2"
 #define FlrVersion "1.0"
-#define XSBVersion "3.4"
+#define XSBVersion "3.4.1"
 #define MyAppVerName "Flora-2  v. "+FlrVersion+" (Cherimoya) and XSB "+XSBVersion
 #define MyAppPublisher "Flora-2"
 #define MyAppURL "http://flora.sourceforge.net/"
@@ -41,6 +41,7 @@ OutputBaseFilename=flora2bundle
 Compression=lzma
 SolidCompression=yes
 PrivilegesRequired=none
+TouchTime=none
 
 VersionInfoVersion={#FlrVersion}
 VersionInfoCopyright=© The Research Foundation of SUNY, 1986 - 2014
@@ -101,7 +102,7 @@ Source: "{#FlrBaseDir}\NMakefile.mak"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"
 Source: "{#FlrBaseDir}\AT\*.flr"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\AT"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\AT\include\*.flh"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\AT\include"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\AT\prolog\*.P"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\AT\prolog"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#FlrBaseDir}\AT\prolog\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\AT\prolog"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+; Source: "{#FlrBaseDir}\AT\prolog\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\AT\prolog"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\AT\NMakefile.mak"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\AT"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#FlrBaseDir}\closure\*.flh"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\closure"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
