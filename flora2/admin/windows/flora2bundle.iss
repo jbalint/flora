@@ -84,7 +84,6 @@ Name: "{app}" ; Permissions: users-modify users-full
 Name: "{userdocs}\Flora-2 uninstaller"
 
 [Files]
-Source: "{#FlrBaseDir}\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\*.flh"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\floraconfig.bat"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\runflora.bat"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -96,13 +95,13 @@ Source: "{#FlrBaseDir}\etc\flora.ico"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\e
 
 Source: "{#FlrBaseDir}\*.P"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\*.H"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
+
 Source: "{#FlrBaseDir}\makeflora.bat"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\NMakefile.mak"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#FlrBaseDir}\AT\*.flr"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\AT"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\AT\include\*.flh"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\AT\include"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\AT\prolog\*.P"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\AT\prolog"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
-; Source: "{#FlrBaseDir}\AT\prolog\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\AT\prolog"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\AT\NMakefile.mak"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\AT"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#FlrBaseDir}\closure\*.flh"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\closure"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -111,12 +110,9 @@ Source: "{#FlrBaseDir}\closure\*.fli"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\c
 Source: "{#FlrBaseDir}\closure\*.inc"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\closure"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\closure\NMakefile.mak"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\closure"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 
-Source: "{#FlrBaseDir}\datatypes\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\datatypes"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
-
 Source: "{#FlrBaseDir}\datatypes\*.P"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\datatypes"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\datatypes\NMakefile.mak"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\datatypes"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 
-Source: "{#FlrBaseDir}\debugger\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\debugger"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\debugger\*.dat"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\debugger"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#FlrBaseDir}\debugger\*.P"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\debugger"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -176,8 +172,6 @@ Source: "{#FlrBaseDir}\pkgs\include\*.flh"; Excludes: ".*,CVS"; DestDir: "{#flra
 Source: "{#FlrBaseDir}\pkgs\prolog\*.P"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\pkgs\prolog"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\pkgs\NMakefile.mak"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\pkgs"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 
-Source: "{#FlrBaseDir}\syslib\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\syslib"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
-
 Source: "{#FlrBaseDir}\syslib\*.P"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\syslib"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\syslib\*.H"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\syslib"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\syslib\NMakefile.mak"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\syslib"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -185,6 +179,13 @@ Source: "{#FlrBaseDir}\syslib\NMakefile.mak"; Excludes: ".*,CVS"; DestDir: "{#fl
 Source: "{#FlrBaseDir}\syslibinc\*.flh"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\syslibinc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
 Source: "{#FlrBaseDir}\java"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\java"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+
+Source: "{#FlrBaseDir}\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+; Source: "{#FlrBaseDir}\AT\prolog\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\AT\prolog"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#FlrBaseDir}\datatypes\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\datatypes"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#FlrBaseDir}\debugger\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\debugger"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#FlrBaseDir}\syslib\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\syslib"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+
 
 ;; XSB files
 Source: "{#XSBBaseDir}\README"; Excludes: ".*,CVS"; DestDir: "{#xsbapp}\"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
