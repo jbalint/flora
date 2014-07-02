@@ -55,7 +55,8 @@ ALLOBJS = flrarguments${OBJEXT} \
 	  flrwraparound${OBJEXT} \
 	  flrsynonym${OBJEXT} \
 	  flrsimpleprimitive${OBJEXT} \
-	  flrwrapper${OBJEXT}
+	  flrwrapper${OBJEXT} \
+	  flora2${OBJEXT}
 
 
 FLORA_CHAR_DEFS = $(FLORADIR)/flrincludes/flora_characters.flh

@@ -49,7 +49,8 @@ ALLOBJS = flrarguments$(OBJEXT) \
 	  flrwraparound$(OBJEXT) \
 	  flrsynonym$(OBJEXT) \
 	  flrsimpleprimitive$(OBJEXT) \
-	  flrwrapper$(OBJEXT)
+	  flrwrapper$(OBJEXT) \
+	  flora2$(OBJEXT)
 
 OPTIONS = [optimize,ti_all]
 
