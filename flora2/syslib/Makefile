@@ -95,7 +95,7 @@ OPTION = [optimize,ti_all,spec_repr]
 PROLOG_COMMAND = "$(PROLOG)" -m 60000 -c 10000 -e 'segfault_handler(warn).'
 
 # Make sure warnings are saved in a file.
-SVFILE = '$(FLORADIR)/.flora_syslib_warn.tmp'
+SVFILE = '$(FLORADIR)/.__flora_syslib_warn.tmp'
 STDWARN = 3
 STDERR = 2
 HDRMSG = "While compiling .../flora2/syslib:"

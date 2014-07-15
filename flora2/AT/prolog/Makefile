@@ -1,11 +1,13 @@
-## File:      flora2/datatypes/Makefile
+## File:      flora2/Makefile
 ##
 ## Author(s): Michael Kifer
+##            Guizhen Yang
 ##
 ## Contact:   flora-users@lists.sourceforge.net
 ##
 ## Copyright (C) by
-##      The Research Foundation of the State University of New York, 1999-2013.
+##      The Research Foundation of the State University of New York, 1999-2013;
+##      and Vulcan, Inc., 2008-2013.
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -24,57 +26,55 @@
 
 
 OBJEXT=.xwam
-PROLOGEXT = .P
+PROLOGEXT=.P
 PROLOGHEADEREXT=.H
 
-PROLOG = none
-FLORADIR = ..
+FLORADIR = ../..
 
-ALLOBJS = flrdatatype$(OBJEXT) \
-	flrdtype_sub$(OBJEXT) \
-	flrdatatype_parse$(OBJEXT) \
-	flrtime_arith$(OBJEXT) \
-	flrdatatype_utils$(OBJEXT)
+ALLOBJS = atco_init${OBJEXT}
 
-FLORA_INCLUDES_DIR = ../flrincludes
-DYN_INCLUDES_DIR = ../includes
+FLORA_INCLUDES_DIR = $(FLORADIR)/flrincludes
 
 FLORA_TERMS = $(FLORA_INCLUDES_DIR)/flora_terms.flh
-FLORA_ERRORS = $(FLORA_INCLUDES_DIR)/flora_errors.flh
-FLRHEADER = $(DYN_INCLUDES_DIR)/flrheader.flh
+FLORA_PORTING = $(FLORA_INCLUDES_DIR)/flora_porting.flh
+FLORA_EXTENSIONS = $(FLORA_INCLUDES_DIR)/flora_extensions.flh
+FLORA_WRAP = $(FLORA_INCLUDES_DIR)/flora_wrap.flh
 
+OPTION = [optimize,ti_all,spec_repr]
+#OPTION = [optimize]
 
-OPTION = [optimize]
-
+# PROLOG is passed as an argument to make. Default is none, to trigger an error
+PROLOG=none
 PROLOG_COMMAND = "$(PROLOG)" -m 60000 -c 10000 -e 'segfault_handler(warn).'
 
 # Make sure warnings are saved in a file.
-SVFILE = '$(FLORADIR)/.__flora_datatypes_warn.tmp'
+SVFILE = '$(FLORADIR)/.__flora_AT_prolog_warn.tmp'
 STDWARN = 3
 STDERR = 2
-HDRMSG = "While compiling .../flora2/datatypes:"
+HDRMSG = "While compiling  .../flora2/AT/prolog:"
 
 .SUFFIXES: $(PROLOGEXT) $(PROLOGHEADEREXT) $(OBJEXT)
 
+
+# acceptable targets are all (default), system, base, top
 all: init $(ALLOBJS) finish
 	./CompileChangedFiles.sh $(PROLOG_COMMAND)
 	@cat $(SVFILE)
 
 
-%$(OBJEXT): %$(PROLOGEXT) $(FLORA_TERMS)
+%$(OBJEXT) : %$(PROLOGEXT) $(FLORA_TERMS) $(FLORA_PORTING) $(FLORA_EXTENSIONS) $(FLORA_WRAP)
 	@echo 'mc($*,$(OPTION)).' >> cmd...
 
-%$(PROLOGEXT) : %$(PROLOGHEADEREXT)
-	../touch.sh $@
 
 
 init:
 	/bin/rm -f $(SVFILE)
-	@echo "write($(STDWARN),'-------------- Warnings/Errors --------------------'), nl($(STDWARN))." >> cmd...
+	@echo "write($(STDWARN),'-------------- Warnings/Errors --------------------'), nl($(STDWARN))." > cmd...
 	@echo "write($(STDWARN),'$(HDRMSG)'), nl($(STDWARN))." >> cmd...
 	@echo "file_flush($(STDWARN),_)." >> cmd...
-	@echo "asserta(library_directory('..'))." >> cmd...hdr
-	@echo "['../flora2']." >> cmd...hdr
+	@echo "asserta(library_directory('../..'))." >> cmd...hdr
+	@echo "['../../flora2']." >> cmd...hdr
+	@echo "retractall(xpp_options(_))." >> cmd...hdr
 	@echo "import '_#flmakesetup'/0 from flora2." >> cmd...hdr
 	@echo "'_#flmakesetup'." >> cmd...hdr
 	@echo "file_reopen($(SVFILE),a,$(STDWARN),_)." >> cmd...hdr
@@ -86,7 +86,7 @@ finish:
 
 
 clean:
-	/bin/rm -f core *~ .*~ *$(OBJEXT) *.O *.bak .#*
+	/bin/rm -f core *~ .*~ *$(OBJEXT) *.O *.bak .#* cmd* *$(OBJEXT)
 
 
 .DONE:

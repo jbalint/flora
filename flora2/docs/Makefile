@@ -24,7 +24,7 @@
 
 all:  flora2-manual.pdf flora-packages.pdf
 
-flora2-manual.dvi: flora2-manual.tex
+flora2-manual.dvi: flora2-manual.tex ../hooks/ergo.switch
 	@echo
 	@echo Compiling flora2-manual.tex
 	latex flora2-manual
@@ -44,7 +44,7 @@ flora2-manual.pdf: flora2-manual.dvi
 	@echo Making pdf for flora2-manual
 	dvipdf flora2-manual
 
-flora-packages.dvi: flora-packages.tex flora-persistence.tex flora-flrxml.tex flora-protege.tex
+flora-packages.dvi: flora-packages.tex flora-persistence.tex flora-flrxml.tex flora-protege.tex ../hooks/ergo.switch
 	@echo
 	@echo Compiling flora-packages.tex
 	latex flora-packages

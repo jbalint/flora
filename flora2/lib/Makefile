@@ -49,7 +49,7 @@ PROLOG_COMMAND = "$(PROLOG)" -i -m 80000 -c 10000 -e 'segfault_handler(warn).'
 #-----------------------------------------------------------------------#
 
 # Make sure warnings are saved in a file.
-SVFILE = '$(FLORADIR)/.flora_lib_warn.tmp'
+SVFILE = '$(FLORADIR)/.__flora_lib_warn.tmp'
 STDWARN = 3
 STDERR = 2
 HDRMSG = "While compiling .../flora2/lib:"

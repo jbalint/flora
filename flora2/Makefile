@@ -79,7 +79,7 @@ PROLOG=none
 PROLOG_COMMAND = "$(PROLOG)" -m 60000 -c 10000 -e 'segfault_handler(warn).'
 
 # Make sure warnings are saved in a file.
-SVFILE = '$(FLORADIR)/.flora_top_warn.tmp'
+SVFILE = '$(FLORADIR)/.__flora_top_warn.tmp'
 STDWARN = 3
 STDERR = 2
 HDRMSG = "While compiling  .../flora2:"
@@ -95,8 +95,8 @@ system: core libs showerrors
 base: core showerrors
 
 showerrors:
-	@cat $(FLORADIR)/.flora*.tmp
-	@rm $(FLORADIR)/.flora*.tmp
+	@cat $(FLORADIR)/.__flora*.tmp
+	@rm $(FLORADIR)/.__flora*.tmp
 
 top: init $(ALLOBJS) finish
 	./CompileChangedFiles.sh $(PROLOG_COMMAND)
@@ -116,8 +116,8 @@ core: top
 	cd genincludes && $(MAKE) PROLOG=$(PROLOG)
 	cd syslib && $(MAKE) PROLOG=$(PROLOG)
 	cd debugger && $(MAKE) PROLOG=$(PROLOG)
-	@cat $(FLORADIR)/.flora*.tmp
-	@rm $(FLORADIR)/.flora*.tmp
+	@cat $(FLORADIR)/.__flora*.tmp
+	@rm $(FLORADIR)/.__flora*.tmp
 
 libs:
 	cd lib && $(MAKE) PROLOG=$(PROLOG)
@@ -125,6 +125,7 @@ libs:
 
 misc:
 	cd pkgs && $(MAKE) PROLOG=$(PROLOG)
+	-test -d ergo_pkgs && cd ergo_pkgs && $(MAKE) PROLOG=$(PROLOG)
 	cd demos && $(MAKE) PROLOG=$(PROLOG)
 	-test -f docs/Makefile && cd docs && $(MAKE) PROLOG=$(PROLOG) || echo "" > /dev/null
 
@@ -171,7 +172,7 @@ flrutils${OBJEXT} : flrutils${PROLOGEXT} flrutils.H $(FLORA_CHAR_DEFS) $(FLORA_T
 
 
 init:
-	@/bin/rm -f $(FLORADIR)/.*flora*.tmp
+	@/bin/rm -f $(FLORADIR)/.__*flora*.tmp
 	@echo "write($(STDWARN),'-------------- Warnings/Errors --------------------'), nl($(STDWARN))." > cmd...
 	@echo "write($(STDWARN),'$(HDRMSG)'), nl($(STDWARN))." >> cmd...
 	@echo "file_flush($(STDWARN),_)." >> cmd...

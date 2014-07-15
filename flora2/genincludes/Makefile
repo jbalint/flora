@@ -47,7 +47,7 @@ FLORA_TABLING_METHODS = $(FLORA_INCLUDES_DIR)/flora_tabling_methods.flh
 FLORA_WSPREDICATES = $(FLORA_INCLUDES_DIR)/flora_wspredicates.flh
 
 # Make sure warnings are saved in a file.
-SVFILE = '$(FLORADIR)/.flora_genincl_warn.tmp'
+SVFILE = '$(FLORADIR)/.__flora_genincl_warn.tmp'
 STDWARN = 3
 STDERR = 2
 HDRMSG = "While compiling .../flora2/genincludes:"

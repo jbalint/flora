@@ -180,6 +180,8 @@ Source: "{#FlrBaseDir}\syslibinc\*.flh"; Excludes: ".*,CVS"; DestDir: "{#flrapp}
 
 Source: "{#FlrBaseDir}\java"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\java"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
+;;;; .xwam's are at the end so they will have later time stamps ;;;;;;
+
 Source: "{#FlrBaseDir}\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\"; Components: base; Flags: ignoreversion touch recursesubdirs createallsubdirs
 ; Source: "{#FlrBaseDir}\AT\prolog\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\AT\prolog"; Components: base; Flags: ignoreversion touch recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\datatypes\*.xwam"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\datatypes"; Components: base; Flags: ignoreversion touch recursesubdirs createallsubdirs

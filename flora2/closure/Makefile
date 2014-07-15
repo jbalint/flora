@@ -49,7 +49,7 @@ PROLOG_COMMAND = "$(PROLOG)" -m 60000 -c 10000 -e 'segfault_handler(warn).'
 FLORA_PRED_DEF = ../flrincludes/flora_wspredicates.flh
 
 # Make sure warnings are saved in a file.
-SVFILE = '$(FLORADIR)/.flora_closure_warn.tmp'
+SVFILE = '$(FLORADIR)/.__flora_closure_warn.tmp'
 STDWARN = 3
 STDERR = 2
 HDRMSG = "While compiling .../flora2/closure:"

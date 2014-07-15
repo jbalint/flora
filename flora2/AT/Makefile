@@ -53,7 +53,7 @@ PROLOG_COMMAND = "$(PROLOG)" -i -m 80000 -c 10000 -e 'segfault_handler(warn).'
 #-----------------------------------------------------------------------#
 
 # Make sure warnings are saved in a file.
-SVFILE = '$(FLORADIR)/.flora_AT_warn.tmp'
+SVFILE = '$(FLORADIR)/.__flora_AT_warn.tmp'
 STDWARN = 3
 STDERR = 2
 HDRMSG = "While compiling .../flora2/AT:"
@@ -63,6 +63,7 @@ HDRMSG = "While compiling .../flora2/AT:"
 .SUFFIXES: ${PROLOGEXT} .flr
 
 all: clean init recompile
+	cd prolog && $(MAKE) PROLOG=$(PROLOG)
 
 recompile: $(ALL) finish
 	@../touch.sh cmd...
@@ -99,6 +100,7 @@ finish:
 	echo Done
 
 clean:
-	/bin/rm -f *${PROLOGEXT} *$(OBJEXT) *.O *.fdb *~ .*~ *.fld *.flt *.flm *.fls *.fls2 *.con *.bak .#* cmd*
+	/bin/rm -f *${PROLOGEXT} *$(OBJEXT)  *~ .*~ *.bak .#* cmd*
 	/bin/rm -rf .flora_aux_files/* prolog/*.xwam
 	/bin/rm -rf .ergo_aux_files/* prolog/*.xwam
+	cd prolog && make clean
