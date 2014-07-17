@@ -68,6 +68,7 @@ files="./XSB/LICENSE ./XSB/INSTALL ./XSB/INSTALL_PROBLEMS \
     	./flora2/libinc/*.flh \
     	./flora2/cc/prolog2hilog.* ./flora2/cc/*.P \
     	./flora2/cc/flora_ground.* \
+    	./flora2/cc/flora_prefix.h \
         ./flora2/cc/Makefile \
 	./flora2/cc/NMakefile.mak ./flora2/cc/NMakefile64.mak \
         ./flora2/cc/windows/*.dll ./flora2/cc/windows/*.exp \

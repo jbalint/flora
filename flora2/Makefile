@@ -125,7 +125,7 @@ libs:
 
 misc:
 	cd pkgs && $(MAKE) PROLOG=$(PROLOG)
-	-test -d ergo_pkgs && cd ergo_pkgs && $(MAKE) PROLOG=$(PROLOG)
+	-test -d ergo_pkgs && test -f hooks/ergo.switch && cd ergo_pkgs && $(MAKE) PROLOG=$(PROLOG)
 	cd demos && $(MAKE) PROLOG=$(PROLOG)
 	-test -f docs/Makefile && cd docs && $(MAKE) PROLOG=$(PROLOG) || echo "" > /dev/null
 

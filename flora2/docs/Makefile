@@ -56,6 +56,9 @@ flora-packages.pdf: flora-packages.dvi
 	@echo Making pdf for flora-packages
 	dvipdf flora-packages
 
+../hooks/ergo.switch:
+	@echo "" > /dev/null
+
 clean:
 	/bin/rm -f  *.bak *~ .*~ .#* *.aux *.toc *.ind
 

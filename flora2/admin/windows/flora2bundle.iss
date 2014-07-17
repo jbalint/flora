@@ -158,6 +158,7 @@ Source: "{#FlrBaseDir}\libinc\*.flh"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\li
 Source: "{#FlrBaseDir}\cc\*.P"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\cc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\cc\prolog2hilog.*"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\cc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\cc\flora_ground.*"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\cc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#FlrBaseDir}\cc\flora_prefix.h"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\cc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\cc\NMakefile.mak"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\cc"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\cc\NMakefile64.mak"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\cc"; Components: base\sources; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#FlrBaseDir}\cc\windows\*.dll"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\cc\windows"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
