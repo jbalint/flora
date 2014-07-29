@@ -1151,8 +1151,14 @@ decode_literal_internal(Term, Code, _Level, _Depth) :-
 	atom(Term),
 	flora_printable_type_representation(Term,[TypeName,TypeLit]),
 	!,
+	(atom(TypeLit) ->
+	    set_context(displaying_dbl_quoted_string),
+	    flora_escape_atom(TypeLit,TypeLitEsc),
+	    clear_context(displaying_dbl_quoted_string)
+	; TypeLitEsc = TypeLit
+	),
 	flora_display_type_name(TypeName,DisplayTypename),
-	Code = ['"',TypeLit,'"',FL_DATATYPE_CONNECTOR,DisplayTypename].
+	Code = ['"',TypeLitEsc,'"',FL_DATATYPE_CONNECTOR,DisplayTypename].
 
 %% Level=0: top level; Level=1: reified predicate/molecule arg of a functor
 decode_literal_internal(Call,Code,_Level,_Depth) :-
@@ -1188,7 +1194,13 @@ decode_literal_internal(FL_DATATYPE(Term,Type), Code, Level,Depth) :-
 		decode_literal_internal(LitList,TypeLitDecoded,Level,Depth),
 		Code = [TypeLitDecoded,FL_DATATYPE_CONNECTOR,DisplayTypename]
 	    ;
-		Code = ['"',TypeLit,'"',FL_DATATYPE_CONNECTOR,DisplayTypename]
+		(atom(TypeLit) ->
+		    set_context(displaying_dbl_quoted_string),
+		    flora_escape_atom(TypeLit,TypeLitEsc),
+		    clear_context(displaying_dbl_quoted_string)
+		; TypeLitEsc = TypeLit
+		),
+		Code = ['"',TypeLitEsc,'"',FL_DATATYPE_CONNECTOR,DisplayTypename]
 	    )
 	).
 
@@ -1561,7 +1573,9 @@ decode_literal_internal(Call,['[', ']'],_Level,_Depth) :-
 decode_literal_internal(Call,['"', Code, '"'],_Level,_Depth) :-
 	is_charlist(Call),
 	!,
+	set_context(displaying_dbl_quoted_string),
         escape(Call,EscCall),
+	clear_context(displaying_dbl_quoted_string),
 	atom_codes(Code,EscCall).
 decode_literal_internal('.'(H,T),['[',Code,']'],Level,Depth) :-
 	!,
@@ -1861,6 +1875,11 @@ escape([CH_QUOTE|L],[CH_BACKSLASH,CH_QUOTE|EL],needs_quoting) :-
 	!,
 	escape(L,EL,_).
 */
+escape([CH_DOUBLEQUOTE|L],[CH_BACKSLASH,CH_DOUBLEQUOTE|EL],needs_quoting) :-
+	flora_display_schema(flora),
+	has_context(displaying_dbl_quoted_string),
+	!,
+	escape(L,EL,_).
 %% Backslash before special character is escaped: '\\n' is internally 
 %% translated as \ n and is printed as '\\n'
 escape([CH_BACKSLASH,H|L],[CH_BACKSLASH,CH_BACKSLASH,H|EL],needs_quoting) :-

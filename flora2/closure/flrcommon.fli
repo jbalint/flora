@@ -31,6 +31,8 @@
 
 :- import flora_optimizer_registry/2 from flrregistry.
 
+:- import flora_builtin_class/1 from flrdatatype.
+
 :- WRAP_COPY_UNQUOTED 'FLORA_THIS_MODULE_NAME'.
 
 
@@ -170,32 +172,31 @@ WRAP_EXISTS(X,FWContext) :- WRAP_IMVDDEF(X,_,FWContext).
 WRAP_EXISTS(X,FWContext) :- WRAP_METH(X,_,FWContext).
 WRAP_EXISTS(X,FWContext) :- WRAP_IMETH(X,_,FWContext).
 
-%% We need to restrict these so that one could not infer existence merely
-%% due to standard classes such as _symbol, \object, (?;?), etc.
-WRAP_EXISTS(X,FWContext) :- WRAP_ISA(X,C,FWContext).
+%% We restrict these so that one could not infer existence merely
+%% due to standard classes such as \symbol, \object, (?;?), etc.
+WRAP_EXISTS(X,FWContext) :-
+    	WRAP_ISA(X,C,FWContext),
+	\+ flora_builtin_class(C),
+	((C = (Class;_) ; C = (_;Class)) -> \+flora_builtin_class(Class)
+	; true
+	).
 WRAP_EXISTS(X,FWContext) :- WRAP_ISA(O,X,FWContext).
-WRAP_EXISTS(X,FWContext) :- WRAP_SUB(X,C,FWContext).
-WRAP_EXISTS(X,FWContext) :- WRAP_SUB(C,X,FWContext).
+WRAP_EXISTS(X,FWContext) :-
+    	WRAP_SUB(X,C,FWContext),
+	\+ flora_builtin_class(C),
+	C\= (X;_),          C\= (_;X),
+	X \= (C,_),         X\= (_,C),           X\= C-_,
+	((C = (Class;_) ; C = (_;Class)) -> \+flora_builtin_class(Class)
+	; true
+	).
+WRAP_EXISTS(X,FWContext) :-
+    	WRAP_SUB(C,X,FWContext),
+	X\= (C;_), X\= (_;C),
+	C\= (X,_), C\= (_,X), C\= X-_.
 
 /* Ensure that objects corresponding to the standard data types "exist" */
-WRAP_EXISTS(FL_TOPTYPE,_FWContext).
-WRAP_EXISTS(FL_LONG,_FWContext).
-WRAP_EXISTS(FL_INTEGER,_FWContext).
-WRAP_EXISTS(FL_SHORT,_FWContext).
-WRAP_EXISTS(FL_DECIMAL,_FWContext).
-WRAP_EXISTS(FL_DOUBLE,_FWContext).
-WRAP_EXISTS(FL_REAL,_FWContext).
-WRAP_EXISTS(FL_FLOAT,_FWContext).
-WRAP_EXISTS(FL_SYMBOL,_FWContext).
-WRAP_EXISTS(FL_STRING,_FWContext).
-WRAP_EXISTS(FL_DATETIME,_FWContext).
-WRAP_EXISTS(FL_DATE,_FWContext).
-WRAP_EXISTS(FL_DURATION,_FWContext).
-WRAP_EXISTS(FL_TIME,_FWContext).
-WRAP_EXISTS(FL_IRI,_FWContext).
-WRAP_EXISTS(FL_BOOL,_FWContext).
-WRAP_EXISTS(FL_LISTTYPE,_FWContext).
-WRAP_EXISTS(FL_CHARLIST,_FWContext).
+WRAP_EXISTS(Class,_FWContext) :- flora_builtin_class(Class).
+
 
 %% Have to assert, because flora_defined_class/1 gets its content from
 %% different modules. Using compiled rules would cause each module to
