@@ -73,6 +73,10 @@
 	print_backtrace/1
    from error_handler.
 
+:- import
+	flora_abolish_nonincremental_tables/0
+   from flrtables.
+
 %%:- import FL_QUERY_PREDICATE0/1 from usermod.
 
 %%:- import close_open_tables/1 from machine.
@@ -86,6 +90,10 @@
 :- import flora_shreset_operator/0 from flroperator.
 
 :- import flora_clear_runtime_uriprefixes/0 from flrprefixdef.
+
+:- import
+	flora_reset_oid_related_counters/0
+   from flrcompiler.
 
 :- import
 	flora_load_library/1,

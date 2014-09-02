@@ -37,6 +37,10 @@
    from machine.
 
 :- import
+	flora_abolish_nonincremental_tables/0
+   from flrtables.
+
+:- import
 	flora_abort/1,
 	flora_abort/2,
 	flora_user_floradir/1,

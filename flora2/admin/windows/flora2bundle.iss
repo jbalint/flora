@@ -179,7 +179,7 @@ Source: "{#FlrBaseDir}\syslib\NMakefile.mak"; Excludes: ".*,CVS"; DestDir: "{#fl
 
 Source: "{#FlrBaseDir}\syslibinc\*.flh"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\syslibinc"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
-Source: "{#FlrBaseDir}\java"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\java"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#FlrBaseDir}\java\*"; Excludes: ".*,CVS"; DestDir: "{#flrapp}\java"; Components: base; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ;;;; .xwam's are at the end so they will have later time stamps ;;;;;;
 

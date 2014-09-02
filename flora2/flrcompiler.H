@@ -180,6 +180,7 @@
 	flora_compilation_context/1,
 	flora_get_compilation_liboptions/1,
         flora_reset_newvar/0,
+	flora_reset_oid_related_counters/0,
         flora_new_varobj/3,
 	flora_reset_compiler/1, 
 	flora_compile_pathexp/3,

@@ -193,8 +193,8 @@ serv2[
 		      // Input must be a request for a ticket from a
                       // city in France or Germany to a city in Austria
 		      ?Input = contract(?_, ?From:(france \or germany),
-		                          ?To:austria, ?Date, ?Card)
-		      \and validDate(?Date) \and validCard(?Card)
+		                          ?To:austria, ?Date, ?_Card)
+		      \and validDate(?Date) \and validCard(?_Card)
 			   },
 	   effects(?Input)-> ${
 		      (itinerary(?Req)[from->?From, to->?To] :-
@@ -219,16 +219,16 @@ serv3[
 	   precondition(?Input) ->
 		       ${
 			      // request for a pass for a French city
-                              ?Input = pay(?_,?City:france,?Date,?Card)
-			      \and validDate(?Date) \and validCard(?Card)
+                              ?Input = pay(?_,?_City:france,?_Date,?_Card)
+			      \and validDate(?_Date) \and validCard(?_Card)
 			},
 	   effects(?Input)->
 		       ${
-			   (?Req[location->?City] :-
-	                            ?Input = discover(?Req,?City:france))
+			   (?Req[location->?_City] :-
+	                            ?Input = discover(?Req,?_City:france))
 		           \and
-		           (?Req[confirmation->(?Num,?City,?Date)] :-
-				    ?Input = pay(?Req,?City,?Date,?_Card) \and 
+		           (?Req[confirmation->(?Num,?_City,?_Date)] :-
+				    ?Input = pay(?Req,?_City,?_Date,?_Card) \and 
 				    %generateConfNumber(?Num))
 		        }
 	 ],
@@ -243,18 +243,18 @@ serv4[
 	   precondition(?Input) ->
                     ${
 			      // can do passes in any city except Paris
-                              ?Input = pay(?_,?City:france,?Date,?Card)
-			      \and ?City \= paris
-			      \and validDate(?Date) \and validCard(?Card)
+                              ?Input = pay(?_,?_City:france,?_Date,?_Card)
+			      \and ?_City \= paris
+			      \and validDate(?_Date) \and validCard(?_Card)
 		     },
 	   effects(?Input)->
                     ${
-		       (?Req[location->?City] :-
-				?Input = discover(?Req,?City:france)
-			        \and ?City \= paris)
+		       (?Req[location->?_City] :-
+				?Input = discover(?Req,?_City:france)
+			        \and ?_City \= paris)
 		       \and
-		       (?Req[confirmation->(?Num,?City,?Date)] :-
-				?Input = pay(?Req,?City,?Date,?_Card) \and 
+		       (?Req[confirmation->(?Num,?_City,?_Date)] :-
+				?Input = pay(?Req,?_City,?_Date,?_Card) \and 
 				%generateConfNumber(?Num))
 		     }
 	 ],
@@ -417,7 +417,7 @@ med2[reportResult(?Goal,?Serv,?Result)] :-
 // for region-level queries check if there is a city that is not served
 med2[doesNotServeCity(?Region)] :-
 	?City:?Region \and
-        \naf ?_[location->?City].
+        \naf ?[location->?City].
 
 // contracting request
 med2[reportResult(?Goal,?Result)] :-
@@ -470,7 +470,12 @@ med2[reportResult(?Goal,?Result)] :-
 // %%%%%%%%%%%%%%% MISC DEFINITIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 // use Prolog's gensym/2 to generate a new conf number
-%generateConfNumber(?Num) :- gensym(conf,?Num)@\plg(gensym).
+//%generateConfNumber(?Num) :- gensym(conf,?Num)@\plg(gensym).
+%generateConfNumber(?Num) :-
+	flora_get_counter(mynum,?N)@\plg(flrporting),
+	?N1 \is ?N+1,
+	flora_set_counter(mynum,?N1)@\plg(flrporting),
+	\symbol[concat([conf,?N1])->?Num]@\btp.
 
 validDate(?_). // pretending that we check dates
 
@@ -495,7 +500,7 @@ generalizeArg(?_In,?_In) :- \true.
 	\false.
 %tst2 :- \true.
 
-// should fail
+// contracting should fail (no confirmation should be returned)
 %tst3 :- %contract_service(goal2b),
 	\if goal2b[confirmation->?_Info]
         \then writeln('tst3: Something wrong')@\plg()
@@ -534,7 +539,8 @@ generalizeArg(?_In,?_In) :- \true.
 
 
 %pretest :-
-	prepare@\plg(gensym),
+	//prepare@\plg(gensym),
+	flora_set_counter(mynum,300)@\plg(flrporting),
 	%tst1, %tst2, %tst3, %tst4, %tst5, %tst6, %tst7, %tst8.
 
 %test :- tell(temp)@\plg(),
