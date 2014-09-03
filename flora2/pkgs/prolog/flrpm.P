@@ -99,6 +99,11 @@
    from flrhooks.
 
 :- import
+	flora_trim_last/2,
+	flora_add_last/3
+   from flrtrim.
+
+:- import
 	append/3,
 	length/2
    from basics.
@@ -453,8 +458,11 @@ add_to_memory(_,_,[]) :- true.
  Does the actual insertion to the internal memory.
 ****************************************************************************/
 aux_assert_to_memory(StorageName,Predicate):- 
-	flora_storage_fast_insert_fact(StorageName,_IncrFlag,Predicate),
-	flora_refresh_tables(Predicate).
+	%% in the database we don't keep the context arguments of Flora-2
+	%% wrappers, but in the main memory and tries we do.
+	flora_add_last(Predicate,Predicate1,_),
+	flora_storage_fast_insert_fact(StorageName,_IncrFlag,Predicate1),
+	flora_refresh_tables(Predicate1).
 
 
 /****************************************************************************
@@ -579,7 +587,10 @@ delete_hook_internal(Term) :-
  Is a generic predicate that parses a term and extracts information.
 ****************************************************************************/
 aux_construct_query_string(Term,N,ModuleName,CleanedUpWrapper,ValueList,ColValList):-
-	flora_decode_predicate(Term,_PredicateType,ModuleName,Wrapper,_WrapPrefix,_PredicateSymbol,ArgsList),	
+	%% in the database we don't keep the context arguments of Flora-2
+	%% wrappers, but in the main memory and tries we do.
+	flora_trim_last(Term,Term1),
+	flora_decode_predicate(Term1,_PredicateType,ModuleName,Wrapper,_WrapPrefix,_PredicateSymbol,ArgsList),	
 	aux_cleanup_name(Wrapper,CleanedUpWrapper),
 	ValueList = ArgsList,
 	length(ValueList,N),
@@ -722,9 +733,12 @@ db_DDL_sql_internal(Connhandle,QueryHandle,SQLQueryList,ReturnList,QueryType,Obj
 
 %% Object = predicate, QueryType = insert/ delete
 db_DML_sql_internal(Connhandle,QueryHandle,SQLQueryList,ReturnList,QueryType,Object) :-
+	%% in the database we don't keep the context arguments of Flora-2
+	%% wrappers, but in the main memory and tries we do.
+	flora_trim_last(Object,Object1),
 	catch(db_query(Connhandle, QueryHandle, SQLQueryList, ReturnList),
 	      xsb_error(database(_Number), Mesg),
-	      flora_db_query_error(QueryType,Object,Mesg)).
+	      flora_db_query_error(QueryType,Object1,Mesg)).
 
 
 %% currently not being handled.
